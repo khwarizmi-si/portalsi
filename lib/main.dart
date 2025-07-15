@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'pages/login_page.dart';
 import 'pages/register_page.dart';
+import 'pages/dashboard_page.dart';
 
 void main() {
   runApp(MyApp());
@@ -12,10 +13,11 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Portal SI',
       theme: ThemeData(primarySwatch: Colors.blue, fontFamily: 'Roboto'),
-      home: LoginPage(),
+      home: HomePage(),
       routes: {
         '/login': (context) => LoginPage(),
         '/register': (context) => RegisterPage(),
+        '/dashboard': (context) => HomePage(),
       },
     );
   }

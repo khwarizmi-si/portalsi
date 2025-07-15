@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:portal_si/services/api_service.dart';
 
 class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
+
   @override
   _LoginPageState createState() => _LoginPageState();
 }
@@ -19,26 +22,67 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+  // Future<void> _handleLogin() async {
+  //   if (_formKey.currentState!.validate()) {
+  //     setState(() {
+  //       _isLoading = true;
+  //     });
+
+  //     // Simulasi proses login
+  //     await Future.delayed(Duration(seconds: 2));
+
+  //     setState(() {
+  //       _isLoading = false;
+  //     });
+
+  //     // Tampilkan pesan sukses
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       SnackBar(
+  //         content: Text('Login berhasil!'),
+  //         backgroundColor: Colors.green,
+  //       ),
+  //     );
+
+  //     // Navigasi ke halaman dashboard
+  //     Navigator.pushReplacementNamed(context, '/dashboard');
+  //   }
+  // }
+
   Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       setState(() {
         _isLoading = true;
       });
 
-      // Simulasi proses login
-      await Future.delayed(Duration(seconds: 2));
+      final result = await ApiService.login(
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
+      );
 
       setState(() {
         _isLoading = false;
       });
 
-      // Navigasi ke halaman utama (placeholder)
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Login berhasil!'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      if (result != null && result['success'] == true) {
+        // Tampilkan pesan sukses
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Login berhasil!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Navigasi ke dashboard
+        Navigator.pushReplacementNamed(context, '/dashboard');
+      } else {
+        // Tampilkan pesan gagal
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result?['message'] ?? 'Login gagal'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -244,9 +288,9 @@ class _LoginPageState extends State<LoginPage> {
                   onPressed: () {
                     // Handle Facebook login
                   },
-                  icon: Icon(Icons.facebook, color: Colors.blue),
+                  icon: Icon(Icons.g_mobiledata, color: Colors.blue),
                   label: Text(
-                    'Masuk dengan Facebook',
+                    'Masuk dengan Google',
                     style: TextStyle(
                       color: Colors.blue,
                       fontWeight: FontWeight.bold,

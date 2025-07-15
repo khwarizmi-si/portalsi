@@ -188,11 +188,11 @@ class _RegisterPageState extends State<RegisterPage> {
 
                 // Facebook Register Button
                 _buildButton(
-                  text: 'Daftar dengan Facebook',
+                  text: 'Daftar dengan Google',
                   onPressed: () {
                     // Handle Facebook register
                   },
-                  icon: Icon(Icons.facebook, color: Colors.white),
+                  icon: Icon(Icons.g_mobiledata, color: Colors.white),
                 ),
 
                 SizedBox(height: 20),
