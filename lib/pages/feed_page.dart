@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../components/bottom_navigation.dart';
+import 'post_detail_page.dart';
 
 class FeedPage extends StatefulWidget {
   @override
@@ -295,25 +296,6 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
                       ],
                     ),
                   ),
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: GestureDetector(
-                      onTap: () => HapticFeedback.lightImpact(),
-                      child: Container(
-                        padding: EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white70,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.favorite_border,
-                          color: Colors.grey[700],
-                          size: 16,
-                        ),
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -324,44 +306,16 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
   }
 
   void _showDetailDialog(Map<String, dynamic> item) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                item['image'],
-                height: 200,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
-            ),
-            SizedBox(height: 16),
-            Text(
-              item['title'],
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 8),
-            Text(
-              item['subtitle'],
-              style: TextStyle(color: Colors.grey[600], fontSize: 14),
-            ),
-            SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: Text('View Detail'),
-            ),
-          ],
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PostDetailPage(
+          username: 'uwangraph',
+          timeAgo: 'Baru saja',
+          imageUrl: item['image'],
+          content: item['subtitle'],
+          likes: 10,
+          comments: 5,
         ),
       ),
     );
