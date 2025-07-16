@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:portal_si/components/comment_section.dart';
 
 class PostActions extends StatelessWidget {
   final int likes;
@@ -36,22 +37,22 @@ class PostActions extends StatelessWidget {
                 ),
               ),
               SizedBox(width: 12),
-              Row(
-                children: [
-                  Icon(
-                    Icons.chat_bubble_outline,
-                    color: Colors.grey[600],
-                    size: 16,
-                  ),
-                  SizedBox(width: 4),
-                  Text(
-                    comments.toString(),
-                    style: TextStyle(
+              GestureDetector(
+                onTap: () => showCommentSheet(context),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.chat_bubble_outline,
                       color: Colors.grey[600],
-                      fontWeight: FontWeight.bold,
+                      size: 16,
                     ),
-                  ),
-                ],
+                    SizedBox(width: 4),
+                    Text(
+                      comments.toString(),
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
