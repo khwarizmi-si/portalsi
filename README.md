@@ -1,92 +1,90 @@
 # 📱 portal_si
 
-**portal_si** adalah aplikasi mobile sosial media berbasis Flutter yang terinspirasi dari platform seperti Instagram dan X. Aplikasi ini mendukung fitur feed, postingan, komentar, like, notifikasi, dan autentikasi pengguna, serta telah disiapkan untuk platform Android dan iOS.
+Proyek Flutter sederhana yang meniru fitur-fitur dasar dari aplikasi media sosial seperti Instagram/X. Berisi halaman login, register, feed, komentar, dan layanan API modular.
 
 ---
 
-## 🚀 Fitur Utama
+## 🚀 Getting Started
 
-- 🔐 **Autentikasi Pengguna**
-  - Login, Register
-  - Penyimpanan token aman via secure storage
+Proyek ini adalah titik awal untuk aplikasi Flutter yang terhubung ke backend REST API.
 
-- 🏠 **Dashboard dan Feed**
-  - Feed dengan tampilan grid dan tampilan detail post
-  - Interaksi: komentar, like, reply
+---
 
-- 💬 **Komentar dan Balasan**
-  - Modal komentar interaktif menggunakan `DraggableScrollableSheet`
+## 🛠️ Cara Menjalankan Proyek
 
-- 📩 **Notifikasi**
-  - Dukungan endpoint notifikasi untuk update pengguna
+### 🔹 Prasyarat
 
-- 🧑‍🤝‍🧑 **Profil & Avatar**
-  - Avatar pengguna dengan fallback jika gambar tidak tersedia
+Pastikan kamu telah menyiapkan:
 
-- 🧰 **Layanan Modular**
-  - Struktur `service` terpisah per fitur:
-    - Post, Comment, Like, Follow, Message, Notification, User, Upload
+- ✅ **Flutter SDK** (versi stable)
+- ✅ **Emulator** atau perangkat fisik Android/iOS
+- ✅ **Backend API** aktif dan dapat diakses
 
-- 🌐 **Dukungan Multi-Platform**
-  - Android, iOS, Web, Windows, macOS, Linux
+### 🔹 Jalankan Aplikasi
+
+```bash
+flutter pub get
+flutter run
+```
+
+### 🔹 Build untuk iOS
+
+> ⚠️ _Perlu perangkat macOS dan Xcode terinstal_
+
+```bash
+flutter build ios --release
+```
+
+---
+
+## 🧪 Testing
+
+Untuk menjalankan unit test:
+
+```bash
+flutter test
+```
+
+---
+
+## 📦 Dependencies Utama
+
+Beberapa package penting yang digunakan dalam proyek ini:
+
+- [`http`](https://pub.dev/packages/http) – komunikasi dengan API
+- [`flutter_secure_storage`](https://pub.dev/packages/flutter_secure_storage) – token storage aman
+- [`provider`](https://pub.dev/packages/provider) – state management (opsional)
+- [`cached_network_image`](https://pub.dev/packages/cached_network_image) – gambar dengan placeholder dan caching
+
+ℹ️ Lihat detail lengkap di file [`pubspec.yaml`](./pubspec.yaml)
 
 ---
 
 ## 📁 Struktur Proyek
 
-```bash
+```
 lib/
-├── pages/              # Halaman UI (login, register, feed, detail)
-├── services/           # Layer service untuk API backend
-├── utils/              # Utility seperti validator dan secure storage
-├── widgets/            # Komponen UI custom (textfield, avatar, dsb)
-├── routes.dart         # Definisi dan navigasi routing
-├── app.dart            # Root konfigurasi aplikasi
-└── main.dart           # Entry point utama aplikasi
+├── pages/              # Halaman UI (Login, Register, Feed, dll)
+├── services/           # Layanan API terpisah (auth, post, comment, dsb)
+├── utils/              # Utilitas seperti validator, date formatter, dsb
+├── widgets/            # Widget custom reusable
+├── routes.dart         # Manajemen routing
+├── main.dart           # Entry point aplikasi
+└── app.dart            # Inisialisasi dan konfigurasi awal
 ```
 
-🛠️ Cara Menjalankan Proyek
-🔹 Prasyarat
-Flutter SDK (versi stable)
+---
 
-Emulator atau perangkat Android/iOS
+## 💡 Catatan Pengembangan
 
-Backend API aktif dan dapat diakses
+- Semua service API mengikuti endpoint **REST** yang telah disediakan.
+- Penamaan file dan struktur folder mengikuti prinsip **clean architecture** secara sederhana.
+- Komentar dan struktur kode dirancang agar **mudah dikembangkan** dan dipelihara ke depannya.
 
-🔹 Jalankan Aplikasi
-bash
-Salin
-Edit
-flutter pub get
-flutter run
-🔹 Build untuk iOS
-Perlu macOS + Xcode
+---
 
-bash
-Salin
-Edit
-flutter build ios --release
-🧪 Testing
-bash
-Salin
-Edit
-flutter test
-📦 Dependencies Utama
-Beberapa package yang digunakan:
+## 📬 Kontribusi
 
-http – komunikasi dengan API
+Jika kamu ingin berkontribusi, jangan ragu untuk fork repository ini dan kirim pull request!
 
-flutter_secure_storage – token storage aman
-
-provider – state management (jika digunakan)
-
-cached_network_image – gambar dengan placeholder
-
-Lihat detail lengkap di file pubspec.yaml
-
-💡 Catatan Pengembangan
-Semua service API mengikuti endpoint REST yang telah disediakan.
-
-Penamaan file dan folder mengikuti praktik clean architecture sederhana.
-
-Komentar dan struktur kode ditulis agar mudah dikembangkan lebih lanjut.
+---
