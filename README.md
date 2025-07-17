@@ -43,6 +43,8 @@ lib/
 ├── routes.dart         # Definisi dan navigasi routing
 ├── app.dart            # Root konfigurasi aplikasi
 └── main.dart           # Entry point utama aplikasi
+```
+
 🛠️ Cara Menjalankan Proyek
 🔹 Prasyarat
 Flutter SDK (versi stable)
