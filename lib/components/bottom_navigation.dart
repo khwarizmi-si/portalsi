@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:portal_si/pages/feed_page.dart';
 import 'package:portal_si/pages/dashboard_page.dart';
+import 'package:portal_si/pages/profile_page.dart';
 
 class CustomBottomNavigation extends StatefulWidget {
   final int selectedIndex;
@@ -113,6 +114,8 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
     } else if (index == 1) {
       // Arahkan ke FeedPage
       Navigator.push(context, MaterialPageRoute(builder: (_) => FeedPage()));
+    } else if (index == 4) {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => ProfilePage()));
     } else {
       widget.onTap(index); // tetap jalankan untuk icon lain
     }

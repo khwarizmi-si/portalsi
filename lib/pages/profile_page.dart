@@ -22,7 +22,7 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -71,7 +71,7 @@ class _ProfilePageState extends State<ProfilePage> {
       decoration: const BoxDecoration(
         image: DecorationImage(
           image: NetworkImage(
-            'https://via.placeholder.com/400x200/4A90E2/FFFFFF?text=UWANGRAPH',
+            'https://i.pinimg.com/1200x/8c/56/c4/8c56c483afc07fbbc8d1c937c53c26b1.jpg',
           ),
           fit: BoxFit.cover,
         ),
@@ -114,17 +114,26 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           Row(
             children: [
-              // Profile picture
+              // Profile picture with enhanced styling
               Stack(
                 children: [
                   Container(
                     width: 80,
                     height: 80,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      image: DecorationImage(
+                      border: Border.all(color: Colors.grey[200]!, width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.15),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                          spreadRadius: -2,
+                        ),
+                      ],
+                      image: const DecorationImage(
                         image: NetworkImage(
-                          'https://via.placeholder.com/80x80/333333/FFFFFF?text=U',
+                          'https://i.pinimg.com/736x/19/5c/15/195c15bc600ba3e50ff5ac3be08c3667.jpg',
                         ),
                         fit: BoxFit.cover,
                       ),
@@ -136,95 +145,178 @@ class _ProfilePageState extends State<ProfilePage> {
                     child: Container(
                       width: 24,
                       height: 24,
-                      decoration: const BoxDecoration(
-                        color: Colors.orange,
+                      decoration: BoxDecoration(
+                        color: Colors.orange[600],
                         shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.orange.withOpacity(0.25),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                            spreadRadius: -1,
+                          ),
+                        ],
                       ),
                       child: const Icon(
                         Icons.add,
                         color: Colors.white,
-                        size: 16,
+                        size: 14,
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(width: 20),
-              // Stats
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildStatItem('7', 'postingan'),
-                    _buildStatItem('2.594', 'pengikut'),
-                    _buildStatItem('2.229', 'mengikuti'),
-                  ],
-                ),
-              ),
+              const Spacer(), // Better spacing distribution
             ],
           ),
+
           const SizedBox(height: 16),
-          // Bio
-          const Align(
+
+          // Bio dan Statistik with improved spacing
+          Align(
             alignment: Alignment.centerLeft,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Bio section with better typography
                 Text(
                   'Uwan | Visual Creator',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                    color: Colors.grey[900],
+                    letterSpacing: 0.2,
+                  ),
                 ),
-                SizedBox(height: 4),
-                Text(
-                  '📱 Bantu kamu bisa ngedit cuma dari HP',
-                  style: TextStyle(fontSize: 14),
-                ),
-                Text(
-                  '💡 Tips & trik seputar Pixellab dan Figma',
-                  style: TextStyle(fontSize: 14),
-                ),
-                Text(
-                  '📱 Lensplay → @wannshoot.id',
-                  style: TextStyle(fontSize: 14),
-                ),
-                Text(
-                  '💌 DM for business/collaboration',
-                  style: TextStyle(fontSize: 14),
+                const SizedBox(height: 8),
+
+                // Bio items with consistent spacing
+                ...{
+                      '📱 Bantu kamu bisa ngedit cuma dari HP',
+                      '💡 Tips & trik seputar Pixellab dan Figma',
+                      '📱 Lensplay → @wannshoot.id',
+                      '💌 DM for business/collaboration',
+                    }
+                    .map(
+                      (text) => Padding(
+                        padding: const EdgeInsets.only(bottom: 3),
+                        child: Text(
+                          text,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[700],
+                            height: 1.3,
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+
+                const SizedBox(height: 16),
+
+                // Enhanced statistics section
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildStatItem('7', 'postingan'),
+                      Container(height: 40, width: 1, color: Colors.grey[300]),
+                      _buildStatItem('2.594', 'pengikut'),
+                      Container(height: 40, width: 1, color: Colors.grey[300]),
+                      _buildStatItem('2.229', 'mengikuti'),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          // Action Buttons
+
+          const SizedBox(height: 20),
+
+          // Enhanced Action Buttons
           Row(
             children: [
               Expanded(
-                child: ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey[300],
-                    foregroundColor: Colors.black,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  decoration: BoxDecoration(
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.12),
+                        offset: const Offset(0, 3),
+                        blurRadius: 10,
+                        spreadRadius: -2,
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        offset: const Offset(0, 1),
+                        blurRadius: 4,
+                        spreadRadius: 0,
+                      ),
+                    ],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: ElevatedButton(
+                    onPressed: () {},
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey[200],
+                      foregroundColor: Colors.grey[800],
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text(
+                      'Edit profile',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
-                  child: const Text('Edit profile'),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               Expanded(
-                child: ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey[300],
-                    foregroundColor: Colors.black,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  decoration: BoxDecoration(
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.12),
+                        offset: const Offset(0, 3),
+                        blurRadius: 10,
+                        spreadRadius: -2,
+                      ),
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        offset: const Offset(0, 1),
+                        blurRadius: 4,
+                        spreadRadius: 0,
+                      ),
+                    ],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: ElevatedButton(
+                    onPressed: () {},
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.grey[200],
+                      foregroundColor: Colors.grey[800],
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Text(
+                      'Bagikan Profile',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
-                  child: const Text('Bagikan Profile'),
                 ),
               ),
             ],
@@ -234,14 +326,30 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  // Enhanced stat item widget
   Widget _buildStatItem(String count, String label) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           count,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: Colors.grey[900],
+            letterSpacing: 0.3,
+          ),
         ),
-        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: Colors.grey[600],
+            letterSpacing: 0.1,
+          ),
+        ),
       ],
     );
   }
@@ -250,97 +358,119 @@ class _ProfilePageState extends State<ProfilePage> {
     final List<Map<String, dynamic>> posts = [
       {
         'image':
-            'https://via.placeholder.com/200x200/2E86AB/FFFFFF?text=KAMPUHAN',
+            'https://i.pinimg.com/736x/81/db/7c/81db7ca9eb93133ee8d1091936d80625.jpg',
         'title': 'KAMPUHAN',
       },
       {
         'image':
-            'https://via.placeholder.com/200x200/F18F01/FFFFFF?text=NEXTRO',
+            'https://i.pinimg.com/736x/1d/1a/3f/1d1a3fff2183b264ad00ee507101fd1e.jpg',
         'title': 'NEXTRO',
       },
       {
         'image':
-            'https://via.placeholder.com/200x200/8B4513/FFFFFF?text=JAPANROOM',
+            'https://i.pinimg.com/736x/d9/d8/c6/d9d8c67d96e15ab6a17442fc55024cc7.jpg',
         'title': 'JAPANROOM',
       },
       {
         'image':
-            'https://via.placeholder.com/200x200/708090/FFFFFF?text=WAITING',
+            'https://i.pinimg.com/736x/d6/e5/0d/d6e50d10fc39a3b47cfa23b58afaf148.jpg',
         'title': 'WAITING',
       },
       {
         'image':
-            'https://via.placeholder.com/200x200/4682B4/FFFFFF?text=KAMPUHAN',
+            'https://i.pinimg.com/736x/a8/13/08/a81308cbf1a607ad22def295c86cd6b6.jpg',
         'title': 'KAMPUHAN',
       },
       {
         'image':
-            'https://via.placeholder.com/200x200/DAA520/FFFFFF?text=NEXTRO',
+            'https://i.pinimg.com/736x/63/f8/41/63f84192f01fb809ddf39982a144c5c3.jpg',
         'title': 'NEXTRO',
       },
       {
         'image':
-            'https://via.placeholder.com/200x200/A0522D/FFFFFF?text=JAPANROOM',
+            'https://i.pinimg.com/736x/e3/48/ef/e348ef87342010f1e2ac21cca1d0b27a.jpg',
         'title': 'JAPANROOM',
       },
       {
         'image':
-            'https://via.placeholder.com/200x200/778899/FFFFFF?text=WAITING',
+            'https://i.pinimg.com/736x/ab/7d/34/ab7d34778833e71e575bbe4100d9d272.jpg',
         'title': 'WAITING',
       },
       {
         'image':
-            'https://via.placeholder.com/200x200/5F9EA0/FFFFFF?text=KAMPUHAN',
+            'https://i.pinimg.com/736x/94/74/24/947424a08a621e3a1414f43ccab82eb0.jpg',
         'title': 'KAMPUHAN',
       },
     ];
 
     return Container(
       color: Colors.white,
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          crossAxisSpacing: 1,
-          mainAxisSpacing: 1,
-        ),
-        itemCount: posts.length,
-        itemBuilder: (context, index) {
-          final post = posts[index];
-          return Container(
-            decoration: BoxDecoration(
-              image: DecorationImage(
-                image: NetworkImage(post['image']),
-                fit: BoxFit.cover,
-              ),
-            ),
-            child: Container(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 12,
+        ), // Margin kiri & kanan
+        child: GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 6, // Bisa kamu atur supaya ada jarak antar item
+            mainAxisSpacing: 8,
+          ),
+          itemCount: posts.length,
+          itemBuilder: (context, index) {
+            final post = posts[index];
+            return Container(
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Text(
-                    post['title'],
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                    textAlign: TextAlign.center,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color.fromARGB(80, 0, 0, 0),
+
+                    blurRadius: 4,
+                    offset: const Offset(0, 4),
                   ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.network(post['image'], fit: BoxFit.cover),
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.7),
+                          ],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        ),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Text(
+                          post['title'],
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
