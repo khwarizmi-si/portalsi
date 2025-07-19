@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../components/bottom_navigation.dart';
+import '../utils/secure_storage.dart';
+import '../services/auth_service.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({Key? key}) : super(key: key);
@@ -11,6 +13,29 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   int _selectedIndex = 4;
+  Map<String, dynamic>? _user;
+  bool _isLoadingUser = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUser();
+  }
+
+  Future<void> _loadUser() async {
+    final userData = await AuthService().getUser();
+    if (userData == null) {
+      // Token hilang/invalid → langsung logout
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+      return;
+    }
+
+    setState(() {
+      _user = userData;
+      _isLoadingUser = false;
+    });
+  }
 
   void _onBottomNavTapped(int index) {
     setState(() => _selectedIndex = index);
@@ -30,18 +55,41 @@ class _ProfilePageState extends State<ProfilePage> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'uwangraph',
-          style: TextStyle(
-            color: Colors.black,
-            fontSize: 18,
-            fontWeight: FontWeight.w500,
+        title: Center(
+          child: Text(
+            _isLoadingUser
+                ? 'Memuat...'
+                : _user?['full_name'] ?? 'Nama tidak tersedia',
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 16,
+              color: Colors.black, // ganti jadi putih karena background gelap
+              letterSpacing: 0.2,
+            ),
           ),
         ),
+
         actions: [
-          IconButton(
+          PopupMenuButton<String>(
             icon: const Icon(Icons.menu, color: Colors.black),
-            onPressed: () {},
+            onSelected: (value) async {
+              if (value == 'logout') {
+                await AuthService().logout(); // gunakan service yang konsisten
+                if (!mounted) return;
+                Navigator.pushNamedAndRemoveUntil(
+                  context,
+                  '/login',
+                  (route) => false,
+                );
+              }
+            },
+
+            itemBuilder: (BuildContext context) => [
+              const PopupMenuItem<String>(
+                value: 'logout',
+                child: Text('Logout'),
+              ),
+            ],
           ),
         ],
       ),
@@ -90,9 +138,11 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
             ),
           ),
-          const Center(
+          Center(
             child: Text(
-              'UWANGRAPH',
+              _isLoadingUser
+                  ? 'Memuat...'
+                  : _user?['username'] ?? 'Nama tidak tersedia',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 36,
@@ -181,7 +231,9 @@ class _ProfilePageState extends State<ProfilePage> {
               children: [
                 // Bio section with better typography
                 Text(
-                  'Uwan | Visual Creator',
+                  _isLoadingUser
+                      ? 'Memuat...'
+                      : _user?['full_name'] ?? 'Nama tidak tersedia',
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 16,
@@ -189,6 +241,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     letterSpacing: 0.2,
                   ),
                 ),
+
                 const SizedBox(height: 8),
 
                 // Bio items with consistent spacing

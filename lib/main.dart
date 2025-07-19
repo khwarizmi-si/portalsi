@@ -4,24 +4,35 @@ import 'pages/register_page.dart';
 import 'pages/dashboard_page.dart';
 import 'pages/profile_page.dart';
 import 'pages/feed_page.dart';
+import 'pages/other_profile_page.dart';
+import 'utils/secure_storage.dart'; // pastikan path-nya benar
 
-void main() {
-  runApp(MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final hasToken = await SecureStorage.hasToken();
+
+  runApp(MyApp(startPage: hasToken ? '/dashboard' : '/login'));
 }
 
 class MyApp extends StatelessWidget {
+  final String startPage;
+
+  const MyApp({super.key, required this.startPage});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Portal SI',
       theme: ThemeData(primarySwatch: Colors.blue, fontFamily: 'Roboto'),
-      home: ProfilePage(),
+      initialRoute: startPage,
       routes: {
-        '/login': (context) => LoginPage(),
+        '/login': (context) => const LoginPage(),
         '/register': (context) => RegisterPage(),
         '/dashboard': (context) => HomePage(),
         '/feed': (context) => FeedPage(),
-        '/profile': (context) => ProfilePage(),
+        '/profile': (context) => const ProfilePage(),
+        // Jika ingin lihat profil orang lain secara manual:
+        // '/other_profile': (context) => OtherProfilePage(username: 'r_herdians'),
       },
     );
   }

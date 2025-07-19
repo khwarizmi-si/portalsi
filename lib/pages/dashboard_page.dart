@@ -129,84 +129,100 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ),
         ),
       ),
-      body: RefreshIndicator(
-        onRefresh: _onRefresh,
-        color: Colors.deepOrangeAccent,
-        backgroundColor: Colors.white,
-        strokeWidth: 2.5,
-        child: CustomScrollView(
-          controller: _scrollController,
-          physics: BouncingScrollPhysics(),
-          slivers: [
-            SliverToBoxAdapter(
-              child: AnimatedBuilder(
-                animation: _refreshAnimation,
-                builder: (context, child) {
-                  return Transform.translate(
-                    offset: Offset(0, -20 * _refreshAnimation.value),
-                    child: Opacity(
-                      opacity: 1 - (_refreshAnimation.value * 0.3),
-                      child: StorySection(),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              Color(0xFFFFF0D0), // soft orange/peach kiri
+              Colors.white, // putih tengah
+              Color(0xFFDFFEF8), // mint/cyan kanan
+            ],
+            stops: [0.0, 0.5, 1.0],
+          ),
+        ),
+        child: RefreshIndicator(
+          onRefresh: _onRefresh,
+          color: Colors.deepOrangeAccent,
+          backgroundColor: Colors.white,
+          strokeWidth: 2.5,
+          child: CustomScrollView(
+            controller: _scrollController,
+            physics: BouncingScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: AnimatedBuilder(
+                  animation: _refreshAnimation,
+                  builder: (context, child) {
+                    return Transform.translate(
+                      offset: Offset(0, -20 * _refreshAnimation.value),
+                      child: Opacity(
+                        opacity: 1 - (_refreshAnimation.value * 0.3),
+                        child: StorySection(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Container(
+                  height: 8,
+                  color: Colors.transparent,
+                  margin: EdgeInsets.symmetric(vertical: 8),
+                ),
+              ),
+              SliverList(
+                delegate: SliverChildListDelegate([
+                  _buildAnimatedPost(
+                    delay: 0,
+                    post: PostCard(
+                      username: 'uwangraph',
+                      timeAgo: '10 jam',
+                      imageUrl:
+                          'https://i.pinimg.com/736x/e5/b2/e2/e5b2e25471789ef3d4fe8b9657a16d27.jpg',
+                      likes: 99,
+                      comments: 66,
+                      content:
+                          'Bingung cari font buat desain Ramadhan? Tenang, kita udah siapin rekomendasi terbaik buat kalian! 😊\n\nSwipe buat lihat lebih banyak pilihan! 📱',
                     ),
-                  );
-                },
+                  ),
+                  SizedBox(height: 8),
+                  _buildAnimatedPost(
+                    delay: 100,
+                    post: PostCard(
+                      username: 'uwangraph',
+                      timeAgo: '11 jam',
+                      imageUrl:
+                          'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=400&h=400&fit=crop',
+                      likes: 45,
+                      comments: 23,
+                      content:
+                          'Tips desain yang mudah dipahami untuk pemula! 🎨',
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  _buildAnimatedPost(
+                    delay: 200,
+                    post: PostCard(
+                      username: 'designpro',
+                      timeAgo: '1 hari',
+                      imageUrl:
+                          'https://images.unsplash.com/photo-1558655146-9f40138edfeb?w=400&h=400&fit=crop',
+                      likes: 128,
+                      comments: 45,
+                      content:
+                          'Inspirasi color palette terbaru untuk project 2024! 🎨✨',
+                    ),
+                  ),
+                  SizedBox(height: 100), // Padding bottom untuk nav bar
+                ]),
               ),
-            ),
-            SliverToBoxAdapter(
-              child: Container(
-                height: 8,
-                color: Color(0xFFFFE8D0),
-                margin: EdgeInsets.symmetric(vertical: 8),
-              ),
-            ),
-            SliverList(
-              delegate: SliverChildListDelegate([
-                _buildAnimatedPost(
-                  delay: 0,
-                  post: PostCard(
-                    username: 'uwangraph',
-                    timeAgo: '10 jam',
-                    imageUrl:
-                        'https://i.pinimg.com/736x/e5/b2/e2/e5b2e25471789ef3d4fe8b9657a16d27.jpg',
-                    likes: 99,
-                    comments: 66,
-                    content:
-                        'Bingung cari font buat desain Ramadhan? Tenang, kita udah siapin rekomendasi terbaik buat kalian! 😊\n\nSwipe buat lihat lebih banyak pilihan! 📱',
-                  ),
-                ),
-                SizedBox(height: 8),
-                _buildAnimatedPost(
-                  delay: 100,
-                  post: PostCard(
-                    username: 'uwangraph',
-                    timeAgo: '11 jam',
-                    imageUrl:
-                        'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=400&h=400&fit=crop',
-                    likes: 45,
-                    comments: 23,
-                    content: 'Tips desain yang mudah dipahami untuk pemula! 🎨',
-                  ),
-                ),
-                SizedBox(height: 8),
-                _buildAnimatedPost(
-                  delay: 200,
-                  post: PostCard(
-                    username: 'designpro',
-                    timeAgo: '1 hari',
-                    imageUrl:
-                        'https://images.unsplash.com/photo-1558655146-9f40138edfeb?w=400&h=400&fit=crop',
-                    likes: 128,
-                    comments: 45,
-                    content:
-                        'Inspirasi color palette terbaru untuk project 2024! 🎨✨',
-                  ),
-                ),
-                SizedBox(height: 100), // Padding bottom untuk nav bar
-              ]),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
+
       bottomNavigationBar: CustomBottomNavigation(
         selectedIndex: _selectedIndex,
         onTap: _onBottomNavTapped,

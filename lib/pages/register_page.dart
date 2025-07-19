@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:portal_si/services/auth_service.dart';
+import 'package:portal_si/utils/secure_storage.dart';
 
 class RegisterPage extends StatefulWidget {
   @override
@@ -15,6 +17,19 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _isLoading = false;
 
   @override
+  void initState() {
+    super.initState();
+    _checkToken();
+  }
+
+  void _checkToken() async {
+    final hasToken = await SecureStorage.hasToken();
+    if (hasToken) {
+      Navigator.pushReplacementNamed(context, '/dashboard');
+    }
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _fullNameController.dispose();
@@ -29,22 +44,35 @@ class _RegisterPageState extends State<RegisterPage> {
         _isLoading = true;
       });
 
-      // Simulasi proses registrasi
-      await Future.delayed(Duration(seconds: 2));
+      final authService = AuthService(); // ← buat instance
+
+      final result = await authService.register(
+        _usernameController.text.trim(),
+        _fullNameController.text.trim(),
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
+      );
 
       setState(() {
         _isLoading = false;
       });
 
-      // Navigasi ke halaman login
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Registrasi berhasil! Silakan login.'),
-          backgroundColor: Colors.green,
-        ),
-      );
-
-      Navigator.pushReplacementNamed(context, '/login');
+      if (result['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'Registrasi berhasil!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pushReplacementNamed(context, '/login');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'Registrasi gagal.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

@@ -258,9 +258,4 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
       ),
     );
   }
-
-  // double _getIndicatorPosition() {
-  //   // Method ini tidak digunakan lagi
-  //   return 0;
-  // }
 }

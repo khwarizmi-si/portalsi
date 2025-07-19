@@ -6,7 +6,7 @@ class StorySection extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 100,
-      color: Colors.white,
+      color: Colors.transparent, // Membuat background transparan
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
