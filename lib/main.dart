@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'pages/login_page.dart';
 import 'pages/register_page.dart';
 import 'pages/dashboard_page.dart';
+import 'pages/profile_page.dart';
+import 'pages/feed_page.dart';
 
 void main() {
   runApp(MyApp());
@@ -13,11 +15,13 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Portal SI',
       theme: ThemeData(primarySwatch: Colors.blue, fontFamily: 'Roboto'),
-      home: HomePage(),
+      home: ProfilePage(),
       routes: {
         '/login': (context) => LoginPage(),
         '/register': (context) => RegisterPage(),
         '/dashboard': (context) => HomePage(),
+        '/feed': (context) => FeedPage(),
+        '/profile': (context) => ProfilePage(),
       },
     );
   }
