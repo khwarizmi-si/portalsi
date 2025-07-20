@@ -3,7 +3,7 @@ import 'dart:convert';
 import '../utils/secure_storage.dart';
 
 class CommentService {
-  final baseUrl = 'https://your-api.com';
+  final baseUrl = 'https://api.portalsi.com/api';
 
   Future<List<dynamic>> getComments(int postId) async {
     final token = await SecureStorage.getToken();

@@ -3,44 +3,45 @@ import 'package:flutter/material.dart';
 class PostHeader extends StatelessWidget {
   final String username;
   final String timeAgo;
+  final String profileImageUrl;
+  final bool isVerified;
+  final Map<String, dynamic> user;
 
-  const PostHeader({Key? key, required this.username, required this.timeAgo})
-    : super(key: key);
+  const PostHeader({
+    super.key,
+    required this.username,
+    required this.timeAgo,
+    required this.profileImageUrl,
+    required this.isVerified,
+    required this.user,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.all(12),
-      child: Row(
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      leading: CircleAvatar(
+        backgroundImage: NetworkImage(profileImageUrl),
+        radius: 20,
+        onBackgroundImageError: (_, __) {},
+      ),
+      title: Row(
         children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundImage: NetworkImage(
-              'https://i.pinimg.com/736x/ec/8a/3f/ec8a3f6e345ac819a00ba54bc393f276.jpg',
-            ),
+          Text(
+            username,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           ),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  username,
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                ),
-                Text(
-                  timeAgo,
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
-          ),
-          IconButton(
-            icon: Icon(Icons.more_vert, color: Colors.grey[600]),
-            onPressed: () {},
-          ),
+          if (isVerified) ...[
+            const SizedBox(width: 4),
+            const Icon(Icons.verified, color: Colors.blue, size: 16),
+          ],
         ],
       ),
+      subtitle: Text(timeAgo),
+      onTap: () {
+        // Navigasi ke profil user bisa ditambahkan di sini
+        print('Tampilkan profil user: ${user['username']}');
+      },
     );
   }
 }

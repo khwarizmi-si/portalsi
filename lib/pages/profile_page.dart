@@ -59,7 +59,7 @@ class _ProfilePageState extends State<ProfilePage> {
           child: Text(
             _isLoadingUser
                 ? 'Memuat...'
-                : _user?['full_name'] ?? 'Nama tidak tersedia',
+                : _user?['user']?['username'] ?? 'Nama tidak tersedia',
             style: const TextStyle(
               fontWeight: FontWeight.w600,
               fontSize: 16,
@@ -142,7 +142,7 @@ class _ProfilePageState extends State<ProfilePage> {
             child: Text(
               _isLoadingUser
                   ? 'Memuat...'
-                  : _user?['username'] ?? 'Nama tidak tersedia',
+                  : _user?['user']?['username'] ?? 'Nama tidak tersedia',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 36,
@@ -233,7 +233,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 Text(
                   _isLoadingUser
                       ? 'Memuat...'
-                      : _user?['full_name'] ?? 'Nama tidak tersedia',
+                      : _user?['user']?['full_name'] ?? 'Nama tidak tersedia',
                   style: TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 16,

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../components/bottom_navigation.dart';
 import 'post_detail_page.dart';
+import 'package:portal_si/services/post_service.dart';
+import '../helper/time_helper.dart';
 
 class FeedPage extends StatefulWidget {
   @override
@@ -17,83 +19,34 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
-  final List<Map<String, dynamic>> _feedItems = [
-    {
-      'image':
-          'https://i.pinimg.com/736x/e5/b2/e2/e5b2e25471789ef3d4fe8b9657a16d27.jpg',
-      'title': 'HUT',
-      'subtitle': 'Design Collection',
-      'color': Color(0xFF4A90E2),
-    },
-    {
-      'image':
-          'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=400&fit=crop',
-      'title': 'LORD',
-      'subtitle': 'Game UI Design',
-      'color': Color(0xFF8B4513),
-    },
-    {
-      'image':
-          'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=400&h=400&fit=crop',
-      'title': 'JONAS',
-      'subtitle': 'Character Design',
-      'color': Color(0xFF2ECC71),
-    },
-    {
-      'image':
-          'https://images.unsplash.com/photo-1551650975-87deedd944c3?w=400&h=400&fit=crop',
-      'title': 'SQUIDWARD',
-      'subtitle': 'Animation',
-      'color': Color(0xFF1ABC9C),
-    },
-    {
-      'image':
-          'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=400&h=400&fit=crop',
-      'title': 'PRO SKYLAR',
-      'subtitle': 'Sports Design',
-      'color': Color(0xFFE67E22),
-    },
-    {
-      'image':
-          'https://images.unsplash.com/photo-1551650975-87deedd944c3?w=400&h=400&fit=crop',
-      'title': 'LOGIN',
-      'subtitle': 'UI/UX Design',
-      'color': Color(0xFF3498DB),
-    },
-    {
-      'image':
-          'https://images.unsplash.com/photo-1566492031773-4f4e44671d66?w=400&h=400&fit=crop',
-      'title': 'NINJA',
-      'subtitle': 'Game Interface',
-      'color': Color(0xFF2C3E50),
-    },
-    {
-      'image':
-          'https://images.unsplash.com/photo-1558655146-9f40138edfeb?w=400&h=400&fit=crop',
-      'title': 'GRADIENT',
-      'subtitle': 'Color Palette',
-      'color': Color(0xFF9B59B6),
-    },
-  ];
+  List<dynamic> _feedItems = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _animationController = AnimationController(
-      duration: Duration(milliseconds: 1000),
       vsync: this,
+      duration: Duration(milliseconds: 500),
     );
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    _fadeAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeIn,
     );
-    _animationController.forward();
-    _scrollController.addListener(() {
-      if (_scrollController.offset > 10 && !_isScrolled) {
-        setState(() => _isScrolled = true);
-      } else if (_scrollController.offset <= 10 && _isScrolled) {
-        setState(() => _isScrolled = false);
-      }
-    });
+
+    fetchPosts(); // panggil API
+  }
+
+  Future<void> fetchPosts() async {
+    try {
+      final posts = await PostService().fetchAllPosts();
+      setState(() {
+        _feedItems = posts;
+      });
+    } catch (e) {
+      print('Error: $e');
+      // Tambahkan feedback ke user jika perlu
+    }
   }
 
   @override
@@ -227,14 +180,35 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildGridItem(Map<String, dynamic> item, int index) {
+  Widget _buildGridItem(dynamic item, int index) {
+    final user = item['user'];
+    final imageUrl = item['media_url'] ?? '';
+    final caption = item['caption'] ?? '';
+    final username = user?['username'] ?? 'Unknown';
+
     return TweenAnimationBuilder<double>(
       duration: Duration(milliseconds: 600 + (index * 100)),
       tween: Tween(begin: 0.0, end: 1.0),
       builder: (context, value, child) => Transform.scale(
         scale: value,
         child: GestureDetector(
-          onTap: () => _showDetailDialog(item),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => PostDetailPage(
+                  username: item['user']['username'],
+                  timeAgo: timeAgoFromDate(item['created_at']),
+                  imageUrl: item['media_url'],
+                  content: item['caption'],
+                  likes: 0, // karena belum ada di struktur, bisa 0 dulu
+                  comments: 0, // karena belum ada juga
+                  profileImageUrl: item['user']['profile_picture_url'] ?? '',
+                  isVerified: item['user']['is_verified'] ?? false,
+                ),
+              ),
+            );
+          },
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
@@ -252,10 +226,10 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
                 fit: StackFit.expand,
                 children: [
                   Image.network(
-                    item['image'],
+                    imageUrl,
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(
-                      color: item['color'],
+                      color: Colors.grey[300],
                       child: Center(
                         child: Icon(
                           Icons.image_not_supported,
@@ -281,7 +255,7 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          item['title'],
+                          username,
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 18,
@@ -290,7 +264,9 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
                         ),
                         SizedBox(height: 4),
                         Text(
-                          item['subtitle'],
+                          caption,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(color: Colors.white70, fontSize: 12),
                         ),
                       ],
@@ -305,17 +281,20 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
     );
   }
 
-  void _showDetailDialog(Map<String, dynamic> item) {
+  void _showDetailDialog(dynamic item) {
+    final user = item['user'];
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => PostDetailPage(
-          username: 'uwangraph',
-          timeAgo: 'Baru saja',
-          imageUrl: item['image'],
-          content: item['subtitle'],
-          likes: 10,
-          comments: 5,
+          username: user?['username'] ?? '',
+          timeAgo: timeAgoFromDate(item['created_at']),
+          imageUrl: item['media_url'] ?? '',
+          content: item['caption'] ?? '',
+          likes: item['likes_count'] ?? 0,
+          comments: item['comments_count'] ?? 0,
+          profileImageUrl: user?['profile_picture_url'] ?? '',
+          isVerified: user?['is_verified'] ?? false,
         ),
       ),
     );
