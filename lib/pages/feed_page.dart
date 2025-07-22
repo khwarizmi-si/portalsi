@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../components/bottom_navigation.dart';
 import 'post_detail_page.dart';
 import 'package:portal_si/services/post_service.dart';
+import 'dashboard_page.dart';
 import '../helper/time_helper.dart';
 
 class FeedPage extends StatefulWidget {
@@ -108,23 +109,35 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
       ),
     );
 
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
-      backgroundColor: Color(0xFFFAFAFA),
-      body: RefreshIndicator(
-        onRefresh: _fetchPosts,
-        child: SafeArea(
-          child: Column(
-            children: [
-              _buildHeader(),
-              Expanded(child: _buildBody()),
-            ],
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (!didPop) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => HomePage()),
+            (route) => false,
+          );
+        }
+      },
+      child: Scaffold(
+        resizeToAvoidBottomInset: true,
+        backgroundColor: Color(0xFFFAFAFA),
+        body: RefreshIndicator(
+          onRefresh: _fetchPosts,
+          child: SafeArea(
+            child: Column(
+              children: [
+                _buildHeader(),
+                Expanded(child: _buildBody()),
+              ],
+            ),
           ),
         ),
-      ),
-      bottomNavigationBar: CustomBottomNavigation(
-        selectedIndex: _selectedIndex,
-        onTap: _onBottomNavTapped,
+        bottomNavigationBar: CustomBottomNavigation(
+          selectedIndex: _selectedIndex,
+          onTap: _onBottomNavTapped,
+        ),
       ),
     );
   }

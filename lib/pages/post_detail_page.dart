@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../components/post_card.dart';
+import 'dashboard_page.dart';
 import '../components/bottom_navigation.dart';
 import '../helper/time_helper.dart'; // Pastikan ada fungsi timeAgoFromDate()
 
@@ -249,41 +250,53 @@ class _PostDetailPageState extends State<PostDetailPage>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.white.withOpacity(0.95),
-        elevation: 0,
-        title: const Text(
-          'Detail Postingan',
-          style: TextStyle(
-            color: Colors.black87,
-            fontWeight: FontWeight.w600,
-            fontSize: 18,
-          ),
-        ),
-        iconTheme: const IconThemeData(color: Colors.black87),
-        systemOverlayStyle: SystemUiOverlayStyle.dark,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
-        ),
-      ),
-      body: Stack(
-        children: [
-          _buildBackgroundGradient(),
-          Positioned.fill(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-              child: Container(color: Colors.transparent),
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (!didPop) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => HomePage()),
+            (route) => false,
+          );
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          backgroundColor: Colors.white.withOpacity(0.95),
+          elevation: 0,
+          title: const Text(
+            'Detail Postingan',
+            style: TextStyle(
+              color: Colors.black87,
+              fontWeight: FontWeight.w600,
+              fontSize: 18,
             ),
           ),
-          SafeArea(child: _buildPostsList()),
-        ],
-      ),
-      bottomNavigationBar: CustomBottomNavigation(
-        selectedIndex: _selectedIndex,
-        onTap: _onBottomNavTapped,
+          iconTheme: const IconThemeData(color: Colors.black87),
+          systemOverlayStyle: SystemUiOverlayStyle.dark,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+          ),
+        ),
+        body: Stack(
+          children: [
+            _buildBackgroundGradient(),
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                child: Container(color: Colors.transparent),
+              ),
+            ),
+            SafeArea(child: _buildPostsList()),
+          ],
+        ),
+        bottomNavigationBar: CustomBottomNavigation(
+          selectedIndex: _selectedIndex,
+          onTap: _onBottomNavTapped,
+        ),
       ),
     );
   }
