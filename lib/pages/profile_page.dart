@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import '../components/bottom_navigation.dart';
 import '../utils/secure_storage.dart';
 import '../services/auth_service.dart';
+import '../services/post_service.dart';
+import '../services/follow_service.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({Key? key}) : super(key: key);
@@ -15,17 +17,45 @@ class _ProfilePageState extends State<ProfilePage> {
   int _selectedIndex = 4;
   Map<String, dynamic>? _user;
   bool _isLoadingUser = true;
+  List<dynamic> _userPosts = [];
+  bool _isLoadingPosts = true;
+  final FollowService _followService = FollowService();
+
+  List<dynamic> followers = [];
+  List<dynamic> following = [];
+  bool isLoading = true;
+  int? userId;
 
   @override
   void initState() {
     super.initState();
     _loadUser();
+    fetchFollowData();
+  }
+
+  Future<void> fetchFollowData() async {
+    try {
+      final userIdStr = await SecureStorage.getToken();
+      userId = int.tryParse(userIdStr ?? '');
+      if (userId == null) throw Exception('User ID tidak valid');
+
+      final fetchedFollowers = await _followService.getFollowers(userId!);
+      final fetchedFollowing = await _followService.getFollowing(userId!);
+
+      setState(() {
+        followers = fetchedFollowers;
+        following = fetchedFollowing;
+        isLoading = false;
+      });
+    } catch (e) {
+      print('Error ambil followers/following: $e');
+      setState(() => isLoading = false);
+    }
   }
 
   Future<void> _loadUser() async {
     final userData = await AuthService().getUser();
     if (userData == null) {
-      // Token hilang/invalid → langsung logout
       if (!mounted) return;
       Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
       return;
@@ -35,6 +65,33 @@ class _ProfilePageState extends State<ProfilePage> {
       _user = userData;
       _isLoadingUser = false;
     });
+
+    _fetchUserPosts();
+  }
+
+  Future<void> _fetchUserPosts() async {
+    if (_user == null) return;
+
+    try {
+      final allPosts = await PostService().fetchAllPosts();
+      final userId = _user!['user']['user_id'].toString();
+      final userPosts = allPosts.where((post) {
+        final postMap = post as Map<String, dynamic>;
+        return postMap['user_id'].toString() == userId;
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _userPosts = userPosts;
+          _isLoadingPosts = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingPosts = false);
+        print('Error fetching user posts: $e');
+      }
+    }
   }
 
   void _onBottomNavTapped(int index) {
@@ -48,63 +105,71 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Center(
-          child: Text(
-            _isLoadingUser
-                ? 'Memuat...'
-                : _user?['user']?['username'] ?? 'Nama tidak tersedia',
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 16,
-              color: Colors.black, // ganti jadi putih karena background gelap
-              letterSpacing: 0.2,
+      body: CustomScrollView(
+        slivers: [
+          // AppBar sebagai sliver
+          SliverAppBar(
+            backgroundColor: Colors.white,
+            elevation: 0,
+            floating: true,
+            snap: true,
+            pinned: false,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.black),
+              onPressed: () => Navigator.pop(context),
             ),
-          ),
-        ),
-
-        actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.menu, color: Colors.black),
-            onSelected: (value) async {
-              if (value == 'logout') {
-                await AuthService().logout(); // gunakan service yang konsisten
-                if (!mounted) return;
-                Navigator.pushNamedAndRemoveUntil(
-                  context,
-                  '/login',
-                  (route) => false,
-                );
-              }
-            },
-
-            itemBuilder: (BuildContext context) => [
-              const PopupMenuItem<String>(
-                value: 'logout',
-                child: Text('Logout'),
+            title: Text(
+              _isLoadingUser
+                  ? 'Memuat...'
+                  : _user?['user']?['username'] ?? 'Nama tidak tersedia',
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
+                color: Colors.black,
+                letterSpacing: 0.2,
+              ),
+            ),
+            centerTitle: true,
+            actions: [
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.menu, color: Colors.black),
+                onSelected: (value) async {
+                  if (value == 'logout') {
+                    await AuthService().logout();
+                    if (!mounted) return;
+                    Navigator.pushNamedAndRemoveUntil(
+                      context,
+                      '/login',
+                      (route) => false,
+                    );
+                  }
+                },
+                itemBuilder: (BuildContext context) => [
+                  const PopupMenuItem<String>(
+                    value: 'logout',
+                    child: Text('Logout'),
+                  ),
+                ],
               ),
             ],
           ),
+
+          // Konten utama sebagai sliver
+          SliverToBoxAdapter(
+            child: Column(
+              children: [
+                // Header
+                _buildHeader(),
+                // Profile Info
+                _buildProfileSection(),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+
+          // Grid Posts sebagai sliver
+          _buildPostGridSliver(),
         ],
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Header
-            _buildHeader(),
-            // Profile Info
-            _buildProfileSection(),
-            const SizedBox(height: 8),
-            // Grid Posts
-            _buildPostGrid(),
-          ],
-        ),
       ),
       bottomNavigationBar: CustomBottomNavigation(
         selectedIndex: _selectedIndex,
@@ -217,7 +282,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   ),
                 ],
               ),
-              const Spacer(), // Better spacing distribution
+              const Spacer(),
             ],
           ),
 
@@ -244,27 +309,19 @@ class _ProfilePageState extends State<ProfilePage> {
 
                 const SizedBox(height: 8),
 
-                // Bio items with consistent spacing
-                ...{
-                      '📱 Bantu kamu bisa ngedit cuma dari HP',
-                      '💡 Tips & trik seputar Pixellab dan Figma',
-                      '📱 Lensplay → @wannshoot.id',
-                      '💌 DM for business/collaboration',
-                    }
-                    .map(
-                      (text) => Padding(
-                        padding: const EdgeInsets.only(bottom: 3),
-                        child: Text(
-                          text,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[700],
-                            height: 1.3,
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 3),
+                  child: Text(
+                    _isLoadingUser
+                        ? 'Memuat...'
+                        : (_user?['user']?['bio'] ?? 'Tidak ada bio'),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[700],
+                      height: 1.3,
+                    ),
+                  ),
+                ),
 
                 const SizedBox(height: 16),
 
@@ -274,11 +331,11 @@ class _ProfilePageState extends State<ProfilePage> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _buildStatItem('7', 'postingan'),
+                      _buildStatItem(_userPosts.length.toString(), 'postingan'),
                       Container(height: 40, width: 1, color: Colors.grey[300]),
-                      _buildStatItem('2.594', 'pengikut'),
+                      _buildStatItem(followers.length.toString(), 'pengikut'),
                       Container(height: 40, width: 1, color: Colors.grey[300]),
-                      _buildStatItem('2.229', 'mengikuti'),
+                      _buildStatItem(following.length.toString(), 'mengikuti'),
                     ],
                   ),
                 ),
@@ -379,7 +436,6 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // Enhanced stat item widget
   Widget _buildStatItem(String count, String label) {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -407,122 +463,200 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildPostGrid() {
-    final List<Map<String, dynamic>> posts = [
-      {
-        'image':
-            'https://i.pinimg.com/736x/81/db/7c/81db7ca9eb93133ee8d1091936d80625.jpg',
-        'title': 'KAMPUHAN',
-      },
-      {
-        'image':
-            'https://i.pinimg.com/736x/1d/1a/3f/1d1a3fff2183b264ad00ee507101fd1e.jpg',
-        'title': 'NEXTRO',
-      },
-      {
-        'image':
-            'https://i.pinimg.com/736x/d9/d8/c6/d9d8c67d96e15ab6a17442fc55024cc7.jpg',
-        'title': 'JAPANROOM',
-      },
-      {
-        'image':
-            'https://i.pinimg.com/736x/d6/e5/0d/d6e50d10fc39a3b47cfa23b58afaf148.jpg',
-        'title': 'WAITING',
-      },
-      {
-        'image':
-            'https://i.pinimg.com/736x/a8/13/08/a81308cbf1a607ad22def295c86cd6b6.jpg',
-        'title': 'KAMPUHAN',
-      },
-      {
-        'image':
-            'https://i.pinimg.com/736x/63/f8/41/63f84192f01fb809ddf39982a144c5c3.jpg',
-        'title': 'NEXTRO',
-      },
-      {
-        'image':
-            'https://i.pinimg.com/736x/e3/48/ef/e348ef87342010f1e2ac21cca1d0b27a.jpg',
-        'title': 'JAPANROOM',
-      },
-      {
-        'image':
-            'https://i.pinimg.com/736x/ab/7d/34/ab7d34778833e71e575bbe4100d9d272.jpg',
-        'title': 'WAITING',
-      },
-      {
-        'image':
-            'https://i.pinimg.com/736x/94/74/24/947424a08a621e3a1414f43ccab82eb0.jpg',
-        'title': 'KAMPUHAN',
-      },
-    ];
-
-    return Container(
-      color: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 12,
-        ), // Margin kiri & kanan
-        child: GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 6, // Bisa kamu atur supaya ada jarak antar item
-            mainAxisSpacing: 8,
+  Widget _buildPostGridSliver() {
+    if (_isLoadingPosts) {
+      return const SliverToBoxAdapter(
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(32.0),
+            child: CircularProgressIndicator(),
           ),
-          itemCount: posts.length,
-          itemBuilder: (context, index) {
-            final post = posts[index];
-            return Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color.fromARGB(80, 0, 0, 0),
+        ),
+      );
+    }
 
-                    blurRadius: 4,
-                    offset: const Offset(0, 4),
+    if (_userPosts.isEmpty) {
+      return SliverToBoxAdapter(
+        child: Container(
+          height: 200,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.photo_camera_outlined,
+                  size: 64,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Belum ada postingan',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Postingan yang Anda bagikan akan muncul di sini',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      sliver: SliverGrid(
+        delegate: SliverChildBuilderDelegate((context, index) {
+          final post = _userPosts[index];
+          return Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color.fromARGB(80, 0, 0, 0),
+                  blurRadius: 4,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.network(
+                    post['media_url'] ??
+                        'https://via.placeholder.com/300x300?text=No+Image',
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Colors.grey[300],
+                        child: Icon(
+                          Icons.image_not_supported,
+                          color: Colors.grey[600],
+                          size: 40,
+                        ),
+                      );
+                    },
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        color: Colors.grey[300],
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                : null,
+                            strokeWidth: 2,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.7),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 8,
+                    left: 8,
+                    right: 8,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (post['caption'] != null &&
+                            post['caption'].toString().isNotEmpty)
+                          Text(
+                            post['caption'].toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+
+                        if (post['location'] != null &&
+                            post['location'].toString().isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.location_on,
+                                  color: Colors.white,
+                                  size: 10,
+                                ),
+                                const SizedBox(width: 2),
+                                Flexible(
+                                  child: Text(
+                                    post['location'].toString(),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                        if (post['is_video'] == 1)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.play_circle_filled,
+                                  color: Colors.white,
+                                  size: 10,
+                                ),
+                                const SizedBox(width: 2),
+                                const Text(
+                                  'Video',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ],
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Image.network(post['image'], fit: BoxFit.cover),
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Colors.transparent,
-                            Colors.black.withOpacity(0.7),
-                          ],
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                        ),
-                      ),
-                    ),
-                    Align(
-                      alignment: Alignment.bottomCenter,
-                      child: Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Text(
-                          post['title'],
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
+            ),
+          );
+        }, childCount: _userPosts.length),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: 6,
+          mainAxisSpacing: 8,
         ),
       ),
     );
