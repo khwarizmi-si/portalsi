@@ -16,6 +16,7 @@ class PostDetailPage extends StatefulWidget {
   final int comments;
   final String profileImageUrl;
   final bool isVerified;
+  final int postId;
 
   const PostDetailPage({
     Key? key,
@@ -27,6 +28,7 @@ class PostDetailPage extends StatefulWidget {
     required this.comments,
     required this.profileImageUrl,
     required this.isVerified,
+    required this.postId,
   }) : super(key: key);
 
   @override
@@ -195,6 +197,7 @@ class _PostDetailPageState extends State<PostDetailPage>
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       child: PostCard(
+        postId: widget.postId,
         username: widget.username,
         timeAgo: widget.timeAgo,
         imageUrl: widget.imageUrl,
@@ -209,6 +212,7 @@ class _PostDetailPageState extends State<PostDetailPage>
         onLike: () {},
         onBookmark: () {},
         onShare: () {},
+        onComment: () {},
       ),
     );
   }
@@ -221,6 +225,7 @@ class _PostDetailPageState extends State<PostDetailPage>
         child: Container(
           margin: const EdgeInsets.symmetric(vertical: 2),
           child: PostCard(
+            postId: widget.postId,
             username: post['user']['username'],
             timeAgo: timeAgoFromDate(post['created_at']),
             imageUrl: post['media_url'] ?? '',
@@ -235,6 +240,7 @@ class _PostDetailPageState extends State<PostDetailPage>
             onLike: () {},
             onBookmark: () {},
             onShare: () {},
+            onComment: () {},
           ),
         ),
       ),

@@ -18,7 +18,7 @@ void showCommentSheet(BuildContext context) {
               topLeft: Radius.circular(27),
               topRight: Radius.circular(27),
             ),
-            child: CommentSection(scrollController: controller),
+            child: CommentSection(scrollController: controller, post: null),
           );
         },
       );
@@ -29,7 +29,7 @@ void showCommentSheet(BuildContext context) {
 // comment_section.dart
 class CommentSection extends StatefulWidget {
   final ScrollController? scrollController;
-  const CommentSection({this.scrollController});
+  const CommentSection({this.scrollController, required post});
 
   @override
   State<CommentSection> createState() => _CommentSectionState();
