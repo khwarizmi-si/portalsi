@@ -34,19 +34,53 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
       curve: Curves.easeIn,
     );
 
-    fetchPosts(); // panggil API
+    // Setup scroll listener untuk header shadow
+    _scrollController.addListener(() {
+      bool isScrolled = _scrollController.offset > 0;
+      if (isScrolled != _isScrolled) {
+        setState(() {
+          _isScrolled = isScrolled;
+        });
+      }
+    });
+
+    _fetchPosts();
   }
 
-  Future<void> fetchPosts() async {
+  Future<void> _fetchPosts() async {
     try {
-      final posts = await PostService().fetchAllPosts();
-      setState(() {
-        _feedItems = posts;
-      });
+      final posts = await PostService().getExplorePosts();
+      if (mounted) {
+        setState(() {
+          _feedItems = posts;
+          _isLoading = false;
+        });
+
+        // Mulai animasi setelah data berhasil dimuat
+        if (_feedItems.isNotEmpty) {
+          _animationController.forward();
+        }
+      }
     } catch (e) {
-      print('Error: $e');
-      // Tambahkan feedback ke user jika perlu
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showErrorMessage('Failed to load posts. Please try again.');
+      }
     }
+  }
+
+  void _showErrorMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        action: SnackBarAction(
+          label: 'Retry',
+          textColor: Colors.white,
+          onPressed: _fetchPosts,
+        ),
+      ),
+    );
   }
 
   @override
@@ -77,12 +111,15 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
     return Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: Color(0xFFFAFAFA),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(child: _buildBody()),
-          ],
+      body: RefreshIndicator(
+        onRefresh: _fetchPosts,
+        child: SafeArea(
+          child: Column(
+            children: [
+              _buildHeader(),
+              Expanded(child: _buildBody()),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: CustomBottomNavigation(
@@ -145,6 +182,10 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
                   vertical: 12,
                 ),
               ),
+              onChanged: (value) {
+                // Implement search functionality here
+                // _filterPosts(value);
+              },
             ),
           ),
         ],
@@ -153,6 +194,55 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
   }
 
   Widget _buildBody() {
+    if (_isLoading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text(
+              'Memuat postingan...',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Error handling dilakukan melalui SnackBar di _showErrorMessage()
+
+    if (_feedItems.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.photo_library_outlined,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Belum ada postingan',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[600],
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Postingan akan muncul di sini',
+              style: TextStyle(color: Colors.grey[500]),
+            ),
+            SizedBox(height: 16),
+            ElevatedButton(onPressed: _fetchPosts, child: Text('Refresh')),
+          ],
+        ),
+      );
+    }
+
     return FadeTransition(
       opacity: _fadeAnimation,
       child: CustomScrollView(
@@ -181,10 +271,16 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
   }
 
   Widget _buildGridItem(dynamic item, int index) {
+    // Validasi data item
+    if (item == null) {
+      return _buildPlaceholderItem();
+    }
+
     final user = item['user'];
     final imageUrl = item['media_url'] ?? '';
     final caption = item['caption'] ?? '';
-    final username = user?['username'] ?? 'Unknown';
+    final username = user?['username'] ?? 'Unknown User';
+    final createdAt = item['created_at'];
 
     return TweenAnimationBuilder<double>(
       duration: Duration(milliseconds: 600 + (index * 100)),
@@ -193,86 +289,137 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
         scale: value,
         child: GestureDetector(
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => PostDetailPage(
-                  username: item['user']['username'],
-                  timeAgo: timeAgoFromDate(item['created_at']),
-                  imageUrl: item['media_url'],
-                  content: item['caption'],
-                  likes: 0, // karena belum ada di struktur, bisa 0 dulu
-                  comments: 0, // karena belum ada juga
-                  profileImageUrl: item['user']['profile_picture_url'] ?? '',
-                  isVerified: item['user']['is_verified'] ?? false,
-                ),
-              ),
-            );
+            HapticFeedback.lightImpact();
+            _navigateToDetail(item);
           },
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 8,
-                  offset: Offset(0, 4),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.network(
-                    imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: Colors.grey[300],
-                      child: Center(
-                        child: Icon(
-                          Icons.image_not_supported,
-                          color: Colors.white,
-                          size: 40,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Colors.black54],
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.all(16),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          username,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          caption,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: Colors.white70, fontSize: 12),
-                        ),
-                      ],
-                    ),
+          child: Hero(
+            tag: 'post_$index',
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 8,
+                    offset: Offset(0, 4),
                   ),
                 ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Background untuk loading state
+                    Container(
+                      color: Colors.grey[200],
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.grey[400],
+                        ),
+                      ),
+                    ),
+                    // Image
+                    if (imageUrl.isNotEmpty)
+                      Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Container(
+                            color: Colors.grey[200],
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                value:
+                                    loadingProgress.expectedTotalBytes != null
+                                    ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                    : null,
+                                strokeWidth: 2,
+                                color: Colors.grey[400],
+                              ),
+                            ),
+                          );
+                        },
+                        errorBuilder: (_, __, ___) => Container(
+                          color: Colors.grey[300],
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.image_not_supported,
+                                color: Colors.grey[600],
+                                size: 40,
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                'Gambar tidak\ndapat dimuat',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    // Gradient overlay
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.7),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Content
+                    Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            username,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          if (caption.isNotEmpty) ...[
+                            SizedBox(height: 4),
+                            Text(
+                              caption,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                          if (createdAt != null) ...[
+                            SizedBox(height: 4),
+                            Text(
+                              timeAgoFromDate(createdAt),
+                              style: TextStyle(
+                                color: Colors.white60,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -281,21 +428,47 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
     );
   }
 
-  void _showDetailDialog(dynamic item) {
+  Widget _buildPlaceholderItem() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: Colors.grey[200],
+      ),
+      child: Center(
+        child: Icon(Icons.error_outline, color: Colors.grey[400], size: 40),
+      ),
+    );
+  }
+
+  void _navigateToDetail(dynamic item) {
     final user = item['user'];
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => PostDetailPage(
-          username: user?['username'] ?? '',
-          timeAgo: timeAgoFromDate(item['created_at']),
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => PostDetailPage(
+          username: user?['username'] ?? 'Unknown User',
+          timeAgo: item['created_at'] != null
+              ? timeAgoFromDate(item['created_at'])
+              : 'Unknown time',
           imageUrl: item['media_url'] ?? '',
           content: item['caption'] ?? '',
           likes: item['likes_count'] ?? 0,
           comments: item['comments_count'] ?? 0,
           profileImageUrl: user?['profile_picture_url'] ?? '',
           isVerified: user?['is_verified'] ?? false,
+          postId: item['id'],
         ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return SlideTransition(
+            position: animation.drive(
+              Tween(
+                begin: Offset(1.0, 0.0),
+                end: Offset.zero,
+              ).chain(CurveTween(curve: Curves.easeInOut)),
+            ),
+            child: child,
+          );
+        },
       ),
     );
   }
@@ -319,17 +492,26 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
             ListTile(
               leading: Icon(Icons.trending_up),
               title: Text('Most Popular'),
-              onTap: () => Navigator.pop(context),
+              onTap: () {
+                Navigator.pop(context);
+                // Implement sort logic
+              },
             ),
             ListTile(
               leading: Icon(Icons.access_time),
               title: Text('Most Recent'),
-              onTap: () => Navigator.pop(context),
+              onTap: () {
+                Navigator.pop(context);
+                // Implement sort logic
+              },
             ),
             ListTile(
               leading: Icon(Icons.favorite),
               title: Text('Most Liked'),
-              onTap: () => Navigator.pop(context),
+              onTap: () {
+                Navigator.pop(context);
+                // Implement sort logic
+              },
             ),
           ],
         ),
