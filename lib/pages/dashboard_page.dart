@@ -8,6 +8,7 @@ import 'package:portal_si/services/post_service.dart';
 import 'package:portal_si/services/like_service.dart';
 import '../helper/time_helper.dart';
 import '../utils/secure_storage.dart';
+import 'dart:io'; // untuk exit(0)
 
 class HomePage extends StatefulWidget {
   @override
@@ -226,14 +227,23 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     _setSystemUIOverlayStyle();
 
-    return Scaffold(
-      backgroundColor: Color(0xFFFAFAFA),
-      extendBodyBehindAppBar: false,
-      appBar: _buildAppBar(),
-      body: _buildBody(),
-      bottomNavigationBar: CustomBottomNavigation(
-        selectedIndex: _selectedIndex,
-        onTap: _onBottomNavTapped,
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (!didPop) {
+          SystemNavigator.pop(); // atau exit(0)
+        }
+      },
+
+      child: Scaffold(
+        backgroundColor: Color(0xFFFAFAFA),
+        extendBodyBehindAppBar: false,
+        appBar: _buildAppBar(),
+        body: _buildBody(),
+        bottomNavigationBar: CustomBottomNavigation(
+          selectedIndex: _selectedIndex,
+          onTap: _onBottomNavTapped,
+        ),
       ),
     );
   }

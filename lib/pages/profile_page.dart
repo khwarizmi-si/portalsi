@@ -5,6 +5,10 @@ import '../utils/secure_storage.dart';
 import '../services/auth_service.dart';
 import '../services/post_service.dart';
 import '../services/follow_service.dart';
+import 'dashboard_page.dart';
+import 'edit_profile_page.dart'; // Import EditProfilePage
+import 'package:portal_si/services/user_service.dart';
+// Import ProfileService dan ProfileModel dari file sebelumnya
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({Key? key}) : super(key: key);
@@ -20,6 +24,7 @@ class _ProfilePageState extends State<ProfilePage> {
   List<dynamic> _userPosts = [];
   bool _isLoadingPosts = true;
   final FollowService _followService = FollowService();
+  final ProfileService _profileService = ProfileService();
 
   List<dynamic> followers = [];
   List<dynamic> following = [];
@@ -94,6 +99,32 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  // Navigasi ke EditProfilePage
+  Future<void> _navigateToEditProfile() async {
+    if (_user == null) return;
+
+    // Convert user data ke ProfileModel
+    final currentProfile = ProfileModel.fromAuthData(_user!);
+
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditProfilePage(initialProfile: currentProfile),
+      ),
+    );
+
+    // Refresh profile data jika edit berhasil
+    if (result == true) {
+      await _loadUser();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profil berhasil diperbarui!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+
   void _onBottomNavTapped(int index) {
     setState(() => _selectedIndex = index);
     HapticFeedback.lightImpact();
@@ -103,77 +134,89 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: CustomScrollView(
-        slivers: [
-          // AppBar sebagai sliver
-          SliverAppBar(
-            backgroundColor: Colors.white,
-            elevation: 0,
-            floating: true,
-            snap: true,
-            pinned: false,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.black),
-              onPressed: () => Navigator.pop(context),
-            ),
-            title: Text(
-              _isLoadingUser
-                  ? 'Memuat...'
-                  : _user?['user']?['username'] ?? 'Nama tidak tersedia',
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
-                color: Colors.black,
-                letterSpacing: 0.2,
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (!didPop) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => HomePage()),
+            (route) => false,
+          );
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: CustomScrollView(
+          slivers: [
+            // AppBar sebagai sliver
+            SliverAppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              floating: true,
+              snap: true,
+              pinned: false,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.black),
+                onPressed: () => Navigator.pop(context),
               ),
-            ),
-            centerTitle: true,
-            actions: [
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.menu, color: Colors.black),
-                onSelected: (value) async {
-                  if (value == 'logout') {
-                    await AuthService().logout();
-                    if (!mounted) return;
-                    Navigator.pushNamedAndRemoveUntil(
-                      context,
-                      '/login',
-                      (route) => false,
-                    );
-                  }
-                },
-                itemBuilder: (BuildContext context) => [
-                  const PopupMenuItem<String>(
-                    value: 'logout',
-                    child: Text('Logout'),
-                  ),
-                ],
+              title: Text(
+                _isLoadingUser
+                    ? 'Memuat...'
+                    : _user?['user']?['username'] ?? 'Nama tidak tersedia',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                  color: Colors.black,
+                  letterSpacing: 0.2,
+                ),
               ),
-            ],
-          ),
-
-          // Konten utama sebagai sliver
-          SliverToBoxAdapter(
-            child: Column(
-              children: [
-                // Header
-                _buildHeader(),
-                // Profile Info
-                _buildProfileSection(),
-                const SizedBox(height: 8),
+              centerTitle: true,
+              actions: [
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.menu, color: Colors.black),
+                  onSelected: (value) async {
+                    if (value == 'logout') {
+                      await AuthService().logout();
+                      if (!mounted) return;
+                      Navigator.pushNamedAndRemoveUntil(
+                        context,
+                        '/login',
+                        (route) => false,
+                      );
+                    }
+                  },
+                  itemBuilder: (BuildContext context) => [
+                    const PopupMenuItem<String>(
+                      value: 'logout',
+                      child: Text('Logout'),
+                    ),
+                  ],
+                ),
               ],
             ),
-          ),
 
-          // Grid Posts sebagai sliver
-          _buildPostGridSliver(),
-        ],
-      ),
-      bottomNavigationBar: CustomBottomNavigation(
-        selectedIndex: _selectedIndex,
-        onTap: _onBottomNavTapped,
+            // Konten utama sebagai sliver
+            SliverToBoxAdapter(
+              child: Column(
+                children: [
+                  // Header
+                  _buildHeader(),
+                  // Profile Info
+                  _buildProfileSection(),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+
+            // Grid Posts sebagai sliver
+            _buildPostGridSliver(),
+          ],
+        ),
+        bottomNavigationBar: CustomBottomNavigation(
+          selectedIndex: _selectedIndex,
+          onTap: _onBottomNavTapped,
+        ),
       ),
     );
   }
@@ -246,9 +289,10 @@ class _ProfilePageState extends State<ProfilePage> {
                           spreadRadius: -2,
                         ),
                       ],
-                      image: const DecorationImage(
+                      image: DecorationImage(
                         image: NetworkImage(
-                          'https://i.pinimg.com/736x/19/5c/15/195c15bc600ba3e50ff5ac3be08c3667.jpg',
+                          _user?['user']?['profile_picture_url'] ??
+                              'https://i.pinimg.com/736x/19/5c/15/195c15bc600ba3e50ff5ac3be08c3667.jpg',
                         ),
                         fit: BoxFit.cover,
                       ),
@@ -257,26 +301,29 @@ class _ProfilePageState extends State<ProfilePage> {
                   Positioned(
                     bottom: 0,
                     right: 0,
-                    child: Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: Colors.orange[600],
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.orange.withOpacity(0.25),
-                            blurRadius: 8,
-                            offset: const Offset(0, 3),
-                            spreadRadius: -1,
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.add,
-                        color: Colors.white,
-                        size: 14,
+                    child: GestureDetector(
+                      onTap: _navigateToEditProfile,
+                      child: Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: Colors.blue[600],
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.blue.withOpacity(0.25),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                              spreadRadius: -1,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.edit,
+                          color: Colors.white,
+                          size: 12,
+                        ),
                       ),
                     ),
                   ),
@@ -368,10 +415,10 @@ class _ProfilePageState extends State<ProfilePage> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: ElevatedButton(
-                    onPressed: () {},
+                    onPressed: _navigateToEditProfile,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey[200],
-                      foregroundColor: Colors.grey[800],
+                      backgroundColor: Colors.blue[600],
+                      foregroundColor: Colors.white,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
@@ -409,7 +456,16 @@ class _ProfilePageState extends State<ProfilePage> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: ElevatedButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      // Implementasi share profile
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Fitur bagikan profile akan segera hadir!',
+                          ),
+                        ),
+                      );
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.grey[200],
                       foregroundColor: Colors.grey[800],
@@ -660,5 +716,11 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _profileService.dispose();
+    super.dispose();
   }
 }
