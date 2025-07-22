@@ -19,10 +19,10 @@ class PostHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       leading: CircleAvatar(
         backgroundImage: NetworkImage(profileImageUrl),
-        radius: 20,
+        radius: 30,
         onBackgroundImageError: (_, __) {},
       ),
       title: Row(
