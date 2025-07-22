@@ -2,7 +2,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class ApiService {
-  static const baseUrl = 'https://example.com/api'; // ganti sesuai API kamu
+  static const baseUrl =
+      'https://api.portalsi.com/api'; // ganti sesuai API kamu
 
   static Future<Map<String, dynamic>?> login(
     String email,

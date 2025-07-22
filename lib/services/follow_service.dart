@@ -3,7 +3,7 @@ import '../utils/secure_storage.dart';
 import 'dart:convert';
 
 class FollowService {
-  final baseUrl = 'https://your-api.com';
+  final baseUrl = 'https://api.portalsi.com/api';
 
   Future<bool> followUser(int userId) async {
     final token = await SecureStorage.getToken();
