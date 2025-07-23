@@ -8,6 +8,10 @@ class SecureStorage {
     await _storage.write(key: _keyToken, value: token);
   }
 
+  static Future<void> saveUserId(String userId) async {
+    await _storage.write(key: 'userId', value: userId);
+  }
+
   static Future<String?> getToken() async {
     return await _storage.read(key: _keyToken);
   }

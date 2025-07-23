@@ -6,6 +6,7 @@ class PostHeader extends StatelessWidget {
   final String profileImageUrl;
   final bool isVerified;
   final Map<String, dynamic> user;
+  final VoidCallback? onProfileTap;
 
   const PostHeader({
     super.key,
@@ -14,34 +15,37 @@ class PostHeader extends StatelessWidget {
     required this.profileImageUrl,
     required this.isVerified,
     required this.user,
+    this.onProfileTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-      leading: CircleAvatar(
-        backgroundImage: NetworkImage(profileImageUrl),
-        radius: 30,
-        onBackgroundImageError: (_, __) {},
+      leading: GestureDetector(
+        onTap: onProfileTap,
+        child: CircleAvatar(
+          backgroundImage: NetworkImage(profileImageUrl),
+          radius: 30,
+          onBackgroundImageError: (_, __) {},
+        ),
       ),
-      title: Row(
-        children: [
-          Text(
-            username,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-          if (isVerified) ...[
-            const SizedBox(width: 4),
-            const Icon(Icons.verified, color: Colors.blue, size: 16),
+      title: GestureDetector(
+        onTap: onProfileTap,
+        child: Row(
+          children: [
+            Text(
+              username,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            if (isVerified) ...[
+              const SizedBox(width: 4),
+              const Icon(Icons.verified, color: Colors.blue, size: 16),
+            ],
           ],
-        ],
+        ),
       ),
       subtitle: Text(timeAgo),
-      onTap: () {
-        // Navigasi ke profil user bisa ditambahkan di sini
-        print('Tampilkan profil user: ${user['username']}');
-      },
     );
   }
 }

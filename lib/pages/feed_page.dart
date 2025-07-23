@@ -303,6 +303,7 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
         child: GestureDetector(
           onTap: () {
             HapticFeedback.lightImpact();
+            print('Item tapped: $item');
             _navigateToDetail(item);
           },
           child: Hero(
@@ -455,6 +456,16 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
 
   void _navigateToDetail(dynamic item) {
     final user = item['user'];
+    final postId = item['post_id']; // Perbaiki disini
+
+    print('Item tapped: $item');
+    print('Post ID: $postId');
+
+    if (postId == null) {
+      print('ERROR: postId null, tidak bisa navigasi');
+      return;
+    }
+
     Navigator.push(
       context,
       PageRouteBuilder(
@@ -469,7 +480,7 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
           comments: item['comments_count'] ?? 0,
           profileImageUrl: user?['profile_picture_url'] ?? '',
           isVerified: user?['is_verified'] ?? false,
-          postId: item['id'],
+          postId: postId, // Sudah benar sekarang
         ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return SlideTransition(

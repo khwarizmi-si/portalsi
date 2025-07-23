@@ -98,6 +98,35 @@ class ProfileService {
     }
   }
 
+  //  Get other user's profile by ID or username
+  Future<ProfileModel> getOtherProfile(int userId) async {
+    try {
+      final token = await SecureStorage.getToken(); // ✅ Ambil token
+
+      final response = await _client.get(
+        Uri.parse('$baseUrl/profile/$userId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token', // ✅ Pakai token
+        },
+      );
+
+      print('Other profile status: ${response.statusCode}');
+      print('Other profile body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        return ProfileModel.fromJson(data);
+      } else if (response.statusCode == 404) {
+        throw Exception('User not found');
+      } else {
+        throw Exception('Failed to load profile: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error fetching other profile: $e');
+    }
+  }
+
   // Update profile data
   Future<bool> updateProfile(ProfileModel profile) async {
     try {

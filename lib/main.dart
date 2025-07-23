@@ -6,6 +6,7 @@ import 'pages/dashboard_page.dart';
 import 'pages/profile_page.dart';
 import 'pages/feed_page.dart';
 import 'pages/other_profile_page.dart';
+import 'pages/message_list_page.dart';
 import 'pages/story_page.dart';
 import 'utils/secure_storage.dart'; // pastikan path-nya benar
 
@@ -13,8 +14,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final hasToken = await SecureStorage.hasToken();
 
-  runApp(MyApp(startPage: hasToken ? '/notif' : '/notif'));
-  // runApp(MyApp(startPage: hasToken ? '/dashboard' : '/login'));
+  // runApp(MyApp(startPage: hasToken ? '/notif' : '/notif'));
+  runApp(MyApp(startPage: hasToken ? '/dashboard' : '/login'));
 }
 
 class MyApp extends StatelessWidget {
@@ -36,8 +37,8 @@ class MyApp extends StatelessWidget {
         '/profile': (context) => const ProfilePage(),
         '/story': (context) => InstagramStoryPage(),
         '/notif': (context) => const NotificationPage(),
+        '/message': (context) => MessageListPage(),
         // Jika ingin lihat profil orang lain secara manual:
-        // '/other_profile': (context) => OtherProfilePage(username: 'r_herdians'),
       },
     );
   }

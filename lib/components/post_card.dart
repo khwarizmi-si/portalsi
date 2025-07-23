@@ -18,6 +18,7 @@ class PostCard extends StatelessWidget {
   final String profileImageUrl;
   final Map<String, dynamic> user;
   final int postId;
+  final VoidCallback? onProfileTap;
 
   const PostCard({
     super.key,
@@ -37,6 +38,7 @@ class PostCard extends StatelessWidget {
     required this.profileImageUrl,
     required this.user,
     required this.postId,
+    this.onProfileTap,
   });
 
   @override
@@ -65,6 +67,7 @@ class PostCard extends StatelessWidget {
               profileImageUrl: profileImageUrl,
               isVerified: isVerified,
               user: user,
+              onProfileTap: onProfileTap,
             ),
           ),
 

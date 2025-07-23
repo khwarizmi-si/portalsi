@@ -3,10 +3,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:portal_si/utils/secure_storage.dart';
 import '../components/post_card.dart';
 import 'dashboard_page.dart';
 import '../components/bottom_navigation.dart';
-import '../helper/time_helper.dart'; // Pastikan ada fungsi timeAgoFromDate()
+import '../helper/time_helper.dart';
+import 'dart:math';
 
 class PostDetailPage extends StatefulWidget {
   final String username;
@@ -20,7 +22,7 @@ class PostDetailPage extends StatefulWidget {
   final int postId;
 
   const PostDetailPage({
-    Key? key,
+    super.key,
     required this.username,
     required this.timeAgo,
     required this.imageUrl,
@@ -30,7 +32,7 @@ class PostDetailPage extends StatefulWidget {
     required this.profileImageUrl,
     required this.isVerified,
     required this.postId,
-  }) : super(key: key);
+  });
 
   @override
   State<PostDetailPage> createState() => _PostDetailPageState();
@@ -41,13 +43,20 @@ class _PostDetailPageState extends State<PostDetailPage>
   int _selectedIndex = 1;
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
-  List<Map<String, dynamic>> _allPosts = [];
+  List<Map<String, dynamic>> _relatedPosts = [];
+  bool _isLoadingRelated = true;
 
   @override
   void initState() {
     super.initState();
     _initializeAnimations();
     fetchRelatedPosts();
+  }
+
+  @override
+  void dispose() {
+    _fadeController.dispose();
+    super.dispose();
   }
 
   void _initializeAnimations() {
@@ -61,19 +70,245 @@ class _PostDetailPageState extends State<PostDetailPage>
     _fadeController.forward();
   }
 
+  // Function to get additional post stats (likes, comments)
+  Future<Map<String, int>> getPostStats(int postId) async {
+    try {
+      // Try to get likes count
+      final likesResponse = await http
+          .get(
+            Uri.parse('https://api.portalsi.com/api/posts/$postId/likes'),
+            headers: {'Accept': 'application/json'},
+          )
+          .timeout(const Duration(seconds: 5));
+
+      // Try to get comments count
+      final commentsResponse = await http
+          .get(
+            Uri.parse('https://api.portalsi.com/api/posts/$postId/comments'),
+            headers: {'Accept': 'application/json'},
+          )
+          .timeout(const Duration(seconds: 5));
+
+      int likesCount = 0;
+      int commentsCount = 0;
+
+      if (likesResponse.statusCode == 200) {
+        final likesData = json.decode(likesResponse.body);
+        if (likesData is List) {
+          likesCount = likesData.length;
+        } else if (likesData is Map && likesData['count'] != null) {
+          likesCount = likesData['count'];
+        }
+      }
+
+      if (commentsResponse.statusCode == 200) {
+        final commentsData = json.decode(commentsResponse.body);
+        if (commentsData is List) {
+          commentsCount = commentsData.length;
+        } else if (commentsData is Map && commentsData['count'] != null) {
+          commentsCount = commentsData['count'];
+        }
+      }
+
+      return {'likes': likesCount, 'comments': commentsCount};
+    } catch (e) {
+      debugPrint('Error getting post stats: $e');
+      return {'likes': 0, 'comments': 0};
+    }
+  }
+
+  final List<String> _apiEndpoints = [
+    'https://api.portalsi.com/api/posts',
+    // Alternative endpoint
+    // Add more fallback endpoints if available
+  ];
+
+  // Load stats for posts asynchronously
+  Future<void> _loadPostsStats(List<Map<String, dynamic>> posts) async {
+    for (int i = 0; i < posts.length; i++) {
+      try {
+        final stats = await getPostStats(posts[i]['post_id']);
+        if (mounted) {
+          setState(() {
+            _relatedPosts[i]['likes_count'] = stats['likes'];
+            _relatedPosts[i]['comments_count'] = stats['comments'];
+          });
+        }
+      } catch (e) {
+        debugPrint('Error loading stats for post ${posts[i]['post_id']}: $e');
+      }
+
+      // Add small delay to prevent overwhelming the server
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+  }
+
+  Map<String, dynamic> _enhancePostWithStats(Map<String, dynamic> post) {
+    return {
+      ...post,
+      'likes_count': post['likes_count'] ?? 0,
+      'comments_count': post['comments_count'] ?? 0,
+      'caption': post['caption'] ?? '',
+      'media_url': post['media_url'] ?? '',
+      'created_at': post['created_at'] ?? DateTime.now().toIso8601String(),
+      'user':
+          post['user'] ??
+          {
+            'username': 'Unknown',
+            'profile_picture_url': '',
+            'is_verified': false,
+          },
+    };
+  }
+
   Future<void> fetchRelatedPosts() async {
     try {
-      final response = await http.get(
-        Uri.parse('https://api.portalsi.com/api/posts'),
-      );
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        setState(() {
-          _allPosts = data.cast<Map<String, dynamic>>();
-        });
+      setState(() {
+        _isLoadingRelated = true;
+      });
+
+      Exception? lastException;
+
+      // Try each endpoint until one works
+      for (String endpoint in _apiEndpoints) {
+        try {
+          debugPrint('Trying endpoint: $endpoint');
+
+          final authToken =
+              await SecureStorage.getToken(); // Contoh ambil token
+
+          final response = await http
+              .get(
+                Uri.parse(endpoint),
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                  'User-Agent': 'Flutter App',
+                  'Authorization': 'Bearer $authToken',
+                },
+              )
+              .timeout(const Duration(seconds: 10));
+
+          debugPrint('Response status: ${response.statusCode}');
+
+          if (response.statusCode == 200) {
+            final dynamic responseData = json.decode(response.body);
+
+            // Handle different response formats
+            List<dynamic> data;
+            if (responseData is Map<String, dynamic>) {
+              // If response is wrapped in an object
+              data =
+                  responseData['data'] ??
+                  responseData['posts'] ??
+                  responseData['result'] ??
+                  [];
+            } else if (responseData is List) {
+              // If response is direct array
+              data = responseData;
+            } else {
+              debugPrint(
+                'Unexpected response format: ${responseData.runtimeType}',
+              );
+              continue; // Try next endpoint
+            }
+
+            if (data.isEmpty) {
+              debugPrint('No posts found in response from $endpoint');
+              continue; // Try next endpoint
+            }
+
+            final List<Map<String, dynamic>> allFetchedPosts = data
+                .where((item) => item is Map<String, dynamic>)
+                .cast<Map<String, dynamic>>()
+                .toList();
+
+            debugPrint(
+              "Total posts fetched from $endpoint: ${allFetchedPosts.length}",
+            );
+            debugPrint("Post utama: ${widget.postId}");
+
+            // Filter post agar tidak termasuk post yang sedang dibuka
+            final filteredPosts = allFetchedPosts
+                .where(
+                  (post) =>
+                      post['post_id'] != null &&
+                      post['post_id'] != widget.postId &&
+                      post['user'] != null &&
+                      post['media_url'] != null &&
+                      post['media_url'] != '',
+                )
+                .toList();
+
+            // Enhance posts with default stats
+            final List<Map<String, dynamic>> enhancedPosts = filteredPosts
+                .map((post) => _enhancePostWithStats(post))
+                .toList();
+
+            debugPrint("Filtered posts: ${enhancedPosts.length}");
+
+            // Shuffle untuk randomisasi
+            enhancedPosts.shuffle(Random());
+
+            // Ambil maksimal 10 postingan secara acak
+            final List<Map<String, dynamic>> randomPosts = enhancedPosts
+                .take(10)
+                .toList();
+
+            setState(() {
+              _relatedPosts = randomPosts;
+              _isLoadingRelated = false;
+            });
+
+            debugPrint("Success! Final related posts: ${randomPosts.length}");
+
+            // Optionally load stats for each post asynchronously
+            _loadPostsStats(randomPosts);
+
+            return; // Success, exit the function
+          } else if (response.statusCode == 500) {
+            debugPrint('Server error 500 from $endpoint, trying next...');
+            lastException = Exception('Server sedang bermasalah');
+            continue; // Try next endpoint
+          } else {
+            debugPrint('HTTP ${response.statusCode} from $endpoint');
+            lastException = Exception('HTTP Error ${response.statusCode}');
+            continue; // Try next endpoint
+          }
+        } catch (e) {
+          debugPrint('Error with endpoint $endpoint: $e');
+          lastException = Exception(e.toString());
+          continue; // Try next endpoint
+        }
       }
+
+      // If we reach here, all endpoints failed
+      throw lastException ?? Exception('Semua endpoint gagal');
     } catch (e) {
-      debugPrint('Error fetching posts: $e');
+      debugPrint('All endpoints failed: $e');
+      setState(() {
+        _isLoadingRelated = false;
+      });
+
+      // Only show error if there are no existing posts
+      if (_relatedPosts.isEmpty && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              e.toString().contains('Exception:')
+                  ? e.toString().replaceFirst('Exception: ', '')
+                  : 'Tidak dapat memuat postingan terkait',
+            ),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Coba Lagi',
+              textColor: Colors.white,
+              onPressed: fetchRelatedPosts,
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -130,10 +365,17 @@ class _PostDetailPageState extends State<PostDetailPage>
             Stack(
               children: [
                 Image.network(
-                  item['media_url'],
+                  item['media_url'] ?? '',
                   height: 280,
                   width: double.infinity,
                   fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      height: 280,
+                      color: Colors.grey[300],
+                      child: const Icon(Icons.image_not_supported, size: 50),
+                    );
+                  },
                 ),
                 Container(
                   height: 280,
@@ -155,7 +397,7 @@ class _PostDetailPageState extends State<PostDetailPage>
               child: Column(
                 children: [
                   Text(
-                    item['user']['username'],
+                    item['user']?['username'] ?? 'Unknown User',
                     style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
@@ -169,6 +411,8 @@ class _PostDetailPageState extends State<PostDetailPage>
                       color: Colors.grey[600],
                       fontWeight: FontWeight.w500,
                     ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -182,21 +426,39 @@ class _PostDetailPageState extends State<PostDetailPage>
   Widget _buildPostsList() {
     return FadeTransition(
       opacity: _fadeAnimation,
-      child: ListView.builder(
-        physics: const BouncingScrollPhysics(),
-        itemCount: _allPosts.length + 2,
-        itemBuilder: (context, index) {
-          if (index == 0) return _buildMainPost();
-          if (index == _allPosts.length + 1) return const SizedBox(height: 100);
-          return _buildRelatedPost(_allPosts[index - 1]);
-        },
+      child: RefreshIndicator(
+        onRefresh: fetchRelatedPosts,
+        child: ListView.builder(
+          physics: const BouncingScrollPhysics(),
+          itemCount:
+              _relatedPosts.length +
+              (_relatedPosts.isEmpty && !_isLoadingRelated
+                  ? 2
+                  : 3), // Dynamic count
+          itemBuilder: (context, index) {
+            if (index == 0) return _buildMainPost();
+            if (index == 1) return _buildRelatedPostsHeader();
+            if (index == _relatedPosts.length + 2)
+              return const SizedBox(height: 100);
+            return _buildRelatedPost(_relatedPosts[index - 2]);
+          },
+        ),
       ),
     );
   }
 
   Widget _buildMainPost() {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 24),
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
       child: PostCard(
         postId: widget.postId,
         username: widget.username,
@@ -209,7 +471,7 @@ class _PostDetailPageState extends State<PostDetailPage>
         profileImageUrl: widget.profileImageUrl,
         isLiked: false,
         isBookmarked: false,
-        user: {}, // Ganti dengan user jika ada
+        user: {},
         onLike: () {},
         onBookmark: () {},
         onShare: () {},
@@ -218,30 +480,131 @@ class _PostDetailPageState extends State<PostDetailPage>
     );
   }
 
+  Widget _buildRelatedPostsHeader() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Postingan Lainnya',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.grey[800],
+                ),
+              ),
+              const Spacer(),
+              if (_isLoadingRelated)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else if (_relatedPosts.isEmpty)
+                Icon(Icons.info_outline, color: Colors.grey[600], size: 20),
+            ],
+          ),
+          if (_relatedPosts.isEmpty && !_isLoadingRelated)
+            Padding(
+              padding: const EdgeInsets.only(top: 8, left: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Tidak ada postingan lain yang tersedia',
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 4),
+                  GestureDetector(
+                    onTap: fetchRelatedPosts,
+                    child: Text(
+                      'Tap untuk mencoba lagi',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).primaryColor,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRelatedPost(Map<String, dynamic> post) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
+        onTap: () {
+          // Navigate to detail of this post
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PostDetailPage(
+                postId: post['post_id'] ?? 0,
+                username: post['user']?['username'] ?? 'Unknown',
+                timeAgo: timeAgoFromDate(post['created_at']),
+                imageUrl: post['media_url'] ?? '',
+                content: post['caption'] ?? '',
+                likes: post['likes_count'] ?? 0,
+                comments: post['comments_count'] ?? 0,
+                profileImageUrl: post['user']?['profile_picture_url'] ?? '',
+                isVerified: post['user']?['is_verified'] ?? false,
+              ),
+            ),
+          );
+        },
         onLongPress: () => _showEnhancedPostPreview(post),
         child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 2),
+          margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: Colors.white.withOpacity(0.7),
+          ),
           child: PostCard(
-            postId: widget.postId,
-            username: post['user']['username'],
+            postId: post['post_id'] ?? 0,
+            username: post['user']?['username'] ?? 'Unknown User',
             timeAgo: timeAgoFromDate(post['created_at']),
             imageUrl: post['media_url'] ?? '',
             likes: post['likes_count'] ?? 0,
             comments: post['comments_count'] ?? 0,
             content: post['caption'] ?? '',
-            isVerified: post['user']['is_verified'] ?? false,
-            isLiked: post['is_liked'] ?? false,
-            isBookmarked: post['is_bookmarked'] ?? false,
-            profileImageUrl: post['user']['profile_picture_url'] ?? '',
-            user: post['user'],
-            onLike: () {},
-            onBookmark: () {},
-            onShare: () {},
-            onComment: () {},
+            isVerified: post['user']?['is_verified'] ?? false,
+            isLiked: false, // Default karena API tidak ada field ini
+            isBookmarked: false, // Default karena API tidak ada field ini
+            profileImageUrl: post['user']?['profile_picture_url'] ?? '',
+            user: post['user'] ?? {},
+            onLike: () {
+              // Implement like functionality
+              debugPrint('Liked post: ${post['post_id']}');
+            },
+            onBookmark: () {
+              // Implement bookmark functionality
+              debugPrint('Bookmarked post: ${post['post_id']}');
+            },
+            onShare: () {
+              // Implement share functionality
+              debugPrint('Shared post: ${post['post_id']}');
+            },
+            onComment: () {
+              // Implement comment functionality
+              debugPrint('Comment on post: ${post['post_id']}');
+            },
           ),
         ),
       ),
@@ -280,6 +643,13 @@ class _PostDetailPageState extends State<PostDetailPage>
           shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
           ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: fetchRelatedPosts,
+              tooltip: 'Refresh postingan terkait',
+            ),
+          ],
         ),
         body: Stack(
           children: [
@@ -305,15 +675,14 @@ class _PostDetailPageState extends State<PostDetailPage>
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
           colors: [
-            Color(0xFFFFF8E1),
-            Color(0xFFF3E5F5),
-            Color(0xFFE8F5E9),
-            Colors.white,
+            Color(0xFFFFF0D0), // peach lembut di kiri
+            Color(0xFFFFFFFF), // putih di tengah
+            Color(0xFFDFFEF8), // mint lembut di kanan
           ],
-          stops: [0.0, 0.3, 0.7, 1.0],
+          stops: [0.0, 0.5, 1.0],
         ),
       ),
     );

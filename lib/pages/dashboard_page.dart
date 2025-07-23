@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:portal_si/pages/profile_page.dart';
 import '../components/story_section.dart';
 import '../components/post_card.dart';
 import '../components/bottom_navigation.dart';
@@ -9,6 +10,8 @@ import 'package:portal_si/services/like_service.dart';
 import '../helper/time_helper.dart';
 import '../utils/secure_storage.dart';
 import 'dart:io'; // untuk exit(0)
+import 'other_profile_page.dart';
+import 'message_list_page.dart';
 
 class HomePage extends StatefulWidget {
   @override
@@ -34,7 +37,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     _setupScrollListener();
   }
 
-  Future<void> _loadLikesForPosts(List<dynamic> posts) async {
+  Future<void> loadLikesForPosts(List<dynamic> posts) async {
     for (var post in posts) {
       final postId = post['post_id'];
       try {
@@ -62,11 +65,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       print('ERROR: postId null');
       return;
     }
+
     final success = await LikeService().toggleLike(postId);
     if (success) {
       print('Like berhasil dikirim');
       final updatedLikes = await LikeService().getLikes(postId);
-      final currentUserId = await SecureStorage.getUserId();
+      final currentUserId = await SecureStorage.getUserId(); // ✅ Tambahkan ini
 
       setState(() {
         _likeCounts[postId] = updatedLikes.length;
@@ -308,7 +312,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ),
               onPressed: () {
                 HapticFeedback.lightImpact();
-                // TODO: Navigate to messages
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => MessageListPage()),
+                );
               },
             ),
             SizedBox(width: 12),
@@ -481,7 +488,31 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               onBookmark: () => _onBookmarkPost(post, index),
               onShare: () => _onSharePost(post),
               onComment: () => _showCommentSection(post),
-              postId: post['post_id'], // Add comment callback
+              postId: post['post_id'],
+              onProfileTap: () async {
+                final currentUserId = await SecureStorage.getUserId();
+                final tappedUserId = int.tryParse(
+                  post['user']['user_id'].toString(),
+                );
+                print('Current User ID: $currentUserId');
+                print('Tapped User ID: $tappedUserId');
+
+                if (tappedUserId == currentUserId) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => ProfilePage()),
+                  );
+                } else {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          OtherProfilePage(userId: tappedUserId!),
+                    ),
+                  );
+                }
+              },
+              // Add comment callback
             ),
           ),
         );

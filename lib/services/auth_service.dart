@@ -17,7 +17,13 @@ class AuthService {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         await SecureStorage.saveToken(data['token']);
-        return {'success': true, 'message': 'Login berhasil'};
+        await SecureStorage.saveUserId(data['user']['user_id'].toString());
+        return {
+          'success': true,
+          'message': 'Login berhasil',
+          'token': data['token'],
+          'user': data['user'],
+        };
       } else {
         final data = json.decode(response.body);
         String message = 'Login gagal';

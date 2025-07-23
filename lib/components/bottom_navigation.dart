@@ -3,6 +3,7 @@ import 'package:portal_si/pages/feed_page.dart';
 import 'package:portal_si/pages/dashboard_page.dart';
 import 'package:portal_si/pages/profile_page.dart';
 import 'package:portal_si/pages/notif_page.dart';
+import 'package:portal_si/pages/create_post_page.dart';
 
 class CustomBottomNavigation extends StatefulWidget {
   final int selectedIndex;
@@ -115,6 +116,12 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
     } else if (index == 1) {
       // Arahkan ke FeedPage
       Navigator.push(context, MaterialPageRoute(builder: (_) => FeedPage()));
+    } else if (index == 2) {
+      // Arahkan ke FeedPage
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => CreatePostPage()),
+      );
     } else if (index == 3) {
       // Arahkan ke notif
       Navigator.push(
@@ -133,6 +140,10 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
       _fabAnimationController.reverse();
     });
     widget.onTap(2);
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => CreatePostPage()),
+    );
   }
 
   @override
