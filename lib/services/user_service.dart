@@ -132,7 +132,7 @@ class ProfileService {
     try {
       final token = await SecureStorage.getToken(); // ✅ Ambil token
 
-      final response = await _client.put(
+      final response = await _client.post(
         Uri.parse('$baseUrl/account/settings'),
         headers: {
           'Content-Type': 'application/json',
@@ -157,7 +157,7 @@ class ProfileService {
       final token = await SecureStorage.getToken(); // ✅ Ambil token
 
       var request = http.MultipartRequest(
-        'PUT',
+        'POST',
         Uri.parse('$baseUrl/account/settings'),
       );
 
@@ -167,7 +167,7 @@ class ProfileService {
       });
 
       request.files.add(
-        await http.MultipartFile.fromPath('file', imageFile.path),
+        await http.MultipartFile.fromPath('profile_picture', imageFile.path),
       );
 
       final streamedResponse = await request.send();

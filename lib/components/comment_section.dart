@@ -1,26 +1,36 @@
 // comment_bottom_sheet.dart
 import 'package:flutter/material.dart';
+import '../services/comment_service.dart';
 
-void showCommentSheet(BuildContext context) {
+void showCommentSheet(BuildContext context, int postId) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
+    isDismissible: true, // klik luar bisa nutup
+    enableDrag: true, // swipe ke bawah bisa nutup
     builder: (_) {
-      return DraggableScrollableSheet(
-        initialChildSize: 0.75, // Ubah jadi 75%
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (_, controller) {
-          return ClipRRect(
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(27),
-              topRight: Radius.circular(27),
-            ),
-            child: CommentSection(scrollController: controller, post: null),
-          );
-        },
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => Navigator.of(context).pop(), // klik luar nutup
+        child: DraggableScrollableSheet(
+          initialChildSize: 0.75,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (_, controller) {
+            return GestureDetector(
+              onTap: () {}, // agar tap di dalam tidak menutup
+              child: ClipRRect(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(27)),
+                child: CommentSection(
+                  scrollController: controller,
+                  postId: postId,
+                ),
+              ),
+            );
+          },
+        ),
       );
     },
   );
@@ -29,41 +39,117 @@ void showCommentSheet(BuildContext context) {
 // comment_section.dart
 class CommentSection extends StatefulWidget {
   final ScrollController? scrollController;
-  const CommentSection({this.scrollController, required post});
+  final int postId;
+
+  const CommentSection({Key? key, this.scrollController, required this.postId})
+    : super(key: key);
 
   @override
   State<CommentSection> createState() => _CommentSectionState();
 }
 
 class Comment {
-  final String username;
+  final int id;
+  final int postId;
+  final int userId;
   final String content;
-  final List<Comment> replies;
+  final int? parentCommentId;
   final DateTime createdAt;
-  int likes;
+  final DateTime updatedAt;
+
+  // Tambahan
+  final String username;
   bool liked;
+  int likes;
 
   Comment({
-    required this.username,
+    required this.id,
+    required this.postId,
+    required this.userId,
     required this.content,
-    this.replies = const [],
-    this.likes = 0,
-    this.liked = false,
-    DateTime? createdAt,
-  }) : createdAt = createdAt ?? DateTime.now();
+    this.parentCommentId,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.username, // ← Tambahan
+    this.liked = false, // ← Tambahan
+    this.likes = 0, // ← Tambahan
+  });
+
+  factory Comment.fromJson(Map<String, dynamic> json) {
+    return Comment(
+      id: json['comment_id'],
+      postId: json['post_id'],
+      userId: json['user_id'],
+      content: json['content'],
+      parentCommentId: json['parent_comment_id'],
+      createdAt: DateTime.parse(json['created_at']),
+      updatedAt: DateTime.parse(json['updated_at']),
+      username: json['username'] ?? 'User', // ← Pastikan backend kirim ini
+      likes: json['likes'] ?? 0, // ← Default 0 jika tidak ada
+      liked: json['liked'] ?? false, // ← Default false jika tidak ada
+    );
+  }
 }
 
 class _CommentSectionState extends State<CommentSection> {
   final TextEditingController _commentController = TextEditingController();
-  final List<Comment> _comments = [
-    Comment(username: 'user1', content: 'Komentar pertama', likes: 2),
-    Comment(username: 'user2', content: 'Komentar kedua', likes: 0),
-    Comment(username: 'user3', content: 'Komentar ketiga', likes: 1),
-  ];
+  final CommentService _commentService = CommentService();
+
+  List<Comment> _comments = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadComments();
+  }
+
+  Future<void> _loadComments() async {
+    try {
+      print("Loading comments for postId: ${widget.postId}");
+      final data = await _commentService.getComments(widget.postId);
+      setState(() {
+        _comments = data.map((e) => Comment.fromJson(e)).toList();
+        _isLoading = false;
+      });
+    } catch (e, stacktrace) {
+      print('Error loading comments: $e');
+      print(stacktrace);
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _addComment() async {
+    final content = _commentController.text.trim();
+    if (content.isEmpty) return;
+
+    final success = await _commentService.addComment(widget.postId, content);
+    if (success) {
+      _commentController.clear();
+      await _loadComments(); // reload data
+
+      // Scroll ke atas
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        widget.scrollController?.animateTo(
+          0,
+          duration: Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      });
+    }
+  }
+
+  // Untuk like bisa ditambahkan nanti pakai API kalau ada
+  void _toggleLike(Comment comment) {
+    setState(() {
+      comment.liked = !comment.liked;
+      comment.likes += comment.liked ? 1 : -1;
+    });
+  }
+
   String timeAgo(DateTime date) {
     final now = DateTime.now();
     final diff = now.difference(date);
-
     if (diff.inSeconds < 60) return 'Baru saja';
     if (diff.inMinutes < 60) return '${diff.inMinutes} menit lalu';
     if (diff.inHours < 24) return '${diff.inHours} jam lalu';
@@ -73,245 +159,8 @@ class _CommentSectionState extends State<CommentSection> {
     return '${(diff.inDays / 365).floor()} tahun lalu';
   }
 
-  void _addComment() {
-    if (_commentController.text.trim().isNotEmpty) {
-      setState(() {
-        _comments.add(
-          Comment(username: 'current_user', content: _commentController.text),
-        );
-        _commentController.clear();
-      });
-
-      // ⬆️ Scroll otomatis ke atas
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (widget.scrollController?.hasClients ?? false) {
-          widget.scrollController?.animateTo(
-            0,
-            duration: Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          );
-        }
-      });
-    }
-  }
-
-  void _toggleLike(Comment comment) {
-    setState(() {
-      comment.liked = !comment.liked;
-      comment.likes += comment.liked ? 1 : -1;
-    });
-  }
-
-  void _replyToComment(Comment parentComment) {
-    TextEditingController replyController = TextEditingController();
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-            top: 16,
-            left: 16,
-            right: 16,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: replyController,
-                decoration: InputDecoration(hintText: 'Balas komentar...'),
-                autofocus: true,
-              ),
-              SizedBox(height: 8),
-              ElevatedButton(
-                onPressed: () {
-                  if (replyController.text.trim().isNotEmpty) {
-                    setState(() {
-                      parentComment.replies.add(
-                        Comment(
-                          username: 'current_user',
-                          content: replyController.text,
-                        ),
-                      );
-                    });
-                    Navigator.pop(context);
-                  }
-                },
-                child: Text('Kirim'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildComment(Comment comment) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Avatar
-              CircleAvatar(
-                radius: 16,
-                backgroundColor: Colors.grey[600],
-                child: Text(
-                  comment.username[0].toUpperCase(),
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-
-              SizedBox(width: 12),
-
-              // Content area
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Username and time
-                    Row(
-                      children: [
-                        Text(
-                          comment.username,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          timeAgo(comment.createdAt),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    SizedBox(height: 4),
-
-                    // Comment content
-                    Text(
-                      comment.content,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey[800],
-                        height: 1.3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Like button and count
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: comment.liked
-                        ? ShaderMask(
-                            shaderCallback: (Rect bounds) {
-                              return LinearGradient(
-                                colors: [
-                                  Colors.orangeAccent,
-                                  Colors.deepOrange,
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ).createShader(bounds);
-                            },
-                            blendMode: BlendMode.srcIn,
-                            child: Icon(Icons.favorite, size: 18),
-                          )
-                        : Icon(
-                            Icons.favorite_border,
-                            size: 18,
-                            color: Colors.grey[600],
-                          ),
-                    onPressed: () => _toggleLike(comment),
-                    padding: EdgeInsets.all(8),
-                    constraints: BoxConstraints(minWidth: 40, minHeight: 40),
-                  ),
-
-                  if (comment.likes > 0)
-                    Text(
-                      comment.likes.toString(),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-
-          Padding(
-            padding: EdgeInsets.only(left: 52),
-            child: GestureDetector(
-              onTap: () => _replyToComment(comment),
-              child: Text(
-                'Balas',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              ),
-            ),
-          ),
-          if (comment.replies.isNotEmpty)
-            Padding(
-              padding: EdgeInsets.only(top: 4, left: 52),
-              child: Column(
-                children: comment.replies.map(_buildReply).toList(),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildReply(Comment reply) {
-    return Row(
-      children: [
-        SizedBox(width: 16),
-        CircleAvatar(
-          radius: 14,
-          child: Text(
-            reply.username[0].toUpperCase(),
-            style: TextStyle(fontSize: 12),
-          ),
-        ),
-        SizedBox(width: 12),
-        Expanded(
-          child: Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(
-                  text: '${reply.username} ',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                TextSpan(text: reply.content),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final reversedComments = _comments.reversed.toList();
     return Scaffold(
       backgroundColor: Colors.white,
       resizeToAvoidBottomInset: true,
@@ -335,22 +184,29 @@ class _CommentSectionState extends State<CommentSection> {
           ),
           SizedBox(height: 12),
           Expanded(
-            child: ListView.builder(
-              controller: widget.scrollController,
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              itemCount: reversedComments.length,
-              itemBuilder: (context, index) => Column(
-                children: [
-                  _buildComment(reversedComments[index]),
-                  Divider(
-                    color: Colors.grey[300],
-                    height: 16,
-                    thickness: 1,
-                    indent: 52,
+            child: _isLoading
+                ? Center(child: CircularProgressIndicator())
+                : _comments.isEmpty
+                ? Center(child: Text('Belum ada komentar'))
+                : ListView.builder(
+                    controller: widget.scrollController,
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _comments.length,
+                    itemBuilder: (context, index) {
+                      final comment = _comments.reversed.toList()[index];
+                      return Column(
+                        children: [
+                          _buildComment(comment),
+                          Divider(
+                            color: Colors.grey[300],
+                            height: 16,
+                            thickness: 1,
+                            indent: 52,
+                          ),
+                        ],
+                      );
+                    },
                   ),
-                ],
-              ),
-            ),
           ),
           SafeArea(
             child: Padding(
@@ -379,6 +235,79 @@ class _CommentSectionState extends State<CommentSection> {
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildComment(Comment comment) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: Colors.grey[600],
+            child: Text(
+              comment.username[0].toUpperCase(),
+              style: TextStyle(color: Colors.white, fontSize: 14),
+            ),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      comment.username,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      timeAgo(comment.createdAt),
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 4),
+                Text(
+                  comment.content,
+                  style: TextStyle(fontSize: 13, color: Colors.grey[800]),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            children: [
+              IconButton(
+                icon: comment.liked
+                    ? ShaderMask(
+                        shaderCallback: (bounds) => LinearGradient(
+                          colors: [Colors.orangeAccent, Colors.deepOrange],
+                        ).createShader(bounds),
+                        blendMode: BlendMode.srcIn,
+                        child: Icon(Icons.favorite, size: 18),
+                      )
+                    : Icon(
+                        Icons.favorite_border,
+                        size: 18,
+                        color: Colors.grey[600],
+                      ),
+                onPressed: () => _toggleLike(comment),
+              ),
+              if (comment.likes > 0)
+                Text(
+                  comment.likes.toString(),
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+            ],
           ),
         ],
       ),

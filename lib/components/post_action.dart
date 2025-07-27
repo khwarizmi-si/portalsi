@@ -4,9 +4,14 @@ import 'package:portal_si/components/comment_section.dart';
 class PostActions extends StatelessWidget {
   final int likes;
   final int comments;
+  final int postId;
 
-  const PostActions({Key? key, required this.likes, required this.comments})
-    : super(key: key);
+  const PostActions({
+    Key? key,
+    required this.postId,
+    required this.comments,
+    required this.likes,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +43,8 @@ class PostActions extends StatelessWidget {
               ),
               SizedBox(width: 12),
               GestureDetector(
-                onTap: () => showCommentSheet(context),
+                onTap: () => showCommentSheet(context, postId),
+                // Pastikan post.id ada
                 child: Row(
                   children: [
                     Icon(

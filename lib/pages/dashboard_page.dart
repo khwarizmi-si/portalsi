@@ -26,8 +26,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   bool _isScrolled = false;
   List<dynamic> _posts = [];
   bool _isLoading = true;
-  Map<int, int> _likeCounts = {};
-  Map<int, bool> _likedPosts = {};
+  final Map<int, int> _likeCounts = {};
+  final Map<int, bool> _likedPosts = {};
 
   @override
   void initState() {
@@ -37,49 +37,75 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     _setupScrollListener();
   }
 
-  Future<void> loadLikesForPosts(List<dynamic> posts) async {
-    for (var post in posts) {
-      final postId = post['post_id'];
-      try {
-        final likes = await LikeService().getLikes(postId);
-        _likeCounts[postId] = likes.length;
+  /// Fetch posts from API
+  Future<void> _fetchPosts() async {
+    try {
+      final posts = await PostService().fetchAllPosts();
+      if (mounted) {
+        setState(() {
+          _posts = posts;
+          _isLoading = false;
+        });
 
-        final currentUserId =
-            await SecureStorage.getUserId(); // Pastikan method ini ada
-        _likedPosts[postId] = likes.any(
-          (like) => like['user_id'] == currentUserId,
-        );
-      } catch (e) {
-        _likeCounts[postId] = 0;
-        _likedPosts[postId] = false;
+        // ✅ Tambahkan ini untuk ambil jumlah like dan status like user
+        await loadLikesForPosts(posts);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _showErrorMessage('Failed to load posts. Please try again.');
       }
     }
+  }
+
+  Future<void> loadLikesForPosts(List<dynamic> posts) async {
+    final currentUserId = await SecureStorage.getUserId(); // ✅ cukup sekali
+    await Future.wait(
+      posts.map((post) async {
+        final postId = int.tryParse(post['post_id'].toString());
+        if (postId == null) return;
+
+        try {
+          final likes = await LikeService().getLikes(postId);
+          _likeCounts[postId] = likes.length;
+
+          _likedPosts[postId] = likes.any(
+            (like) => like['user_id'] == currentUserId,
+          );
+        } catch (e) {
+          print("Error loading likes for post $postId: $e");
+          _likeCounts[postId] = 0;
+          _likedPosts[postId] = false;
+        }
+      }),
+    );
+
     setState(() {});
   }
 
   Future<void> _onLikePost(Map post, int index) async {
-    print('Post data saat like: $post');
+    final postId = int.tryParse(post['post_id'].toString())!;
+    final currentLiked = _likedPosts[postId] ?? false;
 
-    final postId = post['post_id'];
-    if (postId == null) {
-      print('ERROR: postId null');
-      return;
-    }
+    // ✅ 1. Optimistic update langsung
+    setState(() {
+      _likedPosts[postId] = !currentLiked;
+      _likeCounts[postId] =
+          (_likeCounts[postId] ?? 0) + (currentLiked ? -1 : 1);
+    });
 
+    // ✅ 2. Kirim permintaan ke server di belakang
     final success = await LikeService().toggleLike(postId);
-    if (success) {
-      print('Like berhasil dikirim');
-      final updatedLikes = await LikeService().getLikes(postId);
-      final currentUserId = await SecureStorage.getUserId(); // ✅ Tambahkan ini
 
+    // ❌ 3. Kalau gagal, rollback (opsional)
+    if (!success) {
+      // rollback perubahan UI kalau gagal
       setState(() {
-        _likeCounts[postId] = updatedLikes.length;
-        _likedPosts[postId] = updatedLikes.any(
-          (like) => like['user_id'] == currentUserId,
-        );
+        _likedPosts[postId] = currentLiked;
+        _likeCounts[postId] =
+            (_likeCounts[postId] ?? 0) + (currentLiked ? 1 : -1);
       });
-    } else {
-      print('Gagal like');
+      print('Gagal mengirim like ke server');
     }
   }
 
@@ -105,24 +131,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         });
       }
     });
-  }
-
-  /// Fetch posts from API
-  Future<void> _fetchPosts() async {
-    try {
-      final posts = await PostService().fetchAllPosts();
-      if (mounted) {
-        setState(() {
-          _posts = posts;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        _showErrorMessage('Failed to load posts. Please try again.');
-      }
-    }
   }
 
   /// Show error message to user
@@ -202,7 +210,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ),
             ],
           ),
-          child: CommentSection(post: post, scrollController: scrollController),
+          child: CommentSection(
+            scrollController: scrollController,
+            postId: int.tryParse(post['post_id'].toString()) ?? 0,
+          ),
         ),
       ),
     );

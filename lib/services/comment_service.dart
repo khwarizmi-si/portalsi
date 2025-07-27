@@ -11,8 +11,20 @@ class CommentService {
       Uri.parse('$baseUrl/posts/$postId/comments'),
       headers: {'Authorization': 'Bearer $token'},
     );
+
+    print('GET /posts/$postId/comments');
+    print('Status code: ${res.statusCode}');
+    print('Response body: ${res.body}');
+
     if (res.statusCode == 200) {
-      return jsonDecode(res.body);
+      final decoded = jsonDecode(res.body);
+
+      // Ubah sesuai key 'data' atau lainnya
+      if (decoded is Map && decoded.containsKey('data')) {
+        return decoded['data'];
+      } else {
+        throw Exception('Format response tidak sesuai');
+      }
     } else {
       throw Exception('Gagal memuat komentar');
     }
