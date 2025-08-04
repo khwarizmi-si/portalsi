@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../utils/secure_storage.dart';
 
 class NotificationService {
-  final baseUrl = 'https://your-api.com';
+  final baseUrl = 'https://api.portalsi.com/api';
 
   Future<List<dynamic>> getNotifications() async {
     final token = await SecureStorage.getToken();
