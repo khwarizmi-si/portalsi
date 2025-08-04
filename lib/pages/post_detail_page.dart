@@ -747,7 +747,7 @@ class _PostDetailPageState extends State<PostDetailPage>
     final isLiked = _likedPosts[postId] ?? false;
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
       child: PostCard(
         postId: postId,
         username: post['user']?['username'] ?? 'Unknown User',
