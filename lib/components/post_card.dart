@@ -47,9 +47,7 @@ class PostCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8, left: 16, right: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(
-          12,
-        ), // <-- ini membuat sudut membulat
+        borderRadius: BorderRadius.circular(12),
         border: Border(
           bottom: BorderSide(color: Colors.grey.shade200, width: 0.5),
           top: BorderSide(color: Colors.grey.shade200, width: 0.5),
@@ -58,7 +56,7 @@ class PostCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header dengan padding Instagram-style
+          // Header
           Padding(
             padding: const EdgeInsets.all(12),
             child: PostHeader(
@@ -71,10 +69,10 @@ class PostCard extends StatelessWidget {
             ),
           ),
 
-          // Image dengan aspect ratio yang konsisten
+          // Image
           if (imageUrl.isNotEmpty)
             AspectRatio(
-              aspectRatio: 1.0, // Square seperti Instagram
+              aspectRatio: 1.0,
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(color: Colors.grey.shade100),
@@ -90,7 +88,7 @@ class PostCard extends StatelessWidget {
                         color: Colors.grey.shade400,
                         value: loadingProgress.expectedTotalBytes != null
                             ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
+                                loadingProgress.expectedTotalBytes!
                             : null,
                       ),
                     );
@@ -120,7 +118,7 @@ class PostCard extends StatelessWidget {
               ),
             ),
 
-          // Action buttons dengan style Instagram
+          // Action buttons
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: Row(
@@ -160,7 +158,11 @@ class PostCard extends StatelessWidget {
                   onTap: onShare,
                   child: Padding(
                     padding: const EdgeInsets.all(8),
-                    child: Icon(Icons.send, color: Colors.black87, size: 26),
+                    child: Icon(
+                      Icons.send,
+                      color: Colors.black87,
+                      size: 26,
+                    ),
                   ),
                 ),
 
@@ -186,18 +188,57 @@ class PostCard extends StatelessWidget {
             ),
           ),
 
-          // Likes count
-          if (likes > 0)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                '$likes suka',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
+          // ✅ LIKES & COMMENTS COUNT - Tampil dengan format Instagram
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+            child: Row(
+              children: [
+                // Tampilkan likes jika > 0
+                if (likes > 0) ...[
+                  GestureDetector(
+                    onTap: () {
+                      // TODO: Show who liked this post
+                      print('Show who liked this post');
+                    },
+                    child: Text(
+                      '$likes suka',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+
+                  // Separator dot
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Container(
+                      width: 3,
+                      height: 3,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade500,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ],
+
+                // Tampilkan jumlah comments (selalu tampil)
+                GestureDetector(
+                  onTap: onComment,
+                  child: Text(
+                    '$comments komentar',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: Colors.black87,
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
+          ),
 
           // Content/Caption
           if (content.isNotEmpty)
@@ -223,19 +264,6 @@ class PostCard extends StatelessWidget {
                       ),
                     ),
                   ],
-                ),
-              ),
-            ),
-
-          // Comments count
-          if (comments > 0)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: GestureDetector(
-                onTap: onComment,
-                child: Text(
-                  'Lihat semua $comments komentar',
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
                 ),
               ),
             ),
