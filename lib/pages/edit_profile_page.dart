@@ -186,14 +186,15 @@ class _EditProfilePageState extends State<EditProfilePage> {
       child: Stack(
         children: [
           CircleAvatar(
-            radius: 60,
+            radius: 40,
+            backgroundColor: Colors.grey[300],
             backgroundImage: _selectedImage != null
-                ? FileImage(_selectedImage!)
-                : _profilePictureUrl.isNotEmpty
-                ? NetworkImage(_profilePictureUrl)
-                : null,
+                ? FileImage(File(_selectedImage!.path)) as ImageProvider
+                : (_profilePictureUrl.isNotEmpty
+                    ? NetworkImage(_profilePictureUrl)
+                    : null),
             child: _selectedImage == null && _profilePictureUrl.isEmpty
-                ? const Icon(Icons.person, size: 60)
+                ? const Icon(Icons.person, size: 60, color: Colors.white)
                 : null,
           ),
           Positioned(

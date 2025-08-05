@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
@@ -77,24 +78,45 @@ class ProfileService {
   // Get current profile data
   Future<ProfileModel> getProfile() async {
     try {
-      final token = await SecureStorage.getToken(); // ✅ Ambil token
+      // 1. Dapatkan token dan user ID
+      final token = await SecureStorage.getToken();
+      final userId = await SecureStorage
+          .getUserId(); // Anda perlu menambahkan ini di SecureStorage
 
+      if (token == null) {
+        throw Exception('Authentication required');
+      }
+
+      // 2. Buat request ke endpoint profile dengan user ID
       final response = await _client.get(
-        Uri.parse('$baseUrl/account/settings'),
+        Uri.parse(
+            '$baseUrl/profile/$userId'), // Gunakan endpoint profile dengan ID
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token', // ✅ Pakai token
+          'Authorization': 'Bearer $token',
         },
-      );
+      ).timeout(const Duration(seconds: 10));
+
+      // 3. Handle response
+      final responseData = json.decode(response.body);
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(response.body);
-        return ProfileModel.fromJson(data);
+        return ProfileModel.fromJson(responseData);
       } else {
-        throw Exception('Failed to load profile: ${response.statusCode}');
+        final errorMsg = responseData['message'] ??
+            'Failed to load profile (Status: ${response.statusCode})';
+        throw Exception(errorMsg);
       }
+    } on SocketException {
+      throw Exception('No internet connection');
+    } on TimeoutException {
+      throw Exception('Request timeout. Please try again');
+    } on http.ClientException {
+      throw Exception('Server connection failed');
+    } on FormatException {
+      throw Exception('Invalid server response');
     } catch (e) {
-      throw Exception('Error fetching profile: $e');
+      throw Exception('Failed to load profile: ${e.toString()}');
     }
   }
 
@@ -205,6 +227,62 @@ class ProfileService {
       return null;
     } catch (e) {
       throw Exception('Error picking image: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>?> getCurrentUserForComments() async {
+    try {
+      final token = await SecureStorage.getToken();
+      if (token == null) return null;
+
+      final response = await _client.get(
+        Uri.parse('$baseUrl/account/settings'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(Duration(seconds: 8));
+
+      print(
+          '👤 Get current user for comments - Status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+
+        // Extract user info yang dibutuhkan comment section
+        final userInfo = {
+          'username': data['username'] ?? '',
+          'profile_picture_url': data['profile_picture_url'] ?? '',
+          'full_name': data['full_name'] ?? '',
+          'email': data['email'] ?? '',
+        };
+
+        // ✅ Save ke storage untuk cache
+        await _saveUserDataToStorage(userInfo);
+
+        return userInfo;
+      } else {
+        print('❌ Failed to get current user: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ Error getting current user for comments: $e');
+      return null;
+    }
+  }
+
+  // ✅ Helper method untuk save ke storage
+  Future<void> _saveUserDataToStorage(Map<String, dynamic> userInfo) async {
+    try {
+      await Future.wait([
+        SecureStorage.saveUsername(userInfo['username'] ?? ''),
+        SecureStorage.saveProfilePicture(userInfo['profile_picture_url'] ?? ''),
+        if (userInfo['full_name'] != null)
+          SecureStorage.saveFullName(userInfo['full_name']),
+      ]);
+      print('✅ User data cached to storage');
+    } catch (e) {
+      print('⚠️ Failed to cache user data: $e');
     }
   }
 

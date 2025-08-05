@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:portal_si/pages/post_detail_page.dart';
 import 'package:portal_si/pages/profile_page.dart';
 import '../components/story_section.dart';
 import '../components/post_card.dart';
 import '../components/bottom_navigation.dart';
-import '../components/comment_section.dart';
 import 'package:flutter/services.dart';
 import 'package:portal_si/services/post_service.dart';
 import 'package:portal_si/services/like_service.dart';
 import '../helper/time_helper.dart';
 import '../utils/secure_storage.dart';
-import 'dart:io'; // untuk exit(0)
 import 'other_profile_page.dart';
 import 'message_list_page.dart';
+import '../services/comment_service.dart';
 
 class HomePage extends StatefulWidget {
   @override
@@ -28,6 +28,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   bool _isLoading = true;
   final Map<int, int> _likeCounts = {};
   final Map<int, bool> _likedPosts = {};
+  final Map<int, int> _commentCounts = {};
+  final CommentService _commentService =
+      CommentService(); // Import CommentService
 
   @override
   void initState() {
@@ -47,8 +50,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           _isLoading = false;
         });
 
-        // ✅ Tambahkan ini untuk ambil jumlah like dan status like user
-        await loadLikesForPosts(posts);
+        // ✅ Load likes dan comments count
+        await Future.wait([
+          loadLikesForPosts(posts),
+          loadCommentsForPosts(posts), // ✅ TAMBAHAN INI
+        ]);
       }
     } catch (e) {
       if (mounted) {
@@ -57,6 +63,39 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       }
     }
   }
+
+  // ✅ FUNGSI BARU: Load comments count untuk semua posts
+  Future<void> loadCommentsForPosts(List<dynamic> posts) async {
+    await Future.wait(
+      posts.map((post) async {
+        final postId = int.tryParse(post['post_id'].toString());
+        if (postId == null) return;
+
+        try {
+          final comments = await _commentService.getComments(postId);
+          _commentCounts[postId] = comments.length;
+        } catch (e) {
+          _commentCounts[postId] = 0;
+        }
+      }),
+    );
+    setState(() {});
+  }
+
+  // ✅ FUNGSI UNTUK REFRESH COMMENTS COUNT SETELAH ADD COMMENT
+  Future<void> refreshCommentsCount(int postId) async {
+    try {
+      final comments = await _commentService.getComments(postId);
+      setState(() {
+        _commentCounts[postId] = comments.length;
+      });
+      print('🔄 Refreshed comments count for post $postId: ${comments.length}');
+    } catch (e) {
+      print('Error refreshing comments count: $e');
+    }
+  }
+
+  /// Fetch posts from API
 
   Future<void> loadLikesForPosts(List<dynamic> posts) async {
     final currentUserId = await SecureStorage.getUserId(); // ✅ cukup sekali
@@ -249,7 +288,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           SystemNavigator.pop(); // atau exit(0)
         }
       },
-
       child: Scaffold(
         backgroundColor: Color(0xFFFAFAFA),
         extendBodyBehindAppBar: false,
@@ -475,10 +513,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   /// Build posts list
+
   Widget _buildPostsList() {
     return SliverList(
       delegate: SliverChildBuilderDelegate((context, index) {
         final post = _posts[index];
+        final postId = int.tryParse(post['post_id'].toString()) ?? 0;
+
         return _buildAnimatedPost(
           delay: index * 100,
           post: Container(
@@ -487,11 +528,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               username: post['user']['username'] ?? 'Unknown',
               timeAgo: timeAgoFromDate(post['created_at']),
               imageUrl: post['media_url'] ?? '',
-              likes: _likeCounts[post['post_id']] ?? 0,
-              comments: post['comments_count'] ?? 0,
+              likes: _likeCounts[postId] ?? 0,
+
+              // ✅ COBA BERBAGAI SUMBER COMMENTS COUNT
+              comments: _commentCounts[postId] ??
+                  int.tryParse(post['comments_count']?.toString() ?? '0') ??
+                  0,
+
               content: post['caption'] ?? '',
               isVerified: post['user']['is_verified'] ?? false,
-              isLiked: _likedPosts[post['post_id']] ?? false,
+              isLiked: _likedPosts[postId] ?? false,
               isBookmarked: post['is_bookmarked'] ?? false,
               profileImageUrl: post['user']['profile_picture_url'] ?? '',
               user: post['user'],
@@ -499,14 +545,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               onBookmark: () => _onBookmarkPost(post, index),
               onShare: () => _onSharePost(post),
               onComment: () => _showCommentSection(post),
-              postId: post['post_id'],
+              postId: postId,
               onProfileTap: () async {
                 final currentUserId = await SecureStorage.getUserId();
                 final tappedUserId = int.tryParse(
                   post['user']['user_id'].toString(),
                 );
-                print('Current User ID: $currentUserId');
-                print('Tapped User ID: $tappedUserId');
 
                 if (tappedUserId == currentUserId) {
                   Navigator.push(
@@ -523,7 +567,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   );
                 }
               },
-              // Add comment callback
             ),
           ),
         );
