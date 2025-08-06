@@ -562,7 +562,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     context,
                     MaterialPageRoute(
                       builder: (context) =>
-                          OtherProfilePage(userId: tappedUserId!),
+                          OtherProfilePage(username: post['user']['username']),
                     ),
                   );
                 }

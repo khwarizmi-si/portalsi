@@ -6,9 +6,9 @@ import '../services/auth_service.dart';
 import '../services/post_service.dart';
 import '../services/follow_service.dart';
 import 'dashboard_page.dart';
-import 'edit_profile_page.dart'; // Import EditProfilePage
+import 'edit_profile_page.dart';
+import 'followers_following_page.dart'; // Import halaman baru
 import 'package:portal_si/services/user_service.dart';
-// Import ProfileService dan ProfileModel dari file sebelumnya
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({Key? key}) : super(key: key);
@@ -28,33 +28,56 @@ class _ProfilePageState extends State<ProfilePage> {
 
   List<dynamic> followers = [];
   List<dynamic> following = [];
-  bool isLoading = true;
+  bool isLoadingFollowData = true;
   int? userId;
 
   @override
   void initState() {
     super.initState();
     _loadUser();
-    fetchFollowData();
   }
 
   Future<void> fetchFollowData() async {
+    if (!mounted) return;
+
+    setState(() => isLoadingFollowData = true);
+
     try {
       final userIdStr = await SecureStorage.getToken();
       userId = int.tryParse(userIdStr ?? '');
-      if (userId == null) throw Exception('User ID tidak valid');
+
+      if (userId == null) {
+        // Coba ambil dari user data yang sudah dimuat
+        if (_user != null) {
+          userId = _user!['user']['user_id'];
+        } else {
+          throw Exception('User ID tidak valid');
+        }
+      }
 
       final fetchedFollowers = await _followService.getFollowers(userId!);
       final fetchedFollowing = await _followService.getFollowing(userId!);
 
-      setState(() {
-        followers = fetchedFollowers;
-        following = fetchedFollowing;
-        isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          followers = fetchedFollowers;
+          following = fetchedFollowing;
+          isLoadingFollowData = false;
+        });
+      }
     } catch (e) {
       print('Error ambil followers/following: $e');
-      setState(() => isLoading = false);
+      if (mounted) {
+        setState(() => isLoadingFollowData = false);
+        // Tampilkan snackbar error
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('Gagal memuat data followers/following: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -71,7 +94,11 @@ class _ProfilePageState extends State<ProfilePage> {
       _isLoadingUser = false;
     });
 
-    _fetchUserPosts();
+    // Setelah user data dimuat, ambil data follow dan posts
+    await Future.wait([
+      _fetchUserPosts(),
+      fetchFollowData(),
+    ]);
   }
 
   Future<void> _fetchUserPosts() async {
@@ -123,6 +150,28 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
       );
     }
+  }
+
+  // Navigasi ke halaman followers/following
+  void _navigateToFollowersFollowing(int initialTab) {
+    if (userId == null) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FollowersFollowingPage(
+          userId: userId!,
+          initialTab: initialTab,
+          followers: followers,
+          following: following,
+        ),
+      ),
+    ).then((value) {
+      // Refresh data setelah kembali dari halaman followers/following
+      if (value == true) {
+        fetchFollowData();
+      }
+    });
   }
 
   void _onBottomNavTapped(int index) {
@@ -380,9 +429,25 @@ class _ProfilePageState extends State<ProfilePage> {
                     children: [
                       _buildStatItem(_userPosts.length.toString(), 'postingan'),
                       Container(height: 40, width: 1, color: Colors.grey[300]),
-                      _buildStatItem(followers.length.toString(), 'pengikut'),
+                      GestureDetector(
+                        onTap: () =>
+                            _navigateToFollowersFollowing(0), // Tab followers
+                        child: _buildStatItem(
+                            isLoadingFollowData
+                                ? '...'
+                                : followers.length.toString(),
+                            'pengikut'),
+                      ),
                       Container(height: 40, width: 1, color: Colors.grey[300]),
-                      _buildStatItem(following.length.toString(), 'mengikuti'),
+                      GestureDetector(
+                        onTap: () =>
+                            _navigateToFollowersFollowing(1), // Tab following
+                        child: _buildStatItem(
+                            isLoadingFollowData
+                                ? '...'
+                                : following.length.toString(),
+                            'mengikuti'),
+                      ),
                     ],
                   ),
                 ),
@@ -609,7 +674,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           child: CircularProgressIndicator(
                             value: loadingProgress.expectedTotalBytes != null
                                 ? loadingProgress.cumulativeBytesLoaded /
-                                      loadingProgress.expectedTotalBytes!
+                                    loadingProgress.expectedTotalBytes!
                                 : null,
                             strokeWidth: 2,
                           ),
@@ -649,7 +714,6 @@ class _ProfilePageState extends State<ProfilePage> {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
-
                         if (post['location'] != null &&
                             post['location'].toString().isNotEmpty)
                           Padding(
@@ -677,7 +741,6 @@ class _ProfilePageState extends State<ProfilePage> {
                               ],
                             ),
                           ),
-
                         if (post['is_video'] == 1)
                           Padding(
                             padding: const EdgeInsets.only(top: 2),
