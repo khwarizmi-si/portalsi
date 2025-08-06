@@ -78,19 +78,16 @@ class ProfileService {
   // Get current profile data
   Future<ProfileModel> getProfile() async {
     try {
-      // 1. Dapatkan token dan user ID
+      // 1. Dapatkan token
       final token = await SecureStorage.getToken();
-      final userId = await SecureStorage
-          .getUserId(); // Anda perlu menambahkan ini di SecureStorage
 
       if (token == null) {
         throw Exception('Authentication required');
       }
 
-      // 2. Buat request ke endpoint profile dengan user ID
+      // 2. Buat request ke endpoint profile settings (untuk current user)
       final response = await _client.get(
-        Uri.parse(
-            '$baseUrl/profile/$userId'), // Gunakan endpoint profile dengan ID
+        Uri.parse('$baseUrl/account/settings'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -120,16 +117,16 @@ class ProfileService {
     }
   }
 
-  //  Get other user's profile by ID or username
-  Future<ProfileModel> getOtherProfile(int userId) async {
+  // ✅ UPDATED: Get other user's profile by USERNAME instead of ID
+  Future<ProfileModel> getOtherProfile(String username) async {
     try {
-      final token = await SecureStorage.getToken(); // ✅ Ambil token
+      final token = await SecureStorage.getToken();
 
       final response = await _client.get(
-        Uri.parse('$baseUrl/profile/$userId'),
+        Uri.parse('$baseUrl/profile/$username'), // ✅ Use username in URL
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token', // ✅ Pakai token
+          'Authorization': 'Bearer $token',
         },
       );
 
@@ -152,13 +149,13 @@ class ProfileService {
   // Update profile data
   Future<bool> updateProfile(ProfileModel profile) async {
     try {
-      final token = await SecureStorage.getToken(); // ✅ Ambil token
+      final token = await SecureStorage.getToken();
 
       final response = await _client.post(
         Uri.parse('$baseUrl/account/settings'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token', // ✅ Pakai token
+          'Authorization': 'Bearer $token',
         },
         body: json.encode(profile.toJson()),
       );
@@ -176,7 +173,7 @@ class ProfileService {
   // Upload profile picture
   Future<String?> uploadProfilePicture(File imageFile) async {
     try {
-      final token = await SecureStorage.getToken(); // ✅ Ambil token
+      final token = await SecureStorage.getToken();
 
       var request = http.MultipartRequest(
         'POST',
@@ -184,7 +181,7 @@ class ProfileService {
       );
 
       request.headers.addAll({
-        'Authorization': 'Bearer $token', // ✅ Pakai token
+        'Authorization': 'Bearer $token',
         // Jangan set 'Content-Type' manual, biarkan MultipartRequest yang atur
       });
 

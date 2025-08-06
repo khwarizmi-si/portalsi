@@ -25,10 +25,9 @@ class SecureStorage {
     return token != null && token.isNotEmpty;
   }
 
-  static Future<int> getUserId() async {
-    final storage = FlutterSecureStorage();
-    final idString = await storage.read(key: 'userId');
-    return int.tryParse(idString ?? '') ?? 0;
+  static Future<int?> getUserId() async {
+    final idString = await _storage.read(key: 'userId');
+    return int.tryParse(idString ?? '');
   }
 
   static Future<String?> getUsername() async {
