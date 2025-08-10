@@ -7,10 +7,13 @@ class AuthService {
 
   Future<Map<String, dynamic>> login(String email, String password) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/login'),
-        body: {'email': email, 'password': password},
-      ).timeout(const Duration(seconds: 10));
+
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/login'),
+            body: {'login': email, 'password': password},
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);

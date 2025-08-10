@@ -279,23 +279,43 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    _setSystemUIOverlayStyle();
+    // HAPUS BARIS INI: _setSystemUIOverlayStyle();
 
-    return PopScope(
-      canPop: false,
-      onPopInvoked: (didPop) {
-        if (!didPop) {
-          SystemNavigator.pop(); // atau exit(0)
-        }
-      },
-      child: Scaffold(
-        backgroundColor: Color(0xFFFAFAFA),
-        extendBodyBehindAppBar: false,
-        appBar: _buildAppBar(),
-        body: _buildBody(),
-        bottomNavigationBar: CustomBottomNavigation(
-          selectedIndex: _selectedIndex,
-          onTap: _onBottomNavTapped,
+
+    // NEW: Bungkus widget utama Anda dengan AnnotatedRegion
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        // Atur warna background Navigation Bar agar sama dengan background Scaffold
+        systemNavigationBarColor: Color(0xFFFAFAFA),
+
+        // KARENA background terang, ikon navigasi harus GELAP agar terlihat
+        systemNavigationBarIconBrightness: Brightness.dark,
+
+        // Optional: Atur status bar di bagian atas
+        // Kita buat transparan agar warna AppBar yang menentukannya
+        statusBarColor: Colors.transparent,
+
+        // Ikon di status bar (jam, sinyal) juga kita buat GELAP
+        // karena biasanya AppBar di tema terang berwarna terang juga.
+        statusBarIconBrightness: Brightness.dark,
+      ),
+      child: PopScope(
+        canPop: false,
+        onPopInvoked: (didPop) {
+          if (!didPop) {
+            SystemNavigator.pop(); // atau exit(0)
+          }
+        },
+        child: Scaffold(
+          backgroundColor: const Color(0xFFFAFAFA),
+          extendBodyBehindAppBar: false,
+          appBar: _buildAppBar(), // Asumsi _buildAppBar() mengembalikan sebuah AppBar
+          body: _buildBody(),     // Asumsi _buildBody() mengembalikan body
+          bottomNavigationBar: CustomBottomNavigation(
+            selectedIndex: _selectedIndex, // Asumsi _selectedIndex adalah state
+            onTap: _onBottomNavTapped,     // Asumsi _onBottomNavTapped adalah fungsi
+          ),
+
         ),
       ),
     );
