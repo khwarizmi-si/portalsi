@@ -34,7 +34,11 @@ class _PostHeaderState extends State<PostHeader> {
   bool isPrivateAccount = false;
   String? followStatus;
   String? currentUsername;
-  String? targetUsername;
+
+  // Cache untuk menghindari API calls berulang
+  static final Map<String, bool> _isCurrentUserCache = {};
+  static final Map<String, bool> _privateAccountCache = {};
+  static String? _cachedCurrentUsername;
 
   @override
   void initState() {
@@ -45,25 +49,30 @@ class _PostHeaderState extends State<PostHeader> {
   @override
   void didUpdateWidget(PostHeader oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Refresh status jika user berubah
-    if (oldWidget.user != widget.user ||
-        oldWidget.username != widget.username) {
+    // Hanya refresh jika username benar-benar berubah
+    if (oldWidget.username != widget.username) {
       _initializeData();
     }
   }
 
   Future<void> _initializeData() async {
+    // Fast check untuk current user
+    await _checkIfCurrentUser();
+
+    if (isCurrentUser) {
+      // Jika current user, tidak perlu API calls lain
+      if (mounted) setState(() => isLoading = false);
+      return;
+    }
+
     setState(() => isLoading = true);
 
     try {
-      await _getCurrentUsername();
-      _checkIfCurrentUser();
-
-      if (!isCurrentUser && targetUsername != null) {
-        // Check if account is private
-        await _checkAccountType();
-        await _checkFollowStatus();
-      }
+      // Parallel execution untuk account type dan follow status
+      await Future.wait([
+        _checkAccountType(),
+        _checkFollowStatus(),
+      ]);
     } catch (e) {
       print('Error initializing data: $e');
     } finally {
@@ -73,81 +82,73 @@ class _PostHeaderState extends State<PostHeader> {
     }
   }
 
-  // ✅ UPDATED: Get current username instead of userId
+  // Optimized: Cache current username
   Future<void> _getCurrentUsername() async {
+    if (_cachedCurrentUsername != null) {
+      currentUsername = _cachedCurrentUsername;
+      return;
+    }
+
     try {
       final myProfile = await _followService.getMyProfile();
       currentUsername = myProfile['username'];
-      print('Current username: $currentUsername');
-
-      if (currentUsername == null || currentUsername!.isEmpty) {
-        print('⚠️ Current username tidak valid!');
-      }
+      _cachedCurrentUsername = currentUsername; // Cache it
     } catch (e) {
       print('Error getting current username: $e');
     }
   }
 
-  // ✅ UPDATED: Check if current user using username comparison
-  void _checkIfCurrentUser() {
-    try {
-      // Get target username from widget
-      targetUsername = widget.username;
+  // Optimized: Check with caching
+  Future<void> _checkIfCurrentUser() async {
+    final targetUsername = widget.username;
 
-      if (targetUsername == null || targetUsername!.isEmpty) {
-        // Fallback: try to get from user object
-        targetUsername = widget.user['username']?.toString();
-      }
-
-      print('Target username: $targetUsername');
-
-      isCurrentUser = currentUsername != null &&
-          targetUsername != null &&
-          currentUsername == targetUsername;
-
-      print('Is current user: $isCurrentUser');
-    } catch (e) {
-      print('Error checking if current user: $e');
-      isCurrentUser = false;
+    // Check cache first
+    if (_isCurrentUserCache.containsKey(targetUsername)) {
+      isCurrentUser = _isCurrentUserCache[targetUsername]!;
+      return;
     }
+
+    await _getCurrentUsername();
+
+    isCurrentUser =
+        currentUsername != null && currentUsername == targetUsername;
+
+    // Cache the result
+    _isCurrentUserCache[targetUsername] = isCurrentUser;
   }
 
-  // ✅ UPDATED: Check account type using username
+  // Optimized: Cache account type
   Future<void> _checkAccountType() async {
-    if (targetUsername == null) return;
+    final targetUsername = widget.username;
 
-    try {
-      final profile = await _followService.getUserProfile(targetUsername!);
-      if (mounted) {
-        setState(() {
-          isPrivateAccount = profile['is_private'] ?? false;
-        });
-        print('Account type: ${isPrivateAccount ? 'Private' : 'Public'}');
-      }
-    } catch (e) {
-      print('Error checking account type: $e');
-      // Default to false if we can't determine
-      isPrivateAccount = false;
-    }
-  }
-
-  // Method untuk force refresh status
-  Future<void> forceRefreshStatus() async {
-    if (!isCurrentUser && targetUsername != null) {
-      await _checkAccountType();
-      await _checkFollowStatus();
-    }
-  }
-
-  // ✅ UPDATED: Check follow status using username
-  Future<void> _checkFollowStatus() async {
-    if (targetUsername == null) {
-      print('Cannot check follow status: targetUsername is null');
+    // Check cache first
+    if (_privateAccountCache.containsKey(targetUsername)) {
+      isPrivateAccount = _privateAccountCache[targetUsername]!;
       return;
     }
 
     try {
-      final statusData = await _followService.getFollowStatus(targetUsername!);
+      final profile = await _followService.getUserProfile(targetUsername);
+      isPrivateAccount = profile['is_private'] ?? false;
+
+      // Cache the result
+      _privateAccountCache[targetUsername] = isPrivateAccount;
+
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      print('Error checking account type: $e');
+      isPrivateAccount = false;
+    }
+  }
+
+  // Optimized: Use efficient follow status check
+  Future<void> _checkFollowStatus() async {
+    try {
+      print('🔍 Checking follow status for ${widget.username}');
+
+      final statusData = await _followService.getFollowStatus(widget.username);
 
       if (mounted) {
         setState(() {
@@ -156,7 +157,7 @@ class _PostHeaderState extends State<PostHeader> {
         });
 
         print(
-            'Follow status updated: isFollowing=$isFollowing, status=$followStatus');
+            '📊 Follow status updated: isFollowing=$isFollowing, status=$followStatus');
       }
     } catch (e) {
       print('Error checking follow status: $e');
@@ -169,64 +170,42 @@ class _PostHeaderState extends State<PostHeader> {
     }
   }
 
-  // ✅ UPDATED: Handle follow action using username
   Future<void> _handleFollowAction() async {
-    if (targetUsername == null || isLoading || isCurrentUser) {
-      print(
-          '❌ Cannot handle follow action: targetUsername=$targetUsername, isLoading=$isLoading, isCurrentUser=$isCurrentUser');
-      return;
-    }
-
-    print('🎯 Starting follow action for user $targetUsername');
-    print('📊 Current state: isFollowing=$isFollowing, status=$followStatus');
+    if (isLoading || isCurrentUser) return;
 
     setState(() => isLoading = true);
 
     try {
       bool success;
-      String action;
+      String action = isFollowing ? 'unfollow' : 'follow';
 
       if (isFollowing) {
-        // User is currently following, so unfollow
-        action = 'unfollow';
-        print('🔄 Attempting to unfollow user $targetUsername');
-        success = await _followService.unfollowUser(targetUsername!);
+        success = await _followService.unfollowUser(widget.username);
       } else {
-        // User is not following, so follow
-        action = 'follow';
-        print('🔄 Attempting to follow user $targetUsername');
-        success = await _followService.followUser(targetUsername!);
+        success = await _followService.followUser(widget.username);
       }
 
-      print('📈 Action result: $action = $success');
-
       if (success) {
-        print('✅ Action successful, refreshing status...');
+        // Clear cache untuk user ini agar data fresh
+        _privateAccountCache.remove(widget.username);
+        _followService.clearFollowStatusCache();
 
-        // Wait a bit for server to process
-        await Future.delayed(const Duration(milliseconds: 500));
+        // Wait for server processing
+        await Future.delayed(const Duration(milliseconds: 300));
 
-        // Refresh status dari server untuk memastikan data terbaru
+        // Refresh status
         await _checkFollowStatus();
-
-        // Panggil callback
         widget.onFollowChanged?.call();
 
         if (mounted) {
           _showSuccessMessage(action);
         }
       } else {
-        print('❌ Action failed');
-
-        // Jika action gagal, coba refresh status dulu
-        // Mungkin state kita tidak sinkron dengan server
-        print('🔄 Refreshing status to check current state...');
         await _checkFollowStatus();
-
-        _showErrorSnackbar('Aksi $action gagal. Status telah diperbarui.');
+        _showErrorSnackbar('Aksi $action gagal.');
       }
     } catch (e) {
-      print('💥 Error in follow action: $e');
+      print('Error in follow action: $e');
       _showErrorSnackbar('Terjadi kesalahan: ${e.toString()}');
     } finally {
       if (mounted) {
@@ -238,27 +217,18 @@ class _PostHeaderState extends State<PostHeader> {
   void _showSuccessMessage(String action) {
     String message;
     if (action == 'follow') {
-      if (isPrivateAccount) {
-        message =
-            'Permintaan mengikuti @${targetUsername} terkirim dan menunggu persetujuan';
-      } else {
-        message = followStatus == 'pending'
-            ? 'Permintaan mengikuti @${targetUsername} terkirim'
-            : 'Berhasil mengikuti @${targetUsername}';
-      }
+      message = isPrivateAccount
+          ? 'Permintaan mengikuti @${widget.username} terkirim'
+          : 'Berhasil mengikuti @${widget.username}';
     } else {
-      if (followStatus == 'pending') {
-        message = 'Permintaan mengikuti @${targetUsername} dibatalkan';
-      } else {
-        message = 'Berhasil berhenti mengikuti @${targetUsername}';
-      }
+      message = 'Berhasil berhenti mengikuti @${widget.username}';
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.green,
-        duration: const Duration(seconds: 3),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -269,7 +239,7 @@ class _PostHeaderState extends State<PostHeader> {
         SnackBar(
           content: Text(message),
           backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
+          duration: const Duration(seconds: 2),
         ),
       );
     }
@@ -290,9 +260,6 @@ class _PostHeaderState extends State<PostHeader> {
           child: widget.profileImageUrl.isEmpty
               ? Icon(Icons.person, size: 30, color: Colors.grey[600])
               : null,
-          onBackgroundImageError: (_, __) {
-            print('Error loading profile image: ${widget.profileImageUrl}');
-          },
         ),
       ),
       title: GestureDetector(
@@ -323,13 +290,9 @@ class _PostHeaderState extends State<PostHeader> {
   }
 
   Widget? _buildTrailingWidget() {
-    // Jangan tampilkan tombol untuk user sendiri
     if (isCurrentUser) return null;
-
-    // Jangan tampilkan tombol jika sudah following dengan status accepted
     if (isFollowing && followStatus == 'accepted') return null;
 
-    // Jika masih loading awal, tampilkan loading kecil
     if (isLoading && followStatus == null) {
       return const SizedBox(
         width: 20,
@@ -339,7 +302,7 @@ class _PostHeaderState extends State<PostHeader> {
     }
 
     return SizedBox(
-      width: 100, // Increased width for longer text
+      width: 100,
       height: 32,
       child: ElevatedButton(
         onPressed: isLoading ? null : _handleFollowAction,
@@ -351,8 +314,6 @@ class _PostHeaderState extends State<PostHeader> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          disabledBackgroundColor: Colors.grey[300],
-          disabledForegroundColor: Colors.grey[600],
         ),
         child: isLoading
             ? const SizedBox(
@@ -380,8 +341,6 @@ class _PostHeaderState extends State<PostHeader> {
     switch (followStatus) {
       case 'pending':
         return Colors.orange[600]!;
-      case 'accepted':
-        return Colors.grey[600]!;
       default:
         return Colors.grey[600]!;
     }
@@ -394,11 +353,23 @@ class _PostHeaderState extends State<PostHeader> {
 
     switch (followStatus) {
       case 'pending':
-        return isPrivateAccount ? 'Diminta' : 'Pending';
-      case 'accepted':
-        return 'Mengikuti';
+        return 'Diminta';
       default:
         return 'Mengikuti';
     }
+  }
+
+  // Clear cache when widget is disposed
+  @override
+  void dispose() {
+    // Optional: clear cache entries for this user
+    super.dispose();
+  }
+
+  // Static method to clear all cache
+  static void clearCache() {
+    _isCurrentUserCache.clear();
+    _privateAccountCache.clear();
+    _cachedCurrentUsername = null;
   }
 }

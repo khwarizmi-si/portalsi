@@ -10,6 +10,8 @@ class PostGridItem extends StatelessWidget {
   final Map<int, bool> likedPosts;
   final Future<void> Function(Map, int) onLikePost;
   final Function(dynamic) onPostTap;
+  final Function(Map<String, dynamic>)
+      onUserTap; // Tambahkan callback untuk user tap
 
   const PostGridItem({
     Key? key,
@@ -19,6 +21,7 @@ class PostGridItem extends StatelessWidget {
     required this.likedPosts,
     required this.onLikePost,
     required this.onPostTap,
+    required this.onUserTap, // Required parameter baru
   }) : super(key: key);
 
   @override
@@ -29,6 +32,7 @@ class PostGridItem extends StatelessWidget {
     final imageUrl = item['media_url'] ?? '';
     final caption = item['caption'] ?? '';
     final username = user?['username'] ?? 'Unknown User';
+    final userAvatar = user?['avatar'] ?? user?['profile_picture'] ?? '';
     final createdAt = item['created_at'];
     final postId = int.tryParse(item['post_id'].toString()) ?? 0;
     final likesCount = likeCounts[postId] ?? 0;
@@ -65,12 +69,64 @@ class PostGridItem extends StatelessWidget {
                   children: [
                     _buildImageContent(imageUrl),
                     _buildGradientOverlay(),
+                    _buildUserProfile(
+                        user, userAvatar), // Tambahkan user profile
                     _buildLikeButton(isLiked, likesCount),
                     _buildPostInfo(username, caption, createdAt),
                   ],
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Widget baru untuk profile user di bagian atas
+  Widget _buildUserProfile(Map<String, dynamic>? user, String userAvatar) {
+    if (user == null) return SizedBox.shrink();
+
+    return Positioned(
+      top: 12,
+      left: 12,
+      child: GestureDetector(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onUserTap(user);
+        },
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 12,
+                backgroundColor: Colors.grey[300],
+                backgroundImage:
+                    userAvatar.isNotEmpty ? NetworkImage(userAvatar) : null,
+                child: userAvatar.isEmpty
+                    ? Icon(
+                        Icons.person,
+                        size: 14,
+                        color: Colors.grey[600],
+                      )
+                    : null,
+              ),
+              SizedBox(width: 6),
+              Text(
+                user['username'] ?? 'Unknown',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -92,7 +148,7 @@ class PostGridItem extends StatelessWidget {
                     child: CircularProgressIndicator(
                       value: loadingProgress.expectedTotalBytes != null
                           ? loadingProgress.cumulativeBytesLoaded /
-                                loadingProgress.expectedTotalBytes!
+                              loadingProgress.expectedTotalBytes!
                           : null,
                       strokeWidth: 2,
                       color: Colors.grey[400],
@@ -195,15 +251,24 @@ class PostGridItem extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.end,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            username,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              shadows: [
-                Shadow(color: Colors.black.withOpacity(0.5), blurRadius: 4),
-              ],
+          // Username yang bisa diklik
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              if (item['user'] != null) {
+                onUserTap(item['user']);
+              }
+            },
+            child: Text(
+              username,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                shadows: [
+                  Shadow(color: Colors.black.withOpacity(0.5), blurRadius: 4),
+                ],
+              ),
             ),
           ),
           if (caption.isNotEmpty) ...[

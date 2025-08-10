@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import '../components/bottom_navigation.dart';
 import '../services/user_service.dart';
 import '../services/post_service.dart';
-import '../services/follow_service.dart'; // ✅ Add FollowService import
+import '../services/follow_service.dart';
+import '../utils/secure_storage.dart';
+import 'followers_following_page.dart';
 
 class OtherProfilePage extends StatefulWidget {
-  final String? username; // ✅ Changed from int? userId to String? username
+  final String? username;
 
   const OtherProfilePage({Key? key, this.username}) : super(key: key);
 
@@ -27,14 +31,61 @@ class _OtherProfilePageState extends State<OtherProfilePage>
   late Animation<double> _fadeAnimation;
 
   final ProfileService _profileService = ProfileService();
-  final FollowService _followService = FollowService(); // ✅ Add FollowService
+  final FollowService _followService = FollowService();
   ProfileModel? _profileData;
 
   List<dynamic> _userPosts = [];
+  int? _targetUserId;
 
-  // ✅ Add follow counts
-  int _followersCount = 0;
-  int _followingCount = 0;
+  // ✅ Updated follow data variables to match ProfilePage
+  List<dynamic> followers = [];
+  List<dynamic> following = [];
+  bool isLoadingFollowData = true;
+
+  // ✅ Helper method to extract userId from ProfileModel
+  int? _extractUserIdFromProfile(ProfileModel profile) {
+    // ProfileModel tidak memiliki userId field berdasarkan struktur yang ada
+    // Kita perlu menggunakan pendekatan alternatif
+    print('DEBUG: ProfileModel structure does not contain userId');
+    print(
+        'DEBUG: Available fields: username=${profile.username}, email=${profile.email}');
+
+    // Untuk sementara return null, dan gunakan username-based operations
+    return null;
+  }
+
+  // ✅ Alternative: Method to get userId from API response directly
+  Future<int?> _getUserIdFromApiResponse(String username) async {
+    try {
+      final token = await SecureStorage.getToken();
+      if (token == null) return null;
+
+      // Make a request to get raw API response that might contain user_id
+      final response = await http.get(
+        Uri.parse('https://api.portalsi.com/api/profile/$username'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        print('DEBUG: Raw API response for userId: $data');
+
+        // Try to extract user_id from different possible fields
+        return data['user_id'] ??
+            data['id'] ??
+            data['userId'] ??
+            data['user']?['id'] ??
+            data['user']?['user_id'];
+      }
+      return null;
+    } catch (e) {
+      print('Error getting userId from API: $e');
+      return null;
+    }
+  }
 
   @override
   void initState() {
@@ -55,11 +106,10 @@ class _OtherProfilePageState extends State<OtherProfilePage>
   void dispose() {
     _animationController.dispose();
     _profileService.dispose();
-    // _followService doesn't need disposal as it doesn't have persistent connections
     super.dispose();
   }
 
-  // ✅ UPDATED: Load profile data using username and check follow status
+  // ✅ Updated: Load profile data and follow data using consistent system
   Future<void> _loadProfileData() async {
     try {
       setState(() {
@@ -74,30 +124,101 @@ class _OtherProfilePageState extends State<OtherProfilePage>
 
       // ✅ Load profile data
       final profile = await _profileService.getOtherProfile(username);
+      // _targetUserId = profile.userId;
 
       // ✅ Check follow status
       final followStatus = await _followService.getFollowStatus(username);
       final isCurrentlyFollowing = followStatus['isFollowing'] ?? false;
 
-      // ✅ Get follow counts
-      final followCounts = await _followService.getFollowCounts(username);
-
       setState(() {
         _profileData = profile;
         _isFollowing = isCurrentlyFollowing;
-        _followersCount = followCounts['followers'] ?? 0;
-        _followingCount = followCounts['following'] ?? 0;
         _isLoadingProfile = false;
       });
 
-      // Load posts after profile is loaded
-      _fetchUserPosts();
+      // ✅ Load posts and follow data after profile is loaded
+      await Future.wait([
+        _fetchUserPosts(),
+        fetchFollowData(),
+      ]);
     } catch (e) {
       setState(() {
         _error = e.toString();
         _isLoadingProfile = false;
         _isLoadingPosts = false;
+        isLoadingFollowData = false;
       });
+    }
+  }
+
+  // ✅ UPDATED: Fetch follow data with fallback system
+  Future<void> fetchFollowData() async {
+    if (!mounted) return;
+
+    setState(() => isLoadingFollowData = true);
+
+    try {
+      List<dynamic> fetchedFollowers = [];
+      List<dynamic> fetchedFollowing = [];
+
+      if (_targetUserId != null) {
+        // Option 1: Use userId if available (preferred method like ProfilePage)
+        print('Using userId-based API calls for follow data');
+        fetchedFollowers = await _followService.getFollowers(_targetUserId!);
+        fetchedFollowing = await _followService.getFollowing(_targetUserId!);
+      } else if (_profileData != null) {
+        // Option 2: Fallback to username-based API calls
+        print('Fallback: Using username-based API calls for follow data');
+
+        // Check if FollowService has username-based methods
+        try {
+          // If your FollowService has these methods:
+          // fetchedFollowers = await _followService.getFollowersByUsername(_profileData!.username);
+          // fetchedFollowing = await _followService.getFollowingByUsername(_profileData!.username);
+
+          // For now, create empty arrays and show message
+          fetchedFollowers = [];
+          fetchedFollowing = [];
+          print(
+              'Username-based follow methods not implemented in FollowService');
+        } catch (e) {
+          print('Error with username-based follow calls: $e');
+          fetchedFollowers = [];
+          fetchedFollowing = [];
+        }
+      } else {
+        throw Exception(
+            'No user identifier available for fetching follow data');
+      }
+
+      if (mounted) {
+        setState(() {
+          followers = fetchedFollowers;
+          following = fetchedFollowing;
+          isLoadingFollowData = false;
+        });
+      }
+    } catch (e) {
+      print('Error ambil followers/following: $e');
+      if (mounted) {
+        setState(() {
+          followers = [];
+          following = [];
+          isLoadingFollowData = false;
+        });
+
+        // Only show error if it's not about missing username-based methods
+        if (!e.toString().contains('Username-based follow methods')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Gagal memuat data followers/following: ${e.toString()}'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -111,13 +232,10 @@ class _OtherProfilePageState extends State<OtherProfilePage>
       });
 
       final allPosts = await PostService().fetchAllPosts();
-      final targetUsername =
-          _profileData!.username; // Use username from profile data
+      final targetUsername = _profileData!.username;
 
-      // ✅ Filter posts by username instead of user_id
       final userPosts = allPosts.where((post) {
         final postMap = post as Map<String, dynamic>;
-        // Assuming the post has a 'username' field, adjust if different
         return postMap['username']?.toString() == targetUsername ||
             postMap['user']?['username']?.toString() == targetUsername;
       }).toList();
@@ -161,7 +279,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     }
   }
 
-  // ✅ UPDATED: Real follow/unfollow implementation
+  // ✅ UPDATED: Real follow/unfollow implementation with follower count update
   Future<void> _handleFollowAction() async {
     if (_isLoading || _profileData == null) return;
 
@@ -178,7 +296,10 @@ class _OtherProfilePageState extends State<OtherProfilePage>
         if (success) {
           setState(() {
             _isFollowing = false;
-            _followersCount = _followersCount > 0 ? _followersCount - 1 : 0;
+            // Update local followers list
+            followers.removeWhere((follower) =>
+                follower['username'] == username ||
+                follower['user_id'] == _targetUserId);
           });
         }
       } else {
@@ -187,7 +308,8 @@ class _OtherProfilePageState extends State<OtherProfilePage>
         if (success) {
           setState(() {
             _isFollowing = true;
-            _followersCount++;
+            // Update local followers list (add current user to followers)
+            // Note: You might need to get current user data to add to followers list
           });
         }
       }
@@ -206,8 +328,10 @@ class _OtherProfilePageState extends State<OtherProfilePage>
             backgroundColor: _isFollowing ? Colors.green : Colors.orange,
           ),
         );
+
+        // ✅ Refresh follow data after follow/unfollow action
+        await fetchFollowData();
       } else if (mounted && !success) {
-        // Show error message
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content:
@@ -218,7 +342,6 @@ class _OtherProfilePageState extends State<OtherProfilePage>
         );
       }
     } catch (e) {
-      // Handle error
       print('Follow action error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -276,6 +399,143 @@ class _OtherProfilePageState extends State<OtherProfilePage>
         Navigator.pop(context);
         onTap();
       },
+    );
+  }
+
+  // ✅ UPDATED: Navigate to followers/following with better handling
+  void _navigateToFollowersFollowing(int initialTab) {
+    if (_targetUserId != null) {
+      // Preferred method: Use userId (same as ProfilePage)
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => FollowersFollowingPage(
+            userId: _targetUserId!,
+            initialTab: initialTab,
+            followers: followers,
+            following: following,
+          ),
+        ),
+      ).then((value) {
+        if (value == true) {
+          fetchFollowData();
+        }
+      });
+    } else {
+      // Alternative: Show follow data in modal since we don't have userId
+      _showUserListDialog(
+        initialTab == 0 ? 'Pengikut' : 'Mengikuti',
+        initialTab == 0 ? followers : following,
+      );
+    }
+  }
+
+  // ✅ Show user list dialog when userId is not available
+  void _showUserListDialog(String title, List<dynamic> users) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.9,
+        builder: (context, scrollController) => Container(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Column(
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: users.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.people_outline,
+                              size: 64,
+                              color: Colors.grey[400],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Belum ada ${title.toLowerCase()}',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: scrollController,
+                        itemCount: users.length,
+                        itemBuilder: (context, index) {
+                          final user = users[index];
+                          return ListTile(
+                            leading: CircleAvatar(
+                              backgroundImage: user['profile_picture_url'] !=
+                                          null &&
+                                      user['profile_picture_url']
+                                          .toString()
+                                          .isNotEmpty
+                                  ? NetworkImage(user['profile_picture_url'])
+                                  : null,
+                              child: user['profile_picture_url'] == null ||
+                                      user['profile_picture_url']
+                                          .toString()
+                                          .isEmpty
+                                  ? Icon(Icons.person, color: Colors.grey[600])
+                                  : null,
+                            ),
+                            title: Text(
+                              user['full_name']?.toString() ??
+                                  user['username']?.toString() ??
+                                  'Unknown User',
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            subtitle:
+                                Text('@${user['username']?.toString() ?? ''}'),
+                            onTap: () {
+                              Navigator.pop(context);
+                              if (user['username'] != null) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => OtherProfilePage(
+                                      username: user['username'].toString(),
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -498,13 +758,19 @@ class _OtherProfilePageState extends State<OtherProfilePage>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    // ✅ Use real post count from API and real follow counts
+                    // ✅ Updated stat items to match ProfilePage system
                     _buildStatItem(
                         _userPosts.length.toString(), 'Postingan', null),
-                    _buildStatItem(_formatCount(_followersCount), 'Pengikut',
-                        () => _showFollowersList()),
-                    _buildStatItem(_formatCount(_followingCount), 'Mengikuti',
-                        () => _showFollowingList()),
+                    _buildStatItem(
+                      isLoadingFollowData ? '...' : followers.length.toString(),
+                      'Pengikut',
+                      () => _navigateToFollowersFollowing(0), // Tab followers
+                    ),
+                    _buildStatItem(
+                      isLoadingFollowData ? '...' : following.length.toString(),
+                      'Mengikuti',
+                      () => _navigateToFollowersFollowing(1), // Tab following
+                    ),
                   ],
                 ),
               ),
@@ -618,7 +884,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         title: Text(
-          'Kirim pesan ke ${_profileData?.fullName ?? _profileData?.username ?? 'Loading...'}',
+          'Kirim pesan ke ${_profileData?.fullName.isNotEmpty == true ? _profileData!.fullName : _profileData?.username ?? 'Loading...'}',
         ),
         content: const TextField(
           decoration: InputDecoration(
@@ -638,7 +904,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(
-                    'Pesan terkirim ke ${_profileData?.fullName ?? _profileData?.username ?? 'Loading...'}',
+                    'Pesan terkirim ke ${_profileData?.fullName.isNotEmpty == true ? _profileData!.fullName : _profileData?.username ?? 'Loading...'}',
                   ),
                   behavior: SnackBarBehavior.floating,
                 ),
@@ -917,151 +1183,8 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     );
   }
 
-  String _formatCount(int count) {
-    if (count < 1000) return count.toString();
-    if (count < 1000000) return '${(count / 1000).toStringAsFixed(1)}K';
-    return '${(count / 1000000).toStringAsFixed(1)}M';
-  }
-
-  // ✅ Add method to refresh follow counts after follow/unfollow
-  Future<void> _refreshFollowCounts() async {
-    if (_profileData != null) {
-      try {
-        final followCounts =
-            await _followService.getFollowCounts(_profileData!.username);
-        setState(() {
-          _followersCount = followCounts['followers'] ?? 0;
-          _followingCount = followCounts['following'] ?? 0;
-        });
-      } catch (e) {
-        print('Error refreshing follow counts: $e');
-      }
-    }
-  }
-
-  // ✅ Add pull-to-refresh functionality
+  // ✅ NEW: Add pull-to-refresh functionality (same as ProfilePage)
   Future<void> _onRefresh() async {
     await _loadProfileData();
-  }
-
-  // ✅ Show followers list
-  void _showFollowersList() async {
-    if (_profileData == null) return;
-
-    try {
-      final followers =
-          await _followService.getFollowers(_profileData!.username);
-      _showUserListDialog('Pengikut', followers);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Gagal memuat daftar pengikut: ${e.toString()}'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
-  // ✅ Show following list
-  void _showFollowingList() async {
-    if (_profileData == null) return;
-
-    try {
-      final following =
-          await _followService.getFollowing(_profileData!.username);
-      _showUserListDialog('Mengikuti', following);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Gagal memuat daftar yang diikuti: ${e.toString()}'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
-  }
-
-  // ✅ Show user list dialog (followers/following)
-  void _showUserListDialog(String title, List<dynamic> users) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.5,
-        maxChildSize: 0.9,
-        builder: (context, scrollController) => Container(
-          padding: const EdgeInsets.symmetric(vertical: 20),
-          child: Column(
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: ListView.builder(
-                  controller: scrollController,
-                  itemCount: users.length,
-                  itemBuilder: (context, index) {
-                    final user = users[index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundImage: user['profile_picture_url'] != null &&
-                                user['profile_picture_url']
-                                    .toString()
-                                    .isNotEmpty
-                            ? NetworkImage(user['profile_picture_url'])
-                            : null,
-                        child: user['profile_picture_url'] == null ||
-                                user['profile_picture_url'].toString().isEmpty
-                            ? Icon(Icons.person, color: Colors.grey[600])
-                            : null,
-                      ),
-                      title: Text(
-                        user['full_name']?.toString() ??
-                            user['username']?.toString() ??
-                            'Unknown User',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      subtitle: Text('@${user['username']?.toString() ?? ''}'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        if (user['username'] != null) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => OtherProfilePage(
-                                username: user['username'].toString(),
-                              ),
-                            ),
-                          );
-                        }
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }

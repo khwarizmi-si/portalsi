@@ -63,9 +63,16 @@ class FeedController extends ChangeNotifier {
     }
   }
 
-  Future<void> fetchPosts() async {
+  Future<void> fetchPosts({String? tag, String sort = 'random'}) async {
     try {
-      final fetchedPosts = await PostService().fetchAllPosts();
+      isLoading = true;
+      notifyListeners();
+
+      final fetchedPosts = await PostService().fetchExplorePosts(
+        tag: tag,
+        sort: sort,
+      );
+
       posts = fetchedPosts;
       isLoading = false;
       notifyListeners();
@@ -124,16 +131,14 @@ class FeedController extends ChangeNotifier {
         'https://api.portalsi.com/api/users/search',
       ).replace(queryParameters: {'username': query, 'full_name': query});
 
-      final response = await http
-          .get(
-            uri,
-            headers: {
-              'Authorization': 'Bearer $authToken',
-              'Accept': 'application/json',
-              'Content-Type': 'application/json',
-            },
-          )
-          .timeout(const Duration(seconds: 10));
+      final response = await http.get(
+        uri,
+        headers: {
+          'Authorization': 'Bearer $authToken',
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);

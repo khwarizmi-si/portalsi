@@ -5,6 +5,22 @@ import '../utils/secure_storage.dart';
 class FollowService {
   final String _baseUrl = 'https://api.portalsi.com/api';
 
+  // Enhanced cache dengan expiry yang berbeda per jenis data
+  static final Map<String, Map<String, dynamic>> _profileCache = {};
+  static final Map<String, Map<String, dynamic>> _followStatusCache = {};
+  static final Map<String, Map<String, dynamic>> _followingCache = {};
+  static final Map<String, Map<String, dynamic>> _followersCache = {};
+
+  // Cache expiry times (dalam menit)
+  static const int _profileCacheExpiry = 15; // Profile jarang berubah
+  static const int _followingCacheExpiry = 5; // Following list medium expiry
+  static const int _followStatusExpiry = 2; // Follow status short expiry
+  static const int _myProfileExpiry = 3; // My profile short expiry
+
+  // Cache hit counter untuk monitoring
+  static int _cacheHits = 0;
+  static int _totalRequests = 0;
+
   Future<String?> _getToken() async {
     return await SecureStorage.getToken();
   }
@@ -18,19 +34,51 @@ class FollowService {
     };
   }
 
+  // Enhanced cache checker with different expiry times
+  bool _isCacheValid(Map<String, dynamic> cached, int expiryMinutes) {
+    final cachedTime = DateTime.parse(cached['_cached_at']);
+    return DateTime.now().difference(cachedTime).inMinutes < expiryMinutes;
+  }
+
   Future<Map<String, dynamic>> getMyProfile() async {
+    _totalRequests++;
+    const cacheKey = '_my_profile';
+
+    // Check cache first
+    if (_profileCache.containsKey(cacheKey)) {
+      final cached = _profileCache[cacheKey]!;
+      if (_isCacheValid(cached, _myProfileExpiry)) {
+        _cacheHits++;
+        print('✅ Cache hit: My profile (${_cacheHits}/$_totalRequests hits)');
+        return Map<String, dynamic>.from(cached)..remove('_cached_at');
+      }
+    }
+
     try {
+      print('🌐 API call: Getting my profile');
       final headers = await _getHeaders();
       final res = await http.get(
         Uri.parse('$_baseUrl/user'),
         headers: headers,
       );
 
-      print('Get profile response: ${res.statusCode}');
-      print('Get profile body: ${res.body}');
-
       if (res.statusCode == 200) {
-        return jsonDecode(res.body);
+        final data = jsonDecode(res.body);
+        Map<String, dynamic> profile;
+
+        if (data['user'] != null) {
+          profile = data['user'];
+        } else {
+          profile = data;
+        }
+
+        // Cache my profile
+        _profileCache[cacheKey] = {
+          ...profile,
+          '_cached_at': DateTime.now().toIso8601String(),
+        };
+
+        return profile;
       } else {
         throw Exception('Gagal memuat profil: ${res.statusCode}');
       }
@@ -40,21 +88,38 @@ class FollowService {
     }
   }
 
-  // ✅ UPDATED: Support both userId and username
+  // Highly cached user profile getter
   Future<Map<String, dynamic>> getUserProfile(dynamic userIdentifier) async {
+    _totalRequests++;
+    final cacheKey = 'profile_$userIdentifier';
+
+    // Check cache first with longer expiry for user profiles
+    if (_profileCache.containsKey(cacheKey)) {
+      final cached = _profileCache[cacheKey]!;
+      if (_isCacheValid(cached, _profileCacheExpiry)) {
+        _cacheHits++;
+        print(
+            '✅ Cache hit: Profile $userIdentifier (${_cacheHits}/$_totalRequests hits)');
+        return Map<String, dynamic>.from(cached)..remove('_cached_at');
+      }
+    }
+
     try {
+      print('🌐 API call: Getting profile for $userIdentifier');
       final headers = await _getHeaders();
       final res = await http.get(
-        Uri.parse(
-            '$_baseUrl/profile/$userIdentifier'), // Can be userId or username
+        Uri.parse('$_baseUrl/profile/$userIdentifier'),
         headers: headers,
       );
 
-      print('Get user profile response: ${res.statusCode}');
-      print('Get user profile body: ${res.body}');
-
       if (res.statusCode == 200) {
-        return jsonDecode(res.body);
+        final data = jsonDecode(res.body);
+        // Cache with long expiry
+        _profileCache[cacheKey] = {
+          ...data,
+          '_cached_at': DateTime.now().toIso8601String(),
+        };
+        return data;
       } else {
         throw Exception('Gagal memuat profil user: ${res.statusCode}');
       }
@@ -64,168 +129,253 @@ class FollowService {
     }
   }
 
-  // ✅ UPDATED: Support username-based follow
+  // Cached helper to get user ID from username
+  Future<int?> _getUserIdFromUsername(String username) async {
+    try {
+      // This will use cache if available
+      final profile = await getUserProfile(username);
+      final userId = (profile['user_id'] as num?)?.toInt() ??
+          (profile['id'] as num?)?.toInt();
+      if (userId != null) {
+        // Cache username -> userId mapping for quick lookup
+        _profileCache['userid_$username'] = {
+          'user_id': userId,
+          '_cached_at': DateTime.now().toIso8601String(),
+        };
+      }
+      return userId;
+    } catch (e) {
+      print('Error getting user ID for username $username: $e');
+      return null;
+    }
+  }
+
+  // Quick username to userId lookup from cache
+  int? _getCachedUserId(String username) {
+    final cacheKey = 'userid_$username';
+    if (_profileCache.containsKey(cacheKey)) {
+      final cached = _profileCache[cacheKey]!;
+      if (_isCacheValid(cached, _profileCacheExpiry)) {
+        return cached['user_id'];
+      }
+    }
+    return null;
+  }
+
+  // Optimized follow method with intelligent caching
   Future<bool> followUser(dynamic userIdentifier) async {
     try {
-      final headers = await _getHeaders();
-      final url =
-          '$_baseUrl/follow/$userIdentifier'; // Can be userId or username
-
       print('🔄 Attempting to follow user $userIdentifier');
-      print('📍 URL: $url');
-      print('🔑 Headers: $headers');
+      final headers = await _getHeaders();
 
-      final res = await http.post(
-        Uri.parse(url),
-        headers: headers,
-      );
+      // Quick cache check for userId if username
+      dynamic targetId = userIdentifier;
+      if (userIdentifier is String &&
+          !RegExp(r'^\d+$').hasMatch(userIdentifier)) {
+        final cachedUserId = _getCachedUserId(userIdentifier);
+        if (cachedUserId != null) {
+          targetId = cachedUserId;
+          print('✅ Using cached user_id: $cachedUserId for $userIdentifier');
+        }
+      }
 
-      print('📥 Follow user response code: ${res.statusCode}');
-      print('📝 Follow user response body: ${res.body}');
-      print('📋 Follow user response headers: ${res.headers}');
+      // Strategy 1: Try with target identifier
+      bool success = await _tryFollowWithIdentifier(targetId, headers);
+      if (success) {
+        _invalidateUserCache(userIdentifier.toString());
+        return true;
+      }
 
-      // Check for success status codes
-      // 409 with "Sudah di-follow" also means success (already following)
-      final success = res.statusCode == 200 ||
+      // Strategy 2: If still using username, get fresh userId
+      if (userIdentifier is String &&
+          !RegExp(r'^\d+$').hasMatch(userIdentifier) &&
+          targetId == userIdentifier) {
+        print('🔍 Getting fresh user_id for $userIdentifier');
+        final userId = await _getUserIdFromUsername(userIdentifier);
+
+        if (userId != null) {
+          print('✅ Found user_id: $userId for username: $userIdentifier');
+          success = await _tryFollowWithIdentifier(userId, headers);
+          if (success) {
+            _invalidateUserCache(userIdentifier.toString());
+            return true;
+          }
+        }
+      }
+
+      // Strategy 3: Alternative endpoints
+      final alternativeEndpoints = [
+        'users/$userIdentifier/follow',
+        'user/follow/$userIdentifier',
+      ];
+
+      for (final endpoint in alternativeEndpoints) {
+        try {
+          final url = '$_baseUrl/$endpoint';
+          print('🌐 Trying alternative endpoint: $url');
+
+          final res = await http.post(Uri.parse(url), headers: headers);
+          print('📥 Alternative response: ${res.statusCode} - ${res.body}');
+
+          success = res.statusCode == 200 ||
+              res.statusCode == 201 ||
+              (res.statusCode == 409 && res.body.contains('Sudah di-follow'));
+
+          if (success) {
+            print('✅ Follow successful with endpoint: $endpoint');
+            _invalidateUserCache(userIdentifier.toString());
+            return true;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+
+      return false;
+    } catch (e) {
+      print('Error in followUser: $e');
+      return false;
+    }
+  }
+
+  Future<bool> _tryFollowWithIdentifier(
+      dynamic identifier, Map<String, String> headers) async {
+    try {
+      final url = '$_baseUrl/follow/$identifier';
+      print('🌐 Trying URL: $url');
+
+      final res = await http.post(Uri.parse(url), headers: headers);
+      print('📥 Follow response: ${res.statusCode} - ${res.body}');
+
+      return res.statusCode == 200 ||
           res.statusCode == 201 ||
           (res.statusCode == 409 && res.body.contains('Sudah di-follow'));
-
-      print('✅ Follow success: $success');
-
-      return success;
     } catch (e) {
-      print('❌ Error in followUser: $e');
+      print('❌ Follow attempt failed: $e');
       return false;
     }
   }
 
-  // ✅ UPDATED: Support username-based unfollow
+  // Similar optimization for unfollow
   Future<bool> unfollowUser(dynamic userIdentifier) async {
     try {
-      final headers = await _getHeaders();
-      final url =
-          '$_baseUrl/unfollow/$userIdentifier'; // Can be userId or username
-
       print('🔄 Attempting to unfollow user $userIdentifier');
-      print('📍 URL: $url');
-      print('🔑 Headers: $headers');
+      final headers = await _getHeaders();
 
-      final res = await http.delete(
-        Uri.parse(url),
-        headers: headers,
-      );
+      // Use cached userId if available
+      dynamic targetId = userIdentifier;
+      if (userIdentifier is String &&
+          !RegExp(r'^\d+$').hasMatch(userIdentifier)) {
+        final cachedUserId = _getCachedUserId(userIdentifier);
+        if (cachedUserId != null) {
+          targetId = cachedUserId;
+          print('✅ Using cached user_id: $cachedUserId for $userIdentifier');
+        }
+      }
 
-      print('📥 Unfollow user response code: ${res.statusCode}');
-      print('📝 Unfollow user response body: ${res.body}');
-      print('📋 Unfollow user response headers: ${res.headers}');
+      bool success = await _tryUnfollowWithIdentifier(targetId, headers);
+      if (success) {
+        _invalidateUserCache(userIdentifier.toString());
+        return true;
+      }
 
-      // Check for success status codes (200, 204 for delete)
-      // Also handle case where user is not being followed (404 might be success)
-      final success = res.statusCode == 200 ||
-          res.statusCode == 204 ||
-          (res.statusCode == 404 && res.body.contains('tidak ditemukan'));
+      // Get fresh userId if needed
+      if (userIdentifier is String &&
+          !RegExp(r'^\d+$').hasMatch(userIdentifier) &&
+          targetId == userIdentifier) {
+        final userId = await _getUserIdFromUsername(userIdentifier);
+        if (userId != null) {
+          success = await _tryUnfollowWithIdentifier(userId, headers);
+          if (success) {
+            _invalidateUserCache(userIdentifier.toString());
+            return true;
+          }
+        }
+      }
 
-      print('✅ Unfollow success: $success');
-
-      return success;
+      return false;
     } catch (e) {
-      print('❌ Error in unfollowUser: $e');
+      print('Error in unfollowUser: $e');
       return false;
     }
   }
 
-  // ✅ UPDATED: Support both userId and username
-  Future<List<dynamic>> getFollowers(dynamic userIdentifier) async {
+  Future<bool> _tryUnfollowWithIdentifier(
+      dynamic identifier, Map<String, String> headers) async {
     try {
-      final headers = await _getHeaders();
-      final res = await http.get(
-        Uri.parse('$_baseUrl/users/$userIdentifier/followers'),
-        headers: headers,
-      );
+      final url = '$_baseUrl/unfollow/$identifier';
+      final res = await http.delete(Uri.parse(url), headers: headers);
+      print('📥 Unfollow response: ${res.statusCode} - ${res.body}');
 
-      print('Get followers response: ${res.statusCode}');
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        return data['followers'] ?? [];
-      } else {
-        throw Exception('Gagal mengambil daftar pengikut: ${res.statusCode}');
-      }
+      return res.statusCode == 200 ||
+          res.statusCode == 204 ||
+          (res.statusCode == 404 && res.body.contains('tidak ditemukan'));
     } catch (e) {
-      print('Error in getFollowers: $e');
-      rethrow;
+      return false;
     }
   }
 
-  // ✅ UPDATED: Support both userId and username
-  Future<List<dynamic>> getFollowing(dynamic userIdentifier) async {
-    try {
-      final headers = await _getHeaders();
-      final res = await http.get(
-        Uri.parse('$_baseUrl/users/$userIdentifier/following'),
-        headers: headers,
-      );
-
-      print('Get following response: ${res.statusCode}');
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        print('Following data: $data');
-        return data['following'] ?? [];
-      } else {
-        throw Exception(
-            'Gagal mengambil daftar yang diikuti: ${res.statusCode}');
-      }
-    } catch (e) {
-      print('Error in getFollowing: $e');
-      rethrow;
-    }
-  }
-
-  // ✅ UPDATED: Check follow status using current user's following list
+  // Highly optimized follow status check
   Future<Map<String, dynamic>> getFollowStatus(String targetUsername) async {
+    _totalRequests++;
+    final cacheKey = 'follow_status_$targetUsername';
+
+    // Check cache first
+    if (_followStatusCache.containsKey(cacheKey)) {
+      final cached = _followStatusCache[cacheKey]!;
+      if (_isCacheValid(cached, _followStatusExpiry)) {
+        _cacheHits++;
+        print(
+            '✅ Cache hit: Follow status $targetUsername (${_cacheHits}/$_totalRequests hits)');
+        return Map<String, dynamic>.from(cached)..remove('_cached_at');
+      }
+    }
+
     try {
-      print('Checking follow status for target username: $targetUsername');
+      print('🔍 Checking follow status for $targetUsername');
 
-      // Get current user's profile to get their ID/username
+      // Get my userId (cached)
       final myProfile = await getMyProfile();
-      final myUserId = myProfile['id'];
-
-      print('My user ID: $myUserId');
+      final myUserId = myProfile['user_id'] ?? myProfile['id'];
 
       if (myUserId == null) {
         throw Exception('Unable to get current user ID');
       }
 
-      final followingList = await getFollowing(myUserId);
-      print('Following list: $followingList');
+      // Get my following list (cached)
+      final followingData = await _getMyFollowingCached(myUserId);
+      final followingList = followingData['following'] ?? [];
 
-      // Search for target user in following list
+      // Search in following list
       final followData = followingList.firstWhere(
-        (user) {
-          final username = user['username']?.toString();
-          print('Comparing username $username with $targetUsername');
-          return username == targetUsername;
-        },
+        (user) => user['username']?.toString() == targetUsername,
         orElse: () => null,
       );
 
-      print('Follow data found: $followData');
-
+      Map<String, dynamic> result;
       if (followData != null) {
         final pivot = followData['pivot'] ?? {};
-        return {
+        result = {
           'isFollowing': true,
-          'status': pivot['status'] ?? 'active',
+          'status': pivot['status'] ?? 'accepted',
           'followedAt': pivot['followed_at'],
+        };
+        print('✅ Found follow relationship: ${result['status']}');
+      } else {
+        result = {
+          'isFollowing': false,
+          'status': null,
+          'followedAt': null,
         };
       }
 
-      return {
-        'isFollowing': false,
-        'status': null,
-        'followedAt': null,
+      // Cache the result
+      _followStatusCache[cacheKey] = {
+        ...result,
+        '_cached_at': DateTime.now().toIso8601String(),
       };
+
+      return result;
     } catch (e) {
       print('Error getting follow status: $e');
       return {
@@ -236,85 +386,309 @@ class FollowService {
     }
   }
 
-  // ✅ UPDATED: Simplified version for username - now calls the updated getFollowStatus
+  // Dedicated cache for following list
+  Future<Map<String, dynamic>> _getMyFollowingCached(int userId) async {
+    _totalRequests++;
+    final cacheKey = 'my_following_$userId';
+
+    // Check dedicated following cache
+    if (_followingCache.containsKey(cacheKey)) {
+      final cached = _followingCache[cacheKey]!;
+      if (_isCacheValid(cached, _followingCacheExpiry)) {
+        _cacheHits++;
+        print(
+            '✅ Cache hit: Following list (${_cacheHits}/$_totalRequests hits)');
+        return Map<String, dynamic>.from(cached)..remove('_cached_at');
+      }
+    }
+
+    try {
+      print('🌐 API call: Getting following list');
+      final headers = await _getHeaders();
+      final res = await http
+          .get(
+            Uri.parse('$_baseUrl/users/$userId/following'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+
+        // Cache in dedicated following cache
+        _followingCache[cacheKey] = {
+          ...data,
+          '_cached_at': DateTime.now().toIso8601String(),
+        };
+
+        return data;
+      } else {
+        return {'following': []};
+      }
+    } catch (e) {
+      print('Error in _getMyFollowingCached: $e');
+      return {'following': []};
+    }
+  }
+
+  // Cached followers list
+  Future<List<dynamic>> getFollowers(dynamic userIdentifier) async {
+    _totalRequests++;
+    final cacheKey = 'followers_$userIdentifier';
+
+    if (_followersCache.containsKey(cacheKey)) {
+      final cached = _followersCache[cacheKey]!;
+      if (_isCacheValid(cached, _followingCacheExpiry)) {
+        _cacheHits++;
+        print(
+            '✅ Cache hit: Followers $userIdentifier (${_cacheHits}/$_totalRequests hits)');
+        final data = Map<String, dynamic>.from(cached)..remove('_cached_at');
+        return data['followers'] ?? [];
+      }
+    }
+
+    try {
+      print('🌐 API call: Getting followers for $userIdentifier');
+      final headers = await _getHeaders();
+      final res = await http
+          .get(
+            Uri.parse('$_baseUrl/users/$userIdentifier/followers'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+
+        // Cache the result
+        _followersCache[cacheKey] = {
+          ...data,
+          '_cached_at': DateTime.now().toIso8601String(),
+        };
+
+        return data['followers'] ?? [];
+      } else {
+        return [];
+      }
+    } catch (e) {
+      print('Error in getFollowers: $e');
+      return [];
+    }
+  }
+
+  // Cached following list
+  Future<List<dynamic>> getFollowing(dynamic userIdentifier) async {
+    _totalRequests++;
+    final cacheKey = 'following_$userIdentifier';
+
+    if (_followingCache.containsKey(cacheKey)) {
+      final cached = _followingCache[cacheKey]!;
+      if (_isCacheValid(cached, _followingCacheExpiry)) {
+        _cacheHits++;
+        print(
+            '✅ Cache hit: Following $userIdentifier (${_cacheHits}/$_totalRequests hits)');
+        final data = Map<String, dynamic>.from(cached)..remove('_cached_at');
+        return data['following'] ?? [];
+      }
+    }
+
+    try {
+      print('🌐 API call: Getting following for $userIdentifier');
+      final headers = await _getHeaders();
+      final res = await http
+          .get(
+            Uri.parse('$_baseUrl/users/$userIdentifier/following'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+
+        _followingCache[cacheKey] = {
+          ...data,
+          '_cached_at': DateTime.now().toIso8601String(),
+        };
+
+        return data['following'] ?? [];
+      } else {
+        return [];
+      }
+    } catch (e) {
+      print('Error in getFollowing: $e');
+      return [];
+    }
+  }
+
   Future<bool> isFollowing(String targetUsername) async {
     final status = await getFollowStatus(targetUsername);
     return status['isFollowing'] ?? false;
   }
 
-  // ✅ BACKWARD COMPATIBILITY: Keep old method signature for existing code
-  Future<Map<String, dynamic>> getFollowStatusLegacy(
-      int currentUserId, int targetUserId) async {
-    try {
-      print(
-          'Checking follow status: current=$currentUserId, target=$targetUserId');
-
-      final followingList = await getFollowing(currentUserId);
-      print('Following list: $followingList');
-
-      final followData = followingList.firstWhere(
-        (user) {
-          final userId = user['user_id'];
-          print('Comparing $userId with $targetUserId');
-          return userId == targetUserId;
-        },
-        orElse: () => null,
-      );
-
-      print('Follow data found: $followData');
-
-      if (followData != null) {
-        final pivot = followData['pivot'] ?? {};
-        return {
-          'isFollowing': true,
-          'status': pivot['status'] ?? 'unknown',
-          'followedAt': pivot['followed_at'],
-        };
-      }
-
-      return {
-        'isFollowing': false,
-        'status': null,
-        'followedAt': null,
-      };
-    } catch (e) {
-      print('Error getting follow status: $e');
-      return {
-        'isFollowing': false,
-        'status': null,
-        'followedAt': null,
-      };
-    }
-  }
-
-  // ✅ BACKWARD COMPATIBILITY: Simplified version for backward compatibility
-  Future<bool> isFollowingLegacy(int currentUserId, int targetUserId) async {
-    final status = await getFollowStatusLegacy(currentUserId, targetUserId);
-    return status['isFollowing'] ?? false;
-  }
-
-  // ✅ NEW: Get follower/following counts for a user
+  // Use cached profile data for counts
   Future<Map<String, int>> getFollowCounts(dynamic userIdentifier) async {
     try {
-      final followers = await getFollowers(userIdentifier);
-      final following = await getFollowing(userIdentifier);
+      // This will use cache if available
+      final profile = await getUserProfile(userIdentifier);
 
-      return {
-        'followers': followers.length,
-        'following': following.length,
+      return <String, int>{
+        'followers': (profile['followers_count'] as num?)?.toInt() ?? 0,
+        'following': (profile['following_count'] as num?)?.toInt() ?? 0,
       };
     } catch (e) {
       print('Error getting follow counts: $e');
-      return {
+      return <String, int>{
         'followers': 0,
         'following': 0,
       };
     }
   }
 
-  // Method untuk refresh status setelah follow/unfollow
-  Future<void> clearCache() async {
-    // Jika Anda menggunakan caching, clear cache di sini
-    // Untuk saat ini, method ini kosong tapi bisa digunakan nanti
+  // Smart cache invalidation
+  void _invalidateUserCache(String userIdentifier) {
+    // Clear follow status cache for this user
+    _followStatusCache
+        .removeWhere((key, value) => key.contains(userIdentifier));
+
+    // Clear my following cache (relationship changed)
+    _followingCache.clear();
+
+    // Clear my profile cache (following count changed)
+    _profileCache.remove('_my_profile');
+
+    // Clear target user's profile cache (follower count changed)
+    _profileCache.remove('profile_$userIdentifier');
+
+    print('🗑️ Smart cache invalidation for user $userIdentifier');
+  }
+
+  // Enhanced cache management
+  void clearCache() {
+    _profileCache.clear();
+    _followStatusCache.clear();
+    _followingCache.clear();
+    _followersCache.clear();
+    _cacheHits = 0;
+    _totalRequests = 0;
+    print('🗑️ All cache cleared');
+  }
+
+  void clearFollowStatusCache() {
+    _followStatusCache.clear();
+    print('🗑️ Follow status cache cleared');
+  }
+
+  // Preload critical data
+  Future<void> preloadUserData(String username) async {
+    print('🚀 Preloading data for $username');
+    try {
+      await Future.wait([
+        getUserProfile(username),
+        getFollowStatus(username),
+      ]);
+      print('✅ Preload completed for $username');
+    } catch (e) {
+      print('❌ Preload failed for $username: $e');
+    }
+  }
+
+  // Cache statistics
+  void printCacheStats() {
+    final hitRate = _totalRequests > 0
+        ? (_cacheHits / _totalRequests * 100).toStringAsFixed(1)
+        : '0.0';
+    print('\n📊 CACHE STATISTICS');
+    print('═' * 40);
+    print('Total requests: $_totalRequests');
+    print('Cache hits: $_cacheHits');
+    print('Hit rate: $hitRate%');
+    print('Profile cache size: ${_profileCache.length}');
+    print('Following cache size: ${_followingCache.length}');
+    print('Follow status cache size: ${_followStatusCache.length}');
+    print('Followers cache size: ${_followersCache.length}');
+    print('═' * 40);
+  }
+
+  // Clean expired cache entries
+  void cleanExpiredCache() {
+    final now = DateTime.now();
+    int cleaned = 0;
+
+    // Clean profile cache
+    _profileCache.removeWhere((key, value) {
+      if (value['_cached_at'] != null) {
+        final cachedTime = DateTime.parse(value['_cached_at']);
+        final isExpired =
+            now.difference(cachedTime).inMinutes > _profileCacheExpiry;
+        if (isExpired) cleaned++;
+        return isExpired;
+      }
+      return false;
+    });
+
+    // Clean other caches
+    [_followStatusCache, _followingCache, _followersCache].forEach((cache) {
+      cache.removeWhere((key, value) {
+        if (value['_cached_at'] != null) {
+          final cachedTime = DateTime.parse(value['_cached_at']);
+          final isExpired =
+              now.difference(cachedTime).inMinutes > _followingCacheExpiry;
+          if (isExpired) cleaned++;
+          return isExpired;
+        }
+        return false;
+      });
+    });
+
+    print('🧹 Cleaned $cleaned expired cache entries');
+  }
+
+  Future<bool> userExists(String username) async {
+    try {
+      await getUserProfile(username); // Will use cache if available
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Legacy methods (unchanged)
+  Future<Map<String, dynamic>> getFollowStatusLegacy(
+      int currentUserId, int targetUserId) async {
+    try {
+      final followingData = await _getMyFollowingCached(currentUserId);
+      final followingList = followingData['following'] ?? [];
+
+      final followData = followingList.firstWhere(
+        (user) => user['user_id'] == targetUserId,
+        orElse: () => null,
+      );
+
+      if (followData != null) {
+        final pivot = followData['pivot'] ?? {};
+        return {
+          'isFollowing': true,
+          'status': pivot['status'] ?? 'accepted',
+          'followedAt': pivot['followed_at'],
+        };
+      }
+
+      return {
+        'isFollowing': false,
+        'status': null,
+        'followedAt': null,
+      };
+    } catch (e) {
+      return {
+        'isFollowing': false,
+        'status': null,
+        'followedAt': null,
+      };
+    }
+  }
+
+  Future<bool> isFollowingLegacy(int currentUserId, int targetUserId) async {
+    final status = await getFollowStatusLegacy(currentUserId, targetUserId);
+    return status['isFollowing'] ?? false;
   }
 }

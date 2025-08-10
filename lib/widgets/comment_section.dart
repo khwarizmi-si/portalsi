@@ -28,6 +28,7 @@ class CommentSection extends StatefulWidget {
 
 class _CommentSectionState extends State<CommentSection> {
   final CommentService _commentService = CommentService();
+  final ProfileService _profileService = ProfileService(); // Gunakan singleton
   String _currentUserName = '';
   String _currentUserAvatar = '';
   List<Comment> _comments = [];
@@ -35,70 +36,43 @@ class _CommentSectionState extends State<CommentSection> {
   bool _isLoading = true;
   String? _errorMessage;
 
-  // Track temporary comments untuk prevent duplicate
-  final Set<int> _temporaryIds = {};
-
   @override
   void initState() {
     super.initState();
-    _loadCommentsInBackground();
-    _loadCurrentUserData();
+    _loadInitialData(); // Gabungkan dua load awal
+  }
+
+  // Gabungkan dua fungsi load awal menjadi satu
+  Future<void> _loadInitialData() async {
+    await Future.wait([
+      _loadCurrentUserData(),
+      _loadCommentsInBackground(),
+    ]);
   }
 
   Future<void> _loadCurrentUserData() async {
     try {
-      print('🔄 Loading current user data...');
-
-      // 1. Coba ambil dari SecureStorage dulu (fastest)
-      String username = await SecureStorage.getUsername() ?? '';
-      String profilePicture = await SecureStorage.getProfilePicture() ?? '';
-
-      print(
-          '📱 From Storage - Username: "$username", Avatar: "${profilePicture.isNotEmpty ? 'Available' : 'Empty'}"');
+      // 1. Coba ambil dari SecureStorage dulu
+      String? username = await SecureStorage.getUsername();
+      String? profilePicture = await SecureStorage.getProfilePicture();
 
       // 2. Jika tidak ada di storage, ambil dari API
-      if (username.isEmpty || profilePicture.isEmpty) {
-        print('🌐 Loading user data from API...');
-        final profileService = ProfileService();
-        final userInfo = await profileService.getCurrentUserForComments();
-
-        if (userInfo != null) {
-          print('📥 API Response: $userInfo');
-
-          // Coba berbagai field untuk username
-          String apiUsername = '';
-          if (userInfo.containsKey('username') &&
-              userInfo['username'] != null) {
-            apiUsername = userInfo['username'].toString();
-          } else if (userInfo.containsKey('name') && userInfo['name'] != null) {
-            apiUsername = userInfo['name'].toString();
-          } else if (userInfo.containsKey('user_name') &&
-              userInfo['user_name'] != null) {
-            apiUsername = userInfo['user_name'].toString();
-          }
-
-          username = apiUsername.isNotEmpty ? apiUsername : username;
-          profilePicture =
-              userInfo['profile_picture_url']?.toString() ?? profilePicture;
-
-          print('✅ User data loaded from API - Username: "$username"');
-        } else {
-          print('⚠️ Failed to load from API, using storage data');
+      if (username == null || profilePicture == null) {
+        final profile = await _profileService.getCurrentUserForComments();
+        if (profile != null) {
+          username = profile.username;
+          profilePicture = profile.profilePictureUrl;
         }
       }
 
       // 3. Update UI dengan data yang valid
       if (mounted) {
         setState(() {
-          _currentUserName = username.isNotEmpty ? username : 'Anda';
-          _currentUserAvatar = profilePicture;
+          _currentUserName = username ?? 'Anda';
+          _currentUserAvatar = profilePicture ?? '';
         });
-
-        print(
-            '🎯 Final Current User - Name: "$_currentUserName", Avatar: "${_currentUserAvatar.isNotEmpty ? 'Available' : 'Empty'}"');
       }
     } catch (e) {
-      print('❌ Error loading user data: $e');
       if (mounted) {
         setState(() {
           _currentUserName = 'Anda';
@@ -110,72 +84,29 @@ class _CommentSectionState extends State<CommentSection> {
 
   Future<void> _loadCommentsInBackground() async {
     try {
-      await Future.delayed(Duration.zero);
       final data = await _commentService.getComments(widget.postId);
-
-      List<Comment> comments = [];
-      if (data.isNotEmpty) {
-        for (var item in data) {
-          try {
-            comments.add(Comment.fromJson(item));
-          } catch (e) {
-            print("Error parsing comment: $e");
-          }
-        }
-      }
+      final comments = data.map((item) => Comment.fromJson(item)).toList();
 
       if (mounted) {
         setState(() {
           _comments = CommentUtils.sortCommentsByDate(comments);
           _hasError = false;
-          _isLoading = false; // ✅ add this
+          _isLoading = false;
         });
       }
     } catch (e) {
-      print('Background load failed: $e');
       if (mounted) {
         setState(() {
           _hasError = true;
           _errorMessage = 'Gagal memuat komentar';
-          _isLoading = false; // ✅ add this
+          _isLoading = false;
         });
       }
-    }
-  }
-
-  Future<void> _autoSyncAfterAdd() async {
-    try {
-      print('🔄 Auto-syncing comments after successful add...');
-
-      final data = await _commentService.getComments(widget.postId);
-
-      List<Comment> serverComments = [];
-      if (data.isNotEmpty) {
-        for (var item in data) {
-          try {
-            serverComments.add(Comment.fromJson(item));
-          } catch (e) {
-            print("Error parsing comment during auto-sync: $e");
-          }
-        }
-      }
-
-      if (mounted) {
-        setState(() {
-          _comments.removeWhere((comment) => comment.id < 0);
-          _temporaryIds.clear();
-          _comments = CommentUtils.sortCommentsByDate(serverComments);
-          _hasError = false;
-        });
-
-        print('✅ Auto-sync completed! ${_comments.length} comments loaded');
-      }
-    } catch (e) {
-      print('⚠️ Auto-sync failed: $e');
     }
   }
 
   Future<void> _handleCommentSubmit(String content) async {
+    // Optimistic update
     final tempComment = CommentUtils.createTemporaryComment(
       postId: widget.postId,
       content: content,
@@ -183,43 +114,48 @@ class _CommentSectionState extends State<CommentSection> {
       profilePictureUrl: _currentUserAvatar,
     );
 
-    // Update UI instantly
     setState(() {
       _comments.insert(0, tempComment);
       _comments = CommentUtils.sortCommentsByDate(_comments);
-      _temporaryIds.add(tempComment.id);
     });
 
     _scrollToTop();
-    _sendCommentAndAutoSync(tempComment, content);
-  }
 
-  Future<void> _sendCommentAndAutoSync(
-      Comment tempComment, String content) async {
     try {
-      print('📤 Sending comment to server...');
       final success =
           await _commentService.sendCommentOptimistic(widget.postId, content);
 
       if (success) {
-        print('✅ Comment sent successfully! Auto-syncing...');
-        await Future.delayed(Duration(milliseconds: 500));
         await _autoSyncAfterAdd();
-
-        if (widget.onCommentAdded != null) {
-          widget.onCommentAdded!();
-        }
-
-        _scrollToTop();
+        widget.onCommentAdded?.call();
         _showSuccessFeedback();
       } else {
         _rollbackComment(tempComment);
         _showErrorSnackbar('Gagal mengirim komentar');
       }
     } catch (e) {
-      print('❌ Error sending comment: $e');
       _rollbackComment(tempComment);
       _showErrorSnackbar('Koneksi bermasalah, coba lagi');
+    }
+  }
+
+  Future<void> _autoSyncAfterAdd() async {
+    try {
+      final data = await _commentService.getComments(widget.postId);
+      final serverComments =
+          data.map((item) => Comment.fromJson(item)).toList();
+
+      if (mounted) {
+        setState(() {
+          _comments = CommentUtils.sortCommentsByDate(serverComments);
+          _hasError = false;
+        });
+      }
+    } catch (e) {
+      // Handle error sync, tapi jangan rollback UI
+      if (mounted) {
+        _showErrorSnackbar('Gagal sinkronisasi data terbaru');
+      }
     }
   }
 
@@ -228,7 +164,7 @@ class _CommentSectionState extends State<CommentSection> {
       if (widget.scrollController?.hasClients == true) {
         widget.scrollController?.animateTo(
           0,
-          duration: Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutCubic,
         );
       }
@@ -239,7 +175,6 @@ class _CommentSectionState extends State<CommentSection> {
     if (mounted) {
       setState(() {
         _comments.removeWhere((comment) => comment.id == tempComment.id);
-        _temporaryIds.remove(tempComment.id);
       });
     }
   }
@@ -250,15 +185,15 @@ class _CommentSectionState extends State<CommentSection> {
         SnackBar(
           content: Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.white, size: 20),
-              SizedBox(width: 8),
-              Text('Komentar berhasil dikirim'),
+              const Icon(Icons.check_circle, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              const Text('Komentar berhasil dikirim'),
             ],
           ),
           backgroundColor: Colors.green[600],
-          duration: Duration(seconds: 2),
+          duration: const Duration(seconds: 2),
           behavior: SnackBarBehavior.floating,
-          margin: EdgeInsets.all(16),
+          margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
           ),
@@ -273,15 +208,15 @@ class _CommentSectionState extends State<CommentSection> {
         SnackBar(
           content: Row(
             children: [
-              Icon(Icons.error_outline, color: Colors.white, size: 20),
-              SizedBox(width: 8),
+              const Icon(Icons.error_outline, color: Colors.white, size: 20),
+              const SizedBox(width: 8),
               Expanded(child: Text(message)),
             ],
           ),
           backgroundColor: Colors.red[600],
-          duration: Duration(seconds: 3),
+          duration: const Duration(seconds: 3),
           behavior: SnackBarBehavior.floating,
-          margin: EdgeInsets.all(16),
+          margin: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
           ),
@@ -290,6 +225,7 @@ class _CommentSectionState extends State<CommentSection> {
             textColor: Colors.white,
             onPressed: () {
               ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              _loadCommentsInBackground(); // Panggil ulang untuk memuat ulang
             },
           ),
         ),
@@ -300,38 +236,27 @@ class _CommentSectionState extends State<CommentSection> {
   Future<void> _manualRefresh() async {
     try {
       HapticFeedback.lightImpact();
-
       final data = await _commentService.getComments(widget.postId);
-
-      List<Comment> comments = [];
-      if (data.isNotEmpty) {
-        for (var item in data) {
-          try {
-            comments.add(Comment.fromJson(item));
-          } catch (e) {
-            print("Error parsing comment: $e");
-          }
-        }
-      }
+      final comments = data.map((item) => Comment.fromJson(item)).toList();
 
       if (mounted) {
         setState(() {
           _comments = CommentUtils.sortCommentsByDate(comments);
           _hasError = false;
           _errorMessage = null;
-          _temporaryIds.clear();
         });
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Komentar diperbarui'),
-          duration: Duration(seconds: 1),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Komentar diperbarui'),
+            duration: Duration(seconds: 1),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } catch (e) {
-      print('Manual refresh failed: $e');
       _showErrorSnackbar('Gagal memperbarui komentar');
     }
   }
@@ -343,12 +268,13 @@ class _CommentSectionState extends State<CommentSection> {
     });
 
     HapticFeedback.lightImpact();
-    // TODO: Kirim ke server di background
+    // TODO: Implementasi pengiriman ke server di background
   }
 
   void _handleRetry() {
     setState(() {
       _hasError = false;
+      _isLoading = true;
     });
     _loadCommentsInBackground();
   }
@@ -360,8 +286,7 @@ class _CommentSectionState extends State<CommentSection> {
       resizeToAvoidBottomInset: true,
       body: Column(
         children: [
-          // Handle bar
-          SizedBox(height: 12),
+          const SizedBox(height: 12),
           Center(
             child: Container(
               width: 40,
@@ -372,19 +297,15 @@ class _CommentSectionState extends State<CommentSection> {
               ),
             ),
           ),
-          SizedBox(height: 12),
-
-          // Header
+          const SizedBox(height: 12),
           CommentHeaderWidget(
             comments: _comments,
             onRefresh: _manualRefresh,
           ),
-          SizedBox(height: 12),
-
-          // Content
+          const SizedBox(height: 12),
           Expanded(
             child: _isLoading
-                ? Center(child: CircularProgressIndicator())
+                ? const Center(child: CircularProgressIndicator())
                 : CommentListWidget(
                     comments: _comments,
                     scrollController: widget.scrollController,
@@ -393,8 +314,6 @@ class _CommentSectionState extends State<CommentSection> {
                     hasError: _hasError,
                   ),
           ),
-
-          // Input field
           CommentInputWidget(
             currentUserName: _currentUserName,
             currentUserAvatar: _currentUserAvatar,
