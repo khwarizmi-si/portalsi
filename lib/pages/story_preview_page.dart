@@ -21,6 +21,7 @@ import '../utils/secure_storage.dart';
 import '../widgets/collage_layout_view.dart';
 
 enum StoryPreviewMode { single, separate, layout, music }
+
 enum MusicDisplayStyle { vinyl, largeCard, smallCard }
 
 class StoryPreviewPage extends StatefulWidget {
@@ -33,13 +34,15 @@ class StoryPreviewPage extends StatefulWidget {
     this.assets,
     this.song,
     this.mode = StoryPreviewMode.single,
-  }) : assert(assets != null || song != null, 'assets atau song harus disediakan');
+  }) : assert(assets != null || song != null,
+            'assets atau song harus disediakan');
 
   @override
   State<StoryPreviewPage> createState() => _StoryPreviewPageState();
 }
 
-class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProviderStateMixin {
+class _StoryPreviewPageState extends State<StoryPreviewPage>
+    with TickerProviderStateMixin {
   final GlobalKey _collageKey = GlobalKey();
   late StoryPreviewMode _mode;
   int _currentIndex = 0;
@@ -124,7 +127,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
   Future<void> _updateSong(Song newSong) async {
     // Jika belum ada aset, buat gradient dari album art. Jika sudah, biarkan.
     if (_currentAsset == null) {
-      await _generateGradientFromImageProvider(NetworkImage(newSong.artworkUrl));
+      await _generateGradientFromImageProvider(
+          NetworkImage(newSong.artworkUrl));
     }
     _playClip(newSong);
     if (mounted) setState(() => _currentSong = newSong);
@@ -134,7 +138,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
     _playbackTimer?.cancel();
     await _audioPlayer.stop();
     try {
-      await _audioPlayer.play(UrlSource(song.previewUrl), position: _clipStartPosition);
+      await _audioPlayer.play(UrlSource(song.previewUrl),
+          position: _clipStartPosition);
       _playbackTimer = Timer(_clipDuration, () {
         if (mounted && _audioPlayer.state == PlayerState.playing) {
           _audioPlayer.stop();
@@ -159,7 +164,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
     await _videoController?.dispose();
     _videoController = null;
 
-    final thumbData = await _currentAsset!.thumbnailDataWithSize(const ThumbnailSize(100, 100));
+    final thumbData = await _currentAsset!
+        .thumbnailDataWithSize(const ThumbnailSize(100, 100));
     if (thumbData != null) {
       await _generateGradientFromImageProvider(MemoryImage(thumbData));
     }
@@ -183,7 +189,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
       final userId = await SecureStorage.getUserId();
       final token = await SecureStorage.getToken();
       setState(() {
-        _userId = userId;
+        _userId = userId!;
         _token = token ?? '';
       });
     } catch (e) {
@@ -191,9 +197,11 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
     }
   }
 
-  Future<void> _generateGradientFromImageProvider(ImageProvider provider) async {
+  Future<void> _generateGradientFromImageProvider(
+      ImageProvider provider) async {
     try {
-      final PaletteGenerator palette = await PaletteGenerator.fromImageProvider(provider);
+      final PaletteGenerator palette =
+          await PaletteGenerator.fromImageProvider(provider);
       final Color dominantColor = palette.dominantColor?.color ?? Colors.black;
       final Color vibrantColor = palette.vibrantColor?.color ?? dominantColor;
       if (mounted) {
@@ -201,7 +209,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _gradientColors = [const Color(0xFF1A1A1A), Colors.black]);
+        setState(
+            () => _gradientColors = [const Color(0xFF1A1A1A), Colors.black]);
       }
     }
   }
@@ -231,12 +240,14 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
 
     if (_mode == StoryPreviewMode.layout) {
       try {
-        final boundary = _collageKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+        final boundary = _collageKey.currentContext!.findRenderObject()
+            as RenderRepaintBoundary;
         final image = await boundary.toImage(pixelRatio: 2.0);
         final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
         final pngBytes = byteData!.buffer.asUint8List();
         final tempDir = await getTemporaryDirectory();
-        mediaFile = await File('${tempDir.path}/story_layout.png').writeAsBytes(pngBytes);
+        mediaFile = await File('${tempDir.path}/story_layout.png')
+            .writeAsBytes(pngBytes);
         finalFileName = "story_layout.png";
       } catch (e) {
         _showErrorToast('Gagal membuat gambar kolase.');
@@ -256,7 +267,9 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
 
     // Siapkan FormData
     Map<String, dynamic> dataMap = {
-      'media[]': [await MultipartFile.fromFile(mediaFile.path, filename: finalFileName)],
+      'media[]': [
+        await MultipartFile.fromFile(mediaFile.path, filename: finalFileName)
+      ],
       'caption[]': [_captionController.text],
     };
 
@@ -283,14 +296,17 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
         'https://api.portalsi.com/api/stories',
         data: formData,
         options: Options(
-          headers: {'Authorization': 'Bearer $_token', 'Accept': 'application/json'},
+          headers: {
+            'Authorization': 'Bearer $_token',
+            'Accept': 'application/json'
+          },
         ),
       );
       if (response.statusCode! >= 200 && response.statusCode! < 300) {
         if (mounted) {
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (context) => HomePage()),
-                (Route<dynamic> route) => false,
+            (Route<dynamic> route) => false,
           );
         }
       }
@@ -304,7 +320,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
           errorMessage = responseData['message'];
         }
       }
-      _showErrorToast('Gagal mengunggah Story: ${statusCode != null ? "[$statusCode] " : ""}$errorMessage');
+      _showErrorToast(
+          'Gagal mengunggah Story: ${statusCode != null ? "[$statusCode] " : ""}$errorMessage');
     } finally {
       if (mounted) {
         setState(() => _isUploading = false);
@@ -319,7 +336,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
     if (await file.exists()) {
       return file;
     } else {
-      final response = await Dio().get<List<int>>(url, options: Options(responseType: ResponseType.bytes));
+      final response = await Dio().get<List<int>>(url,
+          options: Options(responseType: ResponseType.bytes));
       await file.writeAsBytes(response.data!);
       return file;
     }
@@ -355,7 +373,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setState) {
             int _groupValue = 1;
-            const String userProfileImageUrl = 'https://i.pravatar.cc/150?img=3';
+            const String userProfileImageUrl =
+                'https://i.pravatar.cc/150?img=3';
             return Padding(
               padding: const EdgeInsets.all(24.0),
               child: Column(
@@ -373,29 +392,57 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
                     ),
                   ),
                   const SizedBox(height: 24),
-                  const Text('Share', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                  const Text('Share',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const CircleAvatar(backgroundImage: NetworkImage(userProfileImageUrl)),
-                    title: const Text('Your story', style: TextStyle(color: Colors.white)),
-                    subtitle: Text('And Facebook Story', style: TextStyle(color: Colors.grey[400])),
-                    trailing: Radio<int>(value: 1, groupValue: _groupValue, onChanged: (int? value) => setState(() => _groupValue = value!), activeColor: Colors.blue),
+                    leading: const CircleAvatar(
+                        backgroundImage: NetworkImage(userProfileImageUrl)),
+                    title: const Text('Your story',
+                        style: TextStyle(color: Colors.white)),
+                    subtitle: Text('And Facebook Story',
+                        style: TextStyle(color: Colors.grey[400])),
+                    trailing: Radio<int>(
+                        value: 1,
+                        groupValue: _groupValue,
+                        onChanged: (int? value) =>
+                            setState(() => _groupValue = value!),
+                        activeColor: Colors.blue),
                     onTap: () => setState(() => _groupValue = 1),
                   ),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const CircleAvatar(backgroundColor: Colors.green, child: Icon(Icons.star, color: Colors.white, size: 22)),
-                    title: const Text('Close Friends', style: TextStyle(color: Colors.white)),
-                    subtitle: Text('Add people', style: TextStyle(color: Colors.grey[400])),
-                    trailing: Radio<int>(value: 2, groupValue: _groupValue, onChanged: (int? value) => setState(() => _groupValue = value!), activeColor: Colors.blue),
+                    leading: const CircleAvatar(
+                        backgroundColor: Colors.green,
+                        child: Icon(Icons.star, color: Colors.white, size: 22)),
+                    title: const Text('Close Friends',
+                        style: TextStyle(color: Colors.white)),
+                    subtitle: Text('Add people',
+                        style: TextStyle(color: Colors.grey[400])),
+                    trailing: Radio<int>(
+                        value: 2,
+                        groupValue: _groupValue,
+                        onChanged: (int? value) =>
+                            setState(() => _groupValue = value!),
+                        activeColor: Colors.blue),
                     onTap: () => setState(() => _groupValue = 2),
                   ),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const CircleAvatar(backgroundColor: Color(0xFF383838), child: Icon(Icons.send, color: Colors.white, size: 20, textDirection: TextDirection.rtl)),
-                    title: const Text('Message', style: TextStyle(color: Colors.white)),
-                    trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+                    leading: const CircleAvatar(
+                        backgroundColor: Color(0xFF383838),
+                        child: Icon(Icons.send,
+                            color: Colors.white,
+                            size: 20,
+                            textDirection: TextDirection.rtl)),
+                    title: const Text('Message',
+                        style: TextStyle(color: Colors.white)),
+                    trailing: const Icon(Icons.arrow_forward_ios,
+                        color: Colors.white, size: 16),
                     onTap: () {},
                   ),
                   const SizedBox(height: 24),
@@ -406,9 +453,14 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
                       ),
-                      child: const Text('Share', style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
+                      child: const Text('Share',
+                          style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],
@@ -430,21 +482,29 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
         context: context,
         builder: (context) => AlertDialog(
           backgroundColor: const Color(0xFF2C2C2E),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Discard edits?', style: TextStyle(color: Colors.white)),
-          content: const Text("If you go back now, you'll lose all the edits you've made.", style: TextStyle(color: Colors.white70)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Discard edits?',
+              style: TextStyle(color: Colors.white)),
+          content: const Text(
+              "If you go back now, you'll lose all the edits you've made.",
+              style: TextStyle(color: Colors.white70)),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Discard', style: TextStyle(color: Colors.redAccent)),
+              child: const Text('Discard',
+                  style: TextStyle(color: Colors.redAccent)),
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Save draft', style: TextStyle(color: Colors.white)),
+              child: const Text('Save draft',
+                  style: TextStyle(color: Colors.white)),
             ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Keep editing', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: const Text('Keep editing',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -539,13 +599,14 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
                       children: [
                         _buildBackground(),
                         if (_isLoading)
-                          const Center(child: CircularProgressIndicator(color: Colors.white)),
+                          const Center(
+                              child: CircularProgressIndicator(
+                                  color: Colors.white)),
 
                         _buildAnimatedMediaContainer(),
 
                         // Tampilkan stiker musik DI ATAS konten media
-                        if (_currentSong != null)
-                          _buildMusicPreview(),
+                        if (_currentSong != null) _buildMusicPreview(),
 
                         if (!_isEditingCaption)
                           _isEditingMusic
@@ -582,7 +643,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
             Row(
               children: [
                 // Tombol ini sekarang mengganti style stiker musik
-                _buildActionButton(Icons.grid_view_outlined, onPressed: _cycleMusicStyle),
+                _buildActionButton(Icons.grid_view_outlined,
+                    onPressed: _cycleMusicStyle),
                 _buildActionButton(Icons.color_lens_outlined),
                 _buildActionButton(Icons.discord), // Placeholder
               ],
@@ -592,7 +654,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.black.withOpacity(0.5),
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
               ),
               child: const Text("Done"),
             ),
@@ -622,12 +685,14 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
                   _buildActionButton(Icons.videocam_outlined, size: 22),
                   _buildActionButton(Icons.square_outlined, size: 22),
                   Container(
-                    width: 48, height: 48,
+                    width: 48,
+                    height: 48,
                     decoration: BoxDecoration(
                       color: Colors.white,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.camera_alt, color: Colors.black, size: 28),
+                    child: const Icon(Icons.camera_alt,
+                        color: Colors.black, size: 28),
                   ),
                   _buildActionButton(Icons.videocam_off_outlined, size: 22),
                   _buildActionButton(Icons.more_horiz, size: 22),
@@ -644,17 +709,21 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
                         color: Colors.black.withOpacity(0.5),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Text(_clipDuration.inSeconds.toString(), style: const TextStyle(color: Colors.white)),
+                      child: Text(_clipDuration.inSeconds.toString(),
+                          style: const TextStyle(color: Colors.white)),
                     ),
                     Expanded(
                       child: Slider(
                         value: _clipStartPosition.inMilliseconds.toDouble(),
                         min: 0,
-                        max: (_totalSongDuration - _clipDuration).inMilliseconds.toDouble(),
+                        max: (_totalSongDuration - _clipDuration)
+                            .inMilliseconds
+                            .toDouble(),
                         // onChanged HANYA memperbarui state posisi, tidak memutar audio
                         onChanged: (val) {
                           setState(() {
-                            _clipStartPosition = Duration(milliseconds: val.round());
+                            _clipStartPosition =
+                                Duration(milliseconds: val.round());
                           });
                         },
                         // onChangeEnd memutar audio SETELAH pengguna selesai menggeser
@@ -690,7 +759,9 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
     return LayoutBuilder(
       builder: (context, constraints) {
         final double maxWidth = constraints.maxWidth * 0.8;
-        final double position = (_clipStartPosition.inMilliseconds / (_totalSongDuration - _clipDuration).inMilliseconds) * (maxWidth - 80);
+        final double position = (_clipStartPosition.inMilliseconds /
+                (_totalSongDuration - _clipDuration).inMilliseconds) *
+            (maxWidth - 80);
 
         return Container(
           height: 50,
@@ -717,7 +788,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
               // Jendela pemilih yang bisa digeser
               AnimatedPositioned(
                 duration: const Duration(milliseconds: 100),
-                left: position + (constraints.maxWidth - maxWidth)/2,
+                left: position + (constraints.maxWidth - maxWidth) / 2,
                 child: Container(
                   width: 80, // Lebar jendela pemilih
                   height: 50,
@@ -731,7 +802,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: List.generate(10, (index) {
                       final height = 15 + (index % 4 * 5.0);
-                      final color = index < 3 ? Colors.orangeAccent : Colors.grey[300];
+                      final color =
+                          index < 3 ? Colors.orangeAccent : Colors.grey[300];
                       return Container(
                         width: 3,
                         height: height,
@@ -786,8 +858,16 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 400),
       curve: Curves.easeInOutCubic,
-      top: _isBottomSheetVisible ? 15.0 : (_mode == StoryPreviewMode.layout || _mode == StoryPreviewMode.music ? 60.0 : 120.0),
-      bottom: _isBottomSheetVisible ? 410.0 : (_mode == StoryPreviewMode.layout || _mode == StoryPreviewMode.music ? 100.0 : 160.0),
+      top: _isBottomSheetVisible
+          ? 15.0
+          : (_mode == StoryPreviewMode.layout || _mode == StoryPreviewMode.music
+              ? 60.0
+              : 120.0),
+      bottom: _isBottomSheetVisible
+          ? 410.0
+          : (_mode == StoryPreviewMode.layout || _mode == StoryPreviewMode.music
+              ? 100.0
+              : 160.0),
       left: _isBottomSheetVisible ? 62.0 : 16.0,
       right: _isBottomSheetVisible ? 62.0 : 16.0,
       child: AnimatedScale(
@@ -811,7 +891,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
   Widget _buildMainContent() {
     // Fungsi ini sekarang HANYA menampilkan media visual (gambar/video/kolase)
     if (_mode == StoryPreviewMode.layout) {
-      return RepaintBoundary(key: _collageKey, child: CollageLayoutView(assets: widget.assets!));
+      return RepaintBoundary(
+          key: _collageKey, child: CollageLayoutView(assets: widget.assets!));
     }
     // Untuk mode lain (single, separate, bahkan music), tetap tampilkan aset visualnya
     return LayoutBuilder(
@@ -864,16 +945,22 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
               child: ClipOval(
                 child: SizedBox.fromSize(
                   size: const Size.fromRadius(100),
-                  child: Image.network(_currentSong!.artworkUrl, fit: BoxFit.cover),
+                  child: Image.network(_currentSong!.artworkUrl,
+                      fit: BoxFit.cover),
                 ),
               ),
             ),
           ),
         ),
         const SizedBox(height: 24),
-        Text(_currentSong!.trackName, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+        Text(_currentSong!.trackName,
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
-        Text(_currentSong!.artistName, style: const TextStyle(color: Colors.white70, fontSize: 16)),
+        Text(_currentSong!.artistName,
+            style: const TextStyle(color: Colors.white70, fontSize: 16)),
       ],
     );
   }
@@ -891,7 +978,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.network(_currentSong!.artworkUrl, width: 80, height: 80, fit: BoxFit.cover),
+              child: Image.network(_currentSong!.artworkUrl,
+                  width: 80, height: 80, fit: BoxFit.cover),
             ),
             const SizedBox(width: 12),
             Column(
@@ -900,8 +988,11 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
               children: [
                 const Icon(Icons.equalizer, color: Colors.white),
                 const SizedBox(height: 4),
-                Text(_currentSong!.trackName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                Text(_currentSong!.artistName, style: const TextStyle(color: Colors.white70)),
+                Text(_currentSong!.trackName,
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold)),
+                Text(_currentSong!.artistName,
+                    style: const TextStyle(color: Colors.white70)),
               ],
             )
           ],
@@ -923,12 +1014,14 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
-              child: Image.network(_currentSong!.artworkUrl, width: 24, height: 24, fit: BoxFit.cover),
+              child: Image.network(_currentSong!.artworkUrl,
+                  width: 24, height: 24, fit: BoxFit.cover),
             ),
             const SizedBox(width: 8),
             const Icon(Icons.equalizer, color: Colors.white, size: 18),
             const SizedBox(width: 8),
-            Text('${_currentSong!.trackName} • ${_currentSong!.artistName}', style: const TextStyle(color: Colors.white)),
+            Text('${_currentSong!.trackName} • ${_currentSong!.artistName}',
+                style: const TextStyle(color: Colors.white)),
           ],
         ),
       ),
@@ -960,7 +1053,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildActionButton(Icons.arrow_back_ios_new, onPressed: () async {
+                  _buildActionButton(Icons.arrow_back_ios_new,
+                      onPressed: () async {
                     final shouldPop = await _onWillPop();
                     if (shouldPop && mounted) {
                       Navigator.of(context).pop();
@@ -972,21 +1066,24 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
                       _buildActionButton(Icons.text_fields),
                       _buildActionButton(Icons.emoji_emotions_outlined),
                       _buildActionButton(Icons.auto_awesome_outlined),
-
-                      if (_mode == StoryPreviewMode.music && _currentSong != null)
+                      if (_mode == StoryPreviewMode.music &&
+                          _currentSong != null)
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 4.0),
                           child: GestureDetector(
-                            onTap: () {setState(() => _isEditingMusic = true);},
+                            onTap: () {
+                              setState(() => _isEditingMusic = true);
+                            },
                             child: CircleAvatar(
                               radius: 20,
-                              backgroundImage: NetworkImage(_currentSong!.artworkUrl),
+                              backgroundImage:
+                                  NetworkImage(_currentSong!.artworkUrl),
                             ),
                           ),
                         )
                       else
-                        _buildActionButton(Icons.music_note_outlined, onPressed: _showMusicPicker),
-
+                        _buildActionButton(Icons.music_note_outlined,
+                            onPressed: _showMusicPicker),
                       _buildActionButton(Icons.more_horiz),
                     ],
                   )
@@ -999,7 +1096,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
     );
   }
 
-  Widget _buildActionButton(IconData icon, {VoidCallback? onPressed, double size = 22}) {
+  Widget _buildActionButton(IconData icon,
+      {VoidCallback? onPressed, double size = 22}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4.0),
       // Gunakan Material agar efek ripple berbentuk lingkaran
@@ -1007,7 +1105,10 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
         color: Colors.transparent,
         shape: const CircleBorder(),
         child: InkWell(
-          onTap: onPressed ?? () { print('${icon.codePoint} di-klik'); },
+          onTap: onPressed ??
+              () {
+                print('${icon.codePoint} di-klik');
+              },
           customBorder: const CircleBorder(),
           child: CircleAvatar(
             radius: 20,
@@ -1050,7 +1151,9 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: isSelected ? Colors.white : Colors.transparent,
+                              color: isSelected
+                                  ? Colors.white
+                                  : Colors.transparent,
                               width: 2.5,
                             ),
                           ),
@@ -1075,10 +1178,13 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
                   ),
-                  child: const Text('Next >', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: const Text('Next >',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
             ],
@@ -1135,7 +1241,9 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
                                   ? 'Add a caption...'
                                   : _captionController.text,
                               style: TextStyle(
-                                color: _captionController.text.isEmpty ? Colors.white70 : Colors.white,
+                                color: _captionController.text.isEmpty
+                                    ? Colors.white70
+                                    : Colors.white,
                                 fontSize: 16,
                               ),
                               maxLines: 1,
@@ -1155,14 +1263,21 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
                             Expanded(
                               child: _buildStoryButton(
                                 label: 'Your stories',
-                                iconWidget: const CircleAvatar(radius: 14, backgroundImage: NetworkImage(userProfileImageUrl)),
+                                iconWidget: const CircleAvatar(
+                                    radius: 14,
+                                    backgroundImage:
+                                        NetworkImage(userProfileImageUrl)),
                               ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: _buildStoryButton(
                                 label: 'Close Friends',
-                                iconWidget: const CircleAvatar(radius: 14, backgroundColor: Colors.green, child: Icon(Icons.star, color: Colors.white, size: 20)),
+                                iconWidget: const CircleAvatar(
+                                    radius: 14,
+                                    backgroundColor: Colors.green,
+                                    child: Icon(Icons.star,
+                                        color: Colors.white, size: 20)),
                               ),
                             ),
                           ],
@@ -1177,7 +1292,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
                           shape: BoxShape.circle,
                         ),
                         child: IconButton(
-                          icon: const Icon(Icons.arrow_forward_ios, color: Colors.black, size: 20),
+                          icon: const Icon(Icons.arrow_forward_ios,
+                              color: Colors.black, size: 20),
                           onPressed: _showShareBottomSheet,
                         ),
                       )
@@ -1251,17 +1367,44 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
   Widget _buildMediaContent() {
     if (_currentAsset == null) return const SizedBox.shrink();
     if (_currentAsset!.type == AssetType.video) {
-      if (_isVideoLoading || _videoController == null || !_videoController!.value.isInitialized) {
+      if (_isVideoLoading ||
+          _videoController == null ||
+          !_videoController!.value.isInitialized) {
         return AssetEntityImage(_currentAsset!, fit: BoxFit.fitWidth);
       }
-      return AspectRatio(aspectRatio: _videoController!.value.aspectRatio, child: VideoPlayer(_videoController!));
+      return AspectRatio(
+          aspectRatio: _videoController!.value.aspectRatio,
+          child: VideoPlayer(_videoController!));
     } else {
-      return AssetEntityImage(_currentAsset!, isOriginal: true, fit: BoxFit.fitWidth);
+      return AssetEntityImage(_currentAsset!,
+          isOriginal: true, fit: BoxFit.fitWidth);
     }
   }
 
-  Widget _buildStoryButton({required String label, required Widget iconWidget}) {
-    return Material(color: Colors.black.withOpacity(0.4), borderRadius: BorderRadius.circular(30), child: InkWell(onTap: () { print('Tombol "$label" di-klik'); }, borderRadius: BorderRadius.circular(30), child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0), child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [iconWidget, const SizedBox(width: 8), Flexible(child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis))]))));
+  Widget _buildStoryButton(
+      {required String label, required Widget iconWidget}) {
+    return Material(
+        color: Colors.black.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(30),
+        child: InkWell(
+            onTap: () {
+              print('Tombol "$label" di-klik');
+            },
+            borderRadius: BorderRadius.circular(30),
+            child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child:
+                    Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  iconWidget,
+                  const SizedBox(width: 8),
+                  Flexible(
+                      child: Text(label,
+                          style: const TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis))
+                ]))));
   }
 
   Widget _buildUploadingOverlay() {
@@ -1273,7 +1416,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
           children: [
             CircularProgressIndicator(color: Colors.white),
             SizedBox(height: 16),
-            Text('Mengunggah Story...', style: TextStyle(color: Colors.white, fontSize: 16)),
+            Text('Mengunggah Story...',
+                style: TextStyle(color: Colors.white, fontSize: 16)),
           ],
         ),
       ),
@@ -1283,7 +1427,9 @@ class _StoryPreviewPageState extends State<StoryPreviewPage> with TickerProvider
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
-    properties.add(DiagnosticsProperty<AnimationController>('_vinylController', _vinylController));
-    properties.add(DiagnosticsProperty<AnimationController>('_vinylController', _vinylController));
+    properties.add(DiagnosticsProperty<AnimationController>(
+        '_vinylController', _vinylController));
+    properties.add(DiagnosticsProperty<AnimationController>(
+        '_vinylController', _vinylController));
   }
 }
