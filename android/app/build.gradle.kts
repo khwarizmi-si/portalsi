@@ -7,7 +7,11 @@ plugins {
 
 android {
     namespace = "com.example.portal_si"
+
     compileSdk = 35
+
+
+
     ndkVersion = "27.0.12077973"
 
     compileOptions {

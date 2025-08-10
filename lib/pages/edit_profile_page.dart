@@ -187,6 +187,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       child: Stack(
         children: [
           CircleAvatar(
+
             radius: 60,
             // Atur warna latar belakang sebagai fallback dasar
             backgroundColor: Colors.grey[200],
@@ -214,6 +215,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
               // Prioritas 3: Tampilkan ikon jika tidak ada gambar sama sekali
                   : Icon(Icons.person, size: 60, color: Colors.grey[800]),
             ),
+
           ),
           Positioned(
             bottom: 0,

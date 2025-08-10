@@ -18,6 +18,48 @@ class PostService {
     }
   }
 
+  Future<List<dynamic>> fetchExplorePosts(
+      {String? tag, String sort = 'random'}) async {
+    final token = await SecureStorage.getToken();
+    final headers = {
+      'Authorization': 'Bearer $token',
+      'Accept': 'application/json',
+    };
+
+    final queryParams = <String, String>{
+      'sort': sort,
+    };
+
+    if (tag != null && tag.isNotEmpty) {
+      queryParams['tag'] = tag;
+    }
+
+    final uri = Uri.https('api.portalsi.com', '/api/explore', queryParams);
+
+    try {
+      final res = await http.get(uri, headers: headers);
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+
+        // 🛡️ Tambahkan pengecekan tipe di sini:
+        if (data is Map<String, dynamic> && data.containsKey('posts')) {
+          return data['posts'];
+        } else if (data is List) {
+          return data;
+        } else {
+          throw Exception('Unexpected response format: $data');
+        }
+      } else {
+        print('Error fetching explore posts: ${res.statusCode} - ${res.body}');
+        throw Exception('Failed to load explore posts');
+      }
+    } catch (e) {
+      print('Exception in fetchExplorePosts: $e');
+      rethrow;
+    }
+  }
+
   Future<Map<String, dynamic>?> getPostDetail(int id) async {
     final token = await SecureStorage.getToken();
     final res = await http.get(

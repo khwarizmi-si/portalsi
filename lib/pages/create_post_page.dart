@@ -45,7 +45,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
       final token = await SecureStorage.getToken();
 
       setState(() {
-        _userId = userId;
+        _userId = userId!;
         _token = token ?? '';
       });
     } catch (e) {
@@ -410,10 +410,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                                 ? 'Add location'
                                                 : _locationController.text,
                                             style: TextStyle(
-                                              color:
-                                                  _locationController
-                                                      .text
-                                                      .isEmpty
+                                              color: _locationController
+                                                      .text.isEmpty
                                                   ? Colors.grey
                                                   : darkText,
                                               fontSize: 16,

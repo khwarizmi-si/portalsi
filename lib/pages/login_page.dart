@@ -257,8 +257,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                         child: CircularProgressIndicator(
                                           valueColor:
                                               AlwaysStoppedAnimation<Color>(
-                                                Colors.blue,
-                                              ),
+                                            Colors.blue,
+                                          ),
                                           strokeWidth: 3,
                                         ),
                                       ),
@@ -333,7 +333,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           // Email TextField
                           _buildTextField(
                             controller: _emailController,
-                            hintText: 'Email atau username',
+                            hintText: 'Email ',
                             keyboardType: TextInputType.emailAddress,
                             validator: (value) {
                               if (value == null || value.isEmpty) {

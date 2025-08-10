@@ -10,6 +10,8 @@ import '../components/post_card.dart';
 import 'dashboard_page.dart';
 import '../components/bottom_navigation.dart';
 import '../helper/time_helper.dart';
+import 'other_profile_page.dart'; // Import OtherProfilePage
+import 'profile_page.dart'; // Import ProfilePage
 import 'dart:math';
 
 class PostDetailPage extends StatefulWidget {
@@ -23,6 +25,8 @@ class PostDetailPage extends StatefulWidget {
   final bool isVerified;
   final int postId;
   final bool isLiked;
+  final int? userId; // Tambahkan userId untuk main post
+  final Map<String, dynamic>? user; // Tambahkan user data
 
   const PostDetailPage({
     super.key,
@@ -36,6 +40,8 @@ class PostDetailPage extends StatefulWidget {
     required this.isVerified,
     required this.postId,
     this.isLiked = false,
+    this.userId,
+    this.user,
   });
 
   @override
@@ -88,15 +94,125 @@ class _PostDetailPageState extends State<PostDetailPage>
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _fadeController, curve: Curves.easeOutCubic),
     );
-    _slideAnimation = Tween<Offset>(begin: Offset(0, 0.3), end: Offset.zero)
-        .animate(
-          CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
-        );
+    _slideAnimation =
+        Tween<Offset>(begin: Offset(0, 0.3), end: Offset.zero).animate(
+      CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
+    );
 
     _fadeController.forward();
     Future.delayed(Duration(milliseconds: 200), () {
       _slideController.forward();
     });
+  }
+
+  // ✅ Profile Navigation Logic
+  Future<void> _navigateToProfile(Map<String, dynamic> user) async {
+    try {
+      final username = user['username'] ?? 'Unknown User';
+      final userId = _extractUserId(user);
+      final currentUserId = await SecureStorage.getUserId();
+
+      debugPrint('Profile tap: $username (user_id: $userId)');
+      debugPrint('Current user_id: $currentUserId');
+
+      // Validasi user_id
+      if (userId == null) {
+        debugPrint('Warning: user_id tidak ditemukan dalam data user');
+        _navigateToOtherProfile(username);
+        return;
+      }
+
+      if (currentUserId == null) {
+        debugPrint('Warning: current user_id tidak ditemukan di storage');
+        _navigateToOtherProfile(username);
+        return;
+      }
+
+      // Konversi ke string untuk perbandingan yang lebih aman
+      final userIdStr = userId.toString();
+      final currentUserIdStr = currentUserId.toString();
+
+      // Jika user_id sama dengan user yang login
+      if (userIdStr == currentUserIdStr) {
+        debugPrint('Navigating to own profile (user_id: $userId)');
+        _navigateToOwnProfile();
+      } else {
+        debugPrint('Navigating to other profile: $username (user_id: $userId)');
+        _navigateToOtherProfile(username, userId: userId);
+      }
+    } catch (e) {
+      debugPrint('Error in _navigateToProfile: $e');
+      // Fallback ke other profile
+      final username = user['username'] ?? 'Unknown User';
+      _navigateToOtherProfile(username);
+    }
+  }
+
+  // Navigate ke profile sendiri
+  void _navigateToOwnProfile() {
+    HapticFeedback.lightImpact();
+    Navigator.pushReplacementNamed(context, '/profile');
+  }
+
+  // Navigate ke profile orang lain
+  void _navigateToOtherProfile(String username, {dynamic userId}) {
+    HapticFeedback.lightImpact();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => OtherProfilePage(
+          username: username,
+        ),
+      ),
+    );
+  }
+
+  // Helper method untuk extract user_id
+  dynamic _extractUserId(Map<String, dynamic> user) {
+    final possibleKeys = ['user_id', 'id', 'userId', 'uid'];
+
+    // Cek di level utama
+    for (final key in possibleKeys) {
+      final value = user[key];
+      if (value != null) {
+        if (value is int || value is String) {
+          return value;
+        }
+      }
+    }
+
+    // Cek di nested 'user' object
+    final nestedUser = user['user'];
+    if (nestedUser is Map<String, dynamic>) {
+      for (final key in possibleKeys) {
+        final value = nestedUser[key];
+        if (value != null) {
+          if (value is int || value is String) {
+            return value;
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  // Profile tap handler untuk main post
+  void _onMainPostProfileTap() {
+    final mainPostUser = widget.user ??
+        {
+          'username': widget.username,
+          'profile_picture_url': widget.profileImageUrl,
+          'is_verified': widget.isVerified,
+          'user_id': widget.userId,
+        };
+    _navigateToProfile(mainPostUser);
+  }
+
+  // Profile tap handler untuk related posts
+  void _onRelatedPostProfileTap(Map<String, dynamic> post) {
+    final user = post['user'] ?? {};
+    _navigateToProfile(user);
   }
 
   // ✅ Implementasi like functionality untuk post utama
@@ -185,19 +301,15 @@ class _PostDetailPageState extends State<PostDetailPage>
 
   Future<Map<String, int>> getPostStats(int postId) async {
     try {
-      final likesResponse = await http
-          .get(
-            Uri.parse('https://api.portalsi.com/api/posts/$postId/likes'),
-            headers: {'Accept': 'application/json'},
-          )
-          .timeout(const Duration(seconds: 5));
+      final likesResponse = await http.get(
+        Uri.parse('https://api.portalsi.com/api/posts/$postId/likes'),
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 5));
 
-      final commentsResponse = await http
-          .get(
-            Uri.parse('https://api.portalsi.com/api/posts/$postId/comments'),
-            headers: {'Accept': 'application/json'},
-          )
-          .timeout(const Duration(seconds: 5));
+      final commentsResponse = await http.get(
+        Uri.parse('https://api.portalsi.com/api/posts/$postId/comments'),
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 5));
 
       int likesCount = 0;
       int commentsCount = 0;
@@ -237,8 +349,7 @@ class _PostDetailPageState extends State<PostDetailPage>
       'caption': post['caption'] ?? '',
       'media_url': post['media_url'] ?? '',
       'created_at': post['created_at'] ?? DateTime.now().toIso8601String(),
-      'user':
-          post['user'] ??
+      'user': post['user'] ??
           {
             'username': 'Unknown',
             'profile_picture_url': '',
@@ -261,17 +372,15 @@ class _PostDetailPageState extends State<PostDetailPage>
 
           final authToken = await SecureStorage.getToken();
 
-          final response = await http
-              .get(
-                Uri.parse(endpoint),
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Accept': 'application/json',
-                  'User-Agent': 'Flutter App',
-                  'Authorization': 'Bearer $authToken',
-                },
-              )
-              .timeout(const Duration(seconds: 10));
+          final response = await http.get(
+            Uri.parse(endpoint),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'User-Agent': 'Flutter App',
+              'Authorization': 'Bearer $authToken',
+            },
+          ).timeout(const Duration(seconds: 10));
 
           debugPrint('Response status: ${response.statusCode}');
 
@@ -280,8 +389,7 @@ class _PostDetailPageState extends State<PostDetailPage>
 
             List<dynamic> data;
             if (responseData is Map<String, dynamic>) {
-              data =
-                  responseData['data'] ??
+              data = responseData['data'] ??
                   responseData['posts'] ??
                   responseData['result'] ??
                   [];
@@ -325,9 +433,8 @@ class _PostDetailPageState extends State<PostDetailPage>
 
             enhancedPosts.shuffle(Random());
 
-            final List<Map<String, dynamic>> randomPosts = enhancedPosts
-                .take(10)
-                .toList();
+            final List<Map<String, dynamic>> randomPosts =
+                enhancedPosts.take(10).toList();
 
             setState(() {
               _relatedPosts = randomPosts;
@@ -491,18 +598,25 @@ class _PostDetailPageState extends State<PostDetailPage>
                 children: [
                   Row(
                     children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundImage:
-                            item['user']?['profile_picture_url']?.isNotEmpty ==
-                                true
-                            ? NetworkImage(item['user']['profile_picture_url'])
-                            : null,
-                        child:
-                            item['user']?['profile_picture_url']?.isEmpty !=
-                                false
-                            ? Icon(Icons.person, size: 20)
-                            : null,
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.of(context).pop(); // Close dialog first
+                          _onRelatedPostProfileTap(item);
+                        },
+                        child: CircleAvatar(
+                          radius: 20,
+                          backgroundImage: item['user']?['profile_picture_url']
+                                      ?.isNotEmpty ==
+                                  true
+                              ? NetworkImage(
+                                  item['user']['profile_picture_url'])
+                              : null,
+                          child:
+                              item['user']?['profile_picture_url']?.isEmpty !=
+                                      false
+                                  ? Icon(Icons.person, size: 20)
+                                  : null,
+                        ),
                       ),
                       SizedBox(width: 12),
                       Expanded(
@@ -511,11 +625,18 @@ class _PostDetailPageState extends State<PostDetailPage>
                           children: [
                             Row(
                               children: [
-                                Text(
-                                  item['user']?['username'] ?? 'Unknown User',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
+                                GestureDetector(
+                                  onTap: () {
+                                    Navigator.of(context)
+                                        .pop(); // Close dialog first
+                                    _onRelatedPostProfileTap(item);
+                                  },
+                                  child: Text(
+                                    item['user']?['username'] ?? 'Unknown User',
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
                                 if (item['user']?['is_verified'] == true) ...[
@@ -571,8 +692,7 @@ class _PostDetailPageState extends State<PostDetailPage>
           color: Theme.of(context).primaryColor,
           child: ListView.builder(
             physics: const BouncingScrollPhysics(),
-            itemCount:
-                _relatedPosts.length +
+            itemCount: _relatedPosts.length +
                 (_relatedPosts.isEmpty && !_isLoadingRelated ? 2 : 3),
             itemBuilder: (context, index) {
               if (index == 0) return _buildModernMainPost();
@@ -604,6 +724,8 @@ class _PostDetailPageState extends State<PostDetailPage>
                             post['user']?['profile_picture_url'] ?? '',
                         isVerified: post['user']?['is_verified'] ?? false,
                         isLiked: isLiked,
+                        userId: post['user']?['user_id'] ?? post['user']?['id'],
+                        user: post['user'],
                       ),
                     ),
                   );
@@ -648,6 +770,7 @@ class _PostDetailPageState extends State<PostDetailPage>
           'username': widget.username,
           'profile_picture_url': widget.profileImageUrl,
           'is_verified': widget.isVerified,
+          'user_id': widget.userId,
         },
         onLike: _onLikeMainPost,
         onBookmark: () {
@@ -657,9 +780,7 @@ class _PostDetailPageState extends State<PostDetailPage>
           debugPrint('Shared main post: ${widget.postId}');
         },
         onComment: _onCommentMainPost,
-        onProfileTap: () {
-          debugPrint('Navigate to profile: ${widget.username}');
-        },
+        onProfileTap: _onMainPostProfileTap, // ✅ Tambahkan callback
       ),
     );
   }
@@ -769,9 +890,8 @@ class _PostDetailPageState extends State<PostDetailPage>
           debugPrint('Shared post: $postId');
         },
         onComment: () => _onCommentRelatedPost(post),
-        onProfileTap: () {
-          debugPrint('Navigate to profile: ${post['user']?['username']}');
-        },
+        onProfileTap: () =>
+            _onRelatedPostProfileTap(post), // ✅ Tambahkan callback
       ),
     );
   }
@@ -903,7 +1023,7 @@ class CommentSection extends StatefulWidget {
   final int postId;
 
   const CommentSection({Key? key, this.scrollController, required this.postId})
-    : super(key: key);
+      : super(key: key);
 
   @override
   State<CommentSection> createState() => _CommentSectionState();
@@ -982,7 +1102,8 @@ class _CommentSectionState extends State<CommentSection> {
     final content = _commentController.text.trim();
     if (content.isEmpty) return;
 
-    final success = await _commentService.addComment(widget.postId, content);
+    final success =
+        await _commentService.sendCommentOptimistic(widget.postId, content);
     if (success) {
       _commentController.clear();
       await _loadComments();
@@ -1065,55 +1186,55 @@ class _CommentSectionState extends State<CommentSection> {
                     ),
                   )
                 : _comments.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.chat_bubble_outline,
-                          size: 48,
-                          color: Colors.grey[400],
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'Belum ada komentar',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'Jadilah yang pertama berkomentar!',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    controller: widget.scrollController,
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _comments.length,
-                    itemBuilder: (context, index) {
-                      final comment = _comments.reversed.toList()[index];
-                      return Column(
-                        children: [
-                          _buildComment(comment),
-                          if (index < _comments.length - 1)
-                            Divider(
-                              color: Colors.grey[300],
-                              height: 16,
-                              thickness: 0.5,
-                              indent: 52,
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.chat_bubble_outline,
+                              size: 48,
+                              color: Colors.grey[400],
                             ),
-                        ],
-                      );
-                    },
-                  ),
+                            SizedBox(height: 16),
+                            Text(
+                              'Belum ada komentar',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              'Jadilah yang pertama berkomentar!',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[500],
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: widget.scrollController,
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: _comments.length,
+                        itemBuilder: (context, index) {
+                          final comment = _comments.reversed.toList()[index];
+                          return Column(
+                            children: [
+                              _buildComment(comment),
+                              if (index < _comments.length - 1)
+                                Divider(
+                                  color: Colors.grey[300],
+                                  height: 16,
+                                  thickness: 0.5,
+                                  indent: 52,
+                                ),
+                            ],
+                          );
+                        },
+                      ),
           ),
           SafeArea(
             child: Container(

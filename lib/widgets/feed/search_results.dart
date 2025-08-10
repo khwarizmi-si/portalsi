@@ -1,6 +1,8 @@
-// lib/widgets/feed/search_results.dart
+// lib/widgets/feed/search_results.dart - Versi Simple
 import 'package:flutter/material.dart';
 import 'user_search_item.dart';
+import '../../pages/other_profile_page.dart';
+import '../../utils/secure_storage.dart';
 
 class SearchResults extends StatelessWidget {
   final bool isSearching;
@@ -20,18 +22,85 @@ class SearchResults extends StatelessWidget {
       return _buildLoadingState(context);
     }
 
-    if (searchResults.isEmpty) {
-      return _buildEmptyState();
-    }
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _getCurrentUserData(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildLoadingState(context);
+        }
 
-    return ListView.builder(
-      padding: EdgeInsets.all(16),
-      itemCount: searchResults.length,
-      itemBuilder: (context, index) {
-        final user = searchResults[index];
-        return UserSearchItem(user: user, onTap: () => onUserTap(user));
+        final currentUserData = snapshot.data;
+        final currentUsername = currentUserData?['username'];
+        final currentUserId = currentUserData?['userId'];
+
+        // Filter out current user from search results
+        final filteredResults = searchResults.where((user) {
+          final userUsername = user['username']?.toString();
+          final userId = user['user_id'] ?? user['id'];
+
+          // Filter by both user_id and username to exclude current user
+          return userId != currentUserId &&
+              userUsername != currentUsername &&
+              userUsername != null &&
+              userUsername.isNotEmpty;
+        }).toList();
+
+        if (filteredResults.isEmpty) {
+          return _buildEmptyState();
+        }
+
+        return ListView.builder(
+          padding: EdgeInsets.all(16),
+          itemCount: filteredResults.length,
+          itemBuilder: (context, index) {
+            final user = filteredResults[index];
+            return UserSearchItem(
+              user: user,
+              onTap: () => _navigateToProfile(context, user),
+            );
+          },
+        );
       },
     );
+  }
+
+  Future<Map<String, dynamic>> _getCurrentUserData() async {
+    try {
+      final username = await SecureStorage.getUsername();
+      final userId = await SecureStorage.getUserId();
+      return {
+        'username': username,
+        'userId': userId,
+      };
+    } catch (e) {
+      print('Error loading current user data: $e');
+      return {};
+    }
+  }
+
+  void _navigateToProfile(BuildContext context, Map<String, dynamic> user) {
+    // Call the original onUserTap if needed for additional functionality
+    onUserTap(user);
+
+    // Navigate to OtherProfilePage using the username
+    final username = user['username']?.toString();
+    if (username != null && username.isNotEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => OtherProfilePage(username: username),
+        ),
+      );
+    } else {
+      // Show error if username is not available
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Username tidak tersedia'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   Widget _buildLoadingState(BuildContext context) {
