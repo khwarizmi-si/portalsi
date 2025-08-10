@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/user_service.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 // Import ProfileService and ProfileModel from the previous file
 
 class EditProfilePage extends StatefulWidget {
@@ -187,14 +188,32 @@ class _EditProfilePageState extends State<EditProfilePage> {
         children: [
           CircleAvatar(
             radius: 60,
-            backgroundImage: _selectedImage != null
-                ? FileImage(_selectedImage!)
-                : _profilePictureUrl.isNotEmpty
-                ? NetworkImage(_profilePictureUrl)
-                : null,
-            child: _selectedImage == null && _profilePictureUrl.isEmpty
-                ? const Icon(Icons.person, size: 60)
-                : null,
+            // Atur warna latar belakang sebagai fallback dasar
+            backgroundColor: Colors.grey[200],
+            child: ClipOval(
+              child: _selectedImage != null
+              // Prioritas 1: Tampilkan gambar lokal jika ada
+                  ? Image.file(
+                _selectedImage!,
+                fit: BoxFit.cover,
+                width: 120, // 2x radius
+                height: 120,
+              )
+                  : _profilePictureUrl.isNotEmpty
+              // Prioritas 2: Tampilkan gambar dari internet
+                  ? CachedNetworkImage(
+                imageUrl: _profilePictureUrl,
+                fit: BoxFit.cover,
+                width: 120,
+                height: 120,
+                // Tampilkan ini saat gambar sedang diunduh
+                placeholder: (context, url) => Center(child: CircularProgressIndicator()),
+                // Tampilkan ini jika gambar gagal diunduh (INI SOLUSINYA)
+                errorWidget: (context, url, error) => Icon(Icons.person, size: 60, color: Colors.grey[800]),
+              )
+              // Prioritas 3: Tampilkan ikon jika tidak ada gambar sama sekali
+                  : Icon(Icons.person, size: 60, color: Colors.grey[800]),
+            ),
           ),
           Positioned(
             bottom: 0,

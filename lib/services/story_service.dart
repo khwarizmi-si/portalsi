@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../utils/secure_storage.dart';
 
 class StoryService {
-  final baseUrl = 'https://your-api.com';
+  final baseUrl = 'https://api.portalsi.com/api';
 
   Future<bool> uploadStory(String mediaUrl) async {
     final token = await SecureStorage.getToken();
@@ -18,6 +18,15 @@ class StoryService {
     return res.statusCode == 201;
   }
 
+  Future<bool> deleteStory(int id) async {
+    final token = await SecureStorage.getToken();
+    final res = await http.delete(
+      Uri.parse('$baseUrl/stories/$id'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    return res.statusCode == 200;
+  }
+
   Future<List<dynamic>> getStoryFeed() async {
     final token = await SecureStorage.getToken();
     final res = await http.get(
@@ -29,15 +38,6 @@ class StoryService {
     } else {
       throw Exception('Gagal memuat story feed');
     }
-  }
-
-  Future<bool> deleteStory(int id) async {
-    final token = await SecureStorage.getToken();
-    final res = await http.delete(
-      Uri.parse('$baseUrl/stories/$id'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
-    return res.statusCode == 200;
   }
 
   Future<bool> viewStory(int id) async {

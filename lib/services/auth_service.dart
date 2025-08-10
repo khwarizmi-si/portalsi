@@ -10,7 +10,7 @@ class AuthService {
       final response = await http
           .post(
             Uri.parse('$baseUrl/login'),
-            body: {'email': email, 'password': password},
+            body: {'login': email, 'password': password},
           )
           .timeout(const Duration(seconds: 10));
 
