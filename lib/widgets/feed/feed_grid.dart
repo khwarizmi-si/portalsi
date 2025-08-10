@@ -12,6 +12,8 @@ class FeedGrid extends StatelessWidget {
   final Future<void> Function() onRefresh;
   final Future<void> Function(Map, int) onLikePost;
   final Function(dynamic) onPostTap;
+  final Function(Map<String, dynamic>)
+      onUserTap; // Tambahkan callback untuk user tap
 
   const FeedGrid({
     Key? key,
@@ -24,6 +26,7 @@ class FeedGrid extends StatelessWidget {
     required this.onRefresh,
     required this.onLikePost,
     required this.onPostTap,
+    required this.onUserTap, // Required parameter baru
   }) : super(key: key);
 
   @override
@@ -59,6 +62,7 @@ class FeedGrid extends StatelessWidget {
                   likedPosts: likedPosts,
                   onLikePost: onLikePost,
                   onPostTap: onPostTap,
+                  onUserTap: onUserTap, // Pass callback ke PostGridItem
                 ),
                 childCount: posts.length,
               ),

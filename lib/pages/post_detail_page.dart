@@ -10,6 +10,8 @@ import '../components/post_card.dart';
 import 'dashboard_page.dart';
 import '../components/bottom_navigation.dart';
 import '../helper/time_helper.dart';
+import 'other_profile_page.dart'; // Import OtherProfilePage
+import 'profile_page.dart'; // Import ProfilePage
 import 'dart:math';
 
 class PostDetailPage extends StatefulWidget {
@@ -23,6 +25,8 @@ class PostDetailPage extends StatefulWidget {
   final bool isVerified;
   final int postId;
   final bool isLiked;
+  final int? userId; // Tambahkan userId untuk main post
+  final Map<String, dynamic>? user; // Tambahkan user data
 
   const PostDetailPage({
     super.key,
@@ -36,6 +40,8 @@ class PostDetailPage extends StatefulWidget {
     required this.isVerified,
     required this.postId,
     this.isLiked = false,
+    this.userId,
+    this.user,
   });
 
   @override
@@ -97,6 +103,116 @@ class _PostDetailPageState extends State<PostDetailPage>
     Future.delayed(Duration(milliseconds: 200), () {
       _slideController.forward();
     });
+  }
+
+  // ✅ Profile Navigation Logic
+  Future<void> _navigateToProfile(Map<String, dynamic> user) async {
+    try {
+      final username = user['username'] ?? 'Unknown User';
+      final userId = _extractUserId(user);
+      final currentUserId = await SecureStorage.getUserId();
+
+      debugPrint('Profile tap: $username (user_id: $userId)');
+      debugPrint('Current user_id: $currentUserId');
+
+      // Validasi user_id
+      if (userId == null) {
+        debugPrint('Warning: user_id tidak ditemukan dalam data user');
+        _navigateToOtherProfile(username);
+        return;
+      }
+
+      if (currentUserId == null) {
+        debugPrint('Warning: current user_id tidak ditemukan di storage');
+        _navigateToOtherProfile(username);
+        return;
+      }
+
+      // Konversi ke string untuk perbandingan yang lebih aman
+      final userIdStr = userId.toString();
+      final currentUserIdStr = currentUserId.toString();
+
+      // Jika user_id sama dengan user yang login
+      if (userIdStr == currentUserIdStr) {
+        debugPrint('Navigating to own profile (user_id: $userId)');
+        _navigateToOwnProfile();
+      } else {
+        debugPrint('Navigating to other profile: $username (user_id: $userId)');
+        _navigateToOtherProfile(username, userId: userId);
+      }
+    } catch (e) {
+      debugPrint('Error in _navigateToProfile: $e');
+      // Fallback ke other profile
+      final username = user['username'] ?? 'Unknown User';
+      _navigateToOtherProfile(username);
+    }
+  }
+
+  // Navigate ke profile sendiri
+  void _navigateToOwnProfile() {
+    HapticFeedback.lightImpact();
+    Navigator.pushReplacementNamed(context, '/profile');
+  }
+
+  // Navigate ke profile orang lain
+  void _navigateToOtherProfile(String username, {dynamic userId}) {
+    HapticFeedback.lightImpact();
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => OtherProfilePage(
+          username: username,
+        ),
+      ),
+    );
+  }
+
+  // Helper method untuk extract user_id
+  dynamic _extractUserId(Map<String, dynamic> user) {
+    final possibleKeys = ['user_id', 'id', 'userId', 'uid'];
+
+    // Cek di level utama
+    for (final key in possibleKeys) {
+      final value = user[key];
+      if (value != null) {
+        if (value is int || value is String) {
+          return value;
+        }
+      }
+    }
+
+    // Cek di nested 'user' object
+    final nestedUser = user['user'];
+    if (nestedUser is Map<String, dynamic>) {
+      for (final key in possibleKeys) {
+        final value = nestedUser[key];
+        if (value != null) {
+          if (value is int || value is String) {
+            return value;
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  // Profile tap handler untuk main post
+  void _onMainPostProfileTap() {
+    final mainPostUser = widget.user ??
+        {
+          'username': widget.username,
+          'profile_picture_url': widget.profileImageUrl,
+          'is_verified': widget.isVerified,
+          'user_id': widget.userId,
+        };
+    _navigateToProfile(mainPostUser);
+  }
+
+  // Profile tap handler untuk related posts
+  void _onRelatedPostProfileTap(Map<String, dynamic> post) {
+    final user = post['user'] ?? {};
+    _navigateToProfile(user);
   }
 
   // ✅ Implementasi like functionality untuk post utama
@@ -482,17 +598,25 @@ class _PostDetailPageState extends State<PostDetailPage>
                 children: [
                   Row(
                     children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundImage: item['user']?['profile_picture_url']
-                                    ?.isNotEmpty ==
-                                true
-                            ? NetworkImage(item['user']['profile_picture_url'])
-                            : null,
-                        child: item['user']?['profile_picture_url']?.isEmpty !=
-                                false
-                            ? Icon(Icons.person, size: 20)
-                            : null,
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.of(context).pop(); // Close dialog first
+                          _onRelatedPostProfileTap(item);
+                        },
+                        child: CircleAvatar(
+                          radius: 20,
+                          backgroundImage: item['user']?['profile_picture_url']
+                                      ?.isNotEmpty ==
+                                  true
+                              ? NetworkImage(
+                                  item['user']['profile_picture_url'])
+                              : null,
+                          child:
+                              item['user']?['profile_picture_url']?.isEmpty !=
+                                      false
+                                  ? Icon(Icons.person, size: 20)
+                                  : null,
+                        ),
                       ),
                       SizedBox(width: 12),
                       Expanded(
@@ -501,11 +625,18 @@ class _PostDetailPageState extends State<PostDetailPage>
                           children: [
                             Row(
                               children: [
-                                Text(
-                                  item['user']?['username'] ?? 'Unknown User',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
+                                GestureDetector(
+                                  onTap: () {
+                                    Navigator.of(context)
+                                        .pop(); // Close dialog first
+                                    _onRelatedPostProfileTap(item);
+                                  },
+                                  child: Text(
+                                    item['user']?['username'] ?? 'Unknown User',
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
                                 if (item['user']?['is_verified'] == true) ...[
@@ -593,6 +724,8 @@ class _PostDetailPageState extends State<PostDetailPage>
                             post['user']?['profile_picture_url'] ?? '',
                         isVerified: post['user']?['is_verified'] ?? false,
                         isLiked: isLiked,
+                        userId: post['user']?['user_id'] ?? post['user']?['id'],
+                        user: post['user'],
                       ),
                     ),
                   );
@@ -637,6 +770,7 @@ class _PostDetailPageState extends State<PostDetailPage>
           'username': widget.username,
           'profile_picture_url': widget.profileImageUrl,
           'is_verified': widget.isVerified,
+          'user_id': widget.userId,
         },
         onLike: _onLikeMainPost,
         onBookmark: () {
@@ -646,9 +780,7 @@ class _PostDetailPageState extends State<PostDetailPage>
           debugPrint('Shared main post: ${widget.postId}');
         },
         onComment: _onCommentMainPost,
-        onProfileTap: () {
-          debugPrint('Navigate to profile: ${widget.username}');
-        },
+        onProfileTap: _onMainPostProfileTap, // ✅ Tambahkan callback
       ),
     );
   }
@@ -758,9 +890,8 @@ class _PostDetailPageState extends State<PostDetailPage>
           debugPrint('Shared post: $postId');
         },
         onComment: () => _onCommentRelatedPost(post),
-        onProfileTap: () {
-          debugPrint('Navigate to profile: ${post['user']?['username']}');
-        },
+        onProfileTap: () =>
+            _onRelatedPostProfileTap(post), // ✅ Tambahkan callback
       ),
     );
   }

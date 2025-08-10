@@ -1,3 +1,4 @@
+// services/profile_service.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -5,12 +6,16 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import '../utils/secure_storage.dart';
 
+// Pindahkan ProfileModel ke file model terpisah (misal: 'models/profile_model.dart')
+// untuk menjaga kebersihan struktur.
+// Namun, jika ingin tetap di sini, pastikan kelas ini di atas ProfileService.
 class ProfileModel {
   final String username;
   final String email;
   final String fullName;
   final String bio;
   final String profilePictureUrl;
+  final bool isVerified;
 
   ProfileModel({
     required this.username,
@@ -18,6 +23,7 @@ class ProfileModel {
     required this.fullName,
     required this.bio,
     required this.profilePictureUrl,
+    this.isVerified = false,
   });
 
   factory ProfileModel.fromJson(Map<String, dynamic> json) {
@@ -27,20 +33,19 @@ class ProfileModel {
       fullName: json['full_name'] ?? '',
       bio: json['bio'] ?? '',
       profilePictureUrl: json['profile_picture_url'] ?? '',
+      isVerified: json['is_verified'] ?? false,
     );
   }
 
-  // Add this method to handle auth data format
   factory ProfileModel.fromAuthData(Map<String, dynamic> authData) {
-    // Extract user data from auth response structure
     final userData = authData['user'] ?? {};
-
     return ProfileModel(
       username: userData['username'] ?? '',
       email: userData['email'] ?? '',
       fullName: userData['full_name'] ?? '',
       bio: userData['bio'] ?? '',
       profilePictureUrl: userData['profile_picture_url'] ?? '',
+      isVerified: userData['is_verified'] ?? false,
     );
   }
 
@@ -51,6 +56,7 @@ class ProfileModel {
       'full_name': fullName,
       'bio': bio,
       'profile_picture_url': profilePictureUrl,
+      'is_verified': isVerified,
     };
   }
 
@@ -60,6 +66,7 @@ class ProfileModel {
     String? fullName,
     String? bio,
     String? profilePictureUrl,
+    bool? isVerified,
   }) {
     return ProfileModel(
       username: username ?? this.username,
@@ -67,34 +74,40 @@ class ProfileModel {
       fullName: fullName ?? this.fullName,
       bio: bio ?? this.bio,
       profilePictureUrl: profilePictureUrl ?? this.profilePictureUrl,
+      isVerified: isVerified ?? this.isVerified,
     );
   }
 }
 
 class ProfileService {
-  static const String baseUrl = 'https://api.portalsi.com/api';
+  static const String _baseUrl = 'https://api.portalsi.com/api';
   final http.Client _client = http.Client();
 
-  // Get current profile data
+  static final ProfileService _instance = ProfileService._internal();
+  factory ProfileService() => _instance;
+  ProfileService._internal();
+
+  Future<Map<String, String>> _getHeaders() async {
+    final token = await SecureStorage.getToken();
+    if (token == null) {
+      throw Exception('Authentication required');
+    }
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
+  }
+
   Future<ProfileModel> getProfile() async {
     try {
-      // 1. Dapatkan token
-      final token = await SecureStorage.getToken();
+      final headers = await _getHeaders();
+      final response = await _client
+          .get(
+            Uri.parse('$_baseUrl/account/settings'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 10));
 
-      if (token == null) {
-        throw Exception('Authentication required');
-      }
-
-      // 2. Buat request ke endpoint profile settings (untuk current user)
-      final response = await _client.get(
-        Uri.parse('$baseUrl/account/settings'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 10));
-
-      // 3. Handle response
       final responseData = json.decode(response.body);
 
       if (response.statusCode == 200) {
@@ -117,21 +130,13 @@ class ProfileService {
     }
   }
 
-  // ✅ UPDATED: Get other user's profile by USERNAME instead of ID
   Future<ProfileModel> getOtherProfile(String username) async {
     try {
-      final token = await SecureStorage.getToken();
-
+      final headers = await _getHeaders();
       final response = await _client.get(
-        Uri.parse('$baseUrl/profile/$username'), // ✅ Use username in URL
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
+        Uri.parse('$_baseUrl/profile/$username'),
+        headers: headers,
       );
-
-      print('Other profile status: ${response.statusCode}');
-      print('Other profile body: ${response.body}');
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(response.body);
@@ -139,75 +144,72 @@ class ProfileService {
       } else if (response.statusCode == 404) {
         throw Exception('User not found');
       } else {
-        throw Exception('Failed to load profile: ${response.statusCode}');
+        final errorBody = json.decode(response.body);
+        final errorMessage = errorBody['message'] ??
+            'Failed to load profile: ${response.statusCode}';
+        throw Exception(errorMessage);
       }
+    } on SocketException {
+      throw Exception('No internet connection');
+    } on TimeoutException {
+      throw Exception('Request timeout. Please try again');
+    } on http.ClientException {
+      throw Exception('Server connection failed');
+    } on FormatException {
+      throw Exception('Invalid server response');
     } catch (e) {
       throw Exception('Error fetching other profile: $e');
     }
   }
 
-  // Update profile data
   Future<bool> updateProfile(ProfileModel profile) async {
     try {
-      final token = await SecureStorage.getToken();
-
+      final headers = await _getHeaders();
       final response = await _client.post(
-        Uri.parse('$baseUrl/account/settings'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
+        Uri.parse('$_baseUrl/account/settings'),
+        headers: headers,
         body: json.encode(profile.toJson()),
       );
 
-      print('Status: ${response.statusCode}');
-      print('Body: ${response.body}');
-
       return response.statusCode == 200;
     } catch (e) {
-      print('Update profile error: $e');
       rethrow;
     }
   }
 
-  // Upload profile picture
   Future<String?> uploadProfilePicture(File imageFile) async {
     try {
       final token = await SecureStorage.getToken();
+      if (token == null) {
+        throw Exception('Authentication required');
+      }
 
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('$baseUrl/account/settings'),
+        Uri.parse('$_baseUrl/account/settings'),
       );
 
-      request.headers.addAll({
-        'Authorization': 'Bearer $token',
-        // Jangan set 'Content-Type' manual, biarkan MultipartRequest yang atur
-      });
-
+      request.headers.addAll({'Authorization': 'Bearer $token'});
       request.files.add(
-        await http.MultipartFile.fromPath('profile_picture', imageFile.path),
-      );
+          await http.MultipartFile.fromPath('profile_picture', imageFile.path));
 
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
-
-      print('Upload status: ${response.statusCode}');
-      print('Upload body: ${response.body}');
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(response.body);
         return data['profile_picture_url'];
       } else {
-        throw Exception('Failed to upload image: ${response.statusCode}');
+        final errorBody = json.decode(response.body);
+        final errorMessage = errorBody['message'] ??
+            'Failed to upload image: ${response.statusCode}';
+        throw Exception(errorMessage);
       }
     } catch (e) {
-      print('Upload error: $e');
       throw Exception('Error uploading image: $e');
     }
   }
 
-  // Pick image from gallery or camera
   Future<File?> pickImage({required ImageSource source}) async {
     try {
       final ImagePicker picker = ImagePicker();
@@ -227,60 +229,38 @@ class ProfileService {
     }
   }
 
-  Future<Map<String, dynamic>?> getCurrentUserForComments() async {
+  Future<ProfileModel?> getCurrentUserForComments() async {
     try {
       final token = await SecureStorage.getToken();
       if (token == null) return null;
 
       final response = await _client.get(
-        Uri.parse('$baseUrl/account/settings'),
+        Uri.parse('$_baseUrl/account/settings'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
+          'Authorization': 'Bearer $token'
         },
-      ).timeout(Duration(seconds: 8));
-
-      print(
-          '👤 Get current user for comments - Status: ${response.statusCode}');
+      ).timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(response.body);
-
-        // Extract user info yang dibutuhkan comment section
-        final userInfo = {
-          'username': data['username'] ?? '',
-          'profile_picture_url': data['profile_picture_url'] ?? '',
-          'full_name': data['full_name'] ?? '',
-          'email': data['email'] ?? '',
-        };
-
-        // ✅ Save ke storage untuk cache
-        await _saveUserDataToStorage(userInfo);
-
-        return userInfo;
+        final profile = ProfileModel.fromJson(data);
+        await _saveUserDataToStorage(profile);
+        return profile;
       } else {
-        print('❌ Failed to get current user: ${response.statusCode}');
         return null;
       }
     } catch (e) {
-      print('❌ Error getting current user for comments: $e');
       return null;
     }
   }
 
-  // ✅ Helper method untuk save ke storage
-  Future<void> _saveUserDataToStorage(Map<String, dynamic> userInfo) async {
-    try {
-      await Future.wait([
-        SecureStorage.saveUsername(userInfo['username'] ?? ''),
-        SecureStorage.saveProfilePicture(userInfo['profile_picture_url'] ?? ''),
-        if (userInfo['full_name'] != null)
-          SecureStorage.saveFullName(userInfo['full_name']),
-      ]);
-      print('✅ User data cached to storage');
-    } catch (e) {
-      print('⚠️ Failed to cache user data: $e');
-    }
+  Future<void> _saveUserDataToStorage(ProfileModel profile) async {
+    await Future.wait([
+      SecureStorage.saveUsername(profile.username),
+      SecureStorage.saveProfilePicture(profile.profilePictureUrl),
+      SecureStorage.saveFullName(profile.fullName),
+    ]);
   }
 
   void dispose() {
