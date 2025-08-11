@@ -100,7 +100,7 @@ class FeedController extends ChangeNotifier {
           final likes = await LikeService().getLikes(postId);
           likeCounts[postId] = likes.length;
           likedPosts[postId] = likes.any(
-            (like) => like['user_id'] == currentUserId,
+            (like) => like.user.id == currentUserId,
           );
         } catch (e) {
           print("Error loading likes for post $postId: $e");

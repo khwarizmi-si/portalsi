@@ -1,6 +1,6 @@
 // widgets/comment_header_widget.dart
 import 'package:flutter/material.dart';
-import '../models/comment.dart';
+import '../models/comment_model.dart';
 import '../utils/comment_utils.dart';
 
 class CommentHeaderWidget extends StatelessWidget {

@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.example.portal_si"
 
-    compileSdk = 35
+    compileSdk =  36
 
 
 
@@ -28,7 +28,7 @@ android {
         applicationId = "com.example.portal_si"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = 23       
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

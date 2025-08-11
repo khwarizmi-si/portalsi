@@ -1,16 +1,13 @@
-// widgets/comment_section.dart
+// lib/widgets/comment_section.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:portal_si/services/user_service.dart';
-import 'package:portal_si/utils/secure_storage.dart';
-import '../services/comment_service.dart';
-import '../models/comment.dart';
+import 'package:provider/provider.dart';
+import '../controllers/comment_controller.dart';
+import '../models/comment_model.dart';
+import '../models/user_model.dart';
 import '../utils/comment_utils.dart';
-import 'comment_header_widget.dart';
-import 'comment_list_widget.dart';
-import 'comment_input_widget.dart';
 
-class CommentSection extends StatefulWidget {
+// Widget utama yang dipanggil oleh showModalBottomSheet
+class CommentSection extends StatelessWidget {
   final ScrollController? scrollController;
   final int postId;
   final VoidCallback? onCommentAdded;
@@ -23,303 +20,331 @@ class CommentSection extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<CommentSection> createState() => _CommentSectionState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => CommentController(postId: postId),
+      // Gunakan Material agar semua komponennya (seperti TextField) berfungsi normal
+      child: Material(
+        color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        child: Consumer<CommentController>(
+          builder: (context, controller, _) {
+            // Gunakan Scaffold untuk struktur header, body, dan input yang kokoh.
+            return Scaffold(
+              backgroundColor: Colors.transparent,
+              appBar: _CommentAppBar(controller: controller),
+              body: _CommentList(
+                controller: controller,
+                scrollController: scrollController,
+              ),
+              // Pin input field ke bagian bawah dan membuatnya keyboard-aware.
+              bottomNavigationBar: _CommentInput(
+                controller: controller,
+                onCommentAdded: onCommentAdded,
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
 }
 
-class _CommentSectionState extends State<CommentSection> {
-  final CommentService _commentService = CommentService();
-  final ProfileService _profileService = ProfileService(); // Gunakan singleton
-  String _currentUserName = '';
-  String _currentUserAvatar = '';
-  List<Comment> _comments = [];
-  bool _hasError = false;
-  bool _isLoading = true;
-  String? _errorMessage;
+// -----------------------------------------------------------------------------
+// WIDGET-WIDGET INTERNAL UNTUK MEMBANGUN UI
+// -----------------------------------------------------------------------------
+
+/// **AppBar Khusus untuk Panel Komentar**
+class _CommentAppBar extends StatelessWidget implements PreferredSizeWidget {
+  final CommentController controller;
+  const _CommentAppBar({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return AppBar(
+      backgroundColor: Colors.white,
+      elevation: 0,
+      automaticallyImplyLeading: false, // Hilangkan tombol back otomatis
+      centerTitle: true,
+      title: Column(
+        children: [
+          // Drag Handle
+          Container(
+            width: 40,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const Text(
+            'Komentar',
+            style: TextStyle(
+              color: Colors.black87,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+      shape: Border(
+        bottom: BorderSide(color: Colors.grey[200]!, width: 1.0),
+      ),
+    );
+  }
+
+  @override
+  Size get preferredSize => const Size.fromHeight(56.0);
+}
+
+/// **Widget untuk Menampilkan Daftar Komentar**
+class _CommentList extends StatelessWidget {
+  final CommentController controller;
+  final ScrollController? scrollController;
+
+  const _CommentList({required this.controller, this.scrollController});
+
+  @override
+  Widget build(BuildContext context) {
+    if (controller.isLoading) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 3));
+    }
+
+    if (controller.errorMessage != null) {
+      return Center(child: Text(controller.errorMessage!));
+    }
+
+    if (controller.comments.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.chat_bubble_outline, size: 48, color: Colors.grey),
+            SizedBox(height: 16),
+            Text('Belum ada komentar',
+                style: TextStyle(fontSize: 16, color: Colors.grey)),
+            Text('Jadilah yang pertama berkomentar!',
+                style: TextStyle(color: Colors.grey)),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      controller: scrollController,
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      itemCount: controller.comments.length,
+      itemBuilder: (context, index) {
+        final comment = controller.comments[index];
+        return _CommentItem(comment: comment);
+      },
+    );
+  }
+}
+
+/// **Widget untuk Menampilkan Satu Item Komentar**
+class _CommentItem extends StatelessWidget {
+  final Comment comment;
+  const _CommentItem({required this.comment});
+
+  @override
+  Widget build(BuildContext context) {
+    final isTemporary = CommentUtils.isTemporary(comment);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Avatar
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: Colors.grey[200],
+            backgroundImage: comment.profilePictureUrl != null &&
+                    comment.profilePictureUrl!.isNotEmpty
+                ? NetworkImage(comment.profilePictureUrl!)
+                : null,
+            child: comment.profilePictureUrl == null ||
+                    comment.profilePictureUrl!.isEmpty
+                ? Text(comment.username[0].toUpperCase(),
+                    style: const TextStyle(fontWeight: FontWeight.bold))
+                : null,
+          ),
+          const SizedBox(width: 12),
+          // Konten Komentar
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Gunakan RichText untuk style username yang berbeda.
+                RichText(
+                  text: TextSpan(
+                    style: const TextStyle(fontSize: 13, color: Colors.black87),
+                    children: [
+                      TextSpan(
+                        text: '${comment.username} ',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      TextSpan(
+                        text: comment.content,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Text(
+                      CommentUtils.timeAgo(comment.createdAt),
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                    const SizedBox(width: 16),
+                    Text(
+                      'Balas',
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Tombol Like
+          Column(
+            children: [
+              Icon(
+                comment.liked ? Icons.favorite : Icons.favorite_border,
+                color: comment.liked ? Colors.red : Colors.grey,
+                size: 16,
+              ),
+              if (comment.likes > 0) ...[
+                const SizedBox(height: 2),
+                Text(comment.likes.toString(),
+                    style: const TextStyle(fontSize: 11, color: Colors.grey))
+              ]
+            ],
+          )
+        ],
+      ),
+    );
+  }
+}
+
+/// **Widget untuk Input Komentar di Bagian Bawah**
+class _CommentInput extends StatefulWidget {
+  final CommentController controller;
+  final VoidCallback? onCommentAdded;
+
+  const _CommentInput({required this.controller, this.onCommentAdded});
+
+  @override
+  State<_CommentInput> createState() => _CommentInputState();
+}
+
+class _CommentInputState extends State<_CommentInput> {
+  final TextEditingController _textController = TextEditingController();
+  bool _canPost = false;
 
   @override
   void initState() {
     super.initState();
-    _loadInitialData(); // Gabungkan dua load awal
-  }
-
-  // Gabungkan dua fungsi load awal menjadi satu
-  Future<void> _loadInitialData() async {
-    await Future.wait([
-      _loadCurrentUserData(),
-      _loadCommentsInBackground(),
-    ]);
-  }
-
-  Future<void> _loadCurrentUserData() async {
-    try {
-      // 1. Coba ambil dari SecureStorage dulu
-      String? username = await SecureStorage.getUsername();
-      String? profilePicture = await SecureStorage.getProfilePicture();
-
-      // 2. Jika tidak ada di storage, ambil dari API
-      if (username == null || profilePicture == null) {
-        final profile = await _profileService.getCurrentUserForComments();
-        if (profile != null) {
-          username = profile.username;
-          profilePicture = profile.profilePictureUrl;
-        }
-      }
-
-      // 3. Update UI dengan data yang valid
-      if (mounted) {
-        setState(() {
-          _currentUserName = username ?? 'Anda';
-          _currentUserAvatar = profilePicture ?? '';
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _currentUserName = 'Anda';
-          _currentUserAvatar = '';
-        });
-      }
-    }
-  }
-
-  Future<void> _loadCommentsInBackground() async {
-    try {
-      final data = await _commentService.getComments(widget.postId);
-      final comments = data.map((item) => Comment.fromJson(item)).toList();
-
-      if (mounted) {
-        setState(() {
-          _comments = CommentUtils.sortCommentsByDate(comments);
-          _hasError = false;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _hasError = true;
-          _errorMessage = 'Gagal memuat komentar';
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _handleCommentSubmit(String content) async {
-    // Optimistic update
-    final tempComment = CommentUtils.createTemporaryComment(
-      postId: widget.postId,
-      content: content,
-      username: _currentUserName,
-      profilePictureUrl: _currentUserAvatar,
-    );
-
-    setState(() {
-      _comments.insert(0, tempComment);
-      _comments = CommentUtils.sortCommentsByDate(_comments);
-    });
-
-    _scrollToTop();
-
-    try {
-      final success =
-          await _commentService.sendCommentOptimistic(widget.postId, content);
-
-      if (success) {
-        await _autoSyncAfterAdd();
-        widget.onCommentAdded?.call();
-        _showSuccessFeedback();
-      } else {
-        _rollbackComment(tempComment);
-        _showErrorSnackbar('Gagal mengirim komentar');
-      }
-    } catch (e) {
-      _rollbackComment(tempComment);
-      _showErrorSnackbar('Koneksi bermasalah, coba lagi');
-    }
-  }
-
-  Future<void> _autoSyncAfterAdd() async {
-    try {
-      final data = await _commentService.getComments(widget.postId);
-      final serverComments =
-          data.map((item) => Comment.fromJson(item)).toList();
-
-      if (mounted) {
-        setState(() {
-          _comments = CommentUtils.sortCommentsByDate(serverComments);
-          _hasError = false;
-        });
-      }
-    } catch (e) {
-      // Handle error sync, tapi jangan rollback UI
-      if (mounted) {
-        _showErrorSnackbar('Gagal sinkronisasi data terbaru');
-      }
-    }
-  }
-
-  void _scrollToTop() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.scrollController?.hasClients == true) {
-        widget.scrollController?.animateTo(
-          0,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
-        );
-      }
-    });
-  }
-
-  void _rollbackComment(Comment tempComment) {
-    if (mounted) {
+    _textController.addListener(() {
       setState(() {
-        _comments.removeWhere((comment) => comment.id == tempComment.id);
+        _canPost = _textController.text.trim().isNotEmpty;
       });
-    }
+    });
   }
 
-  void _showSuccessFeedback() {
-    if (mounted) {
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_canPost) return;
+
+    final content = _textController.text.trim();
+    _textController.clear();
+    FocusScope.of(context).unfocus(); // Tutup keyboard
+
+    final success = await widget.controller.submitComment(content);
+
+    if (success && mounted) {
+      widget.onCommentAdded?.call();
+    } else if (!success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              const Text('Komentar berhasil dikirim'),
-            ],
-          ),
-          backgroundColor: Colors.green[600],
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          content:
+              Text(widget.controller.errorMessage ?? 'Gagal mengirim komentar'),
+          backgroundColor: Colors.red,
         ),
       );
+      // Kembalikan teks jika gagal
+      _textController.text = content;
     }
-  }
-
-  void _showErrorSnackbar(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline, color: Colors.white, size: 20),
-              const SizedBox(width: 8),
-              Expanded(child: Text(message)),
-            ],
-          ),
-          backgroundColor: Colors.red[600],
-          duration: const Duration(seconds: 3),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          action: SnackBarAction(
-            label: 'Coba Lagi',
-            textColor: Colors.white,
-            onPressed: () {
-              ScaffoldMessenger.of(context).hideCurrentSnackBar();
-              _loadCommentsInBackground(); // Panggil ulang untuk memuat ulang
-            },
-          ),
-        ),
-      );
-    }
-  }
-
-  Future<void> _manualRefresh() async {
-    try {
-      HapticFeedback.lightImpact();
-      final data = await _commentService.getComments(widget.postId);
-      final comments = data.map((item) => Comment.fromJson(item)).toList();
-
-      if (mounted) {
-        setState(() {
-          _comments = CommentUtils.sortCommentsByDate(comments);
-          _hasError = false;
-          _errorMessage = null;
-        });
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Komentar diperbarui'),
-            duration: Duration(seconds: 1),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      _showErrorSnackbar('Gagal memperbarui komentar');
-    }
-  }
-
-  void _toggleLike(Comment comment) {
-    setState(() {
-      comment.liked = !comment.liked;
-      comment.likes += comment.liked ? 1 : -1;
-    });
-
-    HapticFeedback.lightImpact();
-    // TODO: Implementasi pengiriman ke server di background
-  }
-
-  void _handleRetry() {
-    setState(() {
-      _hasError = false;
-      _isLoading = true;
-    });
-    _loadCommentsInBackground();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      resizeToAvoidBottomInset: true,
-      body: Column(
-        children: [
-          const SizedBox(height: 12),
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[400],
-                borderRadius: BorderRadius.circular(2),
+    final User? currentUser = widget.controller.currentUser;
+    // Padding ini penting agar input field tidak tertutup oleh UI sistem (misal: gesture bar)
+    return Padding(
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: Colors.grey[200]!, width: 1.0)),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: Colors.grey[200],
+              backgroundImage: currentUser?.profilePictureUrl != null &&
+                      currentUser!.profilePictureUrl!.isNotEmpty
+                  ? NetworkImage(currentUser.profilePictureUrl!)
+                  : null,
+              child: currentUser?.profilePictureUrl == null ||
+                      currentUser!.profilePictureUrl!.isEmpty
+                  ? const Icon(Icons.person, size: 18)
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                controller: _textController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText:
+                      'Tambahkan komentar sebagai ${currentUser?.username ?? 'Anda'}...',
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                  isCollapsed: true,
+                ),
+                maxLines: null, // Agar bisa multiline
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          CommentHeaderWidget(
-            comments: _comments,
-            onRefresh: _manualRefresh,
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : CommentListWidget(
-                    comments: _comments,
-                    scrollController: widget.scrollController,
-                    onLikeToggle: _toggleLike,
-                    onRetry: _handleRetry,
-                    hasError: _hasError,
-                  ),
-          ),
-          CommentInputWidget(
-            currentUserName: _currentUserName,
-            currentUserAvatar: _currentUserAvatar,
-            onCommentSubmit: _handleCommentSubmit,
-          ),
-        ],
+            const SizedBox(width: 12),
+            // Tombol 'Post' hanya aktif jika ada teks.
+            TextButton(
+              onPressed: _canPost ? _submit : null,
+              child: Text(
+                'Post',
+                style: TextStyle(
+                  color: _canPost ? Colors.blue : Colors.grey[400],
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

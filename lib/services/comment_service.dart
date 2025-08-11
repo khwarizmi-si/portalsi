@@ -1,240 +1,92 @@
+// lib/services/comment_service.dart
+import 'api_service.dart';
+import '../models/comment_model.dart';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import '../utils/secure_storage.dart';
 
-class CommentService {
-  final baseUrl = 'https://api.portalsi.com/api';
+class CommentService extends ApiService {
+  // Singleton Pattern
+  CommentService._internal();
+  static final CommentService _instance = CommentService._internal();
+  factory CommentService() => _instance;
 
-  // Cache untuk mengurangi request berulang
-  static final Map<int, List<dynamic>> _cache = {};
-  static final Map<int, DateTime> _cacheTime = {};
+  // Logika cache Anda yang canggih tetap ada di sini.
+  final Map<int, List<Comment>> _cache = {};
+  final Map<int, DateTime> _cacheTime = {};
   static const Duration _cacheExpiration = Duration(minutes: 2);
 
-  Future<List<dynamic>> getComments(int postId) async {
-    try {
-      // ✅ 1. INSTANT return cache jika ada (tidak peduli expired)
-      if (_cache.containsKey(postId)) {
-        final cachedTime = _cacheTime[postId];
-        final now = DateTime.now();
-
-        if (cachedTime != null &&
-            now.difference(cachedTime) < _cacheExpiration) {
-          if (kDebugMode) print('📱 Using fresh cache for post $postId');
-          return _cache[postId]!;
-        } else {
-          if (kDebugMode) print('⚠️ Cache expired for post $postId');
-          // lanjut fetch baru di bawah
-        }
-      }
-
-      final token = await SecureStorage.getToken();
-      if (token == null || token.isEmpty) {
-        throw Exception('Token tidak ditemukan');
-      }
-
-      // ✅ 2. Request dengan timeout yang lebih pendek
-      final res = await http.get(
-        Uri.parse('$baseUrl/posts/$postId/comments'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      ).timeout(Duration(seconds: 8)); // Timeout lebih cepat
-
-      if (res.statusCode == 200) {
-        final decoded = jsonDecode(res.body);
-        List<dynamic> comments = [];
-
-        // Parse response dengan cepat
-        if (decoded is List) {
-          comments = decoded;
-        } else if (decoded is Map) {
-          if (decoded.containsKey('data') && decoded['data'] is List) {
-            comments = decoded['data'];
-          } else if (decoded.containsKey('comments') &&
-              decoded['comments'] is List) {
-            comments = decoded['comments'];
-          }
-        }
-
-        // ✅ 3. Simpan ke cache
-        _cache[postId] = comments;
-        _cacheTime[postId] = DateTime.now();
-
-        return comments;
-      } else {
-        throw Exception('HTTP ${res.statusCode}');
-      }
-    } catch (e) {
-      // ✅ 4. Jika error, return cache lama jika ada
-      if (_cache.containsKey(postId)) {
-        print('⚠️ Using stale cache due to error: $e');
+  /// Mengambil comment, dengan mekanisme cache.
+  Future<List<Comment>> getComments(int postId) async {
+    if (_cache.containsKey(postId)) {
+      final isCacheValid = _cacheTime[postId]
+              ?.isAfter(DateTime.now().subtract(_cacheExpiration)) ??
+          false;
+      if (isCacheValid) {
+        if (kDebugMode)
+          print('💬 Menggunakan cache komentar untuk post $postId');
         return _cache[postId]!;
       }
-      rethrow;
     }
-  }
 
-  // ✅ Fire-and-forget add comment (tidak menunggu response)
-  Future<bool> sendCommentOptimistic(int postId, String content) async {
     try {
-      final token = await SecureStorage.getToken();
-      if (token == null || token.isEmpty) return false;
+      final Map<String, dynamic> data = await get('posts/$postId/comments');
+      final List<dynamic> commentList =
+          data['comments'] ?? []; // Pastikan aman dari null
+      final comments =
+          commentList.map((item) => Comment.fromJson(item)).toList();
 
-      // Kirim request tanpa timeout lama
-      final future = http
-          .post(
-            Uri.parse('$baseUrl/posts/$postId/comments'),
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode({'content': content}),
-          )
-          .timeout(Duration(seconds: 10));
-
-      // ✅ Jangan tunggu response, langsung return true
-      // Response akan dihandle di background
-      future.then((res) {
-        if (res.statusCode == 201 || res.statusCode == 200) {
-          print('✅ Comment added successfully');
-          // Clear cache agar refresh berikutnya ambil data terbaru
-          _cache.remove(postId);
-          _cacheTime.remove(postId);
-        } else {
-          print('❌ Failed to add comment: ${res.statusCode}');
-        }
-      }).catchError((e) {
-        print('❌ Error adding comment: $e');
-      });
-
-      return true; // Optimistic return
+      // Simpan ke cache setelah berhasil fetch
+      _cache[postId] = comments;
+      _cacheTime[postId] = DateTime.now();
+      return comments;
     } catch (e) {
-      print('❌ Exception in addComment: $e');
-      return false;
-    }
-  }
-
-  // ✅ Update cache di background tanpa mengganggu UI
-  Future<void> _updateCacheInBackground(int postId) async {
-    try {
-      final token = await SecureStorage.getToken();
-      if (token == null) return;
-
-      final res = await http.get(
-        Uri.parse('$baseUrl/posts/$postId/comments'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      ).timeout(Duration(seconds: 8));
-
-      if (res.statusCode == 200) {
-        final decoded = jsonDecode(res.body);
-        List<dynamic> comments = [];
-
-        if (decoded is List) {
-          comments = decoded;
-        } else if (decoded is Map) {
-          if (decoded.containsKey('data') && decoded['data'] is List) {
-            comments = decoded['data'];
-          } else if (decoded.containsKey('comments') &&
-              decoded['comments'] is List) {
-            comments = decoded['comments'];
-          }
-        }
-
-        // Update cache dengan data terbaru
-        _cache[postId] = comments;
-        _cacheTime[postId] = DateTime.now();
-
-        print('🔄 Background cache update completed for post $postId');
+      // Jika request gagal tapi ada cache lama (stale), kembalikan cache lama.
+      if (_cache.containsKey(postId)) {
+        if (kDebugMode)
+          print('⚠️ Request gagal, menggunakan cache lama untuk post $postId');
+        return _cache[postId]!;
       }
-    } catch (e) {
-      print('⚠️ Background cache update failed: $e');
-      // Tidak throw error karena ini background operation
+      rethrow; // Jika tidak ada cache sama sekali, lemparkan error.
     }
   }
 
+  /// Mengirim komentar (optimistic, fire-and-forget).
+  Future<bool> addComment(int postId, String content) async {
+    // Langsung return true untuk UI yang responsif.
+    // Proses pengiriman terjadi di background.
+    post('posts/$postId/comments', body: {'content': content}).then((_) {
+      // Jika sukses, hapus cache agar data berikutnya fresh.
+      clearCache(postId);
+      if (kDebugMode) print('✅ Komentar berhasil dikirim untuk post $postId');
+    }).catchError((error) {
+      if (kDebugMode)
+        print('❌ Gagal mengirim komentar untuk post $postId: $error');
+      // Di sini bisa ditambahkan logika untuk notifikasi kegagalan ke user.
+    });
+    return true;
+  }
+
+  /// Memperbarui komentar.
   Future<bool> editComment(int commentId, String newContent) async {
-    try {
-      final token = await SecureStorage.getToken();
-      if (token == null) return false;
-
-      final res = await http
-          .put(
-            Uri.parse('$baseUrl/comments/$commentId'),
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'application/json',
-            },
-            body: jsonEncode({'content': newContent}),
-          )
-          .timeout(Duration(seconds: 8));
-
-      final success = res.statusCode == 200;
-
-      if (success) {
-        // Clear all cache karena comment bisa ada di berbagai post
-        _cache.clear();
-        _cacheTime.clear();
-      }
-
-      return success;
-    } catch (e) {
-      print('Error editing comment: $e');
-      return false;
-    }
+    await put('comments/$commentId', body: {'content': newContent});
+    clearCache(); // Hapus semua cache karena kita tidak tahu post mana yg terpengaruh.
+    return true;
   }
 
+  /// Menghapus komentar.
   Future<bool> deleteComment(int commentId) async {
-    try {
-      final token = await SecureStorage.getToken();
-      if (token == null) return false;
-
-      final res = await http.delete(
-        Uri.parse('$baseUrl/comments/$commentId'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      ).timeout(Duration(seconds: 8));
-
-      final success = res.statusCode == 200 || res.statusCode == 204;
-
-      if (success) {
-        // Clear all cache
-        _cache.clear();
-        _cacheTime.clear();
-      }
-
-      return success;
-    } catch (e) {
-      print('Error deleting comment: $e');
-      return false;
-    }
+    await delete('comments/$commentId');
+    clearCache();
+    return true;
   }
 
-  // ✅ Utility untuk clear cache manual
-  static void clearCache([int? postId]) {
+  /// Utility untuk membersihkan cache secara manual.
+  void clearCache([int? postId]) {
     if (postId != null) {
       _cache.remove(postId);
       _cacheTime.remove(postId);
     } else {
       _cache.clear();
       _cacheTime.clear();
-    }
-  }
-
-  // ✅ Utility untuk preload comments (bisa dipanggil dari homepage)
-  static Future<void> preloadComments(int postId) async {
-    final service = CommentService();
-    try {
-      await service.getComments(postId);
-      print('📱 Preloaded comments for post $postId');
-    } catch (e) {
-      print('⚠️ Failed to preload comments: $e');
     }
   }
 }

@@ -1,611 +1,136 @@
+// lib/pages/home_page.dart
 import 'package:flutter/material.dart';
-import 'package:portal_si/pages/post_detail_page.dart';
-import 'package:portal_si/pages/profile_page.dart';
-import '../components/story_section.dart';
-import '../components/post_card.dart';
-import '../components/bottom_navigation.dart';
 import 'package:flutter/services.dart';
-import 'package:portal_si/services/post_service.dart';
-import 'package:portal_si/services/like_service.dart';
+import 'package:portal_si/components/post_card.dart';
+import 'package:portal_si/components/story_section.dart';
+import 'package:portal_si/widgets/comment_section.dart';
+import 'package:provider/provider.dart';
+import '../controllers/home_controller.dart';
+import '../models/post_model.dart';
+import '../components/bottom_navigation.dart';
 import '../helper/time_helper.dart';
-import '../utils/secure_storage.dart';
-import 'other_profile_page.dart';
-import 'message_list_page.dart';
-import '../services/comment_service.dart';
+import '../utils/navigation_helper.dart';
 
 class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
   @override
-  _HomePageState createState() => _HomePageState();
+  State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
-  int _selectedIndex = 0;
-  late AnimationController _refreshController;
-  late Animation<double> _refreshAnimation;
+class _HomePageState extends State<HomePage> {
   final ScrollController _scrollController = ScrollController();
-  bool _isScrolled = false;
-  List<dynamic> _posts = [];
-  bool _isLoading = true;
-  final Map<int, int> _likeCounts = {};
-  final Map<int, bool> _likedPosts = {};
-  final Map<int, int> _commentCounts = {};
-  final CommentService _commentService =
-      CommentService(); // Import CommentService
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchPosts();
-    _initializeAnimations();
-    _setupScrollListener();
-  }
-
-  /// Fetch posts from API
-  Future<void> _fetchPosts() async {
-    try {
-      final posts = await PostService().fetchAllPosts();
-      if (mounted) {
-        setState(() {
-          _posts = posts;
-          _isLoading = false;
-        });
-
-        // ✅ Load likes dan comments count
-        await Future.wait([
-          loadLikesForPosts(posts),
-          loadCommentsForPosts(posts), // ✅ TAMBAHAN INI
-        ]);
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        _showErrorMessage('Failed to load posts. Please try again.');
-      }
-    }
-  }
-
-  // ✅ FUNGSI BARU: Load comments count untuk semua posts
-  Future<void> loadCommentsForPosts(List<dynamic> posts) async {
-    await Future.wait(
-      posts.map((post) async {
-        final postId = int.tryParse(post['post_id'].toString());
-        if (postId == null) return;
-
-        try {
-          final comments = await _commentService.getComments(postId);
-          _commentCounts[postId] = comments.length;
-        } catch (e) {
-          _commentCounts[postId] = 0;
-        }
-      }),
-    );
-    setState(() {});
-  }
-
-  // ✅ FUNGSI UNTUK REFRESH COMMENTS COUNT SETELAH ADD COMMENT
-  Future<void> refreshCommentsCount(int postId) async {
-    try {
-      final comments = await _commentService.getComments(postId);
-      setState(() {
-        _commentCounts[postId] = comments.length;
-      });
-      print('🔄 Refreshed comments count for post $postId: ${comments.length}');
-    } catch (e) {
-      print('Error refreshing comments count: $e');
-    }
-  }
-
-  /// Fetch posts from API
-
-  Future<void> loadLikesForPosts(List<dynamic> posts) async {
-    final currentUserId = await SecureStorage.getUserId(); // ✅ cukup sekali
-    await Future.wait(
-      posts.map((post) async {
-        final postId = int.tryParse(post['post_id'].toString());
-        if (postId == null) return;
-
-        try {
-          final likes = await LikeService().getLikes(postId);
-          _likeCounts[postId] = likes.length;
-
-          _likedPosts[postId] = likes.any(
-            (like) => like['user_id'] == currentUserId,
-          );
-        } catch (e) {
-          print("Error loading likes for post $postId: $e");
-          _likeCounts[postId] = 0;
-          _likedPosts[postId] = false;
-        }
-      }),
-    );
-
-    setState(() {});
-  }
-
-  Future<void> _onLikePost(Map post, int index) async {
-    final postId = int.tryParse(post['post_id'].toString())!;
-    final currentLiked = _likedPosts[postId] ?? false;
-
-    // ✅ 1. Optimistic update langsung
-    setState(() {
-      _likedPosts[postId] = !currentLiked;
-      _likeCounts[postId] =
-          (_likeCounts[postId] ?? 0) + (currentLiked ? -1 : 1);
-    });
-
-    // ✅ 2. Kirim permintaan ke server di belakang
-    final success = await LikeService().toggleLike(postId);
-
-    // ❌ 3. Kalau gagal, rollback (opsional)
-    if (!success) {
-      // rollback perubahan UI kalau gagal
-      setState(() {
-        _likedPosts[postId] = currentLiked;
-        _likeCounts[postId] =
-            (_likeCounts[postId] ?? 0) + (currentLiked ? 1 : -1);
-      });
-      print('Gagal mengirim like ke server');
-    }
-  }
-
-  /// Initialize animation controllers and animations
-  void _initializeAnimations() {
-    _refreshController = AnimationController(
-      duration: Duration(milliseconds: 800),
-      vsync: this,
-    );
-
-    _refreshAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _refreshController, curve: Curves.easeInOut),
-    );
-  }
-
-  /// Setup scroll listener for app bar shadow effect
-  void _setupScrollListener() {
-    _scrollController.addListener(() {
-      final isScrolled = _scrollController.offset > 10;
-      if (isScrolled != _isScrolled) {
-        setState(() {
-          _isScrolled = isScrolled;
-        });
-      }
-    });
-  }
-
-  /// Show error message to user
-  void _showErrorMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red.shade400,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: EdgeInsets.all(16),
-      ),
-    );
-  }
 
   @override
   void dispose() {
-    _refreshController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  /// Handle bottom navigation tap
-  void _onBottomNavTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-
-    HapticFeedback.lightImpact();
-
-    // Scroll to top when home tab is tapped
-    if (index == 0 && _scrollController.hasClients) {
-      _scrollController.animateTo(
-        0,
-        duration: Duration(milliseconds: 500),
-        curve: Curves.easeOutCubic,
-      );
-    }
-  }
-
-  /// Handle pull to refresh
-  Future<void> _onRefresh() async {
-    _refreshController.forward();
-
-    try {
-      await _fetchPosts();
-      HapticFeedback.mediumImpact();
-    } catch (e) {
-      _showErrorMessage('Failed to refresh posts');
-    } finally {
-      await Future.delayed(Duration(milliseconds: 500));
-      _refreshController.reverse();
-    }
-  }
-
-  /// Show comment section as bottom sheet
-  void _showCommentSection(dynamic post) {
-    HapticFeedback.lightImpact();
-
+  void _showCommentSheet(BuildContext context, int postId) {
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true,
+      isScrollControlled: true, // Penting agar sheet bisa tinggi
       backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        builder: (context, scrollController) => Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 10,
-                offset: Offset(0, -5),
-              ),
-            ],
-          ),
-          child: CommentSection(
-            scrollController: scrollController,
-            postId: int.tryParse(post['post_id'].toString()) ?? 0,
-          ),
-        ),
-      ),
+      builder: (context) {
+        return SizedBox(
+          // Batasi tinggi sheet maksimal 90% layar
+          height: MediaQuery.of(context).size.height * 0.9,
+          child: CommentSection(postId: postId),
+        );
+      },
     );
-  }
-
-  /// Handle like action
-
-  /// Handle bookmark action
-  void _onBookmarkPost(dynamic post, int index) {
-    HapticFeedback.lightImpact();
-    // TODO: Implement bookmark functionality
-    setState(() {
-      _posts[index]['is_bookmarked'] =
-          !(_posts[index]['is_bookmarked'] ?? false);
-    });
-  }
-
-  /// Handle share action
-  void _onSharePost(dynamic post) {
-    HapticFeedback.lightImpact();
-    // TODO: Implement share functionality
-    _showErrorMessage('Share functionality coming soon!');
   }
 
   @override
   Widget build(BuildContext context) {
-    // HAPUS BARIS INI: _setSystemUIOverlayStyle();
-
-
-    // NEW: Bungkus widget utama Anda dengan AnnotatedRegion
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
-        // Atur warna background Navigation Bar agar sama dengan background Scaffold
-        systemNavigationBarColor: Color(0xFFFAFAFA),
-
-        // KARENA background terang, ikon navigasi harus GELAP agar terlihat
-        systemNavigationBarIconBrightness: Brightness.dark,
-
-        // Optional: Atur status bar di bagian atas
-        // Kita buat transparan agar warna AppBar yang menentukannya
-        statusBarColor: Colors.transparent,
-
-        // Ikon di status bar (jam, sinyal) juga kita buat GELAP
-        // karena biasanya AppBar di tema terang berwarna terang juga.
-        statusBarIconBrightness: Brightness.dark,
-      ),
-      child: PopScope(
-        canPop: false,
-        onPopInvoked: (didPop) {
-          if (!didPop) {
-            SystemNavigator.pop(); // atau exit(0)
-          }
-        },
+    return ChangeNotifierProvider(
+      create: (_) => HomeController(),
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              Color(0xFFFFF0D0), // peach lembut di kiri
+              Color(0xFFFFFFFF), // putih di tengah
+              Color(0xFFDFFEF8), // mint lembut di kanan
+            ],
+            stops: [0.0, 0.5, 1.0],
+          ),
+        ),
         child: Scaffold(
-          backgroundColor: const Color(0xFFFAFAFA),
-          extendBodyBehindAppBar: false,
-          appBar: _buildAppBar(), // Asumsi _buildAppBar() mengembalikan sebuah AppBar
-          body: _buildBody(),     // Asumsi _buildBody() mengembalikan body
+          backgroundColor: Colors
+              .transparent, // biar gradient container yang keliatan, bukan warna Scaffold
+          appBar: _buildAppBar(),
+          body: Consumer<HomeController>(
+            builder: (context, controller, _) {
+              return _buildBody(context, controller);
+            },
+          ),
           bottomNavigationBar: CustomBottomNavigation(
-            selectedIndex: _selectedIndex, // Asumsi _selectedIndex adalah state
-            onTap: _onBottomNavTapped,     // Asumsi _onBottomNavTapped adalah fungsi
+            selectedIndex: 0,
+            onTap: (index) {/* Logika Navigasi */},
           ),
-
         ),
       ),
     );
   }
 
-  /// Set system UI overlay style
-  void _setSystemUIOverlayStyle() {
-    SystemChrome.setSystemUIOverlayStyle(
-      SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
-        systemNavigationBarColor: Colors.white,
-        systemNavigationBarIconBrightness: Brightness.dark,
-      ),
-    );
-  }
-
-  /// Build app bar with scroll animation
   PreferredSizeWidget _buildAppBar() {
-    return PreferredSize(
-      preferredSize: Size.fromHeight(kToolbarHeight),
-      child: AnimatedContainer(
-        duration: Duration(milliseconds: 300),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: _isScrolled
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 12,
-                    offset: Offset(0, 2),
-                  ),
-                ]
-              : [],
-        ),
-        child: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          systemOverlayStyle: SystemUiOverlayStyle.dark,
-          title: AnimatedDefaultTextStyle(
-            duration: Duration(milliseconds: 300),
-            style: TextStyle(
-              color: Colors.black87,
-              fontSize: _isScrolled ? 18 : 20,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.5,
-            ),
-            child: Text('Portal SI'),
-          ),
-          actions: [
-            IconButton(
-              icon: Container(
-                padding: EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.chat_bubble_outline_rounded,
-                  color: Colors.grey.shade700,
-                  size: 20,
-                ),
-              ),
-              onPressed: () {
-                HapticFeedback.lightImpact();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => MessageListPage()),
-                );
-              },
-            ),
-            SizedBox(width: 12),
-          ],
-        ),
-      ),
-    );
+    // Implementasi AppBar Anda di sini
+    return AppBar(title: const Text('Portal SI'));
   }
 
-  /// Build main body content
-  Widget _buildBody() {
-    if (_isLoading) {
-      return _buildLoadingState();
+  Widget _buildBody(BuildContext context, HomeController controller) {
+    if (controller.isLoading) {
+      return const Center(child: CircularProgressIndicator());
     }
 
-    if (_posts.isEmpty) {
-      return _buildEmptyState();
+    if (controller.errorMessage != null) {
+      return Center(child: Text('Error: ${controller.errorMessage}'));
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            Color(0xFFFFF0D0), // peach lembut di kiri
-            Color(0xFFFFFFFF), // putih di tengah
-            Color(0xFFDFFEF8), // mint lembut di kanan
-          ],
-          stops: [0.0, 0.5, 1.0],
-        ),
-      ),
-      child: RefreshIndicator(
-        onRefresh: _onRefresh,
-        color: Colors.deepOrangeAccent,
-        backgroundColor: Colors.white,
-        strokeWidth: 2.5,
-        displacement: 40,
-        child: CustomScrollView(
-          controller: _scrollController,
-          physics: BouncingScrollPhysics(),
-          slivers: [_buildStorySection(), _buildPostsList()],
-        ),
-      ),
-    );
-  }
+    if (controller.posts.isEmpty) {
+      return const Center(child: Text('Tidak ada post untuk ditampilkan.'));
+    }
 
-  /// Build loading state
-  Widget _buildLoadingState() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFFFF8F0), Colors.white, Color(0xFFF0FDFA)],
-        ),
-      ),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(
-                Colors.deepOrangeAccent,
-              ),
-              strokeWidth: 3,
-            ),
-            SizedBox(height: 16),
-            Text(
-              'Loading posts...',
-              style: TextStyle(
-                color: Colors.grey.shade600,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Build empty state
-  Widget _buildEmptyState() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            Color(0xFFFFF0D0), // peach lembut di kiri
-            Color(0xFFFFFFFF), // putih di tengah
-            Color(0xFFDFFEF8), // mint lembut di kanan
-          ],
-          stops: [0.0, 0.5, 1.0], // posisi transisi warna
-        ),
-      ),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.post_add_outlined,
-              size: 64,
-              color: Colors.grey.shade400,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No posts yet',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Pull to refresh or check back later',
-              style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Build story section with animation
-  Widget _buildStorySection() {
-    return SliverToBoxAdapter(
-      child: AnimatedBuilder(
-        animation: _refreshAnimation,
-        builder: (context, child) {
-          return Transform.translate(
-            offset: Offset(0, -30 * _refreshAnimation.value),
-            child: Opacity(
-              opacity: 1 - (_refreshAnimation.value * 0.4),
-              child: Container(
-                margin: EdgeInsets.only(bottom: 12),
-                child: StorySection(),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  /// Build posts list
-
-  Widget _buildPostsList() {
-    return SliverList(
-      delegate: SliverChildBuilderDelegate((context, index) {
-        final post = _posts[index];
-        final postId = int.tryParse(post['post_id'].toString()) ?? 0;
-
-        return _buildAnimatedPost(
-          delay: index * 100,
-          post: Container(
-            margin: EdgeInsets.only(bottom: 16),
-            child: PostCard(
-              username: post['user']['username'] ?? 'Unknown',
-              timeAgo: timeAgoFromDate(post['created_at']),
-              imageUrl: post['media_url'] ?? '',
-              likes: _likeCounts[postId] ?? 0,
-
-              // ✅ COBA BERBAGAI SUMBER COMMENTS COUNT
-              comments: _commentCounts[postId] ??
-                  int.tryParse(post['comments_count']?.toString() ?? '0') ??
-                  0,
-
-              content: post['caption'] ?? '',
-              isVerified: post['user']['is_verified'] ?? false,
-              isLiked: _likedPosts[postId] ?? false,
-              isBookmarked: post['is_bookmarked'] ?? false,
-              profileImageUrl: post['user']['profile_picture_url'] ?? '',
-              user: post['user'],
-              onLike: () => _onLikePost(post, index),
-              onBookmark: () => _onBookmarkPost(post, index),
-              onShare: () => _onSharePost(post),
-              onComment: () => _showCommentSection(post),
-              postId: postId,
-              onProfileTap: () async {
-                final currentUserId = await SecureStorage.getUserId();
-                final tappedUserId = int.tryParse(
-                  post['user']['user_id'].toString(),
+    return RefreshIndicator(
+      onRefresh: () => controller.fetchPosts(isRefresh: true),
+      child: CustomScrollView(
+        controller: _scrollController,
+        slivers: [
+          const SliverToBoxAdapter(child: StorySection()),
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final Post post = controller.posts[index];
+                return PostCard(
+                  username: post.user.username,
+                  timeAgo: timeAgoFromDate(post.createdAt.toIso8601String()),
+                  imageUrl: post.mediaUrl ?? '',
+                  likes: post.likesCount,
+                  comments: post.commentsCount,
+                  content: post.caption ?? '',
+                  isVerified: post.user.isVerified,
+                  isLiked: post.isLikedByUser,
+                  isBookmarked: false, // Ganti dengan data asli jika ada
+                  profileImageUrl: post.user.profilePictureUrl ?? '',
+                  user: post.user.toJson(), // Kirim data user untuk navigasi
+                  onLike: () => controller.toggleLike(post.id),
+                  onBookmark: () {/* Panggil controller */},
+                  onShare: () {/* Panggil controller */},
+                  onComment: () => _showCommentSheet(context, post.id),
+                  postId: post.id,
+                  onProfileTap: () => NavigationHelper.navigateToProfile(
+                      context, post.user.toJson()),
                 );
-
-                if (tappedUserId == currentUserId) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => ProfilePage()),
-                  );
-                } else {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          OtherProfilePage(username: post['user']['username']),
-                    ),
-                  );
-                }
               },
+              childCount: controller.posts.length,
             ),
           ),
-        );
-      }, childCount: _posts.length),
-    );
-  }
-
-  /// Build animated post with smooth entrance animation
-  Widget _buildAnimatedPost({required int delay, required Widget post}) {
-    return TweenAnimationBuilder<double>(
-      duration: Duration(milliseconds: 800),
-      tween: Tween(begin: 0.0, end: 1.0),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, child) {
-        return Transform.translate(
-          offset: Offset(0, 30 * (1 - value)),
-          child: Opacity(opacity: value, child: post),
-        );
-      },
+        ],
+      ),
     );
   }
 }

@@ -15,7 +15,7 @@ class PostCard extends StatelessWidget {
   final VoidCallback onBookmark;
   final VoidCallback onShare;
   final VoidCallback onComment;
-  final String profileImageUrl;
+  final String? profileImageUrl;
   final Map<String, dynamic> user;
   final int postId;
   final VoidCallback? onProfileTap;
@@ -62,7 +62,7 @@ class PostCard extends StatelessWidget {
             child: PostHeader(
               username: username,
               timeAgo: timeAgo,
-              profileImageUrl: profileImageUrl,
+              profileImageUrl: profileImageUrl ?? '',
               isVerified: isVerified,
               user: user,
               onProfileTap: onProfileTap,

@@ -5,6 +5,7 @@ import 'package:portal_si/services/user_service.dart';
 class User extends ProfileModel {
   // Konstruktor mewarisi dari ProfileModel
   User({
+    required super.id,
     required super.username,
     required super.email,
     required super.fullName,

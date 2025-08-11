@@ -10,6 +10,7 @@ import '../utils/secure_storage.dart';
 // untuk menjaga kebersihan struktur.
 // Namun, jika ingin tetap di sini, pastikan kelas ini di atas ProfileService.
 class ProfileModel {
+  final int id;
   final String username;
   final String email;
   final String fullName;
@@ -18,6 +19,7 @@ class ProfileModel {
   final bool isVerified;
 
   ProfileModel({
+    required this.id,
     required this.username,
     required this.email,
     required this.fullName,
@@ -28,6 +30,7 @@ class ProfileModel {
 
   factory ProfileModel.fromJson(Map<String, dynamic> json) {
     return ProfileModel(
+      id: json['user_id'] ?? 0,
       username: json['username'] ?? '',
       email: json['email'] ?? '',
       fullName: json['full_name'] ?? '',
@@ -40,6 +43,7 @@ class ProfileModel {
   factory ProfileModel.fromAuthData(Map<String, dynamic> authData) {
     final userData = authData['user'] ?? {};
     return ProfileModel(
+      id: userData['user_id'] ?? 0,
       username: userData['username'] ?? '',
       email: userData['email'] ?? '',
       fullName: userData['full_name'] ?? '',
@@ -61,6 +65,7 @@ class ProfileModel {
   }
 
   ProfileModel copyWith({
+    int? id,
     String? username,
     String? email,
     String? fullName,
@@ -69,6 +74,7 @@ class ProfileModel {
     bool? isVerified,
   }) {
     return ProfileModel(
+      id: id ?? this.id,
       username: username ?? this.username,
       email: email ?? this.email,
       fullName: fullName ?? this.fullName,

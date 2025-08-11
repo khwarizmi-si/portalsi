@@ -123,6 +123,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
       // Create updated profile
       final updatedProfile = ProfileModel(
+        id: _currentProfile!.id,
         username: _usernameController.text.trim(),
         email: _emailController.text.trim(),
         fullName: _fullNameController.text.trim(),
@@ -187,35 +188,37 @@ class _EditProfilePageState extends State<EditProfilePage> {
       child: Stack(
         children: [
           CircleAvatar(
-
             radius: 60,
             // Atur warna latar belakang sebagai fallback dasar
             backgroundColor: Colors.grey[200],
             child: ClipOval(
               child: _selectedImage != null
-              // Prioritas 1: Tampilkan gambar lokal jika ada
+                  // Prioritas 1: Tampilkan gambar lokal jika ada
                   ? Image.file(
-                _selectedImage!,
-                fit: BoxFit.cover,
-                width: 120, // 2x radius
-                height: 120,
-              )
+                      _selectedImage!,
+                      fit: BoxFit.cover,
+                      width: 120, // 2x radius
+                      height: 120,
+                    )
                   : _profilePictureUrl.isNotEmpty
-              // Prioritas 2: Tampilkan gambar dari internet
-                  ? CachedNetworkImage(
-                imageUrl: _profilePictureUrl,
-                fit: BoxFit.cover,
-                width: 120,
-                height: 120,
-                // Tampilkan ini saat gambar sedang diunduh
-                placeholder: (context, url) => Center(child: CircularProgressIndicator()),
-                // Tampilkan ini jika gambar gagal diunduh (INI SOLUSINYA)
-                errorWidget: (context, url, error) => Icon(Icons.person, size: 60, color: Colors.grey[800]),
-              )
-              // Prioritas 3: Tampilkan ikon jika tidak ada gambar sama sekali
-                  : Icon(Icons.person, size: 60, color: Colors.grey[800]),
+                      // Prioritas 2: Tampilkan gambar dari internet
+                      ? CachedNetworkImage(
+                          imageUrl: _profilePictureUrl,
+                          fit: BoxFit.cover,
+                          width: 120,
+                          height: 120,
+                          // Tampilkan ini saat gambar sedang diunduh
+                          placeholder: (context, url) =>
+                              Center(child: CircularProgressIndicator()),
+                          // Tampilkan ini jika gambar gagal diunduh (INI SOLUSINYA)
+                          errorWidget: (context, url, error) => Icon(
+                              Icons.person,
+                              size: 60,
+                              color: Colors.grey[800]),
+                        )
+                      // Prioritas 3: Tampilkan ikon jika tidak ada gambar sama sekali
+                      : Icon(Icons.person, size: 60, color: Colors.grey[800]),
             ),
-
           ),
           Positioned(
             bottom: 0,

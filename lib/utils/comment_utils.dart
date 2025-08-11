@@ -1,5 +1,5 @@
 // utils/comment_utils.dart
-import '../models/comment.dart';
+import '../models/comment_model.dart';
 
 class CommentUtils {
   /// Sort comments: Terbaru di atas, terlama di bawah

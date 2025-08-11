@@ -4,6 +4,7 @@ import 'package:portal_si/pages/dashboard_page.dart';
 import 'package:portal_si/pages/profile_page.dart';
 import 'package:portal_si/pages/notif_page.dart';
 import 'package:portal_si/pages/create_post_page.dart';
+import 'package:portal_si/services/notification_service.dart'; // Import service API Anda
 
 class CustomBottomNavigation extends StatefulWidget {
   final int selectedIndex;
@@ -31,6 +32,9 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
   List<Animation<double>> _iconScaleAnimations = [];
   List<Animation<double>> _iconBounceAnimations = [];
 
+  // Variabel untuk menampung jumlah notifikasi yang belum dibaca
+  int _unreadNotificationCount = 0;
+
   @override
   void initState() {
     super.initState();
@@ -57,11 +61,11 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
 
     _slideAnimation =
         Tween<Offset>(begin: Offset(0.0, 0.0), end: Offset(0.0, 0.0)).animate(
-          CurvedAnimation(
-            parent: _slideAnimationController,
-            curve: Curves.elasticOut,
-          ),
-        );
+      CurvedAnimation(
+        parent: _slideAnimationController,
+        curve: Curves.elasticOut,
+      ),
+    );
 
     // Initialize icon animations
     for (int i = 0; i < 5; i++) {
@@ -85,6 +89,9 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
     }
 
     _slideAnimationController.forward();
+
+    // Load notification count saat widget diinisialisasi
+    _loadNotificationCount();
   }
 
   @override
@@ -95,6 +102,30 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
       controller.dispose();
     }
     super.dispose();
+  }
+
+  // Fungsi untuk memuat jumlah notifikasi yang belum dibaca
+  Future<void> _loadNotificationCount() async {
+    try {
+      final notifications = await NotificationService()
+          .getNotifications(); // Ganti dengan service Anda
+      final unreadCount = notifications
+          .where((notif) => notif['is_read'] == false || notif['is_read'] == 0)
+          .length;
+
+      if (mounted) {
+        setState(() {
+          _unreadNotificationCount = unreadCount;
+        });
+      }
+    } catch (e) {
+      print('Error loading notification count: $e');
+    }
+  }
+
+  // Fungsi untuk refresh notification count (bisa dipanggil dari luar)
+  void refreshNotificationCount() {
+    _loadNotificationCount();
   }
 
   void _onItemTapped(int index) {
@@ -123,11 +154,14 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
         MaterialPageRoute(builder: (_) => CreatePostPage()),
       );
     } else if (index == 3) {
-      // Arahkan ke notif
+      // Arahkan ke notif dan refresh count setelah kembali
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => NotificationPage()),
-      );
+      ).then((_) {
+        // Refresh notification count ketika kembali dari halaman notifikasi
+        _loadNotificationCount();
+      });
     } else if (index == 4) {
       Navigator.push(context, MaterialPageRoute(builder: (_) => ProfilePage()));
     } else {
@@ -181,7 +215,7 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
                   _buildNavItem(Icons.home, 0),
                   _buildNavItem(Icons.search, 1),
                   SizedBox(width: 56), // Space for FAB
-                  _buildNavItem(Icons.favorite_border, 3),
+                  _buildNotificationNavItem(), // Widget khusus untuk notifikasi
                   _buildNavItem(Icons.person_outline, 4),
                 ],
               ),
@@ -230,6 +264,95 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // Widget khusus untuk item navigasi notifikasi dengan badge
+  Widget _buildNotificationNavItem() {
+    final isSelected = widget.selectedIndex == 3;
+
+    return GestureDetector(
+      onTap: () => _onItemTapped(3),
+      child: AnimatedBuilder(
+        animation: _iconAnimationControllers[3],
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _iconScaleAnimations[3].value,
+            child: Transform.translate(
+              offset: Offset(0, _iconBounceAnimations[3].value),
+              child: Container(
+                padding: EdgeInsets.all(12),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    // Container icon notifikasi
+                    AnimatedContainer(
+                      duration: Duration(milliseconds: 200),
+                      padding: EdgeInsets.all(isSelected ? 8 : 4),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? Colors.orange.withOpacity(0.15)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(16),
+                        border: isSelected
+                            ? Border.all(
+                                color: Colors.orange.withOpacity(0.3),
+                                width: 1,
+                              )
+                            : null,
+                      ),
+                      child: Icon(
+                        Icons.favorite_border,
+                        color: isSelected ? Colors.orange : Colors.grey[500],
+                        size: 24,
+                      ),
+                    ),
+
+                    // Badge notifikasi
+                    if (_unreadNotificationCount > 0)
+                      Positioned(
+                        top: -2,
+                        right: -2,
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: _unreadNotificationCount > 9 ? 6 : 4,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black12,
+                                blurRadius: 2,
+                                offset: Offset(0, 1),
+                              ),
+                            ],
+                          ),
+                          constraints: BoxConstraints(
+                            minWidth: 16,
+                            minHeight: 16,
+                          ),
+                          child: Text(
+                            _unreadNotificationCount > 99
+                                ? '99+'
+                                : _unreadNotificationCount.toString(),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: _unreadNotificationCount > 9 ? 10 : 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

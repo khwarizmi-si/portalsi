@@ -1,7 +1,7 @@
 // widgets/comment_item_widget.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../models/comment.dart';
+import '../models/comment_model.dart';
 import '../utils/comment_utils.dart';
 
 class CommentItemWidget extends StatelessWidget {
