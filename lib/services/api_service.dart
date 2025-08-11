@@ -110,6 +110,58 @@ abstract class ApiService {
     }
   }
 
+  Future<dynamic> patch(String endpoint, {Map<String, dynamic>? body}) async {
+    final uri = Uri.https(_host, '$_unencodedPath/$endpoint');
+    try {
+      final response = await _client
+          .patch(
+            uri,
+            headers: await _getHeaders(),
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(_timeout);
+      return _handleResponse(response);
+    } on SocketException {
+      throw Exception('Koneksi jaringan gagal. Mohon periksa internet Anda.');
+    } on TimeoutException {
+      throw Exception('Waktu permintaan habis. Silakan coba lagi.');
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Helper terpusat untuk request POST Multipart (upload file).
+  Future<dynamic> postMultipart(
+    String endpoint, {
+    required Map<String, String> body,
+    Map<String, File>? files,
+  }) async {
+    final uri = Uri.https(_host, '$_unencodedPath/$endpoint');
+    try {
+      final request = http.MultipartRequest('POST', uri);
+      final headers = await _getHeaders();
+      request.headers.addAll(headers);
+      request.fields.addAll(body);
+
+      if (files != null) {
+        for (var entry in files.entries) {
+          request.files.add(
+              await http.MultipartFile.fromPath(entry.key, entry.value.path));
+        }
+      }
+
+      final streamedResponse = await request.send().timeout(_timeout);
+      final response = await http.Response.fromStream(streamedResponse);
+      return _handleResponse(response);
+    } on SocketException {
+      throw Exception('Koneksi jaringan gagal. Mohon periksa internet Anda.');
+    } on TimeoutException {
+      throw Exception('Waktu permintaan habis. Silakan coba lagi.');
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   /// Handler terpusat untuk memproses respons HTTP.
   dynamic _handleResponse(http.Response response) {
     // 204 No Content juga dianggap sukses

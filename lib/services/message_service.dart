@@ -1,75 +1,99 @@
-// lib/services/message_service.dart
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../models/message.dart';
-import '../utils/secure_storage.dart';
+// lib/services/chat_service.dart
+import 'dart:io';
+import '../models/chat.dart';
+import '../models/user_model.dart';
+import 'api_service.dart';
 
-class MessageService {
-  static const String _baseUrl = 'https://api.portalsi.com/api';
+class ChatService extends ApiService {
+  ChatService._internal();
+  static final ChatService _instance = ChatService._internal();
+  factory ChatService() => _instance;
 
-  Future<Map<String, String>> _getHeaders() async {
-    final token = await SecureStorage.getToken();
-    if (token == null) throw Exception('Token not found');
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer $token',
-      'Accept': 'application/json',
-    };
-  }
+  /// Mengambil riwayat percakapan dengan user tertentu.
+  /// GET /api/messages/conversation/{user_id}
+  Future<List<ChatMessage>> getConversation(
+      User currentUser, User recipient) async {
+    try {
+      final List<dynamic> data =
+          await get('messages/conversation/${recipient.id}');
 
-  Future<List<MessageModel>> getConversation(int userId) async {
-    final headers = await _getHeaders();
-    final response = await http.get(
-      Uri.parse('$_baseUrl/messages/conversation/$userId'),
-      headers: headers,
-    );
-
-    if (response.statusCode == 200) {
-      final List<dynamic> data = json.decode(response.body)['messages'];
-      return data.map((json) => MessageModel.fromJson(json)).toList();
-    } else {
-      throw Exception('Failed to load messages');
+      return data
+          .map((item) => ChatMessage.fromJson(
+                item,
+                currentUser: currentUser,
+                recipient: recipient,
+              ))
+          .toList();
+    } catch (e) {
+      print("Error fetching conversation: $e");
+      rethrow;
     }
   }
 
-  Future<MessageModel> sendMessage(int receiverId, String message) async {
-    final headers = await _getHeaders();
-    final body = json.encode({
-      'receiver_id': receiverId,
-      'message': message,
-    });
-    final response = await http.post(
-      Uri.parse('$_baseUrl/messages'),
-      headers: headers,
-      body: body,
-    );
-    if (response.statusCode == 201) {
-      return MessageModel.fromJson(json.decode(response.body)['message']);
-    } else {
-      throw Exception('Failed to send message');
+  /// Mengambil semua percakapan user
+  /// GET /api/messages/conversations
+  Future<List<Conversation>> getAllConversations() async {
+    try {
+      final List<dynamic> data = await get('messages/conversations');
+
+      return data.map((item) => Conversation.fromJson(item)).toList();
+    } catch (e) {
+      print("Error fetching all conversations: $e");
+      rethrow;
     }
   }
 
+  /// Mengirim pesan ke user lain
+  /// POST /api/messages/send
+  Future<ChatMessage> sendMessage({
+    required int receiverId,
+    required String content,
+    required User currentUser, // tambahkan
+    required User recipient, // tambahkan
+    File? media,
+  }) async {
+    try {
+      final body = {
+        'receiver_id': receiverId.toString(),
+        'content': content,
+      };
+
+      final response = await postMultipart(
+        'messages/send',
+        body: body,
+        files: media != null ? {'media': media} : null,
+      );
+
+      return ChatMessage.fromJson(
+        response,
+        currentUser: currentUser, // wajib isi
+        recipient: recipient, // wajib isi
+      );
+    } catch (e) {
+      print("Error sending message: $e");
+      rethrow;
+    }
+  }
+
+  /// Menghapus pesan tertentu
+  /// DELETE /api/messages/{id}
   Future<void> deleteMessage(int messageId) async {
-    final headers = await _getHeaders();
-    final response = await http.delete(
-      Uri.parse('$_baseUrl/messages/$messageId'),
-      headers: headers,
-    );
-    if (response.statusCode != 200) {
-      throw Exception('Failed to delete message');
+    try {
+      await delete('messages/$messageId');
+    } catch (e) {
+      print("Error deleting message: $e");
+      rethrow;
     }
   }
 
-  Future<void> markMessageAsRead(int messageId) async {
-    final headers = await _getHeaders();
-    final response = await http.patch(
-      Uri.parse('$_baseUrl/messages/$messageId/read'),
-      headers: headers,
-    );
-    if (response.statusCode != 200) {
-      // Tidak melempar exception agar tidak mengganggu UI jika gagal
-      print('Failed to mark message as read');
+  /// Menandai pesan sebagai sudah dibaca
+  /// PATCH /api/messages/{id}/read
+  Future<void> markAsRead(int messageId) async {
+    try {
+      await patch('messages/$messageId/read');
+    } catch (e) {
+      print("Error marking message as read: $e");
+      rethrow;
     }
   }
 }
