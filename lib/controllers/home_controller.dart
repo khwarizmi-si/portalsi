@@ -1,6 +1,7 @@
 // lib/controllers/home_controller.dart
 import 'package:flutter/material.dart';
 import '../models/post_model.dart';
+import '../models/user_model.dart'; // <-- PASTIKAN USER MODEL DI-IMPORT
 import '../models/like_model.dart';
 import '../models/comment_model.dart';
 import '../services/post_service.dart';
@@ -17,6 +18,10 @@ class HomeController extends ChangeNotifier {
   List<Post> _posts = [];
   List<Post> get posts => _posts;
 
+  // State baru untuk menampung pinned post
+  Post? _pinnedPost;
+  Post? get pinnedPost => _pinnedPost;
+
   bool _isLoading = true;
   bool get isLoading => _isLoading;
 
@@ -28,23 +33,51 @@ class HomeController extends ChangeNotifier {
   }
 
   Future<void> fetchPosts({bool isRefresh = false}) async {
-    if (!isRefresh) {
+    if (!isRefresh && _posts.isEmpty) {
       _isLoading = true;
       notifyListeners();
     }
     _errorMessage = null;
 
     try {
-      // 1. Ambil data post utama
-      _posts = await _postService.fetchAllPosts();
+      // 1. Ambil semua data post dari service
+      List<Post> allPosts = await _postService.fetchAllPosts();
+
+      // --- LOGIKA BARU: PISAHKAN PINNED POST ---
+      // Cari postingan pertama yang dibuat oleh admin.
+      // Anda bisa menyesuaikan kondisi ini, misal dengan flag `post.isPinned`.
+      // Di sini kita asumsikan user admin punya role 'admin'.
+      final pinnedIndex = allPosts.indexWhere((p) => p.user.role == 'admin');
+
+      if (pinnedIndex != -1) {
+        // Jika ditemukan, pindahkan ke state _pinnedPost
+        _pinnedPost = allPosts[pinnedIndex];
+        // Hapus dari daftar utama agar tidak duplikat
+        allPosts.removeAt(pinnedIndex);
+      } else {
+        // Jika tidak ada post dari admin, pastikan _pinnedPost kosong
+        _pinnedPost = null;
+      }
+
+      _posts = allPosts; // Sisa post menjadi daftar biasa
+      // --- AKHIR LOGIKA BARU ---
+
       _isLoading = false;
+      // Beri tahu UI bahwa daftar post utama sudah siap (tanpa detail like/comment)
       notifyListeners();
 
-      // 2. Ambil ID user yang sedang login (sebagai String?)
+      // 2. Ambil ID user yang sedang login
       final currentUserId = await SecureStorage.getUserId();
 
-      // 3. Ambil data likes & comments untuk setiap post secara paralel
-      await Future.wait(_posts.map((post) async {
+      // 3. Buat daftar gabungan untuk mengambil detail like & comment
+      // Ini memastikan pinned post juga mendapatkan detailnya.
+      final List<Post> postsToProcess = [..._posts];
+      if (_pinnedPost != null) {
+        postsToProcess.add(_pinnedPost!);
+      }
+
+      // 4. Ambil data likes & comments untuk setiap post secara paralel
+      await Future.wait(postsToProcess.map((post) async {
         try {
           final results = await Future.wait([
             _likeService.getLikes(post.id),
@@ -54,10 +87,9 @@ class HomeController extends ChangeNotifier {
           final likes = results[0] as List<Like>;
           final comments = results[1] as List<Comment>;
 
-          // 4. Isi data ke dalam objek post
+          // 5. Isi data ke dalam objek post
           post.likesCount = likes.length;
           post.commentsCount = comments.length;
-          // Perbandingan sekarang aman: int vs int
           if (currentUserId != null) {
             post.isLikedByUser =
                 likes.any((like) => like.user.id == currentUserId);
@@ -67,7 +99,7 @@ class HomeController extends ChangeNotifier {
         }
       }));
 
-      // 5. Beri tahu UI untuk terakhir kalinya agar update dengan data lengkap
+      // 6. Beri tahu UI untuk terakhir kalinya agar update dengan data lengkap
       notifyListeners();
     } catch (e) {
       _errorMessage = e.toString();
@@ -77,10 +109,22 @@ class HomeController extends ChangeNotifier {
   }
 
   Future<void> toggleLike(int postId) async {
-    final postIndex = _posts.indexWhere((p) => p.id == postId);
-    if (postIndex == -1) return;
+    // --- LOGIKA BARU: Cari post di kedua daftar (biasa dan pinned) ---
+    Post? post;
+    int postIndex = _posts.indexWhere((p) => p.id == postId);
 
-    final post = _posts[postIndex];
+    if (postIndex != -1) {
+      // Post ditemukan di daftar biasa
+      post = _posts[postIndex];
+    } else if (_pinnedPost != null && _pinnedPost!.id == postId) {
+      // Post ditemukan sebagai pinned post
+      post = _pinnedPost;
+    }
+
+    // Jika post tidak ditemukan di mana pun, keluar dari fungsi
+    if (post == null) return;
+    // --- AKHIR LOGIKA BARU ---
+
     final originalLikedStatus = post.isLikedByUser;
     final originalLikesCount = post.likesCount;
 

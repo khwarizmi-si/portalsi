@@ -1,13 +1,18 @@
 // lib/models/user_model.dart
 
 class User {
-  final int? id; // Dibuat opsional karena tidak semua response API memilikinya
+  final int? id;
   final String username;
   final String? email;
   final String? fullName;
   final String? bio;
   final String? profilePictureUrl;
   final bool isVerified;
+
+  // --- FIELD BARU ---
+  final String? role;
+  final bool isPrivate;
+  // --------------------
 
   User({
     this.id,
@@ -17,6 +22,10 @@ class User {
     this.bio,
     this.profilePictureUrl,
     this.isVerified = false,
+    // --- TAMBAHKAN DI KONSTRUKTOR ---
+    this.role,
+    this.isPrivate = false,
+    // ---------------------------------
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -32,6 +41,11 @@ class User {
       bio: userData['bio'] as String?,
       profilePictureUrl: userData['profile_picture_url'] as String?,
       isVerified: userData['is_verified'] as bool? ?? false,
+
+      // --- PARSING DATA BARU ---
+      role: userData['role'] as String?,
+      isPrivate: userData['is_private'] as bool? ?? false,
+      // --------------------------
     );
   }
 
@@ -44,6 +58,11 @@ class User {
       'bio': bio,
       'profile_picture_url': profilePictureUrl,
       'is_verified': isVerified,
+
+      // --- TAMBAHKAN KE JSON ---
+      'role': role,
+      'is_private': isPrivate,
+      // --------------------------
     };
   }
 }

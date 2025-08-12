@@ -1,3 +1,5 @@
+// lib/components/post_card.dart
+
 import 'package:flutter/material.dart';
 import '../components/post_header.dart';
 
@@ -20,6 +22,9 @@ class PostCard extends StatelessWidget {
   final int postId;
   final VoidCallback? onProfileTap;
 
+  // --- 1. TAMBAHKAN PARAMETER BARU DI SINI ---
+  final bool hasCardDecoration;
+
   const PostCard({
     super.key,
     required this.username,
@@ -39,20 +44,30 @@ class PostCard extends StatelessWidget {
     required this.user,
     required this.postId,
     this.onProfileTap,
+    // --- 2. TAMBAHKAN DI KONSTRUKTOR DENGAN NILAI DEFAULT ---
+    this.hasCardDecoration =
+        true, // Defaultnya true agar tidak merusak tampilan di tempat lain
   });
 
   @override
   Widget build(BuildContext context) {
+    // --- 3. GUNAKAN PARAMETER UNTUK MENGATUR DEKORASI & MARGIN ---
     return Container(
-      margin: const EdgeInsets.only(bottom: 8, left: 16, right: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border(
-          bottom: BorderSide(color: Colors.grey.shade200, width: 0.5),
-          top: BorderSide(color: Colors.grey.shade200, width: 0.5),
-        ),
-      ),
+      // Margin akan menjadi nol jika dekorasi dinonaktifkan
+      margin: hasCardDecoration
+          ? const EdgeInsets.only(bottom: 8, left: 16, right: 16)
+          : EdgeInsets.zero,
+      // Dekorasi (latar belakang, border, radius) hanya akan muncul jika hasCardDecoration bernilai true
+      decoration: hasCardDecoration
+          ? BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border(
+                bottom: BorderSide(color: Colors.grey.shade200, width: 0.5),
+                top: BorderSide(color: Colors.grey.shade200, width: 0.5),
+              ),
+            )
+          : null, // Jika false, tidak ada dekorasi
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -188,12 +203,11 @@ class PostCard extends StatelessWidget {
             ),
           ),
 
-          // ✅ LIKES & COMMENTS COUNT - Tampil dengan format Instagram
+          // Likes & Comments Count
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
             child: Row(
               children: [
-                // Tampilkan likes jika > 0
                 if (likes > 0) ...[
                   GestureDetector(
                     onTap: () {
@@ -209,8 +223,6 @@ class PostCard extends StatelessWidget {
                       ),
                     ),
                   ),
-
-                  // Separator dot
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     child: Container(
@@ -223,8 +235,6 @@ class PostCard extends StatelessWidget {
                     ),
                   ),
                 ],
-
-                // Tampilkan jumlah comments (selalu tampil)
                 GestureDetector(
                   onTap: onComment,
                   child: Text(

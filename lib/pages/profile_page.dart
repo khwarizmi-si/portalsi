@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:portal_si/models/post_model.dart';
 import '../components/bottom_navigation.dart';
 import '../utils/secure_storage.dart';
 import '../services/auth_service.dart';
@@ -105,11 +106,16 @@ class _ProfilePageState extends State<ProfilePage> {
     if (_user == null) return;
 
     try {
+      // 1. fetchAllPosts() sudah mengembalikan List<Post>
       final allPosts = await PostService().fetchAllPosts();
       final userId = _user!['user']['user_id'].toString();
+
+      // 2. Filter dengan mengakses properti objek Post secara langsung
       final userPosts = allPosts.where((post) {
-        final postMap = post as Map<String, dynamic>;
-        return postMap['user_id'].toString() == userId;
+        // 'post' adalah objek Post, akses propertinya langsung
+        // Asumsi: objek Post memiliki properti 'user' yang merupakan objek User
+        // dan objek User memiliki properti 'id'.
+        return post.user.id.toString() == userId;
       }).toList();
 
       if (mounted) {
@@ -635,7 +641,8 @@ class _ProfilePageState extends State<ProfilePage> {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       sliver: SliverGrid(
         delegate: SliverChildBuilderDelegate((context, index) {
-          final post = _userPosts[index];
+          // Tentukan tipe data post agar lebih aman
+          final Post post = _userPosts[index];
           return Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
@@ -652,8 +659,9 @@ class _ProfilePageState extends State<ProfilePage> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
+                  // PERBAIKAN: Gunakan post.mediaUrl
                   Image.network(
-                    post['media_url'] ??
+                    post.mediaUrl ??
                         'https://via.placeholder.com/300x300?text=No+Image',
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
@@ -702,10 +710,10 @@ class _ProfilePageState extends State<ProfilePage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (post['caption'] != null &&
-                            post['caption'].toString().isNotEmpty)
+                        // PERBAIKAN: Gunakan post.caption
+                        if (post.caption != null && post.caption!.isNotEmpty)
                           Text(
-                            post['caption'].toString(),
+                            post.caption!,
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -714,8 +722,8 @@ class _ProfilePageState extends State<ProfilePage> {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
-                        if (post['location'] != null &&
-                            post['location'].toString().isNotEmpty)
+                        // PERBAIKAN: Gunakan post.location
+                        if (post.location != null && post.location!.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 2),
                             child: Row(
@@ -729,7 +737,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 const SizedBox(width: 2),
                                 Flexible(
                                   child: Text(
-                                    post['location'].toString(),
+                                    post.location!,
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 9,
@@ -741,7 +749,8 @@ class _ProfilePageState extends State<ProfilePage> {
                               ],
                             ),
                           ),
-                        if (post['is_video'] == 1)
+                        // PERBAIKAN: Gunakan post.isVideo (asumsi tipe datanya bool)
+                        if (post.isVideo)
                           Padding(
                             padding: const EdgeInsets.only(top: 2),
                             child: Row(
