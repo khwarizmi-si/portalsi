@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:portal_si/models/user_model.dart';
 import '../utils/secure_storage.dart';
 
 // Pindahkan ProfileModel ke file model terpisah (misal: 'models/profile_model.dart')
@@ -104,35 +105,23 @@ class ProfileService {
     };
   }
 
-  Future<ProfileModel> getProfile() async {
+  Future<User> getProfile() async {
     try {
       final headers = await _getHeaders();
-      final response = await _client
-          .get(
-            Uri.parse('$_baseUrl/account/settings'),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 10));
-
-      final responseData = json.decode(response.body);
+      final response = await _client.get(
+        Uri.parse('$_baseUrl/user'),
+        headers: headers,
+      );
 
       if (response.statusCode == 200) {
-        return ProfileModel.fromJson(responseData);
+        final responseData = json.decode(response.body);
+        // Langsung kembalikan sebagai objek User
+        return User.fromJson(responseData); // <-- Mengembalikan User
       } else {
-        final errorMsg = responseData['message'] ??
-            'Failed to load profile (Status: ${response.statusCode})';
-        throw Exception(errorMsg);
+        throw Exception('Failed to load profile');
       }
-    } on SocketException {
-      throw Exception('No internet connection');
-    } on TimeoutException {
-      throw Exception('Request timeout. Please try again');
-    } on http.ClientException {
-      throw Exception('Server connection failed');
-    } on FormatException {
-      throw Exception('Invalid server response');
     } catch (e) {
-      throw Exception('Failed to load profile: ${e.toString()}');
+      rethrow;
     }
   }
 
@@ -168,13 +157,15 @@ class ProfileService {
     }
   }
 
-  Future<bool> updateProfile(ProfileModel profile) async {
+  Future<bool> updateProfile(User user) async {
     try {
       final headers = await _getHeaders();
       final response = await _client.post(
-        Uri.parse('$_baseUrl/account/settings'),
+        Uri.parse(
+            '$_baseUrl/account/settings'), // Sesuaikan endpoint jika perlu
         headers: headers,
-        body: json.encode(profile.toJson()),
+        // Gunakan .toJson() dari objek User
+        body: json.encode(user.toJson()),
       );
 
       return response.statusCode == 200;

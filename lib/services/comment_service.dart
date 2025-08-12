@@ -50,19 +50,28 @@ class CommentService extends ApiService {
   }
 
   /// Mengirim komentar (optimistic, fire-and-forget).
-  Future<bool> addComment(int postId, String content) async {
-    // Langsung return true untuk UI yang responsif.
-    // Proses pengiriman terjadi di background.
-    post('posts/$postId/comments', body: {'content': content}).then((_) {
-      // Jika sukses, hapus cache agar data berikutnya fresh.
+  Future<Comment> addComment(int postId, String content) async {
+    try {
+      // 1. Tunggu (await) respons dari server.
+      // Asumsi: metode post di ApiService Anda mengembalikan Map<String, dynamic> dari body JSON.
+      final responseData =
+          await post('posts/$postId/comments', body: {'content': content});
+
+      // 2. Ubah data JSON dari server menjadi objek Comment.
+      //    Sesuaikan key ['data'] atau ['comment'] dengan struktur respons API Anda.
+      final newComment = Comment.fromJson(responseData['data']);
+
+      // 3. Hapus cache setelah berhasil agar data berikutnya fresh.
       clearCache(postId);
       if (kDebugMode) print('✅ Komentar berhasil dikirim untuk post $postId');
-    }).catchError((error) {
-      if (kDebugMode)
-        print('❌ Gagal mengirim komentar untuk post $postId: $error');
-      // Di sini bisa ditambahkan logika untuk notifikasi kegagalan ke user.
-    });
-    return true;
+
+      // 4. Kembalikan objek Comment yang baru.
+      return newComment;
+    } catch (e) {
+      if (kDebugMode) print('❌ Gagal mengirim komentar untuk post $postId: $e');
+      // Lemparkan kembali error agar bisa ditangkap oleh UI (misal: untuk SnackBar).
+      rethrow;
+    }
   }
 
   /// Memperbarui komentar.
