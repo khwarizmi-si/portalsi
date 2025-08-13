@@ -64,38 +64,38 @@ class _HomePageState extends State<HomePage> {
   }
 
   @override
+// lib/pages/home_page.dart
+
+  @override
   Widget build(BuildContext context) {
-    // ChangeNotifierProvider harus berada di atas widget yang akan mengaksesnya.
-    // Memindahkannya ke atas MaterialApp atau di atas widget ini adalah praktik yang baik.
-    // Untuk contoh ini, kita asumsikan sudah ada di atasnya atau kita bungkus di sini.
-    return ChangeNotifierProvider(
-      create: (_) => HomeController(),
-      child: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [
-              Color(0xFFFFF0D0), // peach lembut di kiri
-              Color(0xFFFFFFFF), // putih di tengah
-              Color(0xFFDFFEF8), // mint lembut di kanan
-            ],
-            stops: [0.0, 0.5, 1.0],
-          ),
+    // Langsung gunakan Consumer tanpa membuat provider baru di sini
+    final controller = Provider.of<HomeController>(context);
+
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            Color(0xFFFFF0D0),
+            Color(0xFFFFFFFF),
+            Color(0xFFDFFEF8),
+          ],
+          stops: [0.0, 0.5, 1.0],
         ),
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          appBar: _buildAppBar(context),
-          // Gunakan Consumer di sini untuk rebuild saat data berubah
-          body: Consumer<HomeController>(
-            builder: (context, controller, _) {
-              return _buildBody(context, controller);
-            },
-          ),
-          bottomNavigationBar: CustomBottomNavigation(
-            selectedIndex: 0,
-            onTap: (index) {/* Logika Navigasi */},
-          ),
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: _buildAppBar(context),
+        body: _buildBody(context, controller), // Langsung kirim controller
+        bottomNavigationBar: CustomBottomNavigation(
+          selectedIndex: 0,
+          onTap: (index) {
+            // Anda bisa menggunakan NavigationHelper atau Navigator biasa di sini
+            if (index == 4) {
+              Navigator.pushNamed(context, '/profile');
+            }
+          },
         ),
       ),
     );

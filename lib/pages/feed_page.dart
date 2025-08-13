@@ -38,7 +38,7 @@ class _FeedPageState extends State<FeedPage>
     _controller = FeedController(
       context: context,
       vsync: this,
-      onNavigateToDetail: (item) => _controller.navigateToPostDetail(item),
+      // onNavigateToDetail: (item) => _controller.navigateToPostDetail(item),
     )..initialize();
   }
 
@@ -98,10 +98,6 @@ class _FeedPageState extends State<FeedPage>
     );
   }
 
-  // Sisa dari widget builder (buildBody, buildHeader, dll.) tetap sama
-  // dan tidak perlu diubah.
-  // ... (buildBody, buildHeader, buildContent, etc.)
-
   Widget _buildBody() {
     return RefreshIndicator(
       onRefresh: _controller.fetchPosts,
@@ -149,17 +145,22 @@ class _FeedPageState extends State<FeedPage>
     );
   }
 
+// Di dalam file lib/pages/feed_page.dart
+
   Widget _buildFeedGrid() {
     return FeedGrid(
       isLoading: _controller.isLoading,
-      posts: _controller.posts,
+      posts: _controller.posts, // Sekarang ini adalah List<Post>
       likeCounts: _controller.likeCounts,
       likedPosts: _controller.likedPosts,
       scrollController: _controller.scrollController,
       fadeAnimation: _controller.fadeAnimation,
       onRefresh: _controller.fetchPosts,
-      onLikePost: _controller.onLikePost,
-      onPostTap: (item) => _controller.navigateToPostDetail(item),
+      // --- PERBAIKAN DI SINI ---
+      onLikePost: (post) =>
+          _controller.onLikePost(post), // Langsung teruskan objek post
+      onPostTap: (post) => _controller
+          .navigateToPostDetail(post), // Langsung teruskan objek post
       onUserTap: _onUserTap,
     );
   }

@@ -1,12 +1,19 @@
+// lib/providers/user_provider.dart (contoh nama file)
+
 import 'package:flutter/foundation.dart';
-import '../services/user_service.dart';
+import '../models/user_model.dart'; // <-- Cukup import User model
+import '../services/user_service.dart'; // <-- Panggil UserService yang sudah benar
 
 class UserProvider extends ChangeNotifier {
-  ProfileModel? _currentUser;
+  User? _currentUser;
   bool _isLoading = false;
   String? _error;
 
-  ProfileModel? get currentUser => _currentUser;
+  // --- PERBAIKAN DI SINI ---
+  // Getter sekarang mengembalikan tipe data yang benar (User?)
+  User? get currentUser => _currentUser;
+  // -------------------------
+
   bool get isLoading => _isLoading;
   String? get error => _error;
 
@@ -16,8 +23,9 @@ class UserProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final profileService = ProfileService();
-      _currentUser = await profileService.getProfile();
+      // Panggil UserService, bukan ProfileService
+      final userService = ProfileService();
+      _currentUser = await userService.getProfile();
     } catch (e) {
       _error = e.toString();
     } finally {

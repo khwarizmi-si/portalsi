@@ -40,21 +40,17 @@ class Post {
 
   factory Post.fromJson(Map<String, dynamic> json) {
     return Post(
-      id: json['post_id'] as int,
+      id: json['post_id'] ?? 0,
       caption: json['caption'] as String?,
       mediaUrl: json['media_url'] as String?,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      user: User.fromJson(json['user'] as Map<String, dynamic>),
-
-      // --- PARSING DATA BARU ---
+      createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+      user: User.fromJson(json['user'] ?? {}),
       location: json['location'] as String?,
-      // Konversi nilai integer (0 atau 1) menjadi boolean (false atau true)
-      isArchived: (json['is_archived'] as int) == 1,
-      isVideo: (json['is_video'] as int) == 1,
-      updatedAt: DateTime.parse(json['updated_at'] as String),
-      tags: json['tags'] as List<dynamic>,
-      mentions: json['mentions'] as List<dynamic>,
-      // --------------------------
+      isArchived: (json['is_archived'] ?? 0) == 1,
+      isVideo: (json['is_video'] ?? 0) == 1,
+      updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
+      tags: (json['tags'] as List?) ?? [],
+      mentions: (json['mentions'] as List?) ?? [],
     );
   }
 }

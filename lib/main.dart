@@ -1,5 +1,9 @@
+// lib/main.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'; // for kDebugMode
+import 'package:provider/provider.dart';
+import 'package:portal_si/controllers/home_controller.dart';
 import 'package:portal_si/pages/notif_page.dart';
 import 'pages/login_page.dart';
 import 'pages/register_page.dart';
@@ -10,21 +14,20 @@ import 'pages/other_profile_page.dart';
 import 'pages/message_list_page.dart';
 import 'pages/story_page.dart';
 import 'utils/secure_storage.dart';
-import 'managers/cache_manager.dart'; // 🚀 Cache management
-import 'services/follow_service.dart'; // For debug functionality
+import 'managers/cache_manager.dart';
+import 'services/follow_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final hasToken = await SecureStorage.hasToken();
 
-  // 🚀 Initialize cache management system
   if (hasToken) {
     print('🚀 User logged in - initializing cache system...');
     CacheManager.initialize();
   }
 
   runApp(MyApp(
-    startPage: hasToken ? '/dashboard' : '/login',
+    startPage: hasToken ? '/home' : '/login',
     hasToken: hasToken,
   ));
 }
@@ -47,11 +50,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-
-    // 🔄 Add app lifecycle observer for cache management
     WidgetsBinding.instance.addObserver(this);
-
-    // 🚀 Preload critical data if user is logged in
     if (widget.hasToken) {
       _initializeAppData();
     }
@@ -59,13 +58,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    // 🧹 Cleanup when app is disposed
     WidgetsBinding.instance.removeObserver(this);
     CacheManager.dispose();
     super.dispose();
   }
 
-  // 🔄 Handle app lifecycle changes for better cache management
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     switch (state) {
@@ -86,70 +83,59 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
   }
 
-  // 🚨 Handle memory pressure
   @override
   void didHaveMemoryPressure() {
     print('⚠️ Memory pressure detected - clearing cache...');
     CacheManager.onMemoryPressure();
   }
 
-  // 🚀 Initialize app data in background
   Future<void> _initializeAppData() async {
     try {
       print('🚀 Preloading critical app data...');
-
-      // Preload critical data in background
       await CacheManager.preloadCriticalData();
-
       print('✅ App initialization completed');
     } catch (e) {
       print('❌ App initialization failed: $e');
-      // Don't block app startup if preloading fails
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Portal SI',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        fontFamily: 'Roboto',
-        // 🎨 Add app-wide performance optimizations
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-      ),
-
-      // 🚀 Add global navigation observer for cache warming
-      navigatorObservers: [
-        CacheNavigationObserver(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => HomeController()),
       ],
-
-      initialRoute: widget.startPage,
-
-      routes: {
-        '/login': (context) => const LoginPage(),
-        '/register': (context) => RegisterPage(),
-        '/dashboard': (context) => HomePage(),
-        '/feed': (context) => FeedPage(),
-        '/profile': (context) => const ProfilePage(),
-        '/story': (context) => InstagramStoryPage(),
-        '/notif': (context) => const NotificationPage(),
-        '/message': (context) => MessageListPage(),
-
-        // Tambahkan ini
-        '/other-profile': (context) {
-          final args = ModalRoute.of(context)!.settings.arguments
-              as Map<String, dynamic>;
-          return OtherProfilePage(
-            username: args['username'],
-          );
+      child: MaterialApp(
+        title: 'Portal SI',
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+          fontFamily: 'Roboto',
+          visualDensity: VisualDensity.adaptivePlatformDensity,
+        ),
+        navigatorObservers: [
+          CacheNavigationObserver(),
+        ],
+        initialRoute: widget.startPage,
+        routes: {
+          '/login': (context) => const LoginPage(),
+          '/register': (context) => RegisterPage(),
+          '/home': (context) => const HomePage(),
+          '/feed': (context) => FeedPage(),
+          '/profile': (context) => const ProfilePage(),
+          '/story': (context) => InstagramStoryPage(),
+          '/notif': (context) => const NotificationPage(),
+          '/message': (context) => MessageListPage(),
+          '/other-profile': (context) {
+            final args = ModalRoute.of(context)!.settings.arguments
+                as Map<String, dynamic>;
+            return OtherProfilePage(
+              username: args['username'],
+            );
+          },
+          if (kDebugMode) '/debug_cache': (context) => const CacheDebugPage(),
         },
-
-        if (kDebugMode) '/debug_cache': (context) => const CacheDebugPage(),
-      },
-
-      // 🐛 Add debug banner for cache status
-      debugShowCheckedModeBanner: kDebugMode,
+        debugShowCheckedModeBanner: kDebugMode,
+      ),
     );
   }
 }
@@ -159,8 +145,6 @@ class CacheNavigationObserver extends NavigatorObserver {
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPush(route, previousRoute);
-
-    // Warm cache based on destination
     _warmCacheForRoute(route.settings.name);
   }
 
@@ -168,11 +152,9 @@ class CacheNavigationObserver extends NavigatorObserver {
     switch (routeName) {
       case '/feed':
         if (kDebugMode) print('🔥 Warming cache for feed...');
-        // Cache will be warmed when FeedPage loads posts
         break;
       case '/profile':
         if (kDebugMode) print('🔥 Warming cache for profile...');
-        // Preload my profile data
         CacheManager.preloadCriticalData();
         break;
       default:
@@ -212,8 +194,6 @@ class _CacheDebugPageState extends State<CacheDebugPage> {
               ),
             ),
             const SizedBox(height: 16),
-
-            // Simple cache monitor buttons
             Row(
               children: [
                 Expanded(
@@ -251,9 +231,7 @@ class _CacheDebugPageState extends State<CacheDebugPage> {
                 ),
               ],
             ),
-
             const SizedBox(height: 8),
-
             Row(
               children: [
                 Expanded(
@@ -291,9 +269,7 @@ class _CacheDebugPageState extends State<CacheDebugPage> {
                 ),
               ],
             ),
-
             const SizedBox(height: 16),
-
             const Text(
               '📊 Performance Tips:',
               style: TextStyle(
@@ -319,14 +295,12 @@ class _CacheDebugPageState extends State<CacheDebugPage> {
 
 // 🔧 Extension untuk easy debugging
 extension AppDebug on BuildContext {
-  // Navigate to debug page
   void showCacheDebug() {
     if (kDebugMode) {
       Navigator.pushNamed(this, '/debug_cache');
     }
   }
 
-  // Show cache stats in snackbar
   void showCacheStats() {
     if (kDebugMode) {
       final followService = FollowService();

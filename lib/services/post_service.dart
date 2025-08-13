@@ -3,16 +3,24 @@ import 'api_service.dart';
 import '../models/post_model.dart';
 
 class PostService extends ApiService {
-  // Singleton Pattern untuk memastikan hanya ada satu instance.
   PostService._internal();
   static final PostService _instance = PostService._internal();
   factory PostService() => _instance;
 
   /// Mengambil semua post untuk feed utama.
-  /// Mengembalikan List dari Model Post, bukan dynamic.
   Future<List<Post>> fetchAllPosts() async {
-    final List<dynamic> data = await get('posts');
-    return data.map((item) => Post.fromJson(item)).toList();
+    // 1. Simpan hasil ke 'dynamic' terlebih dahulu
+    final dynamic data = await get('posts');
+
+    // 2. Lakukan pengecekan tipe data yang aman
+    if (data is List) {
+      return data.map((item) => Post.fromJson(item)).toList();
+    } else {
+      // Jika data null atau bukan list, kembalikan list kosong
+      print(
+          '⚠️ Peringatan: Endpoint /posts tidak mengembalikan List. Data: $data');
+      return [];
+    }
   }
 
   /// Mengambil post untuk halaman Explore dengan filter.
@@ -25,30 +33,38 @@ class PostService extends ApiService {
 
     final dynamic data = await get('explore', queryParams: queryParams);
 
-    // API explore bisa mengembalikan format berbeda, jadi kita tangani
-    if (data is Map<String, dynamic> && data.containsKey('posts')) {
-      final List<dynamic> postList = data['posts'];
-      return postList.map((item) => Post.fromJson(item)).toList();
-    } else if (data is List) {
+    if (data is List) {
       return data.map((item) => Post.fromJson(item)).toList();
-    } else {
-      throw Exception('Format respons Explore tidak dikenali');
     }
+
+    // Kalau API kadang balikin Map dengan key 'posts'
+    if (data is Map<String, dynamic> && data is List) {
+      return (data as List).map((item) => Post.fromJson(item)).toList();
+    }
+
+    print("⚠️ Unexpected /explore response format: $data");
+    return [];
   }
 
   /// Mengambil detail satu post.
   Future<Post> getPostDetail(int id) async {
-    final Map<String, dynamic> data = await get('posts/$id');
-    return Post.fromJson(data);
+    // 1. Simpan hasil ke 'dynamic' terlebih dahulu
+    final dynamic data = await get('posts/$id');
+
+    // 2. Lakukan pengecekan tipe data yang aman
+    if (data is Map<String, dynamic>) {
+      return Post.fromJson(data);
+    } else {
+      // Jika data null atau bukan Map, lempar error
+      throw Exception('Format data untuk post #$id tidak valid.');
+    }
   }
 
   /// Membuat post baru.
   Future<bool> createPost(Map<String, String> fields,
       {String? filePath}) async {
-    // Note: Upload file (multipart request) lebih kompleks dan tidak dicakup
-    // oleh helper `post` standar. Ini contoh untuk post berbasis JSON.
     await post('posts', body: fields);
-    return true; // Sukses jika tidak ada exception
+    return true;
   }
 
   /// Memperbarui post yang ada.

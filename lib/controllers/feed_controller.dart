@@ -1,19 +1,29 @@
 // lib/controllers/feed_controller.dart
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:portal_si/pages/post_detail_page.dart';
+import '../models/post_model.dart';
+import '../models/user_model.dart';
 import '../services/post_service.dart';
 import '../services/like_service.dart';
 import '../utils/secure_storage.dart';
-import '../helper/time_helper.dart';
-import '../pages/post_detail_page.dart';
 import '../widgets/feed/filter_dialog.dart';
 
 class FeedController extends ChangeNotifier {
   final BuildContext context;
   final TickerProvider vsync;
-  final Function(dynamic) onNavigateToDetail;
+
+  // State variables
+  List<Post> posts = [];
+  List<User> searchResults = [];
+  bool isLoading = true;
+  bool isSearching = false;
+  bool showSearchResults = false;
+  Map<int, int> likeCounts = {};
+  Map<int, bool> likedPosts = {};
+  bool isScrolled = false;
 
   // Controllers
   late ScrollController scrollController;
@@ -21,42 +31,27 @@ class FeedController extends ChangeNotifier {
   late AnimationController animationController;
   late Animation<double> fadeAnimation;
 
-  // State variables
-  bool isScrolled = false;
-  List<dynamic> posts = [];
-  List<dynamic> searchResults = [];
-  bool isLoading = true;
-  bool isSearching = false;
-  bool showSearchResults = false;
-  Map<int, int> likeCounts = {};
-  Map<int, bool> likedPosts = {};
-
   FeedController({
     required this.context,
     required this.vsync,
-    required this.onNavigateToDetail,
   });
 
   void initialize() {
-    scrollController = ScrollController();
+    scrollController = ScrollController()..addListener(_onScroll);
     searchController = TextEditingController();
-
     animationController = AnimationController(
       vsync: vsync,
-      duration: Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 800),
     );
-
-    fadeAnimation = CurvedAnimation(
-      parent: animationController,
-      curve: Curves.easeInOut,
-    );
-
-    scrollController.addListener(_onScroll);
+    fadeAnimation =
+        CurvedAnimation(parent: animationController, curve: Curves.easeInOut);
     fetchPosts();
   }
 
   void _onScroll() {
-    bool scrolled = scrollController.offset > 0;
+    // Cek apakah posisi scroll lebih dari 0
+    final scrolled = scrollController.offset > 0;
+    // Hanya panggil notifyListeners jika nilainya berubah untuk efisiensi
     if (scrolled != isScrolled) {
       isScrolled = scrolled;
       notifyListeners();
@@ -64,48 +59,47 @@ class FeedController extends ChangeNotifier {
   }
 
   Future<void> fetchPosts({String? tag, String sort = 'random'}) async {
+    isLoading = true;
+    notifyListeners();
     try {
-      isLoading = true;
-      notifyListeners();
-
-      final fetchedPosts = await PostService().fetchExplorePosts(
-        tag: tag,
-        sort: sort,
-      );
-
+      final fetchedPosts =
+          await PostService().fetchExplorePosts(tag: tag, sort: sort);
       posts = fetchedPosts;
-      isLoading = false;
-      notifyListeners();
-
       await loadLikesForPosts(fetchedPosts);
-
-      if (posts.isNotEmpty) {
-        animationController.forward();
-      }
     } catch (e) {
+      print(' $e'); // Tambahkan print untuk debug
+      _showErrorMessage('Gagal memuat postingan. Coba lagi.');
+    } finally {
       isLoading = false;
       notifyListeners();
-      _showErrorMessage('Failed to load posts. Please try again.');
+      if (posts.isNotEmpty) {
+        animationController.forward(from: 0.0);
+      }
     }
   }
 
-  Future<void> loadLikesForPosts(List<dynamic> posts) async {
+  // --- PERBAIKAN UTAMA DI SINI ---
+  Future<void> loadLikesForPosts(List<Post> postsToLoad) async {
+    // --- PERBAIKAN DI SINI ---
+    // Langsung dapatkan ID sebagai int? karena getUserId sudah melakukannya untuk kita.
     final currentUserId = await SecureStorage.getUserId();
-    await Future.wait(
-      posts.map((post) async {
-        final postId = int.tryParse(post['post_id'].toString());
-        if (postId == null) return;
 
+    // Jika ID tidak valid (null), jangan lanjutkan proses.
+    if (currentUserId == null) return;
+
+    await Future.wait(
+      postsToLoad.map((post) async {
         try {
-          final likes = await LikeService().getLikes(postId);
-          likeCounts[postId] = likes.length;
-          likedPosts[postId] = likes.any(
-            (like) => like.user.id == currentUserId,
-          );
+          final likes = await LikeService().getLikes(post.id);
+          likeCounts[post.id] = likes.length;
+
+          // Perbandingan sekarang sudah benar (int == int)
+          likedPosts[post.id] =
+              likes.any((like) => like.user.id == currentUserId);
         } catch (e) {
-          print("Error loading likes for post $postId: $e");
-          likeCounts[postId] = 0;
-          likedPosts[postId] = false;
+          // Fallback jika gagal mengambil data likes
+          likeCounts[post.id] = post.likesCount;
+          likedPosts[post.id] = post.isLikedByUser;
         }
       }),
     );
@@ -114,10 +108,7 @@ class FeedController extends ChangeNotifier {
 
   Future<void> searchUsers(String query) async {
     if (query.trim().isEmpty) {
-      showSearchResults = false;
-      searchResults = [];
-      isSearching = false;
-      notifyListeners();
+      clearSearch();
       return;
     }
 
@@ -127,41 +118,38 @@ class FeedController extends ChangeNotifier {
 
     try {
       final authToken = await SecureStorage.getToken();
-      final uri = Uri.parse(
-        'https://api.portalsi.com/api/users/search',
-      ).replace(queryParameters: {'username': query, 'full_name': query});
+      final uri = Uri.parse('https://api.portalsi.com/api/users/search')
+          .replace(
+              queryParameters: {'q': query}); // API search biasanya pakai 'q'
 
       final response = await http.get(
         uri,
         headers: {
           'Authorization': 'Bearer $authToken',
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
-      ).timeout(const Duration(seconds: 10));
+      );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        List<dynamic> users = [];
-
-        if (data is Map<String, dynamic>) {
-          users = data['data'] ?? data['users'] ?? [];
-        } else if (data is List) {
-          users = data;
+        final usersJson = (data['data'] ?? data['users'] ?? []);
+        if (usersJson is List) {
+          searchResults = usersJson.map((item) => User.fromJson(item)).toList();
+        } else {
+          searchResults = [];
         }
 
-        searchResults = users;
-        isSearching = false;
-        notifyListeners();
+        // Ubah setiap item JSON menjadi objek User
+        searchResults = usersJson.map((item) => User.fromJson(item)).toList();
       } else {
         throw Exception('Failed to search users');
       }
     } catch (e) {
-      print('Error searching users: $e');
       searchResults = [];
+      _showErrorMessage('Gagal mencari pengguna. Coba lagi.');
+    } finally {
       isSearching = false;
       notifyListeners();
-      _showErrorMessage('Failed to search users. Please try again.');
     }
   }
 
@@ -173,24 +161,21 @@ class FeedController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> onLikePost(Map post, int index) async {
-    final postId = int.tryParse(post['post_id'].toString())!;
-    final currentLiked = likedPosts[postId] ?? false;
+  Future<void> onLikePost(Post post) async {
+    final postId = post.id;
+    final originalLiked = likedPosts[postId] ?? false;
+    final originalCount = likeCounts[postId] ?? 0;
 
-    // Optimistic update
-    likedPosts[postId] = !currentLiked;
-    likeCounts[postId] = (likeCounts[postId] ?? 0) + (currentLiked ? -1 : 1);
+    likedPosts[postId] = !originalLiked;
+    likeCounts[postId] = originalCount + (!originalLiked ? 1 : -1);
     notifyListeners();
 
-    // Send to server
-    final success = await LikeService().toggleLike(postId);
-
-    if (!success) {
-      // Rollback on failure
-      likedPosts[postId] = currentLiked;
-      likeCounts[postId] = (likeCounts[postId] ?? 0) + (currentLiked ? 1 : -1);
+    try {
+      await LikeService().toggleLike(postId);
+    } catch (e) {
+      likedPosts[postId] = originalLiked;
+      likeCounts[postId] = originalCount;
       notifyListeners();
-      print('Gagal mengirim like ke server');
     }
   }
 
@@ -202,47 +187,23 @@ class FeedController extends ChangeNotifier {
     );
   }
 
-  void navigateToPostDetail(dynamic item) {
-    final user = item['user'];
-    final postId = int.tryParse(item['post_id'].toString());
-
-    if (postId == null) {
-      print('ERROR: postId null, tidak bisa navigasi');
-      return;
-    }
-
+  void navigateToPostDetail(Post post) {
     Navigator.push(
       context,
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => PostDetailPage(
-          username: user?['username'] ?? 'Unknown User',
-          timeAgo: item['created_at'] != null
-              ? timeAgoFromDate(item['created_at'])
-              : 'Unknown time',
-          imageUrl: item['media_url'] ?? '',
-          content: item['caption'] ?? '',
-          likes: likeCounts[postId] ?? 0,
-          comments: item['comments_count'] ?? 0,
-          profileImageUrl: user?['profile_picture_url'] ?? '',
-          isVerified: user?['is_verified'] ?? false,
-          postId: postId,
-          isLiked: likedPosts[postId] ?? false,
+      MaterialPageRoute(
+        builder: (context) => PostDetailPage(
+          postId: post.id,
+          initialPost: post,
+          username: post.user.username,
+          timeAgo: post.createdAt.toString(), // fungsi custom format waktu
+          imageUrl: post.mediaUrl ?? '',
+          content: post.caption ?? '',
+          comments: post.commentsCount,
+          profileImageUrl: post.user.profilePictureUrl ?? '',
+          likes: post.likesCount,
+          isVerified: post.user.isVerified,
+          isLiked: post.isLikedByUser,
         ),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: animation.drive(
-                Tween(
-                  begin: Offset(0.3, 0.0),
-                  end: Offset.zero,
-                ).chain(CurveTween(curve: Curves.easeOutCubic)),
-              ),
-              child: child,
-            ),
-          );
-        },
-        transitionDuration: Duration(milliseconds: 400),
       ),
     );
   }
@@ -253,12 +214,6 @@ class FeedController extends ChangeNotifier {
         content: Text(message),
         backgroundColor: Colors.red.shade400,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        action: SnackBarAction(
-          label: 'Retry',
-          textColor: Colors.white,
-          onPressed: fetchPosts,
-        ),
       ),
     );
   }

@@ -1,22 +1,24 @@
 // lib/widgets/feed/feed_grid.dart
+
 import 'package:flutter/material.dart';
-import 'post_grid_item.dart';
+import '../../models/post_model.dart'; // PENTING: Import Post Model
 
 class FeedGrid extends StatelessWidget {
   final bool isLoading;
-  final List<dynamic> posts;
+  final List<Post> posts; // <-- PERBAIKAN 1: Terima List<Post>
   final Map<int, int> likeCounts;
   final Map<int, bool> likedPosts;
   final ScrollController scrollController;
   final Animation<double> fadeAnimation;
   final Future<void> Function() onRefresh;
-  final Future<void> Function(Map, int) onLikePost;
-  final Function(dynamic) onPostTap;
-  final Function(Map<String, dynamic>)
-      onUserTap; // Tambahkan callback untuk user tap
+  final Function(Post)
+      onLikePost; // <-- PERBAIKAN 2: Callback menerima objek Post
+  final Function(Post)
+      onPostTap; // <-- PERBAIKAN 3: Callback menerima objek Post
+  final Function(Map<String, dynamic>) onUserTap;
 
   const FeedGrid({
-    Key? key,
+    super.key,
     required this.isLoading,
     required this.posts,
     required this.likeCounts,
@@ -26,146 +28,117 @@ class FeedGrid extends StatelessWidget {
     required this.onRefresh,
     required this.onLikePost,
     required this.onPostTap,
-    required this.onUserTap, // Required parameter baru
-  }) : super(key: key);
+    required this.onUserTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-      return _buildLoadingState(context);
+    if (isLoading && posts.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (posts.isEmpty) {
-      return _buildEmptyState();
+      return const Center(
+          child: Text('Tidak ada postingan untuk ditampilkan.'));
     }
 
     return FadeTransition(
       opacity: fadeAnimation,
-      child: CustomScrollView(
+      child: GridView.builder(
         controller: scrollController,
-        physics: BouncingScrollPhysics(),
-        slivers: [
-          SliverPadding(
-            padding: EdgeInsets.all(20),
-            sliver: SliverGrid(
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 0.82,
-              ),
-              delegate: SliverChildBuilderDelegate(
-                (context, index) => PostGridItem(
-                  item: posts[index],
-                  index: index,
-                  likeCounts: likeCounts,
-                  likedPosts: likedPosts,
-                  onLikePost: onLikePost,
-                  onPostTap: onPostTap,
-                  onUserTap: onUserTap, // Pass callback ke PostGridItem
-                ),
-                childCount: posts.length,
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(child: SizedBox(height: 100)),
-        ],
-      ),
-    );
-  }
+        padding: const EdgeInsets.all(8),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 8,
+          mainAxisSpacing: 8,
+          childAspectRatio: 0.75, // Sesuaikan rasio aspek gambar
+        ),
+        itemCount: posts.length,
+        itemBuilder: (context, index) {
+          final Post post = posts[index]; // <-- Sekarang ini adalah objek Post
 
-  Widget _buildLoadingState(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 20,
-                  offset: Offset(0, 8),
-                ),
-              ],
-            ),
-            child: CircularProgressIndicator(
-              strokeWidth: 3,
-              color: Theme.of(context).primaryColor,
-            ),
-          ),
-          SizedBox(height: 24),
-          Text(
-            'Loading amazing content...',
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 20,
-                  offset: Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                Icon(
-                  Icons.photo_library_outlined,
-                  size: 64,
-                  color: Colors.grey[400],
-                ),
-                SizedBox(height: 16),
-                Text(
-                  'No posts yet',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.grey[700],
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Posts will appear here when available',
-                  style: TextStyle(color: Colors.grey[500], fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: onRefresh,
-            icon: Icon(Icons.refresh_rounded),
-            label: Text('Refresh'),
-            style: ElevatedButton.styleFrom(
-              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          return GestureDetector(
+            onTap: () => onPostTap(post), // <-- PERBAIKAN 4: Kirim objek Post
+            child: Card(
+              clipBehavior: Clip.antiAlias,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(12)),
+              elevation: 3,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.network(
+                    post.mediaUrl ?? '',
+                    fit: BoxFit.cover,
+                  ),
+                  // Gradient untuk membuat teks lebih mudah dibaca
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.7)
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
+                  ),
+                  // Info Pengguna dan Tombol Like
+                  Positioned(
+                    bottom: 8,
+                    left: 8,
+                    right: 8,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => onUserTap(post.user.toJson()),
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 12,
+                                  backgroundImage: NetworkImage(
+                                      post.user.profilePictureUrl ?? ''),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    post.user.username,
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => onLikePost(
+                              post), // <-- PERBAIKAN 5: Kirim objek Post
+                          child: Icon(
+                            likedPosts[post.id] == true
+                                ? Icons.favorite
+                                : Icons.favorite_border,
+                            color: likedPosts[post.id] == true
+                                ? Colors.red
+                                : Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                ],
               ),
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
