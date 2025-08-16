@@ -42,7 +42,7 @@ class ChatRoomController extends ChangeNotifier {
       final profilePic = await SecureStorage.getProfilePicture();
 
       _currentUser = User(
-        id: userId,
+        id: userId!,
         username: username ?? 'Saya',
         profilePictureUrl: profilePic,
       );

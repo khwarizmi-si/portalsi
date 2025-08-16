@@ -1,13 +1,12 @@
 // lib/pages/profile_page.dart
 
 import 'package:flutter/material.dart';
-import 'package:portal_si/models/post_model.dart';
+import 'package:provider/provider.dart'; // <-- 1. IMPORT PROVIDER
+import 'package:portal_si/controllers/home_controller.dart'; // <-- 2. IMPORT CONTROLLER
+import 'package:portal_si/models/user_model.dart';
 import '../components/bottom_navigation.dart';
-import '../models/user_model.dart';
 import '../services/auth_service.dart';
-import '../services/post_service.dart';
 import '../services/follow_service.dart';
-import '../services/user_service.dart';
 import 'edit_profile_page.dart';
 import 'followers_following_page.dart';
 import 'post_detail.dart';
@@ -20,101 +19,64 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  // --- Menggunakan Tipe Data yang Benar ---
-  User? _user;
-  List<Post> _userPosts = [];
+  // [OPTIMASI] State lokal hanya untuk menampung daftar lengkap saat dibutuhkan
   List<dynamic> _followers = [];
   List<dynamic> _following = [];
 
-  bool _isLoading = true;
-  String? _error;
+  // [DIHAPUS] _user, _isLoading, _error, dan _loadAllData tidak lagi diperlukan
+  // karena semua data diambil dari HomeController.
 
-  @override
-  void initState() {
-    super.initState();
-    _loadAllData();
-  }
-
-  // --- Logika Pengambilan Data yang Sudah Benar ---
-  Future<void> _loadAllData() async {
-    setStateIfMounted(() => _isLoading = true);
-    try {
-      final user = await ProfileService().getProfile();
-      if (!mounted) return;
-
-      setStateIfMounted(() => _user = user);
-
-      final userId = user.id;
-      if (userId == null) {
-        throw Exception('User ID tidak valid.');
-      }
-
-      final userPostsResult = await _fetchUserPosts(userId);
-      await _fetchFollowData(userId);
-
-      if (mounted) {
-        setStateIfMounted(() {
-          _userPosts = userPostsResult;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setStateIfMounted(() {
-          _error = e.toString();
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  void setStateIfMounted(f) {
-    if (mounted) setState(f);
-  }
-
-  Future<List<Post>> _fetchUserPosts(int userId) async {
-    final allPosts = await PostService().fetchAllPosts();
-    return allPosts.where((post) => post.user.id == userId).toList();
-  }
-
+  // [OPTIMASI] Fungsi ini hanya dipanggil saat tombol pengikut/mengikuti ditekan
   Future<void> _fetchFollowData(int userId) async {
     try {
       final followersData = await FollowService().getFollowers(userId);
       final followingData = await FollowService().getFollowing(userId);
-      setStateIfMounted(() {
-        _followers = followersData;
-        _following = followingData;
-      });
+      if (mounted) {
+        setState(() {
+          _followers = followersData;
+          _following = followingData;
+        });
+      }
     } catch (e) {
       print("Error loading follow data: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Gagal memuat daftar pengikut.")));
+      }
     }
   }
 
-  Future<void> _navigateToEditProfile() async {
-    if (_user == null) return;
+  // [DIUBAH] Menerima 'user' sebagai parameter dari Consumer
+  Future<void> _navigateToEditProfile(User user) async {
+    final homeController = Provider.of<HomeController>(context, listen: false);
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-          builder: (context) => EditProfilePage(initialProfile: _user!)),
+          builder: (context) => EditProfilePage(initialProfile: user)),
     );
+    // Jika ada perubahan, refresh data di HomeController
     if (result == true) {
-      _loadAllData();
+      homeController.fetchPosts(isRefresh: true);
     }
   }
 
-  void _navigateToFollowersFollowing(int initialTab) {
-    if (_user == null) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => FollowersFollowingPage(
-          userId: _user!.id!,
-          initialTab: initialTab,
-          followers: _followers,
-          following: _following,
-        ),
-      ),
-    );
+  // [DIUBAH] Menerima 'user' sebagai parameter
+  void _navigateToFollowersFollowing(User user, int initialTab) {
+    _fetchFollowData(user.id).then((_) {
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => FollowersFollowingPage(
+              userId: user.id,
+              initialTab: initialTab,
+              followers: _followers,
+              following: _following,
+            ),
+          ),
+        );
+      }
+    });
   }
 
   void _onBottomNavTapped(int index) {
@@ -122,56 +84,74 @@ class _ProfilePageState extends State<ProfilePage> {
     if (index == 0) Navigator.pushReplacementNamed(context, '/home');
   }
 
-  // --- Widget Build Utama ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: _buildBody(),
+      // [DIUBAH] Widget utama sekarang dibungkus Consumer<HomeController>
+      body: Consumer<HomeController>(
+        builder: (context, controller, child) {
+          // Tampilkan loading indicator dari controller
+          if (controller.isLoading && controller.currentUser == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          // Tampilkan error dari controller
+          if (controller.errorMessage != null &&
+              controller.currentUser == null) {
+            return Center(child: Text(controller.errorMessage!));
+          }
+
+          // Ambil data user dari controller
+          final user = controller.currentUser;
+          if (user == null) {
+            return Center(
+              child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text("Gagal memuat data pengguna."),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => controller.fetchPosts(isRefresh: true),
+                      child: const Text("Coba Lagi"),
+                    )
+                  ]),
+            );
+          }
+
+          // Jika data user ada, bangun UI-nya
+          return _buildProfileView(user);
+        },
+      ),
       bottomNavigationBar:
           CustomBottomNavigation(selectedIndex: 4, onTap: _onBottomNavTapped),
     );
   }
 
-  Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_error != null) {
-      return Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text("Gagal memuat data: $_error"),
-          const SizedBox(height: 16),
-          ElevatedButton(
-              onPressed: _loadAllData, child: const Text("Coba Lagi"))
-        ]),
-      );
-    }
+  // [BARU] Widget untuk membangun view profil utama
+  Widget _buildProfileView(User user) {
     return RefreshIndicator(
-      onRefresh: _loadAllData,
+      onRefresh: () => Provider.of<HomeController>(context, listen: false)
+          .fetchPosts(isRefresh: true),
       child: CustomScrollView(
         slivers: [
-          _buildHeader(), // Menggunakan header versi detail
-          SliverToBoxAdapter(child: _buildProfileSection()),
-          _buildPostGridSliver(),
+          _buildHeader(user),
+          SliverToBoxAdapter(child: _buildProfileSection(user)),
+          _buildPostGridSliver(user),
         ],
       ),
     );
   }
 
-  // --- KODE UI DETAIL DARI FILE ASLI ANDA DIKEMBALIKAN & DIPERBAIKI ---
-
-  Widget _buildHeader() {
+  Widget _buildHeader(User user) {
     return SliverAppBar(
       backgroundColor: Colors.white,
       expandedHeight: 200,
-      pinned: false,
-      floating: true,
-      snap: true,
-      elevation: 0,
+      pinned: true,
+      elevation: 1,
       centerTitle: true,
       title: Text(
-        _user?.username ?? 'Profil',
+        user.username,
         style: const TextStyle(
             fontWeight: FontWeight.w600, fontSize: 16, color: Colors.black),
       ),
@@ -181,9 +161,10 @@ class _ProfilePageState extends State<ProfilePage> {
           onSelected: (value) async {
             if (value == 'logout') {
               await AuthService().logout();
-              if (mounted)
+              if (mounted) {
                 Navigator.pushNamedAndRemoveUntil(
                     context, '/login', (route) => false);
+              }
             }
           },
           itemBuilder: (BuildContext context) => [
@@ -192,108 +173,76 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
       ],
       flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: BoxDecoration(
-            image: DecorationImage(
-              // Menggunakan profile picture sebagai background header
-              image: NetworkImage(_user?.profilePictureUrl ??
-                  'https://i.pinimg.com/1200x/8c/56/c4/8c56c483afc07fbbc8d1c937c53c26b1.jpg'),
-              fit: BoxFit.cover,
-            ),
-          ),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.black.withOpacity(0.3),
-                  Colors.black.withOpacity(0.7)
-                ],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
-            child: Center(
-              child: Text(
-                _user?.username ?? 'Nama tidak tersedia',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 2),
-              ),
-            ),
-          ),
+        background: Image.network(
+          user.profilePictureUrl ?? 'https://via.placeholder.com/400',
+          fit: BoxFit.cover,
+          color: Colors.black.withOpacity(0.3),
+          colorBlendMode: BlendMode.darken,
         ),
       ),
     );
   }
 
-  Widget _buildProfileSection() {
+  Widget _buildProfileSection(User user) {
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.all(16),
+      transform:
+          Matrix4.translationValues(0.0, -20.0, 0.0), // Efek agar sedikit naik
       child: Column(
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Stack(
                 children: [
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.grey[200]!, width: 2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                          spreadRadius: -2,
-                        ),
-                      ],
-                      image: DecorationImage(
-                        image: NetworkImage(_user?.profilePictureUrl ??
-                            'https://via.placeholder.com/150'),
-                        fit: BoxFit.cover,
-                      ),
+                  CircleAvatar(
+                    radius: 45,
+                    backgroundColor: Colors.white,
+                    child: CircleAvatar(
+                      radius: 42,
+                      backgroundColor: Colors.grey[200],
+                      backgroundImage: user.profilePictureUrl != null &&
+                              user.profilePictureUrl!.isNotEmpty
+                          ? NetworkImage(user.profilePictureUrl!)
+                          : null,
                     ),
                   ),
                   Positioned(
                     bottom: 0,
                     right: 0,
                     child: GestureDetector(
-                      onTap: _navigateToEditProfile,
+                      onTap: () => _navigateToEditProfile(user),
                       child: Container(
-                        width: 24,
-                        height: 24,
+                        width: 32,
+                        height: 32,
                         decoration: BoxDecoration(
-                          color: Colors.blue[600],
+                          color: Colors.blue,
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 2),
                         ),
                         child: const Icon(Icons.edit,
-                            color: Colors.white, size: 12),
+                            color: Colors.white, size: 18),
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 20),
               Expanded(
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _buildStatItem(_userPosts.length.toString(), 'postingan'),
+                    _buildStatItem(user.postsCount.toString(), 'Postingan'),
                     GestureDetector(
-                      onTap: () => _navigateToFollowersFollowing(0),
+                      onTap: () => _navigateToFollowersFollowing(user, 0),
                       child: _buildStatItem(
-                          _followers.length.toString(), 'pengikut'),
+                          user.followersCount.toString(), 'Pengikut'),
                     ),
                     GestureDetector(
-                      onTap: () => _navigateToFollowersFollowing(1),
+                      onTap: () => _navigateToFollowersFollowing(user, 1),
                       child: _buildStatItem(
-                          _following.length.toString(), 'mengikuti'),
+                          user.followingCount.toString(), 'Mengikuti'),
                     ),
                   ],
                 ),
@@ -307,15 +256,15 @@ class _ProfilePageState extends State<ProfilePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _user?.fullName ?? 'Nama tidak tersedia',
+                  user.fullName ?? 'Nama tidak tersedia',
                   style: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 16),
+                      fontWeight: FontWeight.bold, fontSize: 18),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 Text(
-                  _user?.bio ?? 'Tidak ada bio',
+                  user.bio ?? 'Tidak ada bio',
                   style: TextStyle(
-                      fontSize: 14, color: Colors.grey[700], height: 1.3),
+                      fontSize: 14, color: Colors.grey[700], height: 1.4),
                 ),
               ],
             ),
@@ -325,15 +274,16 @@ class _ProfilePageState extends State<ProfilePage> {
             children: [
               Expanded(
                 child: ElevatedButton(
-                  onPressed: _navigateToEditProfile,
+                  onPressed: () => _navigateToEditProfile(user),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[600],
+                    backgroundColor: Colors.blue,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
+                        borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
-                  child: const Text('Edit profile',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  child: const Text('Edit Profil',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
               const SizedBox(width: 12),
@@ -342,9 +292,11 @@ class _ProfilePageState extends State<ProfilePage> {
                   onPressed: () {},
                   style: OutlinedButton.styleFrom(
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
+                        borderRadius: BorderRadius.circular(8)),
+                    side: BorderSide(color: Colors.grey.shade300),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
-                  child: const Text('Bagikan Profile'),
+                  child: const Text('Bagikan Profil'),
                 ),
               ),
             ],
@@ -366,8 +318,10 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildPostGridSliver() {
-    if (_userPosts.isEmpty) {
+  Widget _buildPostGridSliver(User user) {
+    final posts = user.recentPosts;
+
+    if (posts.isEmpty) {
       return const SliverToBoxAdapter(
         child: Center(
           child: Padding(
@@ -382,37 +336,35 @@ class _ProfilePageState extends State<ProfilePage> {
       sliver: SliverGrid(
         delegate: SliverChildBuilderDelegate(
           (context, index) {
-            final Post post = _userPosts[index];
+            final post = posts[index];
             return GestureDetector(
               onTap: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => PostDetail(postId: post.id),
-                  ),
+                      builder: (context) => PostDetail(postId: post.postId)),
                 );
               },
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 4,
-                        offset: const Offset(0, 2)),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    post.mediaUrl ?? '',
-                    fit: BoxFit.cover,
-                  ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  post.mediaUrl,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (context, child, progress) {
+                    if (progress == null) return child;
+                    return Container(color: Colors.grey[200]);
+                  },
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                        color: Colors.grey[200],
+                        child:
+                            const Icon(Icons.broken_image, color: Colors.grey));
+                  },
                 ),
               ),
             );
           },
-          childCount: _userPosts.length,
+          childCount: posts.length,
         ),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 3,

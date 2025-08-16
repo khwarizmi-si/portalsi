@@ -1,16 +1,11 @@
 // lib/pages/other_profile_page.dart
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:portal_si/models/user_model.dart';
 import '../components/bottom_navigation.dart';
-import '../models/post_model.dart';
-import '../services/user_service.dart'; // Menggunakan nama service yang benar
-import '../services/post_service.dart';
+import '../services/user_service.dart';
 import '../services/follow_service.dart';
 import 'followers_following_page.dart';
-
-// Asumsi ProfileModel ada di file user_service.dart (atau profile_service.dart)
-// Jika sudah dipisah, import file modelnya di sini.
 
 class OtherProfilePage extends StatefulWidget {
   final String username;
@@ -23,8 +18,8 @@ class OtherProfilePage extends StatefulWidget {
 
 class _OtherProfilePageState extends State<OtherProfilePage>
     with TickerProviderStateMixin {
-  ProfileModel? _profileData;
-  List<Post> _userPosts = [];
+  // [DIUBAH] Menggunakan User model, bukan ProfileModel lagi
+  User? _profileData;
   List<dynamic> _followers = [];
   List<dynamic> _following = [];
 
@@ -33,7 +28,6 @@ class _OtherProfilePageState extends State<OtherProfilePage>
   bool _isFollowActionLoading = false;
   String? _error;
 
-  // Animasi dari kode asli Anda
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
@@ -41,7 +35,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
   void initState() {
     super.initState();
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 600),
       vsync: this,
     );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -63,26 +57,18 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     });
 
     try {
+      // [LEBIH EFISIEN] Cukup satu panggilan API untuk mendapatkan semua data utama
       final profile = await ProfileService().getOtherProfile(widget.username);
       final followStatus =
           await FollowService().getFollowStatus(widget.username);
-      final isCurrentlyFollowing = followStatus['isFollowing'] ?? false;
-
-      final futurePosts = _fetchUserPosts(profile.username);
-      final futureFollowData = _fetchFollowData(profile.id);
-
-      final userPostsResult = await futurePosts;
-      await futureFollowData;
 
       if (mounted) {
         setState(() {
           _profileData = profile;
-          _isFollowing = isCurrentlyFollowing;
-          _userPosts = userPostsResult;
+          _isFollowing = followStatus['isFollowing'] ?? false;
           _isLoading = false;
         });
-        _animationController.forward(
-            from: 0.0); // Jalankan animasi setelah data dimuat
+        _animationController.forward(from: 0.0);
       }
     } catch (e) {
       if (mounted) {
@@ -94,17 +80,14 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     }
   }
 
-  Future<List<Post>> _fetchUserPosts(String targetUsername) async {
-    final allPosts = await PostService().fetchAllPosts();
-    return allPosts
-        .where((post) => post.user.username == targetUsername)
-        .toList();
-  }
-
-  Future<void> _fetchFollowData(int userId) async {
+  // Fungsi ini dipanggil hanya saat diperlukan untuk melihat daftar lengkap
+  Future<void> _fetchFollowData() async {
+    if (_profileData == null) return;
     try {
-      final fetchedFollowers = await FollowService().getFollowers(userId);
-      final fetchedFollowing = await FollowService().getFollowing(userId);
+      final fetchedFollowers =
+          await FollowService().getFollowers(_profileData!.id);
+      final fetchedFollowing =
+          await FollowService().getFollowing(_profileData!.id);
       if (mounted) {
         setState(() {
           _followers = fetchedFollowers;
@@ -122,14 +105,28 @@ class _OtherProfilePageState extends State<OtherProfilePage>
 
     try {
       final username = _profileData!.username;
+      final originalFollowersCount = _profileData!.followersCount;
+
       if (_isFollowing) {
+        // Optimistic update for unfollow
+        setState(() {
+          _isFollowing = false;
+          _profileData = _profileData!
+              .copyWith(followersCount: originalFollowersCount - 1);
+        });
         await FollowService().unfollowUser(username);
-        if (mounted) setState(() => _isFollowing = false);
       } else {
+        // Optimistic update for follow
+        setState(() {
+          _isFollowing = true;
+          _profileData = _profileData!
+              .copyWith(followersCount: originalFollowersCount + 1);
+        });
         await FollowService().followUser(username);
-        if (mounted) setState(() => _isFollowing = true);
       }
-      await _fetchFollowData(_profileData!.id);
+    } catch (e) {
+      // Rollback on error
+      await _loadAllData(); // Reload all data to ensure consistency
     } finally {
       if (mounted) setState(() => _isFollowActionLoading = false);
     }
@@ -137,20 +134,22 @@ class _OtherProfilePageState extends State<OtherProfilePage>
 
   void _navigateToFollowersFollowing(int initialTab) {
     if (_profileData == null) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => FollowersFollowingPage(
-          userId: _profileData!.id,
-          initialTab: initialTab,
-          followers: _followers,
-          following: _following,
-        ),
-      ),
-    ).then((_) => _fetchFollowData(_profileData!.id));
+    _fetchFollowData().then((_) {
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => FollowersFollowingPage(
+              userId: _profileData!.id,
+              initialTab: initialTab,
+              followers: _followers,
+              following: _following,
+            ),
+          ),
+        );
+      }
+    });
   }
-
-  // --- KODE UI YANG DIKEMBALIKAN KE VERSI ASLI ANDA ---
 
   @override
   Widget build(BuildContext context) {
@@ -158,7 +157,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
       backgroundColor: Colors.white,
       body: _buildBody(),
       bottomNavigationBar:
-          CustomBottomNavigation(selectedIndex: 4, onTap: (_) {}),
+          CustomBottomNavigation(selectedIndex: 0, onTap: (_) {}),
     );
   }
 
@@ -196,16 +195,9 @@ class _OtherProfilePageState extends State<OtherProfilePage>
       expandedHeight: 200,
       pinned: true,
       backgroundColor: Colors.white,
-      elevation: 0,
+      elevation: 1,
       leading: IconButton(
-        icon: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.3),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
-        ),
+        icon: const Icon(Icons.arrow_back),
         onPressed: () => Navigator.pop(context),
       ),
       title: Text(
@@ -213,33 +205,15 @@ class _OtherProfilePageState extends State<OtherProfilePage>
         style: const TextStyle(
             color: Colors.black, fontSize: 18, fontWeight: FontWeight.w600),
       ),
-      actions: [
-        IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.3),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.more_vert, color: Colors.white, size: 20),
-          ),
-          onPressed: () {/* _showMoreOptions */},
-        ),
-      ],
       flexibleSpace: FlexibleSpaceBar(
         background: Hero(
           tag: 'cover_${_profileData?.username ?? ''}',
           child: Container(
             decoration: BoxDecoration(
-              image: const DecorationImage(
-                image: NetworkImage(
-                    'https://i.pinimg.com/1200x/fb/23/03/fb2303e0fdae024825b9d15a3389e2da.jpg'),
+              image: DecorationImage(
+                image: NetworkImage(_profileData?.profilePictureUrl ??
+                    'https://via.placeholder.com/400'),
                 fit: BoxFit.cover,
-              ),
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Colors.transparent, Colors.black.withOpacity(0.3)],
               ),
             ),
           ),
@@ -258,31 +232,17 @@ class _OtherProfilePageState extends State<OtherProfilePage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Hero(
-                tag: 'profile_${_profileData?.username ?? ''}',
-                child: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 4),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 10,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: CircleAvatar(
-                    radius: 45,
-                    backgroundColor: Colors.grey[300],
-                    backgroundImage: _profileData!.profilePictureUrl.isNotEmpty
-                        ? NetworkImage(_profileData!.profilePictureUrl)
-                        : null,
-                    child: _profileData!.profilePictureUrl.isEmpty
-                        ? Icon(Icons.person, size: 45, color: Colors.grey[600])
-                        : null,
-                  ),
+                tag: 'profile_${_profileData!.username}',
+                child: CircleAvatar(
+                  radius: 45,
+                  backgroundColor: Colors.grey[200],
+                  backgroundImage: _profileData!.profilePictureUrl != null &&
+                          _profileData!.profilePictureUrl!.isNotEmpty
+                      ? NetworkImage(_profileData!.profilePictureUrl!)
+                      : null,
                 ),
               ),
               const SizedBox(width: 24),
@@ -291,11 +251,11 @@ class _OtherProfilePageState extends State<OtherProfilePage>
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     _buildStatItem(
-                        _userPosts.length.toString(), 'Postingan', null),
-                    _buildStatItem(_followers.length.toString(), 'Pengikut',
-                        () => _navigateToFollowersFollowing(0)),
-                    _buildStatItem(_following.length.toString(), 'Mengikuti',
-                        () => _navigateToFollowersFollowing(1)),
+                        _profileData!.postsCount.toString(), 'Postingan', null),
+                    _buildStatItem(_profileData!.followersCount.toString(),
+                        'Pengikut', () => _navigateToFollowersFollowing(0)),
+                    _buildStatItem(_profileData!.followingCount.toString(),
+                        'Mengikuti', () => _navigateToFollowersFollowing(1)),
                   ],
                 ),
               ),
@@ -303,15 +263,13 @@ class _OtherProfilePageState extends State<OtherProfilePage>
           ),
           const SizedBox(height: 20),
           Text(
-            _profileData!.fullName.isNotEmpty
-                ? _profileData!.fullName
-                : _profileData!.username,
+            _profileData!.fullName ?? _profileData!.username,
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
           ),
-          if (_profileData!.bio.isNotEmpty) ...[
+          if (_profileData!.bio != null && _profileData!.bio!.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
-              _profileData!.bio,
+              _profileData!.bio!,
               style:
                   TextStyle(color: Colors.grey[700], height: 1.5, fontSize: 15),
             ),
@@ -347,7 +305,8 @@ class _OtherProfilePageState extends State<OtherProfilePage>
                 ? const SizedBox(
                     height: 20,
                     width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2))
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
                 : Text(_isFollowing ? 'Mengikuti' : 'Ikuti',
                     style: const TextStyle(fontWeight: FontWeight.w600)),
           ),
@@ -375,6 +334,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     return GestureDetector(
       onTap: onTap,
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(count,
               style:
@@ -391,7 +351,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
   }
 
   Widget _buildPostGridSliver() {
-    if (_userPosts.isEmpty) {
+    if (_profileData == null || _profileData!.recentPosts.isEmpty) {
       return const SliverToBoxAdapter(
         child: Center(
           child: Padding(
@@ -404,42 +364,22 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     return SliverPadding(
       padding: const EdgeInsets.all(4),
       sliver: SliverGrid(
-        delegate: SliverChildBuilderDelegate((context, index) {
-          final Post post = _userPosts[index]; // <-- Logika sudah benar
-          return GestureDetector(
-            onTap: () => _showImageDetail(
-                post, index), // <-- FUNGSI INI DITAMBAHKAN KEMBALI
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 5,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            final post = _profileData!.recentPosts[index];
+            return GestureDetector(
+              onTap: () => _showImageDetail(post, index),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Hero(
-                      tag:
-                          'post_${post.id}_$index', // Gunakan ID post agar unik
-                      child: Image.network(
-                        post.mediaUrl ?? '', // <-- Logika sudah benar
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    // Jika ingin ada gradient atau info tambahan, tambahkan di sini
-                  ],
+                child: Hero(
+                  tag: 'post_${post.postId}_$index',
+                  child: Image.network(post.mediaUrl, fit: BoxFit.cover),
                 ),
               ),
-            ),
-          );
-        }, childCount: _userPosts.length),
+            );
+          },
+          childCount: _profileData!.recentPosts.length,
+        ),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 3,
           crossAxisSpacing: 4,
@@ -449,8 +389,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     );
   }
 
-  // --- FUNGSI UNTUK MELIHAT DETAIL GAMBAR DARI KODE ASLI ANDA ---
-  void _showImageDetail(Post post, int index) {
+  void _showImageDetail(SimplePost post, int index) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => Scaffold(
@@ -463,22 +402,46 @@ class _OtherProfilePageState extends State<OtherProfilePage>
               onPressed: () => Navigator.pop(context),
             ),
             title: Text(post.caption ?? '',
-                style: const TextStyle(
-                    color: Colors.white)), // <-- Logika sudah benar
+                style: const TextStyle(color: Colors.white)),
           ),
           body: Center(
             child: Hero(
-              tag: 'post_${post.id}_$index', // Tag harus sama persis
+              tag: 'post_${post.postId}_$index', // Tag harus sama persis
               child: InteractiveViewer(
-                child: Image.network(
-                  post.mediaUrl ?? '', // <-- Logika sudah benar
-                  fit: BoxFit.contain,
-                ),
+                child: Image.network(post.mediaUrl, fit: BoxFit.contain),
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+// Tambahan: Implementasi copyWith pada User model jika belum ada.
+// Buka file user_model.dart dan tambahkan method ini di dalam class User
+extension UserCopyWith on User {
+  User copyWith({
+    int? id,
+    String? username,
+    int? followersCount,
+    // ...tambahkan field lain yang ingin di-update
+  }) {
+    return User(
+      id: id ?? this.id,
+      username: username ?? this.username,
+      followersCount: followersCount ?? this.followersCount,
+      // Salin nilai field lain dari objek `this`
+      email: this.email,
+      fullName: this.fullName,
+      bio: this.bio,
+      profilePictureUrl: this.profilePictureUrl,
+      isVerified: this.isVerified,
+      isPrivate: this.isPrivate,
+      followingCount: this.followingCount,
+      postsCount: this.postsCount,
+      recentPosts: this.recentPosts,
+      role: this.role,
     );
   }
 }

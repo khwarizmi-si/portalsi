@@ -8,17 +8,30 @@ class PostService extends ApiService {
   factory PostService() => _instance;
 
   /// Mengambil semua post untuk feed utama.
-  Future<List<Post>> fetchAllPosts() async {
-    // 1. Simpan hasil ke 'dynamic' terlebih dahulu
-    final dynamic data = await get('posts');
+  // lib/services/post_service.dart
 
-    // 2. Lakukan pengecekan tipe data yang aman
-    if (data is List) {
-      return data.map((item) => Post.fromJson(item)).toList();
+// 1. Ubah nama fungsi dan tambahkan parameter page
+  Future<List<Post>> fetchPosts({int page = 1}) async {
+    // 2. Tambahkan page sebagai query parameter ke endpoint
+    // Ini akan menghasilkan request ke /api/posts?page=1, /api/posts?page=2, dst.
+    final dynamic responseData = await get('posts', queryParams: {
+      'page': page.toString(),
+    });
+
+    // 3. Sesuaikan cara membaca response paginasi dari backend
+    // Biasanya, respons paginasi adalah sebuah Map yang berisi list data.
+    // Contoh: { "data": [ ...posts... ], "current_page": 1, ... }
+    // Ganti 'data' jika backend Anda menggunakan key yang berbeda (misal: 'posts')
+    if (responseData is Map<String, dynamic> && responseData['data'] is List) {
+      final List<dynamic> postsData = responseData['data'];
+      return postsData.map((item) => Post.fromJson(item)).toList();
+    } else if (responseData is List) {
+      // Fallback jika API tetap mengembalikan List langsung (untuk halaman pertama)
+      return responseData.map((item) => Post.fromJson(item)).toList();
     } else {
-      // Jika data null atau bukan list, kembalikan list kosong
+      // Jika format tidak dikenali, kembalikan list kosong
       print(
-          '⚠️ Peringatan: Endpoint /posts tidak mengembalikan List. Data: $data');
+          '⚠️ Peringatan: Endpoint /posts dengan paginasi tidak mengembalikan format yang diharapkan. Data: $responseData');
       return [];
     }
   }

@@ -2,18 +2,17 @@
 import 'package:flutter/material.dart';
 import '../models/post_model.dart';
 import '../models/user_model.dart';
-import '../models/like_model.dart';
-import '../models/comment_model.dart';
+// Import Like dan Comment model tidak lagi diperlukan di sini
 import '../services/post_service.dart';
 import '../services/like_service.dart';
 import '../services/comment_service.dart';
-import '../services/user_service.dart'; // Import ProfileService untuk get user
+import '../services/user_service.dart';
 
 class HomeController extends ChangeNotifier {
   final PostService _postService = PostService();
   final LikeService _likeService = LikeService();
   final CommentService _commentService = CommentService();
-  final ProfileService _profileService = ProfileService(); // Tambahkan ini
+  final ProfileService _profileService = ProfileService();
 
   List<Post> _posts = [];
   List<Post> get posts => _posts;
@@ -21,21 +20,24 @@ class HomeController extends ChangeNotifier {
   Post? _pinnedPost;
   Post? get pinnedPost => _pinnedPost;
 
-  // [TAMBAHAN] State untuk menyimpan data pengguna yang sedang login
   User? _currentUser;
   User? get currentUser => _currentUser;
 
+  // State untuk paginasi
+  int _currentPage = 1;
+  bool _hasMore = true;
   bool _isLoading = true;
   bool get isLoading => _isLoading;
+  bool _isLoadingMore = false;
+  bool get isLoadingMore => _isLoadingMore;
 
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
   HomeController() {
-    fetchPosts();
+    fetchPosts(isRefresh: true);
   }
 
-  // [PENYEMPURNAAN] Fungsi helper untuk mencari post dengan lebih mudah
   Post getPostById(int postId) {
     if (_pinnedPost?.id == postId) {
       return _pinnedPost!;
@@ -46,102 +48,95 @@ class HomeController extends ChangeNotifier {
   }
 
   Future<void> fetchPosts({bool isRefresh = false}) async {
-    // [PENYEMPURNAAN] Logika loading yang lebih sederhana
     _isLoading = true;
-    if (isRefresh) _posts.clear(); // Kosongkan list jika refresh
+    if (isRefresh) {
+      _currentPage = 1;
+      _hasMore = true;
+      _posts.clear();
+      _pinnedPost = null;
+    }
     notifyListeners();
 
     _errorMessage = null;
 
     try {
-      // Fetch user dan posts secara bersamaan untuk efisiensi
+      // Cukup panggil API user dan posts. Data like/comment sudah lengkap.
       final results = await Future.wait([
         _profileService.getProfile(),
-        _postService.fetchAllPosts(),
+        _postService.fetchPosts(
+            page: 1), // [DIUBAH] Memastikan selalu mulai dari halaman 1
       ]);
 
       _currentUser = results[0] as User;
       List<Post> allPosts = results[1] as List<Post>;
 
-      // Logika Pinned Post Anda (sudah bagus, tidak diubah)
       final pinnedIndex = allPosts.indexWhere((p) => p.user.role == 'admin');
       if (pinnedIndex != -1) {
         _pinnedPost = allPosts.removeAt(pinnedIndex);
-      } else {
-        _pinnedPost = null;
       }
+
       _posts = allPosts;
+      _currentPage = 1;
+      _hasMore = allPosts.isNotEmpty;
 
-      // Beri tahu UI bahwa post sudah ada (staged loading)
-      _isLoading = false;
-      notifyListeners();
-
-      // Lanjutkan fetch detail likes/comments di background
-      final List<Post> postsToProcess = [..._posts];
-      if (_pinnedPost != null) {
-        postsToProcess.add(_pinnedPost!);
-      }
-
-      await Future.wait(postsToProcess.map((post) async {
-        try {
-          final detailResults = await Future.wait([
-            _likeService.getLikes(post.id),
-            _commentService.getComments(post.id)
-          ]);
-
-          final likes = detailResults[0] as List<Like>;
-          final comments = detailResults[1] as List<Comment>;
-
-          post.likesCount = likes.length;
-          post.commentsCount = comments.length;
-          post.isLikedByUser =
-              likes.any((like) => like.user.id == _currentUser?.id);
-        } catch (e) {
-          debugPrint('Error fetching details for post ${post.id}: $e');
-        }
-      }));
-
-      // Beri tahu UI untuk terakhir kalinya dengan data lengkap
-      notifyListeners();
+      // [OPTIMASI] Seluruh blok untuk mengambil detail like/comment per post DIHAPUS
+      // karena tidak lagi diperlukan. Ini menyelesaikan masalah N+1 dan error 429.
     } catch (e) {
       _errorMessage = e.toString();
+    } finally {
       _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchMorePosts() async {
+    if (_isLoadingMore || !_hasMore) return;
+    _isLoadingMore = true;
+    notifyListeners();
+
+    try {
+      _currentPage++;
+      final newPosts = await _postService.fetchPosts(page: _currentPage);
+      if (newPosts.isEmpty) {
+        _hasMore = false;
+      } else {
+        _posts.addAll(newPosts);
+      }
+    } catch (e) {
+      _currentPage--; // Kembalikan nomor halaman jika gagal
+      _errorMessage = e.toString();
+    } finally {
+      _isLoadingMore = false;
       notifyListeners();
     }
   }
 
   Future<void> toggleLike(int postId) async {
+    final post = getPostById(postId);
+    // Optimistic UI update
+    post.isLikedByUser = !post.isLikedByUser;
+    post.isLikedByUser ? post.likesCount++ : post.likesCount--;
+    notifyListeners();
+
     try {
-      final post = getPostById(postId);
-      // Optimistic UI update
-      post.isLikedByUser = !post.isLikedByUser;
-      post.isLikedByUser ? post.likesCount++ : post.likesCount--;
-      notifyListeners();
-      // Call service
       await _likeService.toggleLike(postId);
     } catch (e) {
-      // Rollback jika gagal
       debugPrint("Gagal toggle like, melakukan rollback: $e");
-      final post = getPostById(postId);
+      // Rollback jika gagal
       post.isLikedByUser = !post.isLikedByUser;
       post.isLikedByUser ? post.likesCount++ : post.likesCount--;
       notifyListeners();
     }
   }
 
-  // [TAMBAHAN] Fungsi untuk mengirim komentar
   Future<void> postComment(int postId, String content) async {
     try {
-      // Panggil service untuk mengirim komentar
       await _commentService.addComment(postId, content);
-
-      // Jika berhasil, update jumlah komentar di UI
       final post = getPostById(postId);
       post.commentsCount++;
       notifyListeners();
     } catch (e) {
       debugPrint("Gagal mengirim komentar dari controller: $e");
-      // Opsional: tampilkan notifikasi error ke pengguna
     }
   }
 }
