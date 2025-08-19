@@ -16,6 +16,7 @@ import 'pages/story_page.dart';
 import 'utils/secure_storage.dart';
 import 'managers/cache_manager.dart';
 import 'services/follow_service.dart';
+import 'services/socket_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

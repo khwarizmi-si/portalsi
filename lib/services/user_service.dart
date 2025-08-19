@@ -85,11 +85,55 @@ class ProfileService {
   }
 
   Future<String?> uploadProfilePicture(File imageFile) async {
-    // ... (Fungsi ini tidak perlu diubah)
+    try {
+      final token = await SecureStorage.getToken();
+      if (token == null) {
+        throw Exception('Authentication required');
+      }
+
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$_baseUrl/account/settings'),
+      );
+
+      request.headers.addAll({'Authorization': 'Bearer $token'});
+      request.files.add(
+          await http.MultipartFile.fromPath('profile_picture', imageFile.path));
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        return data['profile_picture_url'];
+      } else {
+        final errorBody = json.decode(response.body);
+        final errorMessage = errorBody['message'] ??
+            'Failed to upload image: ${response.statusCode}';
+        throw Exception(errorMessage);
+      }
+    } catch (e) {
+      throw Exception('Error uploading image: $e');
+    }
   }
 
   Future<File?> pickImage({required ImageSource source}) async {
-    // ... (Fungsi ini tidak perlu diubah)
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: source,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+
+      if (image != null) {
+        return File(image.path);
+      }
+      return null;
+    } catch (e) {
+      throw Exception('Error picking image: $e');
+    }
   }
 
   // [DIUBAH] Mengembalikan Future<User?>

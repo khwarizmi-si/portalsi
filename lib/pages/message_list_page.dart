@@ -1,5 +1,8 @@
+// lib/pages/message_list_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart'; // Import intl untuk format waktu
 import '../controllers/message_list_controller.dart';
 import '../models/chat.dart';
 import '../models/user_model.dart';
@@ -40,7 +43,6 @@ class MessageListPage extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Consumer<MessageListController>(
                 builder: (context, controller, _) {
-                  // Hubungkan TextField ke metode filter di controller
                   return TextField(
                     onChanged: (value) => controller.filterConversations(value),
                     decoration: InputDecoration(
@@ -95,20 +97,32 @@ class _ConversationTile extends StatelessWidget {
   final Conversation conversation;
   const _ConversationTile({required this.conversation});
 
+  // Helper untuk format waktu
+  String _formatTimestamp(DateTime dt) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDate = DateTime(dt.year, dt.month, dt.day);
+
+    if (messageDate == today) {
+      return DateFormat.Hm().format(dt); // Contoh: 16:30
+    } else {
+      return DateFormat('dd/MM/yy').format(dt); // Contoh: 19/08/25
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Akses data dari `conversation.user`
-    final User user = conversation.user;
-
-    final bool isUnread = !conversation.isRead;
+    final User partner = conversation.partner;
+    final bool isUnread = conversation.unreadCount > 0;
     final fontWeight = isUnread ? FontWeight.bold : FontWeight.normal;
     final textColor = isUnread ? Colors.black : Colors.grey.shade600;
 
     return InkWell(
       onTap: () {
-        // Navigasi ke ruang obrolan dengan mengirim objek User yang benar
+        // Navigasi dengan objek User yang datanya mungkin belum lengkap.
+        // Halaman ChatRoomPage disarankan untuk memuat data lengkap user ini.
         Navigator.push(context,
-            MaterialPageRoute(builder: (_) => ChatRoomPage(user: user)));
+            MaterialPageRoute(builder: (_) => ChatRoomPage(user: partner)));
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
@@ -117,9 +131,15 @@ class _ConversationTile extends StatelessWidget {
             CircleAvatar(
               radius: 28,
               backgroundColor: Colors.grey.shade200,
-              backgroundImage: user.profilePictureUrl != null &&
-                      user.profilePictureUrl!.isNotEmpty
-                  ? NetworkImage(user.profilePictureUrl!)
+              backgroundImage: partner.profilePictureUrl != null &&
+                      partner.profilePictureUrl!.isNotEmpty
+                  ? NetworkImage(partner.profilePictureUrl!)
+                  : null,
+              child: partner.profilePictureUrl == null ||
+                      partner.profilePictureUrl!.isEmpty
+                  ? Text(partner.username.substring(0, 1).toUpperCase(),
+                      style: const TextStyle(
+                          fontSize: 20, fontWeight: FontWeight.bold))
                   : null,
             ),
             const SizedBox(width: 16),
@@ -128,7 +148,8 @@ class _ConversationTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    user.fullName ?? user.username,
+                    // Tampilkan username karena full_name belum ada dari API chat-list
+                    partner.username,
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: fontWeight,
@@ -137,7 +158,7 @@ class _ConversationTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${conversation.lastMessage} ・ ${conversation.lastMessageTime}',
+                    '${conversation.lastMessage} ・ ${_formatTimestamp(conversation.timestamp)}',
                     style: TextStyle(fontSize: 14, color: textColor),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -145,11 +166,19 @@ class _ConversationTile extends StatelessWidget {
                 ],
               ),
             ),
-            IconButton(
-              onPressed: () {},
-              icon:
-                  Icon(Icons.camera_alt_outlined, color: Colors.grey.shade600),
-            ),
+            if (isUnread) // Tampilkan badge jika belum dibaca
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: const BoxDecoration(
+                  color:
+                      Colors.deepPurple, // Bisa disesuaikan dengan warna tema
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  conversation.unreadCount.toString(),
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ),
           ],
         ),
       ),

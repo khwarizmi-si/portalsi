@@ -53,4 +53,20 @@ class Comment {
       liked: json['is_liked'] as bool? ?? false, // Sesuaikan jika nama key beda
     );
   }
+
+  // 🔹 Tambahkan method ini untuk emit socket
+  Map<String, dynamic> toJson() {
+    return {
+      'comment_id': id,
+      'post_id': postId,
+      'user_id': userId,
+      'content': content,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+      'username': username,
+      'profile_picture_url': profilePictureUrl,
+      'likes_count': likes,
+      'is_liked': liked,
+    };
+  }
 }

@@ -62,6 +62,7 @@ dependencies:
   # Untuk merekam & memutar voice note
   record: ^5.0.5
   dio: ^5.9.0
+  web_socket_channel: ^2.4.0
 
 
 

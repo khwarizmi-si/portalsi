@@ -1,6 +1,8 @@
+// lib/controllers/message_list_controller.dart
+
 import 'package:flutter/material.dart';
 import '../models/chat.dart';
-import '../services/message_service.dart';
+import '../services/message_service.dart'; // Pastikan path ini benar ke ChatService
 
 class MessageListController extends ChangeNotifier {
   final ChatService _chatService = ChatService();
@@ -39,10 +41,14 @@ class MessageListController extends ChangeNotifier {
     } else {
       _filteredConversations = _allConversations
           .where((convo) =>
-              (convo.user.fullName ?? '')
+              // ==== PERUBAHAN DI SINI ====
+              // Mengganti convo.user menjadi convo.partner
+              (convo.partner.fullName ?? '')
                   .toLowerCase()
                   .contains(query.toLowerCase()) ||
-              convo.user.username.toLowerCase().contains(query.toLowerCase()))
+              convo.partner.username
+                  .toLowerCase()
+                  .contains(query.toLowerCase()))
           .toList();
     }
     notifyListeners();
