@@ -4,7 +4,10 @@ import 'package:portal_si/pages/dashboard_page.dart';
 import 'package:portal_si/pages/profile_page.dart';
 import 'package:portal_si/pages/notif_page.dart';
 import 'package:portal_si/pages/create_post_page.dart';
-import 'package:portal_si/services/notification_service.dart'; // Import service API Anda
+import 'package:flutter/services.dart';
+import 'package:portal_si/services/notification_service.dart';
+
+import '../pages/create_announcement_page.dart'; // Import service API Anda
 
 class CustomBottomNavigation extends StatefulWidget {
   final int selectedIndex;
@@ -27,6 +30,8 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
   late Animation<double> _fabScaleAnimation;
   late Animation<double> _fabRotationAnimation;
   late Animation<Offset> _slideAnimation;
+
+  bool _isFabPressed = false;
 
   List<AnimationController> _iconAnimationControllers = [];
   List<Animation<double>> _iconScaleAnimations = [];
@@ -169,14 +174,71 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
     }
   }
 
-  void _onFabTapped() {
+  void _showCreateOptions() {
+    // Memberikan efek getaran realistis
+    HapticFeedback.mediumImpact();
+
+    // Menjalankan animasi rotasi dan skala yang sudah ada
     _fabAnimationController.forward().then((_) {
       _fabAnimationController.reverse();
     });
-    widget.onTap(2);
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => CreatePostPage()),
+
+    // Menampilkan modal bottom sheet
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          padding: EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Buat Baru",
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
+                ),
+              ),
+              SizedBox(height: 16),
+              ListTile(
+                leading: Icon(Icons.article_outlined, color: Colors.deepOrange),
+                title: Text("Buat Postingan"),
+                onTap: () {
+                  HapticFeedback.mediumImpact();
+                  Navigator.pop(context); // Tutup bottom sheet
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => CreatePostPage()),
+                  );
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.campaign_outlined, color: Colors.deepOrange),
+                title: Text("Buat Pengumuman"),
+                onTap: () {
+                  HapticFeedback.mediumImpact();
+                  Navigator.pop(context); // Tutup bottom sheet
+                  // Arahkan ke halaman baru
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => CreateAnnouncementPage()),
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -215,7 +277,8 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
                   _buildNavItem(Icons.home, 0),
                   _buildNavItem(Icons.search, 1),
                   SizedBox(width: 56), // Space for FAB
-                  _buildNotificationNavItem(), // Widget khusus untuk notifikasi
+                  // _buildNotificationNavItem(), // Widget khusus untuk notifikasi
+                  _buildNavItem(Icons.shopping_cart, 2),
                   _buildNavItem(Icons.person_outline, 4),
                 ],
               ),
@@ -224,41 +287,62 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
             // Floating Action Button dengan animasi
             Positioned(
               top: -24,
-              child: GestureDetector(
-                onTap: _onFabTapped,
-                child: AnimatedBuilder(
-                  animation: _fabAnimationController,
-                  builder: (context, child) {
-                    return Transform.scale(
-                      scale: _fabScaleAnimation.value,
-                      child: Transform.rotate(
-                        angle: _fabRotationAnimation.value * 2 * 3.14159,
-                        child: Container(
-                          padding: EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [Colors.orangeAccent, Colors.deepOrange],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black26,
-                                blurRadius: 8,
-                                offset: Offset(0, 4),
+              // Widget yang memberikan efek visual "turun" saat ditekan
+              child: Transform.translate(
+                offset: Offset(0, _isFabPressed ? 2.0 : 0.0), // <-- EFEK 3D
+                child: GestureDetector(
+                  // Mendeteksi saat jari mulai menekan tombol
+                  onTapDown: (_) => setState(() => _isFabPressed = true),
+                  // Mendeteksi saat jari diangkat dari tombol
+                  onTapUp: (_) {
+                    setState(() => _isFabPressed = false);
+                    _showCreateOptions(); // Panggil fungsi bottom sheet
+                  },
+                  // Mendeteksi jika sentuhan dibatalkan
+                  onTapCancel: () => setState(() => _isFabPressed = false),
+                  child: AnimatedBuilder(
+                    animation: _fabAnimationController,
+                    builder: (context, child) {
+                      return Transform.scale(
+                        scale: _fabScaleAnimation.value,
+                        child: Transform.rotate(
+                          angle: _fabRotationAnimation.value * 2 * 3.14159,
+                          child: Container(
+                            padding: EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
+                                colors: [Colors.orangeAccent, Colors.deepOrange],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
                               ),
-                            ],
-                          ),
-                          child: Icon(
-                            widget.selectedIndex == 2 ? Icons.close : Icons.add,
-                            color: Colors.white,
-                            size: 28,
+                              // Bayangan (shadow) berubah saat ditekan untuk efek 3D
+                              boxShadow: _isFabPressed
+                                  ? [ // Efek saat ditekan
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.2),
+                                  blurRadius: 4,
+                                  offset: Offset(0, 2),
+                                ),
+                              ]
+                                  : [ // Efek normal
+                                BoxShadow(
+                                  color: Colors.black26,
+                                  blurRadius: 8,
+                                  offset: Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.add, // Icon tetap add
+                              color: Colors.white,
+                              size: 28,
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
               ),
             ),

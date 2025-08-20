@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'; // for kDebugMode
+import 'package:portal_si/pages/welcome_page.dart';
 import 'package:provider/provider.dart';
 import 'package:portal_si/controllers/home_controller.dart';
 import 'package:portal_si/pages/notif_page.dart';
@@ -28,9 +29,13 @@ void main() async {
   }
 
   runApp(MyApp(
-    startPage: hasToken ? '/home' : '/login',
+    startPage: hasToken ? '/home' : '/welcome',
     hasToken: hasToken,
   ));
+  // runApp(MyApp(
+  //   startPage: '/welcome',
+  //   hasToken: hasToken,
+  // ));
 }
 
 class MyApp extends StatefulWidget {
@@ -126,6 +131,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           '/story': (context) => InstagramStoryPage(),
           '/notif': (context) => const NotificationPage(),
           '/message': (context) => MessageListPage(),
+          '/welcome': (context) => WelcomePage(),
           '/other-profile': (context) {
             final args = ModalRoute.of(context)!.settings.arguments
                 as Map<String, dynamic>;

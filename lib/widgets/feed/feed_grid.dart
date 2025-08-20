@@ -1,20 +1,20 @@
 // lib/widgets/feed/feed_grid.dart
 
 import 'package:flutter/material.dart';
-import '../../models/post_model.dart'; // PENTING: Import Post Model
+import '../../models/post_model.dart';
+import 'animated_feed_grid_item.dart';
 
 class FeedGrid extends StatelessWidget {
   final bool isLoading;
-  final List<Post> posts; // <-- PERBAIKAN 1: Terima List<Post>
+  final List<Post> posts;
   final Map<int, int> likeCounts;
   final Map<int, bool> likedPosts;
-  final ScrollController scrollController;
+  // 1. Hapus scrollController dari parameter
+  // final ScrollController scrollController;
   final Animation<double> fadeAnimation;
   final Future<void> Function() onRefresh;
-  final Function(Post)
-      onLikePost; // <-- PERBAIKAN 2: Callback menerima objek Post
-  final Function(Post)
-      onPostTap; // <-- PERBAIKAN 3: Callback menerima objek Post
+  final Function(Post) onLikePost;
+  final Function(Post) onPostTap;
   final Function(Map<String, dynamic>) onUserTap;
 
   const FeedGrid({
@@ -23,7 +23,7 @@ class FeedGrid extends StatelessWidget {
     required this.posts,
     required this.likeCounts,
     required this.likedPosts,
-    required this.scrollController,
+    // required this.scrollController, // Hapus
     required this.fadeAnimation,
     required this.onRefresh,
     required this.onLikePost,
@@ -34,111 +34,45 @@ class FeedGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isLoading && posts.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      // Untuk sliver, kita kembalikan widget yang sesuai
+      return const SliverFillRemaining(
+        child: Center(child: CircularProgressIndicator()),
+      );
     }
 
     if (posts.isEmpty) {
-      return const Center(
-          child: Text('Tidak ada postingan untuk ditampilkan.'));
+      return const SliverFillRemaining(
+        child: Center(child: Text('Tidak ada postingan untuk ditampilkan.')),
+      );
     }
 
-    return FadeTransition(
-      opacity: fadeAnimation,
-      child: GridView.builder(
-        controller: scrollController,
-        padding: const EdgeInsets.all(8),
+    // 2. Ubah dari GridView.builder menjadi SliverGrid
+    // Bungkus dengan SliverPadding untuk memberi ruang di sekitar grid
+    return SliverPadding(
+      padding: const EdgeInsets.all(16.0),
+      sliver: SliverGrid(
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 8,
-          childAspectRatio: 0.75, // Sesuaikan rasio aspek gambar
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 0.75,
         ),
-        itemCount: posts.length,
-        itemBuilder: (context, index) {
-          final Post post = posts[index]; // <-- Sekarang ini adalah objek Post
+        delegate: SliverChildBuilderDelegate(
+              (context, index) {
+            final Post post = posts[index];
+            final bool isLiked = likedPosts[post.id] ?? false;
 
-          return GestureDetector(
-            onTap: () => onPostTap(post), // <-- PERBAIKAN 4: Kirim objek Post
-            child: Card(
-              clipBehavior: Clip.antiAlias,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              elevation: 3,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.network(
-                    post.mediaUrl ?? '',
-                    fit: BoxFit.cover,
-                  ),
-                  // Gradient untuk membuat teks lebih mudah dibaca
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.transparent,
-                          Colors.black.withOpacity(0.7)
-                        ],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                    ),
-                  ),
-                  // Info Pengguna dan Tombol Like
-                  Positioned(
-                    bottom: 8,
-                    left: 8,
-                    right: 8,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => onUserTap(post.user.toJson()),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 12,
-                                  backgroundImage: NetworkImage(
-                                      post.user.profilePictureUrl ?? ''),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    post.user.username,
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () => onLikePost(
-                              post), // <-- PERBAIKAN 5: Kirim objek Post
-                          child: Icon(
-                            likedPosts[post.id] == true
-                                ? Icons.favorite
-                                : Icons.favorite_border,
-                            color: likedPosts[post.id] == true
-                                ? Colors.red
-                                : Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                ],
-              ),
-            ),
-          );
-        },
+            // Logika item tidak berubah
+            return AnimatedFeedGridItem(
+              post: post,
+              isLiked: isLiked,
+              onTap: () => onPostTap(post),
+              onLikeTap: () => onLikePost(post),
+              onUserTap: () => onUserTap(post.user.toJson()),
+            );
+          },
+          childCount: posts.length,
+        ),
       ),
     );
   }

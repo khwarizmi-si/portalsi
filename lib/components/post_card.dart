@@ -1,12 +1,12 @@
-// lib/components/post_card.dart
-
 import 'package:flutter/material.dart';
-import '../components/post_header.dart';
+import 'package:video_player/video_player.dart';
+import 'package:visibility_detector/visibility_detector.dart';
+import '../components/post_header.dart'; // Pastikan path ini benar
 
-class PostCard extends StatelessWidget {
+class PostCard extends StatefulWidget {
   final String username;
   final String timeAgo;
-  final String imageUrl;
+  final String mediaUrl;
   final int likes;
   final int comments;
   final String content;
@@ -21,15 +21,14 @@ class PostCard extends StatelessWidget {
   final Map<String, dynamic> user;
   final int postId;
   final VoidCallback? onProfileTap;
-
-  // --- 1. TAMBAHKAN PARAMETER BARU DI SINI ---
   final bool hasCardDecoration;
+  final bool isVideo;
 
   const PostCard({
     super.key,
     required this.username,
     required this.timeAgo,
-    required this.imageUrl,
+    required this.mediaUrl,
     required this.likes,
     required this.comments,
     required this.content,
@@ -44,254 +43,230 @@ class PostCard extends StatelessWidget {
     required this.user,
     required this.postId,
     this.onProfileTap,
-    // --- 2. TAMBAHKAN DI KONSTRUKTOR DENGAN NILAI DEFAULT ---
-    this.hasCardDecoration =
-        true, // Defaultnya true agar tidak merusak tampilan di tempat lain
+    this.hasCardDecoration = true,
+    this.isVideo = false,
   });
 
   @override
+  State<PostCard> createState() => _PostCardState();
+}
+
+class _PostCardState extends State<PostCard> {
+  VideoPlayerController? _videoController;
+  Future<void>? _initializeVideoPlayerFuture;
+  bool _isMuted = true;
+  bool _wasPlayingBeforeHold = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initVideoPlayer();
+  }
+
+  @override
+  void didUpdateWidget(PostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isVideo && widget.mediaUrl != oldWidget.mediaUrl) {
+      _videoController?.dispose();
+      _initVideoPlayer();
+    }
+  }
+
+  void _initVideoPlayer() {
+    if (widget.isVideo && widget.mediaUrl.isNotEmpty) {
+      _videoController = VideoPlayerController.networkUrl(Uri.parse(widget.mediaUrl));
+      _initializeVideoPlayerFuture = _videoController!.initialize().then((_) {
+        if (mounted) {
+          setState(() {});
+        }
+      });
+      _videoController!.setLooping(true);
+      _videoController!.setVolume(_isMuted ? 0.0 : 1.0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _videoController?.dispose();
+    super.dispose();
+  }
+
+  void _toggleMute() {
+    if (_videoController == null) return;
+    setState(() {
+      _isMuted = !_isMuted;
+      _videoController!.setVolume(_isMuted ? 0.0 : 1.0);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // --- 3. GUNAKAN PARAMETER UNTUK MENGATUR DEKORASI & MARGIN ---
-    return Container(
-      // Margin akan menjadi nol jika dekorasi dinonaktifkan
-      margin: hasCardDecoration
-          ? const EdgeInsets.only(bottom: 8, left: 16, right: 16)
-          : EdgeInsets.zero,
-      // Dekorasi (latar belakang, border, radius) hanya akan muncul jika hasCardDecoration bernilai true
-      decoration: hasCardDecoration
-          ? BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border(
-                bottom: BorderSide(color: Colors.grey.shade200, width: 0.5),
-                top: BorderSide(color: Colors.grey.shade200, width: 0.5),
-              ),
-            )
-          : null, // Jika false, tidak ada dekorasi
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: PostHeader(
-              username: username,
-              timeAgo: timeAgo,
-              profileImageUrl: profileImageUrl ?? '',
-              isVerified: isVerified,
-              user: user,
-              onProfileTap: onProfileTap,
-            ),
-          ),
+    return VisibilityDetector(
+      key: Key('post-card-${widget.postId}'),
+      onVisibilityChanged: (visibilityInfo) {
+        if (_videoController == null || !_videoController!.value.isInitialized) return;
 
-          // Image
-          if (imageUrl.isNotEmpty)
-            AspectRatio(
-              aspectRatio: 1.0,
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(color: Colors.grey.shade100),
-                child: Image.network(
-                  imageUrl,
-                  fit: BoxFit.cover,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return Container(
-                      alignment: Alignment.center,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.grey.shade400,
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded /
-                                loadingProgress.expectedTotalBytes!
-                            : null,
-                      ),
-                    );
-                  },
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    alignment: Alignment.center,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.broken_image_outlined,
-                          size: 48,
-                          color: Colors.grey.shade400,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Gagal memuat gambar',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+        if (visibilityInfo.visibleFraction > 0.6) {
+          if (!_videoController!.value.isPlaying) {
+            _videoController!.play();
+          }
+        } else {
+          if (_videoController!.value.isPlaying) {
+            _videoController!.pause();
+          }
+        }
+      },
+      child: Container(
+        margin: widget.hasCardDecoration
+            ? const EdgeInsets.only(bottom: 8, left: 16, right: 16)
+            : EdgeInsets.zero,
+        decoration: widget.hasCardDecoration
+            ? BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border(
+            bottom: BorderSide(color: Colors.grey.shade200, width: 0.5),
+            top: BorderSide(color: Colors.grey.shade200, width: 0.5),
+          ),
+        )
+            : null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: PostHeader(
+                username: widget.username,
+                timeAgo: widget.timeAgo,
+                profileImageUrl: widget.profileImageUrl ?? '',
+                isVerified: widget.isVerified,
+                user: widget.user,
+                onProfileTap: widget.onProfileTap,
               ),
             ),
-
-          // Action buttons
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Row(
-              children: [
-                // Like button
-                GestureDetector(
-                  onTap: onLike,
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 200),
-                      child: Icon(
-                        isLiked ? Icons.favorite : Icons.favorite_border,
-                        key: ValueKey(isLiked),
-                        color: isLiked ? Colors.red : Colors.black87,
-                        size: 26,
-                      ),
-                    ),
+            if (widget.mediaUrl.isNotEmpty) _buildMediaWidget(),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(
+                children: [
+                  _buildActionButton(
+                    icon: widget.isLiked ? Icons.favorite : Icons.favorite_border,
+                    color: widget.isLiked ? Colors.red : Colors.black87,
+                    onTap: widget.onLike,
                   ),
-                ),
-
-                // Comment button
-                GestureDetector(
-                  onTap: onComment,
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Icon(
-                      Icons.chat_bubble_outline,
-                      color: Colors.black87,
-                      size: 26,
-                    ),
+                  _buildActionButton(
+                    icon: Icons.chat_bubble_outline,
+                    onTap: widget.onComment,
                   ),
-                ),
-
-                // Share button
-                GestureDetector(
-                  onTap: onShare,
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Icon(
-                      Icons.send,
-                      color: Colors.black87,
-                      size: 26,
-                    ),
+                  _buildActionButton(
+                    icon: Icons.send_outlined,
+                    onTap: widget.onShare,
                   ),
-                ),
-
-                const Spacer(),
-
-                // Bookmark button
-                GestureDetector(
-                  onTap: onBookmark,
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 200),
-                      child: Icon(
-                        isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                        key: ValueKey(isBookmarked),
-                        color: Colors.black87,
-                        size: 26,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Likes & Comments Count
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-            child: Row(
-              children: [
-                if (likes > 0) ...[
-                  GestureDetector(
-                    onTap: () {
-                      // TODO: Show who liked this post
-                      print('Show who liked this post');
-                    },
-                    child: Text(
-                      '$likes suka',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Container(
-                      width: 3,
-                      height: 3,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade500,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
+                  const Spacer(),
+                  _buildActionButton(
+                    icon: widget.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                    onTap: widget.onBookmark,
                   ),
                 ],
-                GestureDetector(
-                  onTap: onComment,
-                  child: Text(
-                    '$comments komentar',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                      color: Colors.black87,
-                    ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+              child: Text('${widget.likes} suka', style: const TextStyle(fontWeight: FontWeight.bold)),
+            ),
+            if (widget.content.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: RichText(
+                  text: TextSpan(
+                    style: DefaultTextStyle.of(context).style,
+                    children: <TextSpan>[
+                      TextSpan(text: widget.username, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      TextSpan(text: ' ${widget.content}'),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ),
-
-          // Content/Caption
-          if (content.isNotEmpty)
+              ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: RichText(
-                text: TextSpan(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: Text(widget.timeAgo, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton({required IconData icon, Color? color, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Icon(icon, color: color ?? Colors.black87, size: 26),
+      ),
+    );
+  }
+
+  Widget _buildMediaWidget() {
+    if (widget.isVideo) {
+      return FutureBuilder(
+        future: _initializeVideoPlayerFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.done && _videoController != null && _videoController!.value.isInitialized) {
+            return AspectRatio(
+              aspectRatio: _videoController!.value.aspectRatio,
+              child: GestureDetector(
+                onTap: _toggleMute,
+                onLongPress: () {
+                  if (_videoController != null && _videoController!.value.isPlaying) {
+                    _wasPlayingBeforeHold = true;
+                    _videoController!.pause();
+                  }
+                },
+                onLongPressEnd: (_) {
+                  if (_videoController != null && _wasPlayingBeforeHold) {
+                    _videoController!.play();
+                    _wasPlayingBeforeHold = false;
+                  }
+                },
+                child: Stack(
+                  alignment: Alignment.bottomRight,
                   children: [
-                    TextSpan(
-                      text: '$username ',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    TextSpan(
-                      text: content,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Colors.black87,
-                        height: 1.3,
+                    VideoPlayer(_videoController!),
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _isMuted ? Icons.volume_off : Icons.volume_up,
+                          color: Colors.white,
+                          size: 18,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-
-          // Time ago
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-            child: Text(
-              timeAgo,
-              style: TextStyle(
-                color: Colors.grey.shade600,
-                fontSize: 12,
-                letterSpacing: 0.2,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+            );
+          }
+          return AspectRatio(
+            aspectRatio: 16.0 / 9.0,
+            child: Container(color: Colors.grey.shade200, child: const Center(child: CircularProgressIndicator(strokeWidth: 2))),
+          );
+        },
+      );
+    } else {
+      return Hero(
+        tag: 'feed-post-${widget.postId}',
+        child: AspectRatio(
+          aspectRatio: 1.0,
+          child: Image.network(widget.mediaUrl, fit: BoxFit.cover),
+        ),
+      );
+    }
   }
 }

@@ -1,19 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:page_transition/page_transition.dart';
+import 'package:portal_si/pages/login_page.dart';
 import 'package:portal_si/services/auth_service.dart';
 import 'package:portal_si/utils/secure_storage.dart';
 
 class RegisterPage extends StatefulWidget {
+  const RegisterPage({super.key});
+
   @override
   _RegisterPageState createState() => _RegisterPageState();
 }
 
 class _RegisterPageState extends State<RegisterPage> {
+  // --- STATE DAN CONTROLLER LAMA TETAP DIPERTAHANKAN ---
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
-  final _fullNameController = TextEditingController();
-  final _usernameController = TextEditingController();
+  final _fullNameController = TextEditingController(); // Tetap ada
+  final _usernameController = TextEditingController(); // Tetap ada
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController(); // Baru untuk konfirmasi
   bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   bool _isLoading = false;
 
   @override
@@ -22,9 +29,10 @@ class _RegisterPageState extends State<RegisterPage> {
     _checkToken();
   }
 
+  // --- SEMUA FUNGSI LOGIC TETAP SAMA ---
   void _checkToken() async {
     final hasToken = await SecureStorage.hasToken();
-    if (hasToken) {
+    if (hasToken && mounted) {
       Navigator.pushReplacementNamed(context, '/dashboard');
     }
   }
@@ -35,17 +43,26 @@ class _RegisterPageState extends State<RegisterPage> {
     _fullNameController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
   Future<void> _handleRegister() async {
+    // Validasi tambahan untuk konfirmasi password
     if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
+      if (_passwordController.text != _confirmPasswordController.text) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Password dan konfirmasi password tidak cocok.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
 
-      final authService = AuthService(); // ← buat instance
+      setState(() => _isLoading = true);
 
+      final authService = AuthService();
       final result = await authService.register(
         _usernameController.text.trim(),
         _fullNameController.text.trim(),
@@ -53,316 +70,252 @@ class _RegisterPageState extends State<RegisterPage> {
         _passwordController.text.trim(),
       );
 
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (result['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['message'] ?? 'Registrasi berhasil!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pushReplacementNamed(context, '/login');
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['message'] ?? 'Registrasi gagal.'),
-            backgroundColor: Colors.red,
-          ),
-        );
+      if (mounted) {
+        setState(() => _isLoading = false);
+        if (result['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] ?? 'Registrasi berhasil! Silakan login.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pushReplacementNamed(context, '/login');
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] ?? 'Registrasi gagal.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String hintText,
-    required String? Function(String?) validator,
-    bool obscureText = false,
-    Widget? suffixIcon,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
-    return TextFormField(
-      controller: controller,
-      obscureText: obscureText,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        hintText: hintText,
-        filled: true,
-        fillColor: Colors.grey[50],
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey[300]!),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.grey[300]!),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.blue),
-        ),
-        suffixIcon: suffixIcon,
-      ),
-      validator: validator,
-    );
-  }
-
-  Widget _buildButton({
-    required String text,
-    required VoidCallback? onPressed,
-    bool isLoading = false,
-    Color backgroundColor = Colors.blue,
-    Color textColor = Colors.white,
-    Widget? icon,
-  }) {
-    return SizedBox(
-      width: double.infinity,
-      height: 48,
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: backgroundColor,
-          foregroundColor: textColor,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          elevation: 0,
-        ),
-        child: isLoading
-            ? SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(
-                  color: textColor,
-                  strokeWidth: 2,
-                ),
-              )
-            : icon != null
-            ? Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  icon,
-                  SizedBox(width: 8),
-                  Text(
-                    text,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              )
-            : Text(
-                text,
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-      ),
-    );
-  }
-
-  Widget _buildDivider() {
-    return Row(
-      children: [
-        Expanded(child: Divider(color: Colors.grey[300])),
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'ATAU',
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        Expanded(child: Divider(color: Colors.grey[300])),
-      ],
-    );
-  }
-
+  // --- METHOD BUILD UTAMA DIUBAH TOTAL SESUAI DESAIN BARU ---
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SizedBox(height: 60),
+    const Color primaryOrange = Color(0xFFF97C33);
 
-                // Logo Instagram
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Stack(
+        children: [
+          // Bagian gambar atas
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: MediaQuery.of(context).size.height * 0.35,
+            child: ClipRRect(
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(40),
+                bottomRight: Radius.circular(40),
+              ),
+              child: Image.asset(
+                'assets/images/food_background_raw.png', // <-- GANTI DENGAN GAMBAR ANDA
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+          // Konten utama
+          SafeArea(
+            child: ListView(
+              children: [
+                SizedBox(height: MediaQuery.of(context).size.height * 0.28),
                 Container(
-                  child: Text(
-                    'Portal SI',
-                    style: TextStyle(
-                      fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                      fontFamily: 'Billabong',
+                  padding: const EdgeInsets.all(24.0),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(40),
+                      topRight: Radius.circular(40),
                     ),
                   ),
-                ),
-
-                SizedBox(height: 20),
-
-                // Subtitle
-                Text(
-                  'Daftar untuk melihat foto dan video dari teman-temanmu.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey[600], fontSize: 16),
-                ),
-
-                SizedBox(height: 40),
-
-                // Facebook Register Button
-                _buildButton(
-                  text: 'Daftar dengan Google',
-                  onPressed: () {
-                    // Handle Facebook register
-                  },
-                  icon: Icon(Icons.g_mobiledata, color: Colors.white),
-                ),
-
-                SizedBox(height: 20),
-
-                // Divider
-                _buildDivider(),
-
-                SizedBox(height: 20),
-
-                // Form Register
-                Form(
-                  key: _formKey,
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Email TextField
-                      _buildTextField(
-                        controller: _emailController,
-                        hintText: 'Email',
-                        keyboardType: TextInputType.emailAddress,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Email tidak boleh kosong';
-                          }
-                          if (!value.contains('@')) {
-                            return 'Format email tidak valid';
-                          }
-                          return null;
-                        },
-                      ),
-
-                      SizedBox(height: 16),
-
-                      // Full Name TextField
-                      _buildTextField(
-                        controller: _fullNameController,
-                        hintText: 'Nama Lengkap',
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Nama lengkap tidak boleh kosong';
-                          }
-                          return null;
-                        },
-                      ),
-
-                      SizedBox(height: 16),
-
-                      // Username TextField
-                      _buildTextField(
-                        controller: _usernameController,
-                        hintText: 'Username',
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Username tidak boleh kosong';
-                          }
-                          if (value.length < 3) {
-                            return 'Username minimal 3 karakter';
-                          }
-                          return null;
-                        },
-                      ),
-
-                      SizedBox(height: 16),
-
-                      // Password TextField
-                      _buildTextField(
-                        controller: _passwordController,
-                        hintText: 'Password',
-                        obscureText: _obscurePassword,
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                            color: Colors.grey,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _obscurePassword = !_obscurePassword;
-                            });
-                          },
+                      const Text('Daftar Portal SI', style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 30),
+                      Form(
+                        key: _formKey,
+                        child: Column(
+                          children: [
+                            // --- KOLOM INPUT BARU DITAMBAHKAN DI SINI ---
+                            _buildCustomTextField(
+                              controller: _fullNameController,
+                              hintText: 'Nama Lengkap',
+                              icon: Icons.person_outline,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) return 'Nama lengkap tidak boleh kosong';
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            _buildCustomTextField(
+                              controller: _usernameController,
+                              hintText: 'Username',
+                              icon: Icons.alternate_email,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) return 'Username tidak boleh kosong';
+                                if (value.length < 3) return 'Username minimal 3 karakter';
+                                return null;
+                              },
+                            ),
+                            // ---------------------------------------------
+                            const SizedBox(height: 16),
+                            _buildCustomTextField(
+                              controller: _emailController,
+                              hintText: 'Alamat Email',
+                              icon: Icons.email_outlined,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) return 'Email tidak boleh kosong';
+                                if (!RegExp(r'\S+@\S+\.\S+').hasMatch(value)) return 'Format email tidak valid';
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            _buildCustomTextField(
+                              controller: _passwordController,
+                              hintText: 'Password',
+                              icon: Icons.lock_outline,
+                              obscureText: _obscurePassword,
+                              suffixIcon: IconButton(
+                                icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: Colors.grey),
+                                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                              ),
+                              validator: (value) {
+                                if (value == null || value.isEmpty) return 'Password tidak boleh kosong';
+                                if (value.length < 6) return 'Password minimal 6 karakter';
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            _buildCustomTextField(
+                              controller: _confirmPasswordController,
+                              hintText: 'Ulangi password',
+                              icon: Icons.lock_outline,
+                              obscureText: _obscureConfirmPassword,
+                              suffixIcon: IconButton(
+                                icon: Icon(_obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: Colors.grey),
+                                onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                              ),
+                              validator: (value) {
+                                if (value == null || value.isEmpty) return 'Konfirmasi password tidak boleh kosong';
+                                return null;
+                              },
+                            ),
+                          ],
                         ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Password tidak boleh kosong';
-                          }
-                          if (value.length < 6) {
-                            return 'Password minimal 6 karakter';
-                          }
-                          return null;
-                        },
                       ),
-
-                      SizedBox(height: 24),
-
-                      // Register Button
-                      _buildButton(
-                        text: 'Daftar',
-                        onPressed: _isLoading ? null : _handleRegister,
-                        isLoading: _isLoading,
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _handleRegister,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryOrange,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                            elevation: 0,
+                          ),
+                          child: _isLoading
+                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                              : const Text('Daftar', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                        ),
+                      ),
+                      const SizedBox(height: 30),
+                      Row(
+                        children: [
+                          const Expanded(child: Divider(color: Colors.grey)),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Text('Atau daftar dengan', style: TextStyle(color: Colors.grey.shade600)),
+                          ),
+                          const Expanded(child: Divider(color: Colors.grey)),
+                        ],
+                      ),
+                      const SizedBox(height: 30),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildSocialButton(iconPath: 'assets/logo_google.png', onPressed: () {}),
+                          const SizedBox(width: 20),
+                          _buildSocialButton(iconPath: 'assets/logo_la_rg.png', onPressed: () {}),
+                        ],
+                      ),
+                      const SizedBox(height: 40),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text("Sudah memiliki akun? ", style: TextStyle(color: Colors.grey)),
+                          TextButton(
+                            // onPressed: () {
+                            //   Navigator.pushReplacementNamed(context, '/login');
+                            // },
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                PageTransition(
+                                  type: PageTransitionType.leftToRight, // Tipe animasi dari kanan ke kiri
+                                  child: LoginPage(),
+                                ),
+                              );
+                            },
+                            child: const Text('Login', style: TextStyle(color: primaryOrange, fontWeight: FontWeight.bold)),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
-
-                SizedBox(height: 40),
-
-                // Terms Text
-                Text(
-                  'Dengan mendaftar, kamu menyetujui Ketentuan, Kebijakan Data, dan Kebijakan Cookie kami.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                ),
-
-                SizedBox(height: 40),
-
-                // Login Link
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'Sudah punya akun? ',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pushReplacementNamed(context, '/login');
-                      },
-                      child: Text(
-                        'Masuk',
-                        style: TextStyle(
-                          color: Colors.blue,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
               ],
             ),
           ),
-        ),
+        ],
       ),
+    );
+  }
+
+  // Widget bantuan untuk text field
+  Widget _buildCustomTextField({
+    required TextEditingController controller,
+    required String hintText,
+    required IconData icon,
+    String? Function(String?)? validator,
+    bool obscureText = false,
+    Widget? suffixIcon,
+  }) {
+    return TextFormField(
+      controller: controller,
+      obscureText: obscureText,
+      validator: validator,
+      decoration: InputDecoration(
+        hintText: hintText,
+        prefixIcon: Icon(icon, color: Colors.grey),
+        suffixIcon: suffixIcon,
+        filled: true,
+        fillColor: const Color(0xFFF7F7F7),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(25),
+          borderSide: BorderSide.none,
+        ),
+        contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+      ),
+    );
+  }
+
+  // Widget bantuan untuk tombol social
+  Widget _buildSocialButton({required String iconPath, required VoidCallback onPressed}) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFFF7F7F7),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+        elevation: 0,
+      ),
+      child: Image.asset(iconPath, height: 24, width: 24),
     );
   }
 }

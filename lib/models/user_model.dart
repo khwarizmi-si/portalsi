@@ -33,14 +33,10 @@ class User {
   final String? profilePictureUrl;
   final bool isVerified;
   final bool isPrivate;
-
-  // [BARU] Menambahkan field sesuai data JSON baru
   final int followersCount;
   final int followingCount;
   final int postsCount;
   final List<SimplePost> recentPosts;
-
-  // Field 'role' bisa disimpan jika masih relevan di bagian lain aplikasi
   final String? role;
 
   User({
@@ -52,7 +48,6 @@ class User {
     this.profilePictureUrl,
     this.isVerified = false,
     this.isPrivate = false,
-    // [BARU] Tambahkan di konstruktor
     this.followersCount = 0,
     this.followingCount = 0,
     this.postsCount = 0,
@@ -61,11 +56,8 @@ class User {
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
-    // Logika ini sudah bagus, bisa menangani data yang nested atau tidak
-    final userData =
-        json.containsKey('user') ? json['user'] as Map<String, dynamic> : json;
+    final userData = json.containsKey('user') ? json['user'] as Map<String, dynamic> : json;
 
-    // [BARU] Logika untuk parsing list 'recent_posts'
     var postsList = <SimplePost>[];
     if (userData['recent_posts'] != null && userData['recent_posts'] is List) {
       postsList = (userData['recent_posts'] as List)
@@ -74,8 +66,7 @@ class User {
     }
 
     return User(
-      id: userData['user_id'] ??
-          0, // ID seharusnya tidak null, beri default 0 jika terpaksa
+      id: userData['user_id'] ?? 0,
       username: userData['username'] ?? 'User tidak dikenal',
       email: userData['email'],
       fullName: userData['full_name'],
@@ -84,8 +75,6 @@ class User {
       isVerified: userData['is_verified'] ?? false,
       isPrivate: userData['is_private'] ?? false,
       role: userData['role'],
-
-      // [BARU] Parsing data dari JSON
       followersCount: userData['followers_count'] ?? 0,
       followingCount: userData['following_count'] ?? 0,
       postsCount: userData['posts_count'] ?? 0,
@@ -104,11 +93,45 @@ class User {
       'is_verified': isVerified,
       'is_private': isPrivate,
       'role': role,
-      // [BARU] Tambahkan ke JSON
       'followers_count': followersCount,
       'following_count': followingCount,
       'posts_count': postsCount,
-      // 'recent_posts' biasanya tidak perlu dikirim balik ke server, jadi bisa diabaikan
     };
+  }
+
+  // --- PERBAIKAN DI SINI ---
+  User copyWith({
+    int? id,
+    String? username,
+    String? email,
+    String? fullName,
+    String? bio,
+    String? profilePictureUrl,
+    bool? isVerified,
+    bool? isPrivate,
+    String? role,
+    // Tambahkan parameter untuk field baru
+    int? followersCount,
+    int? followingCount,
+    int? postsCount,
+    List<SimplePost>? recentPosts,
+  }) {
+    return User(
+      // Salin nilai lama atau gunakan nilai baru jika ada
+      id: id ?? this.id,
+      username: username ?? this.username,
+      email: email ?? this.email,
+      fullName: fullName ?? this.fullName,
+      bio: bio ?? this.bio,
+      profilePictureUrl: profilePictureUrl ?? this.profilePictureUrl,
+      isVerified: isVerified ?? this.isVerified,
+      isPrivate: isPrivate ?? this.isPrivate,
+      role: role ?? this.role,
+      // Gunakan nilai baru atau salin nilai lama dari 'this'
+      followersCount: followersCount ?? this.followersCount,
+      followingCount: followingCount ?? this.followingCount,
+      postsCount: postsCount ?? this.postsCount,
+      recentPosts: recentPosts ?? this.recentPosts,
+    );
   }
 }

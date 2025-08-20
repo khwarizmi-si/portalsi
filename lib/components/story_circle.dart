@@ -5,10 +5,8 @@ import '../models/story_model.dart';
 import '../pages/create_story_page.dart';
 import '../pages/my_story_view_page.dart';
 import '../pages/story_view_page.dart';
-import '../pages/my_story_view_page.dart';
 
 class StoryCircle extends StatefulWidget {
-  // ... (properti tetap sama)
   final String name;
   final bool isAddStory;
   final bool hasStory;
@@ -16,6 +14,7 @@ class StoryCircle extends StatefulWidget {
   final String? userProfileUrl;
   final UserWithStories? userStoryData;
   final List<UserWithStories>? previousStoriesQueue;
+  final List<UserWithStories>? nextStoriesQueue;
 
   const StoryCircle({
     Key? key,
@@ -25,11 +24,9 @@ class StoryCircle extends StatefulWidget {
     this.imageUrl,
     this.userProfileUrl,
     this.userStoryData,
-    this.nextStoriesQueue, // <-- TAMBAHKAN DI CONSTRUCTOR
+    this.nextStoriesQueue,
     this.previousStoriesQueue,
   }) : super(key: key);
-
-  final List<UserWithStories>? nextStoriesQueue; // <-- PROPERTI BARU
 
   @override
   _StoryCircleState createState() => _StoryCircleState();
@@ -60,31 +57,34 @@ class _StoryCircleState extends State<StoryCircle> {
     Navigator.of(context).push(_createSlideRightRoute());
   }
 
+  // --- FUNGSI INI DIPERBAIKI ---
   Future<void> _navigateToViewStory(String heroTag) async {
     if (widget.userStoryData == null || widget.userStoryData!.stories.isEmpty) return;
 
     setState(() { _isLoading = true; });
 
     final firstStory = widget.userStoryData!.stories.first;
-    if (!firstStory.isVideo) {
-      await precacheImage(NetworkImage(firstStory.mediaUrl), context);
+
+    // PERBAIKAN: Hanya precache jika mediaUrl tidak null dan bukan video
+    if (!firstStory.isVideo && firstStory.mediaUrl != null) {
+      await precacheImage(NetworkImage(firstStory.mediaUrl!), context);
     }
 
     if (!mounted) return;
     setState(() { _isLoading = false; });
 
-    // Tentukan halaman mana yang akan dibuka berdasarkan properti isAddStory
     final pageToPush = widget.isAddStory
         ? MyStoryViewPage(
       userWithStories: widget.userStoryData!,
       heroTag: heroTag,
-      previousStories: widget.previousStoriesQueue, // <-- Teruskan antrean
+      previousStories: widget.previousStoriesQueue,
       nextStories: widget.nextStoriesQueue,
+      userStories: [],
     )
         : StoryViewPage(
       userWithStories: widget.userStoryData!,
       heroTag: heroTag,
-      previousStories: widget.previousStoriesQueue, // <-- Teruskan antrean
+      previousStories: widget.previousStoriesQueue,
       nextStories: widget.nextStoriesQueue,
     );
 
@@ -97,13 +97,10 @@ class _StoryCircleState extends State<StoryCircle> {
     );
   }
 
-  // --- SEMUA FUNGSI _build... DIMODIFIKASI UNTUK MEMILIKI AKSI KLIK TERPISAH ---
-
   Widget _buildAddStoryNoContent(BuildContext context, String heroTag) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        // Gesture Detector untuk gambar profil (jika ada cerita)
         GestureDetector(
           onTap: widget.hasStory ? () => _navigateToViewStory(heroTag) : _navigateToCreateStory,
           child: Container(
@@ -120,7 +117,6 @@ class _StoryCircleState extends State<StoryCircle> {
             ),
           ),
         ),
-        // Gesture Detector untuk tombol tambah
         Positioned(
           bottom: -2,
           right: -2,
@@ -194,7 +190,6 @@ class _StoryCircleState extends State<StoryCircle> {
 
   Widget _buildOtherStory() {
     return Container(
-      // ... (kode UI tidak berubah)
       width: 60,
       height: 60,
       decoration: const BoxDecoration(
@@ -225,7 +220,6 @@ class _StoryCircleState extends State<StoryCircle> {
   Widget build(BuildContext context) {
     final heroTag = 'story_hero_${widget.userStoryData?.userId ?? widget.name}';
 
-    // GestureDetector hanya untuk cerita pengguna lain
     return widget.isAddStory
         ? Container(
       margin: const EdgeInsets.only(right: 12),
@@ -241,7 +235,6 @@ class _StoryCircleState extends State<StoryCircle> {
                     : _buildAddStoryNoContent(context, heroTag),
               ),
               if (_isLoading)
-              // ... (Loading Indicator)
                 Container(
                   width: 60,
                   height: 60,
@@ -278,7 +271,6 @@ class _StoryCircleState extends State<StoryCircle> {
               children: [
                 Hero(tag: heroTag, child: _buildOtherStory()),
                 if (_isLoading)
-                // ... (Loading Indicator)
                   Container(
                     width: 60,
                     height: 60,

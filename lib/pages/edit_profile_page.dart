@@ -125,14 +125,14 @@ class _EditProfilePageState extends State<EditProfilePage>
                 title: 'Pilih dari Galeri',
                 subtitle: 'Akses galeri foto Anda',
                 onTap: () => _selectImage(ImageSource.gallery),
-                color: Colors.amber.shade700, // Warna baru
+                color: Colors.amber.shade700,
               ),
               _buildImageSourceTile(
                 icon: Icons.camera_alt_outlined,
                 title: 'Ambil Foto Baru',
                 subtitle: 'Gunakan kamera perangkat',
                 onTap: () => _selectImage(ImageSource.camera),
-                color: Colors.orange.shade700, // Warna baru
+                color: Colors.orange.shade700,
               ),
               const SizedBox(height: 20),
             ],
@@ -219,6 +219,7 @@ class _EditProfilePageState extends State<EditProfilePage>
     }
   }
 
+  // --- FUNGSI INI TELAH DISESUAIKAN ---
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -228,31 +229,30 @@ class _EditProfilePageState extends State<EditProfilePage>
     });
 
     setState(() => _isSaving = true);
-    try {
-      String newProfilePictureUrl = _profilePictureUrl;
 
+    try {
+      String? newProfilePictureUrl;
+
+      // Langkah 1: Unggah gambar jika ada yang baru
       if (_selectedImage != null) {
-        final uploadedUrl =
-            await _profileService.uploadProfilePicture(_selectedImage!);
-        if (uploadedUrl != null) {
-          newProfilePictureUrl = uploadedUrl;
-        }
+        newProfilePictureUrl =
+        await _profileService.uploadProfilePicture(_selectedImage!);
       }
 
-      final updatedUser = User(
-        id: _currentProfile.id,
+      // Langkah 2: Siapkan objek User dengan data terbaru
+      final updatedUserData = _currentProfile.copyWith(
         username: _usernameController.text.trim(),
         email: _emailController.text.trim(),
         fullName: _fullNameController.text.trim(),
         bio: _bioController.text.trim(),
-        profilePictureUrl: newProfilePictureUrl,
-        isVerified: _currentProfile.isVerified,
-        isPrivate: _currentProfile.isPrivate,
-        role: _currentProfile.role,
+        // Gunakan URL baru jika ada, jika tidak, gunakan URL lama
+        profilePictureUrl: newProfilePictureUrl ?? _currentProfile.profilePictureUrl,
       );
 
-      final success = await _profileService.updateProfile(updatedUser);
+      // Langkah 3: Kirim data teks yang sudah final ke server
+      final success = await _profileService.updateProfile(updatedUserData);
 
+      // Langkah 4: Tangani hasilnya
       if (success) {
         HapticFeedback.mediumImpact();
         _showSuccessDialog('Profil berhasil diperbarui!');
@@ -299,7 +299,7 @@ class _EditProfilePageState extends State<EditProfilePage>
                   borderRadius: BorderRadius.circular(10)),
             ),
             child:
-                const Text('OK', style: TextStyle(fontWeight: FontWeight.w600)),
+            const Text('OK', style: TextStyle(fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -321,7 +321,7 @@ class _EditProfilePageState extends State<EditProfilePage>
                 borderRadius: BorderRadius.circular(8),
               ),
               child:
-                  const Icon(Icons.check_circle_outline, color: Colors.green),
+              const Icon(Icons.check_circle_outline, color: Colors.green),
             ),
             const SizedBox(width: 12),
             const Text('Berhasil!',
@@ -342,7 +342,7 @@ class _EditProfilePageState extends State<EditProfilePage>
                   borderRadius: BorderRadius.circular(10)),
             ),
             child:
-                const Text('OK', style: TextStyle(fontWeight: FontWeight.w600)),
+            const Text('OK', style: TextStyle(fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -352,7 +352,7 @@ class _EditProfilePageState extends State<EditProfilePage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.amber.shade50, // <-- WARNA BARU
+      backgroundColor: Colors.amber.shade50,
       body: Stack(
         children: [
           const _CoolBackground(),
@@ -363,13 +363,13 @@ class _EditProfilePageState extends State<EditProfilePage>
                 floating: false,
                 pinned: true,
                 backgroundColor: Colors.white.withOpacity(0.8),
-                foregroundColor: Colors.brown.shade800, // Warna baru
+                foregroundColor: Colors.brown.shade800,
                 elevation: 0,
                 flexibleSpace: FlexibleSpaceBar(
                   title: Text(
                     'Edit Profil',
                     style: TextStyle(
-                      color: Colors.brown.shade800, // Warna baru
+                      color: Colors.brown.shade800,
                       fontWeight: FontWeight.bold,
                       fontSize: 20,
                     ),
@@ -388,24 +388,23 @@ class _EditProfilePageState extends State<EditProfilePage>
                             gradient: _isSaving
                                 ? null
                                 : LinearGradient(
-                                    colors: [
-                                      // Gradasi baru
-                                      Colors.amber.shade600,
-                                      Colors.orange.shade800
-                                    ],
-                                  ),
+                              colors: [
+                                Colors.amber.shade600,
+                                Colors.orange.shade800
+                              ],
+                            ),
                             color: _isSaving ? Colors.grey[300] : null,
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: _isSaving
                                 ? null
                                 : [
-                                    BoxShadow(
-                                      color: Colors.amber
-                                          .withOpacity(0.4), // Bayangan baru
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
+                              BoxShadow(
+                                color: Colors.amber
+                                    .withOpacity(0.4),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                           ),
                           child: Material(
                             color: Colors.transparent,
@@ -417,21 +416,21 @@ class _EditProfilePageState extends State<EditProfilePage>
                                     horizontal: 20, vertical: 12),
                                 child: _isSaving
                                     ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      )
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
                                     : const Text(
-                                        'Simpan',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
-                                        ),
-                                      ),
+                                  'Simpan',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -488,7 +487,7 @@ class _EditProfilePageState extends State<EditProfilePage>
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Colors.brown.shade800, // Warna baru
+                color: Colors.brown.shade800,
               ),
             ),
             const SizedBox(height: 8),
@@ -505,7 +504,7 @@ class _EditProfilePageState extends State<EditProfilePage>
               labelText: 'Nama Lengkap',
               icon: Icons.badge_outlined,
               delay: 0.1,
-              color: Colors.amber.shade700, // Warna baru
+              color: Colors.amber.shade700,
             ),
             const SizedBox(height: 20),
             _buildAnimatedTextField(
@@ -513,7 +512,7 @@ class _EditProfilePageState extends State<EditProfilePage>
               labelText: 'Username',
               icon: Icons.alternate_email_outlined,
               delay: 0.2,
-              color: Colors.orange.shade700, // Warna baru
+              color: Colors.orange.shade700,
             ),
             const SizedBox(height: 20),
             _buildAnimatedTextField(
@@ -522,7 +521,7 @@ class _EditProfilePageState extends State<EditProfilePage>
               icon: Icons.email_outlined,
               delay: 0.3,
               keyboardType: TextInputType.emailAddress,
-              color: Colors.brown.shade400, // Warna baru
+              color: Colors.brown.shade400,
             ),
             const SizedBox(height: 20),
             _buildAnimatedTextField(
@@ -532,7 +531,7 @@ class _EditProfilePageState extends State<EditProfilePage>
               delay: 0.4,
               maxLines: 4,
               isOptional: true,
-              color: Colors.deepOrange.shade400, // Warna baru
+              color: Colors.deepOrange.shade400,
             ),
           ],
         ),
@@ -607,7 +606,7 @@ class _EditProfilePageState extends State<EditProfilePage>
               filled: true,
               fillColor: Colors.white,
               contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             ),
             maxLines: maxLines,
             keyboardType: keyboardType,
@@ -615,8 +614,8 @@ class _EditProfilePageState extends State<EditProfilePage>
             validator: isOptional
                 ? null
                 : (value) => (value?.isEmpty ?? true)
-                    ? '$labelText tidak boleh kosong'
-                    : null,
+                ? '$labelText tidak boleh kosong'
+                : null,
           ),
         ),
       ),
@@ -633,12 +632,11 @@ class _EditProfilePageState extends State<EditProfilePage>
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
-                  // Gradasi baru
                   colors: [Colors.amber.shade600, Colors.orange.shade800],
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.amber.withOpacity(0.4), // Bayangan baru
+                    color: Colors.amber.withOpacity(0.4),
                     blurRadius: 20,
                     offset: const Offset(0, 10),
                   ),
@@ -659,67 +657,67 @@ class _EditProfilePageState extends State<EditProfilePage>
                     },
                     child: _selectedImage != null
                         ? Image.file(
-                            _selectedImage!,
-                            key: ValueKey(_selectedImage!.path),
-                            fit: BoxFit.cover,
-                            width: 124,
-                            height: 124,
-                          )
+                      _selectedImage!,
+                      key: ValueKey(_selectedImage!.path),
+                      fit: BoxFit.cover,
+                      width: 124,
+                      height: 124,
+                    )
                         : _profilePictureUrl.isNotEmpty
-                            ? CachedNetworkImage(
-                                key: ValueKey(_profilePictureUrl),
-                                imageUrl: _profilePictureUrl,
-                                fit: BoxFit.cover,
-                                width: 124,
-                                height: 124,
-                                placeholder: (context, url) => Container(
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        Colors.grey.shade200,
-                                        Colors.grey.shade300,
-                                      ],
-                                    ),
-                                  ),
-                                  child: const Center(
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.amber), // Warna baru
-                                  ),
-                                ),
-                                errorWidget: (context, url, error) => Container(
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [
-                                        Colors.grey.shade200,
-                                        Colors.grey.shade300,
-                                      ],
-                                    ),
-                                  ),
-                                  child: Icon(
-                                    Icons.person,
-                                    size: 60,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                              )
-                            : Container(
-                                width: 124,
-                                height: 124,
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Colors.grey.shade200,
-                                      Colors.grey.shade300,
-                                    ],
-                                  ),
-                                ),
-                                child: Icon(
-                                  Icons.person,
-                                  size: 60,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
+                        ? CachedNetworkImage(
+                      key: ValueKey(_profilePictureUrl),
+                      imageUrl: _profilePictureUrl,
+                      fit: BoxFit.cover,
+                      width: 124,
+                      height: 124,
+                      placeholder: (context, url) => Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.grey.shade200,
+                              Colors.grey.shade300,
+                            ],
+                          ),
+                        ),
+                        child: const Center(
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.amber),
+                        ),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.grey.shade200,
+                              Colors.grey.shade300,
+                            ],
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.person,
+                          size: 60,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    )
+                        : Container(
+                      width: 124,
+                      height: 124,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.grey.shade200,
+                            Colors.grey.shade300,
+                          ],
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.person,
+                        size: 60,
+                        color: Colors.grey[600],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -745,7 +743,7 @@ class _EditProfilePageState extends State<EditProfilePage>
                 padding: const EdgeInsets.all(4),
                 child: CircleAvatar(
                   radius: 20,
-                  backgroundColor: Colors.amber.shade700, // Warna baru
+                  backgroundColor: Colors.amber.shade700,
                   child: const Icon(
                     Icons.camera_alt_outlined,
                     color: Colors.white,
@@ -761,7 +759,6 @@ class _EditProfilePageState extends State<EditProfilePage>
   }
 }
 
-// Widget untuk background dengan warna baru
 class _CoolBackground extends StatelessWidget {
   const _CoolBackground({Key? key}) : super(key: key);
 
@@ -778,16 +775,14 @@ class _CoolBackground extends StatelessWidget {
 class _BackgroundPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    // Blob di kiri atas
     final paint1 = Paint()
-      ..color = Colors.yellow.shade50.withOpacity(0.9) // Warna baru
+      ..color = Colors.yellow.shade50.withOpacity(0.9)
       ..style = PaintingStyle.fill
       ..imageFilter = ImageFilter.blur(sigmaX: 100, sigmaY: 100);
     canvas.drawCircle(Offset(size.width * 0.1, size.height * 0.1), 150, paint1);
 
-    // Blob di kanan bawah
     final paint2 = Paint()
-      ..color = Colors.amber.shade100.withOpacity(0.6) // Warna baru
+      ..color = Colors.amber.shade100.withOpacity(0.6)
       ..style = PaintingStyle.fill
       ..imageFilter = ImageFilter.blur(sigmaX: 120, sigmaY: 120);
     canvas.drawCircle(

@@ -20,53 +20,96 @@ class _StorySectionState extends State<StorySection> {
   final StoryService _storyService = StoryService();
   final AuthService _authService = AuthService();
 
-  late Future<List<UserWithStories>> _storiesFuture;
-  Map<String, dynamic>? _user;
+  // late Future<List<UserWithStories>> _storiesFuture;
+  // Map<String, dynamic>? _user;
+
+  late Future<Map<String, dynamic>> _initialDataFuture;
 
   @override
   void initState() {
     super.initState();
-    _storiesFuture = _loadStories();
-    _loadUser();
+    _initialDataFuture = _loadInitialData();
   }
 
-  Future<List<UserWithStories>> _loadStories() async {
+// Hapus fungsi _loadUser() dan _loadStories() yang lama
+// Ganti dengan fungsi baru ini:
+  Future<Map<String, dynamic>> _loadInitialData() async {
     try {
-      final List<dynamic> responseData = await _storyService.getStoryFeed();
-      return responseData.map((json) => UserWithStories.fromJson(json)).toList();
+      final results = await Future.wait([
+        _storyService.getStoryFeed(),
+        _authService.getUser(),
+      ]);
+
+      print('--- RAW API RESPONSE ---');
+      print('Stories Data: ${results[0]}');
+      print('User Data: ${results[1]}');
+
+      final currentUserData = results[1] as Map<String, dynamic>;
+      // --- PERBAIKI BARIS INI ---
+      print('Current User ID: ${currentUserData['user_id']}');
+      // -------------------------
+
+      print('------------------------');
+
+      return {
+        'stories': results[0] as List<dynamic>,
+        'user': results[1] as Map<String, dynamic>,
+      };
     } catch (e) {
-      print(e);
+      print('Gagal memuat data awal di StorySection: $e');
       rethrow;
     }
   }
 
-  Future<void> _loadUser() async {
-    try {
-      final userData = await _authService.getUser();
-      if (mounted) {
-        setState(() {
-          _user = userData;
-        });
-      }
-    } catch (e) {
-      print('Gagal memuat data pengguna di StorySection: $e');
-    }
-  }
+  // Future<void> _loadUser() async {
+  //   try {
+  //     final userData = await _authService.getUser();
+  //     if (mounted) {
+  //       setState(() {
+  //         _user = userData;
+  //       });
+  //     }
+  //   } catch (e) {
+  //     print('Gagal memuat data pengguna di StorySection: $e');
+  //   }
+  // }
+
+  // lib/widgets/story_section.dart
+
+// ... (kode lainnya tetap sama)
 
   @override
   Widget build(BuildContext context) {
-    final String? profileUrl = _user?['user']?['profile_picture_url'];
-    final int? currentUserId = _user?['user']?['user_id'];
-
     return Container(
       height: 100,
       color: Colors.transparent,
-      child: FutureBuilder<List<UserWithStories>>(
-        future: _storiesFuture,
+      child: FutureBuilder<Map<String, dynamic>>(
+        future: _initialDataFuture,
         builder: (context, snapshot) {
-          // ... (kode builder bagian atas tidak berubah)
+          // 1. Tampilkan loading indicator saat data sedang diambil
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-          final allUsersWithStories = snapshot.data ?? [];
+          // 2. Tampilkan pesan error jika terjadi kesalahan
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          // 3. Pastikan data tidak null setelah future selesai
+          if (!snapshot.hasData || snapshot.data == null) {
+            return const Center(child: Text('Tidak ada data cerita.'));
+          }
+
+          // 4. JIKA SEMUA AMAN, baru proses datanya di sini
+          final data = snapshot.data!; // Sekarang aman menggunakan '!'
+          final userData = data['user'] as Map<String, dynamic>;
+          final storiesData = data['stories'] as List<dynamic>;
+
+          // ... Sisa logika Anda yang sebelumnya diletakkan di sini ...
+          final allUsersWithStories = storiesData.map((json) => UserWithStories.fromJson(json)).toList();
+          final String? profileUrl = userData['profile_picture_url'];
+          final int? currentUserId = userData['user_id'];
 
           UserWithStories? myStoryData;
           if (currentUserId != null) {
@@ -84,7 +127,7 @@ class _StorySectionState extends State<StorySection> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             itemCount: otherUsersStories.length + 1,
             itemBuilder: (context, index) {
-              // --- ITEM PERTAMA: "CERITA ANDA" ---
+              // ... sisa kode itemBuilder tidak berubah ...
               if (index == 0) {
                 return StoryCircle(
                   name: 'Cerita Anda',
@@ -92,20 +135,13 @@ class _StorySectionState extends State<StorySection> {
                   hasStory: userHasStory,
                   userProfileUrl: profileUrl,
                   userStoryData: myStoryData,
-                  // Cerita Anda tidak punya cerita sebelumnya
                   previousStoriesQueue: const [],
-                  // Antrean berikutnya adalah semua cerita pengguna lain
                   nextStoriesQueue: otherUsersStories,
                 );
               }
 
-              // --- ITEM SELANJUTNYA: CERITA PENGGUNA LAIN ---
               final userStoryData = otherUsersStories[index - 1];
-
-              // Siapkan antrean cerita SEBELUM item ini
               final previousQueue = otherUsersStories.sublist(0, index - 1);
-
-              // Siapkan antrean cerita SETELAH item ini
               final nextQueue = (index < otherUsersStories.length)
                   ? otherUsersStories.sublist(index)
                   : <UserWithStories>[];
@@ -114,8 +150,8 @@ class _StorySectionState extends State<StorySection> {
                 name: userStoryData.username,
                 imageUrl: userStoryData.profilePictureUrl,
                 userStoryData: userStoryData,
-                previousStoriesQueue: previousQueue, // Teruskan antrean sebelumnya
-                nextStoriesQueue: nextQueue, // Teruskan antrean berikutnya
+                previousStoriesQueue: previousQueue,
+                nextStoriesQueue: nextQueue,
               );
             },
           );

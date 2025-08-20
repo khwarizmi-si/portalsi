@@ -772,6 +772,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
 
+  // Salin dan ganti seluruh fungsi _sharePost di file create_post_page.dart
+
   Future<void> _sharePost() async {
     if (_selectedMedia == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -818,6 +820,14 @@ class _CreatePostPageState extends State<CreatePostPage> {
       request.fields['user_id'] = _userId.toString();
       request.fields['caption'] = _captionController.text;
       request.fields['location'] = _locationController.text;
+      request.fields['is_archived'] = '0'; // Sesuai contoh pada Postman
+
+      // --- [PERUBAHAN UTAMA DI SINI] ---
+      // Tambahkan field 'is_video' jika media yang diupload adalah video
+      if (_isVideo) {
+        request.fields['is_video'] = '1';
+      }
+      // --- [AKHIR DARI PERUBAHAN] ---
 
       // Tambahkan file media
       request.files.add(
@@ -845,7 +855,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => HomePage()),
-          (route) => false,
+              (route) => false,
         );
       } else {
         final responseBody = await response.stream.bytesToString();
