@@ -1,4 +1,7 @@
+// lib/pages/chat_room.dart
+
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../controllers/chat_room_controller.dart';
 import '../models/chat.dart';
@@ -13,32 +16,44 @@ class ChatRoomPage extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (_) => ChatRoomController(recipient: user),
       child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: _ChatAppBar(user: user),
-        body: Column(
-          children: [
-            Expanded(
-              child: Consumer<ChatRoomController>(
-                builder: (context, controller, _) {
-                  if (controller.isLoading) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (controller.errorMessage != null) {
-                    return Center(child: Text(controller.errorMessage!));
-                  }
-                  return _MessageList(); // Tidak perlu passing messages lagi
-                },
-              ),
+        // BARU: Tambahkan latar belakang yang menarik
+        body: Container(
+          decoration: const BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage(
+                  'assets/images/chat_bg.png'), // Pastikan Anda punya gambar ini
+              fit: BoxFit.cover,
+              opacity: 0.1,
             ),
-            const _MessageInputBar(),
-          ],
+          ),
+          child: Column(
+            children: [
+              _ChatAppBar(user: user),
+              Expanded(
+                child: Consumer<ChatRoomController>(
+                  builder: (context, controller, _) {
+                    if (controller.isLoading) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (controller.errorMessage != null) {
+                      return Center(child: Text(controller.errorMessage!));
+                    }
+                    return _MessageList();
+                  },
+                ),
+              ),
+              const _MessageInputBar(),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-// --- WIDGET INTERNAL ---
+// ================================================================
+// --- WIDGET INTERNAL DENGAN UI/UX BARU ---
+// ================================================================
 
 /// AppBar Kustom untuk Ruang Obrolan
 class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
@@ -48,17 +63,18 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      elevation: 0.5,
-      backgroundColor: Colors.white,
+      elevation: 0,
+      backgroundColor: Colors.white.withOpacity(0.8),
+      surfaceTintColor: Colors.transparent,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back, color: Colors.black),
+        icon: const Icon(Icons.arrow_back, color: Colors.black87),
         onPressed: () => Navigator.of(context).pop(),
       ),
       title: Row(
         children: [
           CircleAvatar(
             radius: 20,
-            backgroundColor: Colors.grey[200],
+            backgroundColor: Colors.grey[300],
             backgroundImage: user.profilePictureUrl != null &&
                     user.profilePictureUrl!.isNotEmpty
                 ? NetworkImage(user.profilePictureUrl!)
@@ -72,12 +88,12 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                 user.fullName ?? user.username,
                 style: const TextStyle(
                     color: Colors.black,
-                    fontSize: 16,
+                    fontSize: 17,
                     fontWeight: FontWeight.bold),
               ),
               Text(
                 'Online', // Ganti dengan status online asli jika ada
-                style: TextStyle(color: Colors.green[600], fontSize: 12),
+                style: TextStyle(color: Colors.green.shade600, fontSize: 13),
               ),
             ],
           ),
@@ -85,10 +101,10 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
       ),
       actions: [
         IconButton(
-            icon: const Icon(Icons.videocam_outlined, color: Colors.black),
+            icon: const Icon(Icons.call_outlined, color: Colors.black87),
             onPressed: () {}),
         IconButton(
-            icon: const Icon(Icons.info_outline, color: Colors.black),
+            icon: const Icon(Icons.more_vert, color: Colors.black87),
             onPressed: () {}),
       ],
     );
@@ -105,14 +121,23 @@ class _MessageList extends StatelessWidget {
     final controller = context.watch<ChatRoomController>();
 
     return ListView.builder(
-      reverse: true, // Membuat list mulai dari bawah dan scroll ke atas
-      padding: const EdgeInsets.symmetric(horizontal: 12.0),
+      reverse: true,
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10),
       itemCount: controller.messages.length,
       itemBuilder: (context, index) {
         final message = controller.messages[index];
         final bool isMe = message.sender.id == controller.currentUser?.id;
 
-        return _MessageBubble(message: message, isMe: isMe);
+        // Cek apakah pesan sebelumnya dari sender yang sama
+        final bool isSameSenderAsPrevious =
+            index < controller.messages.length - 1 &&
+                controller.messages[index + 1].sender.id == message.sender.id;
+
+        return _MessageBubble(
+          message: message,
+          isMe: isMe,
+          isGrouped: isSameSenderAsPrevious,
+        );
       },
     );
   }
@@ -122,61 +147,87 @@ class _MessageList extends StatelessWidget {
 class _MessageBubble extends StatelessWidget {
   final ChatMessage message;
   final bool isMe;
+  final bool isGrouped; // BARU: Untuk grouping pesan
 
-  const _MessageBubble({required this.message, required this.isMe});
+  const _MessageBubble({
+    required this.message,
+    required this.isMe,
+    required this.isGrouped,
+  });
 
   @override
   Widget build(BuildContext context) {
     final alignment = isMe ? Alignment.centerRight : Alignment.centerLeft;
-    final color = isMe ? Colors.black87 : Colors.grey[200];
+    final color = isMe ? Theme.of(context).primaryColor : Colors.white;
     final textColor = isMe ? Colors.white : Colors.black87;
+    final tailAlignment =
+        isMe ? MainAxisAlignment.end : MainAxisAlignment.start;
+    final timestampColor = isMe ? Colors.white70 : Colors.black54;
 
     return Align(
       alignment: alignment,
       child: Container(
         constraints:
             BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-        margin: const EdgeInsets.symmetric(vertical: 4.0),
-        padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+        // BARU: Atur margin untuk grouping
+        margin: EdgeInsets.only(
+          top: isGrouped ? 2.0 : 8.0,
+          bottom: 2.0,
+        ),
         decoration: BoxDecoration(
           color: color,
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(20),
-            topRight: const Radius.circular(20),
+            topLeft: const Radius.circular(18),
+            topRight: const Radius.circular(18),
             bottomLeft:
-                isMe ? const Radius.circular(20) : const Radius.circular(4),
+                isMe ? const Radius.circular(18) : const Radius.circular(4),
             bottomRight:
-                isMe ? const Radius.circular(4) : const Radius.circular(20),
+                isMe ? const Radius.circular(4) : const Radius.circular(18),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(message.text ?? "File...",
-                style: TextStyle(color: textColor, fontSize: 15, height: 1.3)),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '${message.timestamp.hour}:${message.timestamp.minute.toString().padLeft(2, '0')}',
-                  style: TextStyle(
-                      color: textColor.withOpacity(0.6), fontSize: 11),
-                ),
-                if (isMe) ...[
-                  const SizedBox(width: 4),
-                  Icon(
-                    _getStatusIcon(message.status),
-                    size: 14,
-                    color: message.status == MessageStatus.read
-                        ? Colors.blue
-                        : textColor.withOpacity(0.6),
-                  ),
-                ]
-              ],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 5,
+              offset: const Offset(0, 2),
             )
           ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Fleksibel agar teks bisa wrap
+              Flexible(
+                child: Text(
+                  message.text ?? "File...",
+                  style: TextStyle(color: textColor, fontSize: 16, height: 1.3),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Waktu dan Status
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    DateFormat.Hm().format(message.timestamp),
+                    style: TextStyle(color: timestampColor, fontSize: 12),
+                  ),
+                  if (isMe) ...[
+                    const SizedBox(width: 4),
+                    Icon(
+                      _getStatusIcon(message.status),
+                      size: 16,
+                      color: message.status == MessageStatus.read
+                          ? Colors.blue.shade300
+                          : timestampColor,
+                    ),
+                  ]
+                ],
+              )
+            ],
+          ),
         ),
       ),
     );
@@ -185,15 +236,15 @@ class _MessageBubble extends StatelessWidget {
   IconData _getStatusIcon(MessageStatus status) {
     switch (status) {
       case MessageStatus.sending:
-        return Icons.watch_later_outlined;
+        return Icons.access_time_rounded;
       case MessageStatus.sent:
-        return Icons.done;
+        return Icons.done_rounded;
       case MessageStatus.read:
-        return Icons.done_all;
+        return Icons.done_all_rounded;
       case MessageStatus.failed:
-        return Icons.error_outline;
+        return Icons.error_outline_rounded;
       default:
-        return Icons.done;
+        return Icons.done_rounded;
     }
   }
 }
@@ -208,19 +259,6 @@ class _MessageInputBar extends StatefulWidget {
 
 class _MessageInputBarState extends State<_MessageInputBar> {
   final TextEditingController _textController = TextEditingController();
-  bool _showSendButton = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _textController.addListener(() {
-      if (mounted) {
-        setState(() {
-          _showSendButton = _textController.text.trim().isNotEmpty;
-        });
-      }
-    });
-  }
 
   @override
   void dispose() {
@@ -234,54 +272,76 @@ class _MessageInputBarState extends State<_MessageInputBar> {
 
     return SafeArea(
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
         decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Colors.grey[200]!)),
+          color: Colors.white.withOpacity(0.9),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -5),
+            )
+          ],
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             IconButton(
-                icon: const Icon(Icons.add, color: Colors.black87),
-                onPressed: () {}),
+              icon: const Icon(Icons.sentiment_satisfied_alt_outlined,
+                  color: Colors.black54),
+              onPressed: () {},
+            ),
             Expanded(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
                 decoration: BoxDecoration(
-                  color: Colors.grey[100],
+                  color: Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(24.0),
                 ),
-                child: TextField(
-                  controller: _textController,
-                  decoration: const InputDecoration(
-                    hintText: 'Kirim pesan...',
-                    border: InputBorder.none,
-                  ),
-                  maxLines: null,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12.0, vertical: 14.0),
+                        child: TextField(
+                          controller: _textController,
+                          decoration: const InputDecoration.collapsed(
+                            hintText: 'Ketik pesan...',
+                          ),
+                          maxLines: 5,
+                          minLines: 1,
+                          onChanged: (_) => setState(() {}),
+                          textCapitalization: TextCapitalization.sentences,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.attach_file_rounded,
+                          color: Colors.black54),
+                      onPressed: () {},
+                    ),
+                  ],
                 ),
               ),
             ),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              transitionBuilder: (child, animation) =>
-                  ScaleTransition(scale: animation, child: child),
-              child: _showSendButton
-                  ? IconButton(
-                      key: const ValueKey('send_button'),
-                      icon: Icon(Icons.send,
-                          color: Theme.of(context).primaryColor),
-                      onPressed: () {
-                        chatController.sendMessage(_textController.text);
-                        _textController.clear();
-                      },
-                    )
-                  : IconButton(
-                      key: const ValueKey('mic_button'),
-                      icon: const Icon(Icons.mic, color: Colors.black87),
-                      onPressed: () {
-                        /* TODO: Panggil controller.startRecording() */
-                      },
-                    ),
+            IconButton(
+              icon: Icon(
+                _textController.text.trim().isEmpty
+                    ? Icons.mic_none_outlined
+                    : Icons.send_rounded,
+                color: Theme.of(context).primaryColor,
+                size: 28,
+              ),
+              onPressed: () {
+                if (_textController.text.trim().isNotEmpty) {
+                  chatController.sendMessage(_textController.text);
+                  _textController.clear();
+                } else {
+                  // Fungsi rekam suara
+                }
+              },
             ),
           ],
         ),

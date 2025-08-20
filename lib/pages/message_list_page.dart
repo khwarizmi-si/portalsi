@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart'; // Import intl untuk format waktu
+import 'package:intl/intl.dart';
 import '../controllers/message_list_controller.dart';
 import '../models/chat.dart';
 import '../models/user_model.dart';
@@ -21,39 +21,41 @@ class MessageListPage extends StatelessWidget {
           backgroundColor: Colors.white,
           elevation: 0.5,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.black),
+            icon: const Icon(Icons.arrow_back, color: Colors.black87),
             onPressed: () => Navigator.of(context).pop(),
           ),
           title: const Text(
             'Pesan',
-            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+            style: TextStyle(
+                color: Colors.black, fontWeight: FontWeight.bold, fontSize: 22),
           ),
           actions: [
             IconButton(
               icon: const Icon(Icons.edit_note_outlined,
-                  color: Colors.black, size: 28),
+                  color: Colors.black87, size: 28),
               onPressed: () {},
             ),
           ],
         ),
         body: Column(
           children: [
-            // Search Bar
+            // --- Search Bar ---
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: Consumer<MessageListController>(
                 builder: (context, controller, _) {
                   return TextField(
                     onChanged: (value) => controller.filterConversations(value),
                     decoration: InputDecoration(
-                      hintText: 'Cari',
+                      hintText: 'Cari percakapan...',
+                      hintStyle: TextStyle(color: Colors.grey.shade500),
                       prefixIcon:
                           Icon(Icons.search, color: Colors.grey.shade600),
                       filled: true,
                       fillColor: Colors.grey.shade100,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                      contentPadding: const EdgeInsets.all(12),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(25),
                         borderSide: BorderSide.none,
                       ),
                     ),
@@ -61,7 +63,7 @@ class MessageListPage extends StatelessWidget {
                 },
               ),
             ),
-            // Daftar Percakapan
+            // --- Daftar Percakapan ---
             Expanded(
               child: Consumer<MessageListController>(
                 builder: (context, controller, _) {
@@ -72,10 +74,19 @@ class MessageListPage extends StatelessWidget {
                     return Center(child: Text(controller.errorMessage!));
                   }
                   if (controller.filteredConversations.isEmpty) {
-                    return const Center(child: Text('Tidak ada pesan.'));
+                    return const Center(
+                        child: Text('Mulai percakapan baru!',
+                            style:
+                                TextStyle(fontSize: 16, color: Colors.grey)));
                   }
-                  return ListView.builder(
+                  return ListView.separated(
                     itemCount: controller.filteredConversations.length,
+                    separatorBuilder: (context, index) => const Divider(
+                      height: 1,
+                      thickness: 1,
+                      indent: 80,
+                      endIndent: 16,
+                    ),
                     itemBuilder: (context, index) {
                       final conversation =
                           controller.filteredConversations[index];
@@ -92,7 +103,9 @@ class MessageListPage extends StatelessWidget {
   }
 }
 
-/// Widget untuk satu baris percakapan
+/// ================================================================
+/// WIDGET TILE PERCAKAPAN DENGAN UI/UX BARU
+/// ================================================================
 class _ConversationTile extends StatelessWidget {
   final Conversation conversation;
   const _ConversationTile({required this.conversation});
@@ -105,6 +118,8 @@ class _ConversationTile extends StatelessWidget {
 
     if (messageDate == today) {
       return DateFormat.Hm().format(dt); // Contoh: 16:30
+    } else if (now.difference(messageDate).inDays == 1) {
+      return 'Kemarin';
     } else {
       return DateFormat('dd/MM/yy').format(dt); // Contoh: 19/08/25
     }
@@ -114,22 +129,21 @@ class _ConversationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final User partner = conversation.partner;
     final bool isUnread = conversation.unreadCount > 0;
-    final fontWeight = isUnread ? FontWeight.bold : FontWeight.normal;
-    final textColor = isUnread ? Colors.black : Colors.grey.shade600;
 
     return InkWell(
       onTap: () {
-        // Navigasi dengan objek User yang datanya mungkin belum lengkap.
-        // Halaman ChatRoomPage disarankan untuk memuat data lengkap user ini.
-        Navigator.push(context,
-            MaterialPageRoute(builder: (_) => ChatRoomPage(user: partner)));
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => ChatRoomPage(user: partner)),
+        );
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
         child: Row(
           children: [
+            // --- Foto Profil ---
             CircleAvatar(
-              radius: 28,
+              radius: 30,
               backgroundColor: Colors.grey.shade200,
               backgroundImage: partner.profilePictureUrl != null &&
                       partner.profilePictureUrl!.isNotEmpty
@@ -137,48 +151,82 @@ class _ConversationTile extends StatelessWidget {
                   : null,
               child: partner.profilePictureUrl == null ||
                       partner.profilePictureUrl!.isEmpty
-                  ? Text(partner.username.substring(0, 1).toUpperCase(),
+                  ? Text(
+                      partner.username.substring(0, 1).toUpperCase(),
                       style: const TextStyle(
-                          fontSize: 20, fontWeight: FontWeight.bold))
+                          fontSize: 24, fontWeight: FontWeight.bold),
+                    )
                   : null,
             ),
             const SizedBox(width: 16),
+            // --- Nama dan Pesan Terakhir ---
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    // Tampilkan username karena full_name belum ada dari API chat-list
-                    partner.username,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: fontWeight,
-                      color: Colors.black,
+                    partner.fullName ?? partner.username,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 5),
                   Text(
-                    '${conversation.lastMessage} ・ ${_formatTimestamp(conversation.timestamp)}',
-                    style: TextStyle(fontSize: 14, color: textColor),
+                    conversation.lastMessage,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isUnread ? Colors.black87 : Colors.grey.shade600,
+                      fontWeight:
+                          isUnread ? FontWeight.bold : FontWeight.normal,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
-            if (isUnread) // Tampilkan badge jika belum dibaca
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: const BoxDecoration(
-                  color:
-                      Colors.deepPurple, // Bisa disesuaikan dengan warna tema
-                  shape: BoxShape.circle,
+            const SizedBox(width: 10),
+            // --- Waktu dan Indikator Unread ---
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  _formatTimestamp(conversation.timestamp),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isUnread
+                        ? Theme.of(context).primaryColor
+                        : Colors.grey.shade500,
+                    fontWeight: isUnread ? FontWeight.bold : FontWeight.normal,
+                  ),
                 ),
-                child: Text(
-                  conversation.unreadCount.toString(),
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                ),
-              ),
+                const SizedBox(height: 8),
+                if (isUnread)
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).primaryColor,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        conversation.unreadCount.toString(),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  )
+                else
+                  const SizedBox(
+                      height: 22), // Placeholder agar alignment tetap sama
+              ],
+            ),
           ],
         ),
       ),

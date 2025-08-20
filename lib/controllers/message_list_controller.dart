@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import '../models/chat.dart';
-import '../services/message_service.dart'; // Pastikan path ini benar ke ChatService
+import '../services/message_service.dart'; // Pastikan path ini benar
 
 class MessageListController extends ChangeNotifier {
   final ChatService _chatService = ChatService();
@@ -26,6 +26,11 @@ class MessageListController extends ChangeNotifier {
     notifyListeners();
     try {
       _allConversations = await _chatService.getAllConversations();
+
+      // ==== PERUBAHAN DI SINI ====
+      // Urutkan daftar percakapan berdasarkan waktu pesan terakhir (terbaru di atas)
+      _allConversations.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
       _filteredConversations = _allConversations;
     } catch (e) {
       _errorMessage = "Gagal memuat pesan: ${e.toString()}";
@@ -41,8 +46,6 @@ class MessageListController extends ChangeNotifier {
     } else {
       _filteredConversations = _allConversations
           .where((convo) =>
-              // ==== PERUBAHAN DI SINI ====
-              // Mengganti convo.user menjadi convo.partner
               (convo.partner.fullName ?? '')
                   .toLowerCase()
                   .contains(query.toLowerCase()) ||

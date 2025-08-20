@@ -60,31 +60,28 @@ class Conversation {
   final String lastMessage;
   final DateTime timestamp;
   final int unreadCount;
-  // BARU: Tambahkan properti ini agar sesuai dengan data dari API
   final String? lastMediaUrl;
 
   Conversation({
     required this.partner,
     required this.lastMessage,
     required this.timestamp,
-    this.unreadCount = 0, // Beri nilai default
-    this.lastMediaUrl, // Tambahkan di konstruktor
+    this.unreadCount = 0,
+    this.lastMediaUrl,
   });
 
+  // ==== BAGIAN YANG DIPERBAIKI ====
   factory Conversation.fromJson(Map<String, dynamic> json) {
-    // API hanya memberikan 'user_id', bukan objek User lengkap.
-    // Kita buat objek User sederhana dari data yang ada.
-    // Detail user (seperti nama lengkap & foto profil) perlu diambil terpisah
-    // atau dimuat saat halaman chat dibuka.
+    // Sekarang API memberikan data user lengkap, jadi kita bisa
+    // langsung membuat objek User yang valid.
     final partnerUser = User(
       id: json['user_id'],
-      // Kita belum punya nama dari API ini, jadi gunakan placeholder
-      username: 'User ${json['user_id']}',
-      // Anda bisa menambahkan properti lain jika ada di JSON
+      username: json['username'] ?? 'unknown',
+      fullName: json['full_name'],
+      profilePictureUrl: json['profile_picture_url'],
     );
 
     String displayMessage = json['last_message'] ?? '';
-    // Jika tidak ada teks pesan tapi ada media, tampilkan 'Media'
     if (displayMessage.isEmpty && json['last_media'] != null) {
       displayMessage = '📎 Media';
     }
@@ -93,9 +90,8 @@ class Conversation {
       partner: partnerUser,
       lastMessage: displayMessage,
       timestamp: DateTime.parse(json['sent_at']),
-      // API Anda mengembalikan is_read (boolean). Kita ubah jadi unreadCount.
-      // Jika is_read=false, berarti ada 1 pesan belum dibaca (minimal).
-      unreadCount: (json['is_read'] == false) ? 1 : 0,
+      // API mengembalikan is_read sebagai integer (0 atau 1)
+      unreadCount: (json['is_read'] == 0) ? 1 : 0,
       lastMediaUrl: json['last_media'],
     );
   }
