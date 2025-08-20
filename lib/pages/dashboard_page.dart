@@ -3,14 +3,55 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:portal_si/components/post_card.dart';
 import 'package:portal_si/components/story_section.dart';
+import 'package:portal_si/pages/notif_page.dart';
 import 'package:portal_si/widgets/comment_section.dart';
 import 'package:provider/provider.dart';
 import '../controllers/home_controller.dart';
 import '../models/post_model.dart';
 import '../components/bottom_navigation.dart';
 import '../helper/time_helper.dart';
+import '../services/notification_service.dart';
 import '../utils/navigation_helper.dart';
 import 'message_list_page.dart'; // <-- JANGAN LUPA IMPORT INI
+
+
+// GANTI CLASS LAMA DENGAN INI (di bagian bawah file)
+
+class ScaleFromPositionRoute extends PageRouteBuilder {
+  final Widget widget;
+  final Offset originOffset; // Parameter baru untuk posisi asal
+
+  ScaleFromPositionRoute({required this.widget, required this.originOffset})
+      : super(
+    transitionDuration: const Duration(milliseconds: 350),
+    reverseTransitionDuration: const Duration(milliseconds: 250),
+    pageBuilder: (context, animation, secondaryAnimation) => widget,
+    opaque: false,
+    barrierDismissible: true,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      // Dapatkan ukuran layar untuk konversi Offset ke Alignment
+      final screenSize = MediaQuery.of(context).size;
+
+      // Konversi Offset (pixel) ke Alignment (nilai -1.0 hingga 1.0)
+      // Rumus: (posisi / ukuran_layar) * 2 - 1
+      final alignX = (originOffset.dx / screenSize.width) * 2 - 1;
+      final alignY = (originOffset.dy / screenSize.height) * 2 - 1;
+
+      final curveAnimation = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+
+      return ScaleTransition(
+        // Gunakan alignment yang sudah dihitung secara dinamis
+        alignment: Alignment(alignX, alignY),
+        scale: curveAnimation,
+        child: child,
+      );
+    },
+  );
+}
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -22,6 +63,8 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final ScrollController _scrollController = ScrollController();
   bool _isScrolled = false;
+  int _unreadNotificationCount = 0;
+  final GlobalKey _notificationIconKey = GlobalKey();
 
   @override
   void initState() {
@@ -41,6 +84,28 @@ class _HomePageState extends State<HomePage> {
       Provider.of<HomeController>(context, listen: false)
           .fetchPosts(isRefresh: true);
     });
+    _loadNotificationCount();
+  }
+
+  Future<void> _loadNotificationCount() async {
+    try {
+      // Gunakan service Anda untuk mendapatkan data notifikasi
+      final notifications = await NotificationService().getNotifications();
+      // Hitung notifikasi yang belum dibaca
+      final unreadCount = notifications
+          .where((notif) => notif['is_read'] == false || notif['is_read'] == 0)
+          .length;
+
+      // Perbarui state jika widget masih ada di tree
+      if (mounted) {
+        setState(() {
+          _unreadNotificationCount = unreadCount;
+        });
+      }
+    } catch (e) {
+      // Sebaiknya tangani error dengan baik
+      print('Error loading notification count in HomePage: $e');
+    }
   }
 
   @override
@@ -130,6 +195,73 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           actions: [
+            Stack(
+              children: [
+                IconButton(
+                  key: _notificationIconKey,
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+
+                    final RenderBox renderBox =
+                    _notificationIconKey.currentContext!.findRenderObject() as RenderBox;
+                    final size = renderBox.size;
+                    final position = renderBox.localToGlobal(Offset.zero);
+                    final originOffset = Offset(
+                      position.dx + size.width / 2,
+                      position.dy + size.height / 2,
+                    );
+
+                    // Gunakan .then() untuk menjalankan kode setelah kembali dari NotificationPage
+                    Navigator.push(
+                      context,
+                      ScaleFromPositionRoute(
+                        widget: const NotificationPage(),
+                        originOffset: originOffset,
+                      ),
+                    ).then((_) {
+                      // Panggil fungsi ini lagi untuk me-refresh jumlah notifikasi
+                      print('Kembali dari halaman notifikasi, memuat ulang jumlah...');
+                      _loadNotificationCount();
+                    });
+                  },
+                  icon: const Icon(
+                    Icons.notifications,
+                    color: Colors.black,
+                  ),
+                  tooltip: 'Notifikasi',
+                ),
+                // Tampilkan badge hanya jika ada notifikasi yang belum dibaca
+                if (_unreadNotificationCount > 0)
+                  Positioned(
+                    top: 8, // Atur posisi vertikal
+                    right: 8, // Atur posisi horizontal
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white, width: 1.5),
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 18,
+                        minHeight: 18,
+                      ),
+                      child: Text(
+                        // Tampilkan '99+' jika lebih dari 99
+                        _unreadNotificationCount > 99
+                            ? '99+'
+                            : _unreadNotificationCount.toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
             IconButton(
               onPressed: () {
                 HapticFeedback.lightImpact();
@@ -182,7 +314,8 @@ class _HomePageState extends State<HomePage> {
                 return PostCard(
                   username: post.user.username,
                   timeAgo: timeAgoFromDate(post.createdAt.toIso8601String()),
-                  imageUrl: post.mediaUrl ?? '',
+                  mediaUrl: post.mediaUrl ?? '', // Ganti imageUrl -> mediaUrl
+                  isVideo: post.isVideo,
                   likes: post.likesCount,
                   comments: post.commentsCount,
                   content: post.caption ?? '',
@@ -295,7 +428,8 @@ class _PinnedPostCard extends StatelessWidget {
             child: PostCard(
               username: post.user.username,
               timeAgo: timeAgoFromDate(post.createdAt.toIso8601String()),
-              imageUrl: post.mediaUrl ?? '',
+              mediaUrl: post.mediaUrl ?? '', // Ganti imageUrl -> mediaUrl
+              isVideo: post.isVideo,
               likes: post.likesCount,
               comments: post.commentsCount,
               content: post.caption ?? '',

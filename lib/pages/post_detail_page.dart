@@ -60,7 +60,8 @@ class PostDetailPage extends StatelessWidget {
                     username: mainPost.user.username,
                     timeAgo:
                         timeAgoFromDate(mainPost.createdAt.toIso8601String()),
-                    imageUrl: mainPost.mediaUrl ?? '',
+                    mediaUrl: mainPost.mediaUrl ?? '', // Ganti imageUrl -> mediaUrl
+                    isVideo: mainPost.isVideo,
                     likes: mainPost.likesCount,
                     comments: mainPost.commentsCount,
                     content: mainPost.caption ?? '',
@@ -102,7 +103,8 @@ class PostDetailPage extends StatelessWidget {
                         username: relatedPost.user.username,
                         timeAgo: timeAgoFromDate(
                             relatedPost.createdAt.toIso8601String()),
-                        imageUrl: relatedPost.mediaUrl ?? '',
+                        mediaUrl: relatedPost.mediaUrl ?? '', // Ganti imageUrl -> mediaUrl
+                        isVideo: relatedPost.isVideo,
                         likes: relatedPost.likesCount,
                         comments: relatedPost.commentsCount,
                         content: relatedPost.caption ?? '',

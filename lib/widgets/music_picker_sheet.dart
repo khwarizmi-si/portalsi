@@ -95,7 +95,7 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
         // Mulai memutar, listener akan menangani sisanya
         await _audioPlayer.play(UrlSource(song.previewUrl));
       } catch (e) {
-        print("Error playing audio: $e");
+        print("Gagal memutar musik: $e");
         // Handle error jika gagal
         if (mounted) {
           setState(() {
@@ -151,7 +151,7 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
                     child: TextField(
                       controller: _searchController,
                       decoration: InputDecoration(
-                        hintText: 'Search music',
+                        hintText: 'Cari musik',
                         hintStyle: TextStyle(color: Colors.grey[400]),
                         prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
                         filled: true,
@@ -170,13 +170,13 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      children: ['For you', 'Trending', 'Saved', 'Original audio']
+                      children: ['Untuk Anda', 'Ngetrend', 'Tersimpan', 'Audio Original']
                           .map((label) => Padding(
                         padding: const EdgeInsets.only(right: 8.0),
                         child: Chip(
                           label: Text(label),
-                          backgroundColor: label == 'For you' ? Colors.white : Colors.grey[800],
-                          labelStyle: TextStyle(color: label == 'For you' ? Colors.black : Colors.white),
+                          backgroundColor: label == 'Untuk Anda' ? Colors.white : Colors.grey[800],
+                          labelStyle: TextStyle(color: label == 'Untuk Anda' ? Colors.black : Colors.white),
                         ),
                       ))
                           .toList(),
@@ -197,7 +197,6 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
                         final isLoadingThisSong = _isAudioLoading && _loadingUrl == song.previewUrl;
 
                         return ListTile(
-                          // --- LEADING SEKARANG MENAMPILKAN LOADING INDICATOR ---
                           leading: Stack(
                             alignment: Alignment.center,
                             children: [
@@ -312,7 +311,7 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
                               ),
                               padding: const EdgeInsets.symmetric(horizontal: 20),
                             ),
-                            child: const Text('Done', style: TextStyle(fontWeight: FontWeight.bold)),
+                            child: const Text('Selesai', style: TextStyle(fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),

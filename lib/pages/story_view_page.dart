@@ -1,13 +1,11 @@
 // lib/pages/story_view_page.dart
 
-import 'dart:async';
-import 'dart:ui' as ui;
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
-import '../widgets/story_content_view.dart';
 import 'package:page_transition/page_transition.dart';
-import 'package:video_player/video_player.dart';
+import '../widgets/story_content_view.dart';
 import '../models/story_model.dart';
+// MODIFIKASI: Impor file ini untuk mendapatkan class StoryContentController
+import 'my_story_view_page.dart';
 
 class StoryViewPage extends StatefulWidget {
   final UserWithStories userWithStories;
@@ -27,35 +25,28 @@ class StoryViewPage extends StatefulWidget {
   _StoryViewPageState createState() => _StoryViewPageState();
 }
 
-class _StoryViewPageState extends State<StoryViewPage> with TickerProviderStateMixin {
+class _StoryViewPageState extends State<StoryViewPage> with SingleTickerProviderStateMixin {
   late PageController _pageController;
   late AnimationController _progressController;
-  VideoPlayerController? _videoController;
   int _currentIndex = 0;
-  bool _isLoadingContent = true;
+  late List<StoryDetail> _stories;
+
+  // MODIFIKASI: Tambahkan state untuk long-press dan map untuk controllers
+  bool _isLongPressing = false;
+  final Map<int, StoryContentController> _contentControllers = {};
+
+  // State untuk gestur dismiss
   double _scale = 1.0;
   double _opacity = 1.0;
-
-  // --- LOGIKA BARU UNTUK MUSIK (DISALIN DARI MY_STORY_VIEW_PAGE) ---
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  late AnimationController _vinylController;
-  Timer? _playbackTimer;
-  late List<StoryDetail> _stories; // Gunakan list lokal
 
   @override
   void initState() {
     super.initState();
-    _stories = List.of(widget.userWithStories.stories); // Salin list
+    _stories = List.of(widget.userWithStories.stories);
     _pageController = PageController();
     _progressController = AnimationController(vsync: this);
-    _vinylController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 10),
-    )..repeat();
 
-    if (_stories.isNotEmpty) {
-      _loadStoryAndStartTimer(0);
-    } else {
+    if (_stories.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) Navigator.of(context).pop();
       });
@@ -74,76 +65,33 @@ class _StoryViewPageState extends State<StoryViewPage> with TickerProviderStateM
   void dispose() {
     _pageController.dispose();
     _progressController.dispose();
-    _videoController?.dispose();
-    _audioPlayer.dispose(); // Jangan lupa dispose audio player
-    _vinylController.dispose();
-    _playbackTimer?.cancel();
+    // MODIFIKASI: Hapus semua controller konten
+    _contentControllers.forEach((_, controller) => controller.dispose());
     super.dispose();
   }
 
-  // --- FUNGSI INI DIMODIFIKASI TOTAL UNTUK MENANGANI MUSIK ---
-  Future<void> _loadStoryAndStartTimer(int index) async {
-    if (_stories.isEmpty || index < 0 || index >= _stories.length) return;
-
-    setState(() {
-      _isLoadingContent = true;
-      _currentIndex = index;
-    });
+  // MODIFIKASI: Buat fungsi terpusat untuk pause
+  void _pauseStory() {
     _progressController.stop();
-    _progressController.reset();
+    _contentControllers[_currentIndex]?.pause();
+  }
 
-    // Hentikan semua media player sebelumnya
-    await _videoController?.dispose();
-    _videoController = null;
-    await _audioPlayer.stop();
-    _playbackTimer?.cancel();
-
-    final StoryDetail story = _stories[index];
-
-    if (story.isMusicStory) {
-      // LOGIKA UNTUK CERITA MUSIK
-      final position = Duration(milliseconds: story.musicStartPositionMs ?? 0);
-      await _audioPlayer.play(UrlSource(story.musicPreviewUrl!), position: position);
-
-      _playbackTimer = Timer(const Duration(seconds: 15), () {
-        if(mounted) _audioPlayer.stop();
-      });
-
-      _progressController.duration = const Duration(seconds: 15);
-
-    } else if (story.isVideo) {
-      // LOGIKA UNTUK VIDEO
-      _videoController = VideoPlayerController.networkUrl(Uri.parse(story.mediaUrl));
-      await _videoController!.initialize();
-      if (mounted) {
-        _progressController.duration = _videoController!.value.duration;
-        _videoController!.play();
-      }
-    } else {
-      // LOGIKA UNTUK GAMBAR
-      await precacheImage(NetworkImage(story.mediaUrl), context);
-      if (mounted) {
-        _progressController.duration = const Duration(seconds: 5);
-      }
-    }
-
-    if (mounted) {
-      setState(() {
-        _isLoadingContent = false;
-      });
+  // MODIFIKASI: Buat fungsi terpusat untuk resume
+  void _resumeStory() {
+    if (mounted && !_isLongPressing) {
       _progressController.forward();
+      _contentControllers[_currentIndex]?.resume();
     }
   }
 
   void _nextStory() {
+    // MODIFIKASI: Jeda konten saat ini sebelum pindah
+    _contentControllers[_currentIndex]?.pause();
+
     if (_currentIndex < _stories.length - 1) {
       final nextIndex = _currentIndex + 1;
-      _pageController.animateToPage(
-        nextIndex,
-        duration: const Duration(milliseconds: 1),
-        curve: Curves.easeInOut,
-      );
-      _loadStoryAndStartTimer(nextIndex);
+      setState(() => _currentIndex = nextIndex);
+      _pageController.animateToPage(nextIndex, duration: const Duration(milliseconds: 1), curve: Curves.easeInOut);
     } else {
       if (widget.nextStories != null && widget.nextStories!.isNotEmpty) {
         final nextUserData = widget.nextStories!.first;
@@ -171,10 +119,13 @@ class _StoryViewPageState extends State<StoryViewPage> with TickerProviderStateM
   }
 
   void _previousStory() {
+    // MODIFIKASI: Jeda konten saat ini sebelum pindah
+    _contentControllers[_currentIndex]?.pause();
+
     if (_currentIndex > 0) {
       final prevIndex = _currentIndex - 1;
+      setState(() => _currentIndex = prevIndex);
       _pageController.animateToPage(prevIndex, duration: const Duration(milliseconds: 1), curve: Curves.easeInOut);
-      _loadStoryAndStartTimer(prevIndex);
     } else {
       if (widget.previousStories != null && widget.previousStories!.isNotEmpty) {
         final previousUserData = widget.previousStories!.last;
@@ -202,13 +153,13 @@ class _StoryViewPageState extends State<StoryViewPage> with TickerProviderStateM
   String _formatTimeAgo(DateTime dateTime) {
     final duration = DateTime.now().difference(dateTime);
     if (duration.inDays > 0) {
-      return '${duration.inDays} hari yang lalu';
+      return '${duration.inDays}d';
     } else if (duration.inHours > 0) {
-      return '${duration.inHours} jam yang lalu';
+      return '${duration.inHours}h';
     } else if (duration.inMinutes > 0) {
-      return '${duration.inMinutes} menit yang lalu';
+      return '${duration.inMinutes}m';
     } else {
-      return 'Baru saja';
+      return 'Now';
     }
   }
 
@@ -240,37 +191,64 @@ class _StoryViewPageState extends State<StoryViewPage> with TickerProviderStateM
               type: MaterialType.transparency,
               child: GestureDetector(
                 onTapUp: (details) {
-                  if (_isLoadingContent) return;
+                  if (_isLongPressing) return;
+
+                  _progressController.stop();
+                  _progressController.reset();
+
                   final double screenWidth = MediaQuery.of(context).size.width;
                   final double dx = details.globalPosition.dx;
-                  if (dx < screenWidth / 3) {
+                  if (dx < screenWidth / 2) { // Cukup bagi dua layar untuk navigasi
                     _previousStory();
-                  } else if (dx > screenWidth * 2 / 3) {
+                  } else {
                     _nextStory();
                   }
                 },
-                onLongPressStart: (_) => _progressController.stop(),
-                onLongPressEnd: (_) => _progressController.forward(),
+                // MODIFIKASI: Gunakan fungsi pause/resume terpusat
+                onLongPressStart: (_) {
+                  setState(() => _isLongPressing = true);
+                  _pauseStory();
+                },
+                onLongPressEnd: (_) {
+                  setState(() => _isLongPressing = false);
+                  _resumeStory();
+                },
                 child: Container(
                   color: Colors.black,
                   child: Stack(
                     children: [
-                      PageView.builder(
-                        controller: _pageController,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _stories.length,
-                        itemBuilder: (context, index) {
-                          final story = _stories[index];
-                          // --- CUKUP PANGGIL STORYCONTENTVIEW ---
-                          return Hero(
-                            tag: widget.heroTag,
-                            child: StoryContentView(
-                              key: ValueKey(story.storyId), // Key agar widget di-rebuild saat ganti cerita
-                              story: story,
-                              progressController: _progressController,
-                            ),
-                          );
-                        },
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 100.0, horizontal: 8.0),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12.0),
+                          child: PageView.builder(
+                            controller: _pageController,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _stories.length,
+                            itemBuilder: (context, index) {
+                              final story = _stories[index];
+                              // MODIFIKASI: Buat dan berikan controller ke StoryContentView
+                              _contentControllers.putIfAbsent(index, () => StoryContentController());
+                              return Hero(
+                                tag: widget.heroTag,
+                                child: StoryContentView(
+                                  key: ValueKey(story.storyId),
+                                  story: story,
+                                  progressController: _progressController,
+                                  controller: _contentControllers[index]!, // Berikan controller
+                                  onContentLoaded: () {
+                                    if (mounted) {
+                                      // MODIFIKASI: Gunakan _resumeStory agar konsisten
+                                      _progressController.stop();
+                                      _progressController.reset();
+                                      _resumeStory();
+                                    }
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+                        ),
                       ),
                       Positioned(
                         top: 40.0,
@@ -311,17 +289,25 @@ class _StoryViewPageState extends State<StoryViewPage> with TickerProviderStateM
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      widget.userWithStories.username,
-                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                                    ),
-                                    Text(
-                                      _formatTimeAgo(currentStory.createdAt),
-                                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          widget.userWithStories.username,
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          _formatTimeAgo(currentStory.createdAt),
+                                          style: const TextStyle(color: Colors.white70, fontSize: 14),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
                                 const Spacer(),
+                                IconButton(
+                                    onPressed: () {},
+                                    icon: const Icon(Icons.more_horiz, color: Colors.white)),
                                 IconButton(
                                   onPressed: () => Navigator.of(context).pop(),
                                   icon: const Icon(Icons.close, color: Colors.white),
@@ -336,25 +322,9 @@ class _StoryViewPageState extends State<StoryViewPage> with TickerProviderStateM
                         left: 0,
                         right: 0,
                         child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [Colors.black.withOpacity(0.6), Colors.transparent],
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
-                            ),
-                          ),
+                          padding: const EdgeInsets.only(bottom: 20),
                           child: Column(
-                            mainAxisAlignment: MainAxisAlignment.end,
                             children: [
-                              if (currentStory.caption.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                                  child: Text(
-                                    currentStory.caption,
-                                    style: const TextStyle(color: Colors.white, fontSize: 15),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ),
                               Padding(
                                 padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 24.0),
                                 child: Row(
@@ -362,7 +332,7 @@ class _StoryViewPageState extends State<StoryViewPage> with TickerProviderStateM
                                     Expanded(
                                       child: TextField(
                                         decoration: InputDecoration(
-                                          hintText: 'Kirim pesan...',
+                                          hintText: 'Send message',
                                           hintStyle: TextStyle(color: Colors.white.withOpacity(0.8)),
                                           contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                                           filled: false,
@@ -378,6 +348,7 @@ class _StoryViewPageState extends State<StoryViewPage> with TickerProviderStateM
                                         style: const TextStyle(color: Colors.white),
                                       ),
                                     ),
+                                    const SizedBox(width: 8),
                                     IconButton(
                                         onPressed: () {},
                                         icon: const Icon(Icons.favorite_border, color: Colors.white, size: 28)),
@@ -391,10 +362,6 @@ class _StoryViewPageState extends State<StoryViewPage> with TickerProviderStateM
                           ),
                         ),
                       ),
-                      if (_isLoadingContent)
-                        const Center(
-                          child: CircularProgressIndicator(color: Colors.white),
-                        )
                     ],
                   ),
                 ),
@@ -403,47 +370,6 @@ class _StoryViewPageState extends State<StoryViewPage> with TickerProviderStateM
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildMusicStoryView(StoryDetail story) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Image.network(story.mediaUrl, fit: BoxFit.cover),
-        BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-          child: Container(color: Colors.black.withOpacity(0.4)),
-        ),
-        Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            RotationTransition(
-              turns: _vinylController,
-              child: Container(
-                width: 280,
-                height: 280,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  image: DecorationImage(image: NetworkImage('https://i.imgur.com/HgflQqA.png')),
-                ),
-                child: Center(
-                  child: ClipOval(
-                    child: SizedBox.fromSize(
-                      size: const Size.fromRadius(100),
-                      child: Image.network(story.mediaUrl, fit: BoxFit.cover),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(story.musicTrackName ?? '', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text(story.musicArtistName ?? '', style: const TextStyle(color: Colors.white70, fontSize: 16)),
-          ],
-        ),
-      ],
     );
   }
 }

@@ -63,7 +63,7 @@ class FeedController extends ChangeNotifier {
     notifyListeners();
     try {
       final fetchedPosts =
-          await PostService().fetchExplorePosts(tag: tag, sort: sort);
+      await PostService().fetchExplorePosts(tag: tag, sort: sort);
       posts = fetchedPosts;
       await loadLikesForPosts(fetchedPosts);
     } catch (e) {
@@ -120,7 +120,7 @@ class FeedController extends ChangeNotifier {
       final authToken = await SecureStorage.getToken();
       final uri = Uri.parse('https://api.portalsi.com/api/users/search')
           .replace(
-              queryParameters: {'q': query}); // API search biasanya pakai 'q'
+          queryParameters: {'q': query}); // API search biasanya pakai 'q'
 
       final response = await http.get(
         uri,

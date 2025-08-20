@@ -60,7 +60,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
       // [LEBIH EFISIEN] Cukup satu panggilan API untuk mendapatkan semua data utama
       final profile = await ProfileService().getOtherProfile(widget.username);
       final followStatus =
-          await FollowService().getFollowStatus(widget.username);
+      await FollowService().getFollowStatus(widget.username);
 
       if (mounted) {
         setState(() {
@@ -85,9 +85,9 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     if (_profileData == null) return;
     try {
       final fetchedFollowers =
-          await FollowService().getFollowers(_profileData!.id);
+      await FollowService().getFollowers(_profileData!.id);
       final fetchedFollowing =
-          await FollowService().getFollowing(_profileData!.id);
+      await FollowService().getFollowing(_profileData!.id);
       if (mounted) {
         setState(() {
           _followers = fetchedFollowers;
@@ -157,7 +157,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
       backgroundColor: Colors.white,
       body: _buildBody(),
       bottomNavigationBar:
-          CustomBottomNavigation(selectedIndex: 0, onTap: (_) {}),
+      CustomBottomNavigation(selectedIndex: 0, onTap: (_) {}),
     );
   }
 
@@ -240,7 +240,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
                   radius: 45,
                   backgroundColor: Colors.grey[200],
                   backgroundImage: _profileData!.profilePictureUrl != null &&
-                          _profileData!.profilePictureUrl!.isNotEmpty
+                      _profileData!.profilePictureUrl!.isNotEmpty
                       ? NetworkImage(_profileData!.profilePictureUrl!)
                       : null,
                 ),
@@ -271,7 +271,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
             Text(
               _profileData!.bio!,
               style:
-                  TextStyle(color: Colors.grey[700], height: 1.5, fontSize: 15),
+              TextStyle(color: Colors.grey[700], height: 1.5, fontSize: 15),
             ),
           ],
           const SizedBox(height: 20),
@@ -290,7 +290,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
             onPressed: _isFollowActionLoading ? null : _handleFollowAction,
             style: ElevatedButton.styleFrom(
               backgroundColor:
-                  _isFollowing ? Colors.grey[200] : Colors.blueAccent,
+              _isFollowing ? Colors.grey[200] : Colors.blueAccent,
               foregroundColor: _isFollowing ? Colors.black : Colors.white,
               elevation: _isFollowing ? 0 : 2,
               shape: RoundedRectangleBorder(
@@ -303,12 +303,12 @@ class _OtherProfilePageState extends State<OtherProfilePage>
             ),
             child: _isFollowActionLoading
                 ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white))
                 : Text(_isFollowing ? 'Mengikuti' : 'Ikuti',
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                style: const TextStyle(fontWeight: FontWeight.w600)),
           ),
         ),
         const SizedBox(width: 12),
@@ -338,7 +338,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
         children: [
           Text(count,
               style:
-                  const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
           const SizedBox(height: 2),
           Text(label,
               style: TextStyle(
@@ -365,7 +365,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
       padding: const EdgeInsets.all(4),
       sliver: SliverGrid(
         delegate: SliverChildBuilderDelegate(
-          (context, index) {
+              (context, index) {
             final post = _profileData!.recentPosts[index];
             return GestureDetector(
               onTap: () => _showImageDetail(post, index),

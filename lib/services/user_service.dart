@@ -1,5 +1,4 @@
-// lib/services/profile_service.dart
-
+// services/profile_service.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -15,7 +14,6 @@ class ProfileService {
   static const String _baseUrl = 'https://api.portalsi.com/api';
   final http.Client _client = http.Client();
 
-  // Singleton pattern
   static final ProfileService _instance = ProfileService._internal();
   factory ProfileService() => _instance;
   ProfileService._internal();
@@ -29,7 +27,6 @@ class ProfileService {
     };
   }
 
-  // [DIUBAH] Mengembalikan Future<User>
   Future<User> getProfile() async {
     try {
       final headers = await _getHeaders();

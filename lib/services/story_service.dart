@@ -13,7 +13,7 @@ class StoryService {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
       },
-      body: jsonEncode({'media': mediaUrl}),
+      body: jsonEncode({'media_url': mediaUrl}),
     );
     return res.statusCode == 201;
   }
