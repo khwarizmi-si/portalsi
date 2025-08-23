@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:portal_si/components/post_card.dart';
 import 'package:portal_si/components/story_section.dart';
 import 'package:portal_si/pages/notif_page.dart';
+import 'package:portal_si/services/message_service.dart';
+import 'package:portal_si/utils/secure_storage.dart';
 import 'package:portal_si/widgets/comment_section.dart';
 import 'package:provider/provider.dart';
 import '../controllers/home_controller.dart';
@@ -14,7 +16,6 @@ import '../services/notification_service.dart';
 import '../utils/navigation_helper.dart';
 import 'message_list_page.dart'; // <-- JANGAN LUPA IMPORT INI
 
-
 // GANTI CLASS LAMA DENGAN INI (di bagian bawah file)
 
 class ScaleFromPositionRoute extends PageRouteBuilder {
@@ -23,34 +24,34 @@ class ScaleFromPositionRoute extends PageRouteBuilder {
 
   ScaleFromPositionRoute({required this.widget, required this.originOffset})
       : super(
-    transitionDuration: const Duration(milliseconds: 350),
-    reverseTransitionDuration: const Duration(milliseconds: 250),
-    pageBuilder: (context, animation, secondaryAnimation) => widget,
-    opaque: false,
-    barrierDismissible: true,
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      // Dapatkan ukuran layar untuk konversi Offset ke Alignment
-      final screenSize = MediaQuery.of(context).size;
+          transitionDuration: const Duration(milliseconds: 350),
+          reverseTransitionDuration: const Duration(milliseconds: 250),
+          pageBuilder: (context, animation, secondaryAnimation) => widget,
+          opaque: false,
+          barrierDismissible: true,
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            // Dapatkan ukuran layar untuk konversi Offset ke Alignment
+            final screenSize = MediaQuery.of(context).size;
 
-      // Konversi Offset (pixel) ke Alignment (nilai -1.0 hingga 1.0)
-      // Rumus: (posisi / ukuran_layar) * 2 - 1
-      final alignX = (originOffset.dx / screenSize.width) * 2 - 1;
-      final alignY = (originOffset.dy / screenSize.height) * 2 - 1;
+            // Konversi Offset (pixel) ke Alignment (nilai -1.0 hingga 1.0)
+            // Rumus: (posisi / ukuran_layar) * 2 - 1
+            final alignX = (originOffset.dx / screenSize.width) * 2 - 1;
+            final alignY = (originOffset.dy / screenSize.height) * 2 - 1;
 
-      final curveAnimation = CurvedAnimation(
-        parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
-      );
+            final curveAnimation = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            );
 
-      return ScaleTransition(
-        // Gunakan alignment yang sudah dihitung secara dinamis
-        alignment: Alignment(alignX, alignY),
-        scale: curveAnimation,
-        child: child,
-      );
-    },
-  );
+            return ScaleTransition(
+              // Gunakan alignment yang sudah dihitung secara dinamis
+              alignment: Alignment(alignX, alignY),
+              scale: curveAnimation,
+              child: child,
+            );
+          },
+        );
 }
 
 class HomePage extends StatefulWidget {
@@ -77,6 +78,7 @@ class _HomePageState extends State<HomePage> {
         });
       }
     });
+    _connectToWebSocket();
 
     // PENTING: Panggil fetchPosts saat halaman pertama kali dibuka
     // Pastikan HomeController Anda dipanggil di sini jika belum ada
@@ -85,6 +87,20 @@ class _HomePageState extends State<HomePage> {
           .fetchPosts(isRefresh: true);
     });
     _loadNotificationCount();
+  }
+
+  Future<void> _connectToWebSocket() async {
+    try {
+      // Dapatkan ID pengguna yang sedang login dari penyimpanan Anda
+      final userId =
+          await SecureStorage.getUserId(); // Sesuaikan dengan metode Anda
+      if (userId != null) {
+        print('🔌 Menghubungkan ke WebSocket untuk user ID: $userId...');
+        ChatService().connect(userId.toString());
+      }
+    } catch (e) {
+      print('❌ Gagal mendapatkan user ID untuk koneksi WebSocket: $e');
+    }
   }
 
   Future<void> _loadNotificationCount() async {
@@ -203,7 +219,8 @@ class _HomePageState extends State<HomePage> {
                     HapticFeedback.lightImpact();
 
                     final RenderBox renderBox =
-                    _notificationIconKey.currentContext!.findRenderObject() as RenderBox;
+                        _notificationIconKey.currentContext!.findRenderObject()
+                            as RenderBox;
                     final size = renderBox.size;
                     final position = renderBox.localToGlobal(Offset.zero);
                     final originOffset = Offset(
@@ -220,7 +237,8 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ).then((_) {
                       // Panggil fungsi ini lagi untuk me-refresh jumlah notifikasi
-                      print('Kembali dari halaman notifikasi, memuat ulang jumlah...');
+                      print(
+                          'Kembali dari halaman notifikasi, memuat ulang jumlah...');
                       _loadNotificationCount();
                     });
                   },
