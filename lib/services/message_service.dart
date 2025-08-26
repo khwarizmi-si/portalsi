@@ -1,13 +1,13 @@
 // lib/services/chat_service.dart
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:web_socket_channel/web_socket_channel.dart'; // BARU: Import WebSocket
+import 'package:portal_si/models/user_model.dart';
+// Ganti import lama dengan yang baru
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 
-import '../models/chat.dart';
-import '../models/user_model.dart';
+import '../models/chat.dart'; // Sesuaikan path model Anda
 import 'api_service.dart';
 
 class ChatService extends ApiService {
@@ -15,70 +15,112 @@ class ChatService extends ApiService {
   static final ChatService _instance = ChatService._internal();
   factory ChatService() => _instance;
 
-  // ===============================================================
-  // BARU: Properti untuk WebSocket
-  // ===============================================================
-  WebSocketChannel? _channel;
-  final StreamController<ChatMessage> _messageController =
+  // Gunakan IO.Socket dari pustaka socket_io_client
+  IO.Socket? _socket;
+
+  // StreamController tetap berguna untuk UI
+  final StreamController<ChatMessage> _privateMessageController =
       StreamController.broadcast();
+  // final StreamController<GroupChatMessage> _groupMessageController = StreamController.broadcast();
 
-  /// Stream ini akan didengarkan oleh UI (halaman chat) untuk pesan realtime.
-  Stream<ChatMessage> get messages => _messageController.stream;
-  // ===============================================================
+  Stream<ChatMessage> get privateMessages => _privateMessageController.stream;
+  // Stream<GroupChatMessage> get groupMessages => _groupMessageController.stream;
 
-  /// BARU: Menghubungkan ke server WebSocket.
-  void connect(String userId,
-      {required User currentUser, required User recipient}) {
-    if (_channel != null && _channel!.closeCode == null) {
-      if (kDebugMode) print('🔌 WebSocket sudah terhubung untuk user $userId.');
+  /// Menghubungkan ke server Socket.IO dan mendaftarkan user.
+  void connect(String userId) {
+    if (_socket?.connected ?? false) {
+      if (kDebugMode) print('🔌 Socket sudah terhubung.');
       return;
     }
 
     try {
-      // GANTI ALAMAT IP SESUAI KONDISI ANDA (Emulator: 10.0.2.2, Device Fisik: IP Lokal)
-      final uri = Uri.parse('ws://10.0.2.2:8080?userId=$userId');
-      _channel = WebSocketChannel.connect(uri);
+      // Ganti dengan URL server Anda. 'autoConnect: false' agar kita bisa menambahkan listener dulu.
+      _socket = IO.io('http://10.0.2.2:8080', <String, dynamic>{
+        'transports': ['websocket'],
+        'autoConnect': false,
+      });
 
-      if (kDebugMode)
-        print('✅ Berhasil terhubung ke WebSocket sebagai user $userId');
+      // === MENDAFTARKAN LISTENER EVENT DARI SERVER ===
 
-      _channel!.stream.listen(
-        (data) {
-          if (kDebugMode) print('📥 Pesan realtime diterima: $data');
-          try {
-            final Map<String, dynamic> messageData = jsonDecode(data);
+      // Listener saat koneksi berhasil
+      _socket!.onConnect((_) {
+        if (kDebugMode) print('✅ Berhasil terhubung ke WebSocket server');
+        // KIRIM EVENT 'register' SETELAH TERHUBUNG
+        _socket!.emit('register', userId);
+      });
 
-            // Konversi data JSON dari WebSocket menjadi objek ChatMessage
-            final chatMessage = ChatMessage.fromJson(
-              messageData,
-              currentUser: currentUser,
-              recipient: recipient,
-            );
+      // Listener untuk pesan pribadi baru
+      _socket!.on('new_private_message', (data) {
+        if (kDebugMode) print('📥 Pesan pribadi diterima: $data');
+        // Di sini Anda perlu mengonversi `data` menjadi objek ChatMessage
+        // final message = ChatMessage.fromJson(data, ...);
+        // _privateMessageController.add(message);
+      });
 
-            // Tambahkan pesan baru ke stream controller agar UI bisa menerimanya
-            _messageController.add(chatMessage);
-          } catch (e) {
-            if (kDebugMode) print('⚠️ Gagal parsing pesan realtime: $e');
-          }
-        },
-        onDone: () => print('❌ Koneksi WebSocket ditutup.'),
-        onError: (error) => print('⚠️ Error pada WebSocket: $error'),
-      );
+      // Listener untuk pesan grup baru
+      _socket!.on('new_group_message', (data) {
+        if (kDebugMode) print('📥 Pesan grup diterima: $data');
+        // Logika serupa untuk pesan grup
+        // final message = GroupChatMessage.fromJson(data);
+        // _groupMessageController.add(message);
+      });
+
+      _socket!.onDisconnect((_) => print('❌ Koneksi WebSocket terputus'));
+      _socket!.onError((error) => print('⚠️ Error pada WebSocket: $error'));
+
+      // Mulai koneksi
+      _socket!.connect();
     } catch (e) {
       if (kDebugMode) print('❌ Gagal terhubung ke WebSocket: $e');
     }
   }
 
-  /// BARU: Memutuskan koneksi WebSocket.
+  /// Mengirim pesan pribadi melalui WebSocket.
+  void sendPrivateMessage({
+    required String senderId,
+    required String receiverId,
+    required String content,
+    String? mediaUrl,
+  }) {
+    _socket?.emit('private_message', {
+      'sender_id': senderId,
+      'receiver_id': receiverId,
+      'content': content,
+      'media_url': mediaUrl,
+    });
+  }
+
+  // === FUNGSI UNTUK GROUP CHAT ===
+
+  void joinGroup(String groupId) {
+    _socket?.emit('join_group', groupId);
+  }
+
+  void sendGroupMessage({
+    required String groupId,
+    required String senderId,
+    required String content,
+    String? mediaUrl,
+    List<String>? mentions,
+  }) {
+    _socket?.emit('group_message', {
+      'group_id': groupId,
+      'sender_id': senderId,
+      'content': content,
+      'media_url': mediaUrl,
+      'mentions': mentions,
+    });
+  }
+
+  /// Memutuskan koneksi WebSocket.
   void disconnect() {
-    _channel?.sink.close();
-    _channel = null;
+    _socket?.disconnect();
     if (kDebugMode) print('🔌 Koneksi WebSocket diputus.');
   }
 
-  /// BARU: Membersihkan StreamController (panggil saat user logout).
   void dispose() {
-    _messageController.close();
+    _privateMessageController.close();
+    // _groupMessageController.close();
     disconnect();
   }
 
@@ -173,4 +215,6 @@ class ChatService extends ApiService {
       rethrow;
     }
   }
+  // Fungsi API untuk mengambil riwayat chat bisa tetap di sini
+  // Future<List<ChatMessage>> getConversation(...) { ... }
 }

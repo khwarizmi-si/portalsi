@@ -16,19 +16,18 @@ class ChatRoomPage extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (_) => ChatRoomController(recipient: user),
       child: Scaffold(
-        // BARU: Tambahkan latar belakang yang menarik
+        // PERBAIKAN: Pindahkan AppBar ke properti Scaffold
+        appBar: _ChatAppBar(user: user),
         body: Container(
           decoration: const BoxDecoration(
             image: DecorationImage(
-              image: AssetImage(
-                  'assets/images/chat_bg.png'), // Pastikan Anda punya gambar ini
+              image: AssetImage('assets/images/chat_bg.png'),
               fit: BoxFit.cover,
               opacity: 0.1,
             ),
           ),
           child: Column(
             children: [
-              _ChatAppBar(user: user),
               Expanded(
                 child: Consumer<ChatRoomController>(
                   builder: (context, controller, _) {
