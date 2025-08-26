@@ -6,6 +6,7 @@ import 'package:portal_si/pages/welcome_page.dart';
 import 'package:provider/provider.dart';
 import 'package:portal_si/controllers/home_controller.dart';
 import 'package:portal_si/pages/notif_page.dart';
+import 'package:portal_si/utils/user_provider.dart'; // Import UserProvider
 import 'pages/login_page.dart';
 import 'pages/register_page.dart';
 import 'pages/dashboard_page.dart';
@@ -17,7 +18,6 @@ import 'pages/story_page.dart';
 import 'utils/secure_storage.dart';
 import 'managers/cache_manager.dart';
 import 'services/follow_service.dart';
-import 'services/socket_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,14 +28,18 @@ void main() async {
     CacheManager.initialize();
   }
 
-  runApp(MyApp(
-    startPage: hasToken ? '/home' : '/welcome',
-    hasToken: hasToken,
-  ));
-  // runApp(MyApp(
-  //   startPage: '/welcome',
-  //   hasToken: hasToken,
-  // ));
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => HomeController()),
+        ChangeNotifierProvider(create: (_) => UserProvider()),
+      ],
+      child: MyApp(
+        startPage: hasToken ? '/home' : '/welcome',
+        hasToken: hasToken,
+      ),
+    ),
+  );
 }
 
 class MyApp extends StatefulWidget {
@@ -107,42 +111,39 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => HomeController()),
-      ],
-      child: MaterialApp(
-        title: 'Portal SI',
-        theme: ThemeData(
-          primarySwatch: Colors.blue,
-          fontFamily: 'Roboto',
-          visualDensity: VisualDensity.adaptivePlatformDensity,
-        ),
-        navigatorObservers: [
-          CacheNavigationObserver(),
-        ],
-        initialRoute: widget.startPage,
-        routes: {
-          '/login': (context) => const LoginPage(),
-          '/register': (context) => RegisterPage(),
-          '/home': (context) => const HomePage(),
-          '/feed': (context) => FeedPage(),
-          '/profile': (context) => const ProfilePage(),
-          '/story': (context) => InstagramStoryPage(),
-          '/notif': (context) => const NotificationPage(),
-          '/message': (context) => MessageListPage(),
-          '/welcome': (context) => WelcomePage(),
-          '/other-profile': (context) {
-            final args = ModalRoute.of(context)!.settings.arguments
-                as Map<String, dynamic>;
-            return OtherProfilePage(
-              username: args['username'],
-            );
-          },
-          if (kDebugMode) '/debug_cache': (context) => const CacheDebugPage(),
-        },
-        debugShowCheckedModeBanner: kDebugMode,
+    // MultiProvider sudah dipindahkan ke atas di `runApp`
+    // untuk memastikan provider tersedia sebelum MaterialApp dibuat.
+    return MaterialApp(
+      title: 'Portal SI',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        fontFamily: 'Roboto',
+        visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
+      navigatorObservers: [
+        CacheNavigationObserver(),
+      ],
+      initialRoute: widget.startPage,
+      routes: {
+        '/login': (context) => const LoginPage(),
+        '/register': (context) => RegisterPage(),
+        '/home': (context) => const DashboardPage(),
+        '/feed': (context) => FeedPage(),
+        '/profile': (context) => const ProfilePage(),
+        '/story': (context) => InstagramStoryPage(),
+        '/notif': (context) => const NotificationPage(),
+        '/message': (context) => MessageListPage(),
+        '/welcome': (context) => WelcomePage(),
+        '/other-profile': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments
+          as Map<String, dynamic>;
+          return OtherProfilePage(
+            username: args['username'],
+          );
+        },
+        if (kDebugMode) '/debug_cache': (context) => const CacheDebugPage(),
+      },
+      debugShowCheckedModeBanner: kDebugMode,
     );
   }
 }
@@ -215,7 +216,7 @@ class _CacheDebugPageState extends State<CacheDebugPage> {
                       );
                     },
                     style:
-                        ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                    ElevatedButton.styleFrom(backgroundColor: Colors.blue),
                     child: const Text('Print Stats'),
                   ),
                 ),
@@ -253,7 +254,7 @@ class _CacheDebugPageState extends State<CacheDebugPage> {
                       );
                     },
                     style:
-                        ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                    ElevatedButton.styleFrom(backgroundColor: Colors.red),
                     child: const Text('Clear All'),
                   ),
                 ),
@@ -270,7 +271,7 @@ class _CacheDebugPageState extends State<CacheDebugPage> {
                       );
                     },
                     style:
-                        ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                    ElevatedButton.styleFrom(backgroundColor: Colors.green),
                     child: const Text('Analyze'),
                   ),
                 ),
@@ -287,10 +288,10 @@ class _CacheDebugPageState extends State<CacheDebugPage> {
             const SizedBox(height: 8),
             const Text(
               '• Check console for cache statistics\n'
-              '• High hit rate (>70%) = good performance\n'
-              '• Clean cache regularly\n'
-              '• Monitor memory usage\n'
-              '• Remove this page in production',
+                  '• High hit rate (>70%) = good performance\n'
+                  '• Clean cache regularly\n'
+                  '• Monitor memory usage\n'
+                  '• Remove this page in production',
               style: TextStyle(fontSize: 14),
             ),
           ],

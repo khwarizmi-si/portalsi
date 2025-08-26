@@ -1,7 +1,8 @@
-// lib/pages/other_profile_page.dart
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:page_transition/page_transition.dart';
 import 'package:portal_si/models/user_model.dart';
+import 'package:portal_si/pages/portfolio_pages.dart';
 import '../components/bottom_navigation.dart';
 import '../services/user_service.dart';
 import '../services/follow_service.dart';
@@ -18,16 +19,13 @@ class OtherProfilePage extends StatefulWidget {
 
 class _OtherProfilePageState extends State<OtherProfilePage>
     with TickerProviderStateMixin {
-  // [DIUBAH] Menggunakan User model, bukan ProfileModel lagi
   User? _profileData;
   List<dynamic> _followers = [];
   List<dynamic> _following = [];
-
   bool _isLoading = true;
   bool _isFollowing = false;
   bool _isFollowActionLoading = false;
   String? _error;
-
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
@@ -57,7 +55,6 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     });
 
     try {
-      // [LEBIH EFISIEN] Cukup satu panggilan API untuk mendapatkan semua data utama
       final profile = await ProfileService().getOtherProfile(widget.username);
       final followStatus =
       await FollowService().getFollowStatus(widget.username);
@@ -80,7 +77,6 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     }
   }
 
-  // Fungsi ini dipanggil hanya saat diperlukan untuk melihat daftar lengkap
   Future<void> _fetchFollowData() async {
     if (_profileData == null) return;
     try {
@@ -108,7 +104,6 @@ class _OtherProfilePageState extends State<OtherProfilePage>
       final originalFollowersCount = _profileData!.followersCount;
 
       if (_isFollowing) {
-        // Optimistic update for unfollow
         setState(() {
           _isFollowing = false;
           _profileData = _profileData!
@@ -116,7 +111,6 @@ class _OtherProfilePageState extends State<OtherProfilePage>
         });
         await FollowService().unfollowUser(username);
       } else {
-        // Optimistic update for follow
         setState(() {
           _isFollowing = true;
           _profileData = _profileData!
@@ -125,8 +119,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
         await FollowService().followUser(username);
       }
     } catch (e) {
-      // Rollback on error
-      await _loadAllData(); // Reload all data to ensure consistency
+      await _loadAllData();
     } finally {
       if (mounted) setState(() => _isFollowActionLoading = false);
     }
@@ -140,7 +133,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
           context,
           MaterialPageRoute(
             builder: (context) => FollowersFollowingPage(
-              userId: _profileData!.id,
+              userId: _profileData!.id!,
               initialTab: initialTab,
               followers: _followers,
               following: _following,
@@ -282,50 +275,104 @@ class _OtherProfilePageState extends State<OtherProfilePage>
   }
 
   Widget _buildActionButtons() {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          flex: 2,
-          child: ElevatedButton(
-            onPressed: _isFollowActionLoading ? null : _handleFollowAction,
-            style: ElevatedButton.styleFrom(
-              backgroundColor:
-              _isFollowing ? Colors.grey[200] : Colors.blueAccent,
-              foregroundColor: _isFollowing ? Colors.black : Colors.white,
-              elevation: _isFollowing ? 0 : 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-                side: _isFollowing
-                    ? BorderSide(color: Colors.grey[300]!)
-                    : BorderSide.none,
+        Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: ElevatedButton(
+                onPressed: _isFollowActionLoading ? null : _handleFollowAction,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor:
+                  _isFollowing ? Colors.grey[200] : Colors.blueAccent,
+                  foregroundColor: _isFollowing ? Colors.black : Colors.white,
+                  elevation: _isFollowing ? 0 : 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    side: _isFollowing
+                        ? BorderSide(color: Colors.grey[300]!)
+                        : BorderSide.none,
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                child: _isFollowActionLoading
+                    ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                    : Text(_isFollowing ? 'Mengikuti' : 'Ikuti',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
               ),
-              padding: const EdgeInsets.symmetric(vertical: 12),
             ),
-            child: _isFollowActionLoading
-                ? const SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white))
-                : Text(_isFollowing ? 'Mengikuti' : 'Ikuti',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: OutlinedButton(
-            onPressed: () {/* Logika Pesan */},
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(color: Colors.grey[300]!),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-              padding: const EdgeInsets.symmetric(vertical: 12),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () {},
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: Colors.grey[300]!),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                child: const Text('Pesan',
+                    style: TextStyle(
+                        color: Colors.black, fontWeight: FontWeight.w600)),
+              ),
             ),
-            child: const Text('Pesan',
-                style: TextStyle(
-                    color: Colors.black, fontWeight: FontWeight.w600)),
-          ),
+          ],
         ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0x83B98946),
+                      offset: const Offset(0, 3),
+                      blurRadius: 10,
+                      spreadRadius: -2,
+                    ),
+                  ],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: ElevatedButton(
+                  onPressed: () {
+                    if (_profileData != null) {
+                      Navigator.push(
+                        context,
+                        PageTransition(
+                          type: PageTransitionType.rightToLeft,
+                          child: PortfolioPage(user: _profileData!),
+                        ),
+                      );
+                      HapticFeedback.lightImpact();
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFC87B),
+                    foregroundColor: Colors.grey[800],
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text(
+                    'Lihat Portofolio',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        )
       ],
     );
   }
@@ -406,7 +453,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
           ),
           body: Center(
             child: Hero(
-              tag: 'post_${post.postId}_$index', // Tag harus sama persis
+              tag: 'post_${post.postId}_$index',
               child: InteractiveViewer(
                 child: Image.network(post.mediaUrl, fit: BoxFit.contain),
               ),
@@ -418,20 +465,16 @@ class _OtherProfilePageState extends State<OtherProfilePage>
   }
 }
 
-// Tambahan: Implementasi copyWith pada User model jika belum ada.
-// Buka file user_model.dart dan tambahkan method ini di dalam class User
 extension UserCopyWith on User {
   User copyWith({
     int? id,
     String? username,
     int? followersCount,
-    // ...tambahkan field lain yang ingin di-update
   }) {
     return User(
       id: id ?? this.id,
       username: username ?? this.username,
       followersCount: followersCount ?? this.followersCount,
-      // Salin nilai field lain dari objek `this`
       email: this.email,
       fullName: this.fullName,
       bio: this.bio,
@@ -441,7 +484,6 @@ extension UserCopyWith on User {
       followingCount: this.followingCount,
       postsCount: this.postsCount,
       recentPosts: this.recentPosts,
-      role: this.role,
     );
   }
 }

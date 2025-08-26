@@ -1,3 +1,7 @@
+//val compileSdkVersion by extra(35)
+//val minSdkVersion by extra(23)
+
+// Kode Anda yang sudah ada dimulai dari sini
 allprojects {
     repositories {
         google()

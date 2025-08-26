@@ -1,15 +1,20 @@
+// lib/utils/secure_storage.dart
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class SecureStorage {
   static const _storage = FlutterSecureStorage();
-  static const _keyToken = 'auth_token';
 
+  // --- Kunci untuk menyimpan data (dibuat konsisten) ---
+  static const _keyToken = 'authToken';
+  static const _keyRefreshToken = 'refreshToken'; // <-- Kunci baru
+  static const _keyUserId = 'userId';
+  static const _keyUsername = 'username';
+  static const _keyFullName = 'fullName';
+  static const _keyProfilePicture = 'profilePictureUrl';
+
+  // --- Metode untuk Token Akses ---
   static Future<void> saveToken(String token) async {
     await _storage.write(key: _keyToken, value: token);
-  }
-
-  static Future<void> saveUserId(String userId) async {
-    await _storage.write(key: 'userId', value: userId);
   }
 
   static Future<String?> getToken() async {
@@ -25,96 +30,61 @@ class SecureStorage {
     return token != null && token.isNotEmpty;
   }
 
+  // --- ✨ METODE BARU UNTUK REFRESH TOKEN ---
+  static Future<void> saveRefreshToken(String refreshToken) async {
+    await _storage.write(key: _keyRefreshToken, value: refreshToken);
+  }
+
+  static Future<String?> getRefreshToken() async {
+    return await _storage.read(key: _keyRefreshToken);
+  }
+
+  static Future<void> deleteRefreshToken() async {
+    await _storage.delete(key: _keyRefreshToken);
+  }
+  // -----------------------------------------
+
+  // --- Metode untuk User ID ---
+  static Future<void> saveUserId(String userId) async {
+    await _storage.write(key: _keyUserId, value: userId);
+  }
+
   static Future<int?> getUserId() async {
-    final idString = await _storage.read(key: 'userId');
+    final idString = await _storage.read(key: _keyUserId);
     return int.tryParse(idString ?? '');
   }
 
-  static Future<String?> getUsername() async {
-    try {
-      return await _storage.read(key: 'username');
-    } catch (e) {
-      print('Error getting username: $e');
-      return null;
-    }
-  }
+  // --- Metode untuk Info Profil Lainnya ---
+  static Future<void> saveUsername(String username) async => await _storage.write(key: _keyUsername, value: username);
+  static Future<String?> getUsername() async => await _storage.read(key: _keyUsername);
 
-  static Future<void> saveUsername(String username) async {
-    try {
-      await _storage.write(key: 'username', value: username);
-    } catch (e) {
-      print('Error saving username: $e');
-    }
-  }
+  static Future<void> saveFullName(String fullName) async => await _storage.write(key: _keyFullName, value: fullName);
+  static Future<String?> getFullName() async => await _storage.read(key: _keyFullName);
 
-  static Future<String?> getProfilePicture() async {
-    try {
-      return await _storage.read(key: 'profile_picture_url');
-    } catch (e) {
-      print('Error getting profile picture: $e');
-      return null;
-    }
-  }
+  static Future<void> saveProfilePicture(String url) async => await _storage.write(key: _keyProfilePicture, value: url);
+  static Future<String?> getProfilePicture() async => await _storage.read(key: _keyProfilePicture);
 
-  static Future<void> saveProfilePicture(String profilePictureUrl) async {
-    try {
-      await _storage.write(
-          key: 'profile_picture_url', value: profilePictureUrl);
-    } catch (e) {
-      print('Error saving profile picture: $e');
-    }
-  }
-
-  static Future<String?> getFullName() async {
-    try {
-      return await _storage.read(key: 'full_name');
-    } catch (e) {
-      print('Error getting full name: $e');
-      return null;
-    }
-  }
-
-  static Future<void> saveFullName(String fullName) async {
-    try {
-      await _storage.write(key: 'full_name', value: fullName);
-    } catch (e) {
-      print('Error saving full name: $e');
-    }
-  }
-
-  // ✅ Method untuk save semua user data sekaligus
+  // --- ✅ Method untuk save semua user data sekaligus (diperbaiki) ---
   static Future<void> saveUserProfile({
     required String username,
     String? profilePicture,
     String? fullName,
     required int userId,
   }) async {
-    try {
-      await Future.wait([
-        saveUsername(username),
-        saveUserId(userId as String),
-        if (profilePicture != null) saveProfilePicture(profilePicture),
-        if (fullName != null) saveFullName(fullName),
-      ]);
-      print('✅ User profile saved successfully');
-    } catch (e) {
-      print('Error saving user profile: $e');
-    }
+    await saveUsername(username);
+    await saveUserId(userId.toString()); // Konversi int ke String
+    if (profilePicture != null) await saveProfilePicture(profilePicture);
+    if (fullName != null) await saveFullName(fullName);
+    print('✅ User profile saved successfully');
   }
 
-  // ✅ Method untuk clear user data saat logout
-  static Future<void> clearUserData() async {
+  // --- ✅ Method untuk clear semua data saat logout (diperbaiki) ---
+  static Future<void> deleteAll() async {
     try {
-      await Future.wait([
-        _storage.delete(key: 'token'),
-        _storage.delete(key: 'user_id'),
-        _storage.delete(key: 'username'),
-        _storage.delete(key: 'profile_picture'),
-        _storage.delete(key: 'full_name'),
-      ]);
-      print('✅ User data cleared');
+      await _storage.deleteAll();
+      print('🗑️ Semua data aman telah dihapus.');
     } catch (e) {
-      print('Error clearing user data: $e');
+      print('Error saat menghapus semua data aman: $e');
     }
   }
 }

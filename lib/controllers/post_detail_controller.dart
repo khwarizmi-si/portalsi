@@ -1,12 +1,13 @@
 // lib/controllers/post_detail_controller.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/post_model.dart';
+import '../models/comment_model.dart';
+import '../models/like_model.dart';
 import '../services/post_service.dart';
 import '../services/like_service.dart';
 import '../services/comment_service.dart';
 import '../utils/secure_storage.dart';
-import '../models/like_model.dart';
-import '../models/comment_model.dart';
 
 class PostDetailController extends ChangeNotifier {
   final PostService _postService = PostService();
@@ -28,13 +29,11 @@ class PostDetailController extends ChangeNotifier {
 
   PostDetailController({required this.mainPostId});
 
-  // Fungsi ini dipanggil dari UI untuk menampilkan data awal secepatnya
   void setInitialPost(Post post) {
-    if (_mainPost != null) return; // Hanya set sekali
+    if (_mainPost != null) return;
     _mainPost = post;
     _isLoadingMainPost = false;
     notifyListeners();
-    // Setelah data awal tampil, fetch data lengkapnya
     loadData();
   }
 
@@ -43,13 +42,13 @@ class PostDetailController extends ChangeNotifier {
       final postFuture = _postService.getPostDetail(mainPostId);
       final relatedFuture = _postService.fetchExplorePosts();
 
+      // --- PERBAIKAN DI SINI ---
       final results = await Future.wait([postFuture, relatedFuture]);
 
       _mainPost = results[0] as Post;
       final allRelated = results[1] as List<Post>;
       _relatedPosts = allRelated.where((p) => p.id != mainPostId).toList();
 
-      // Setelah dapat data, lengkapi dengan info like/comment
       await _fetchDetailsForPosts();
     } catch (e) {
       debugPrint("Error loading post detail page data: $e");
@@ -69,7 +68,7 @@ class PostDetailController extends ChangeNotifier {
 
     await Future.wait(allPosts.map((post) async {
       try {
-        final likesFuture = _likeService.getLikes(post.id);
+        final likesFuture = _likeService.getLikes(post.id); // <-- Panggil getLikes dari LikeService
         final commentsFuture = _commentService.getComments(post.id);
 
         final results = await Future.wait([likesFuture, commentsFuture]);
@@ -79,8 +78,7 @@ class PostDetailController extends ChangeNotifier {
         post.likesCount = likes.length;
         post.commentsCount = comments.length;
         if (currentUserId != null) {
-          post.isLikedByUser =
-              likes.any((like) => like.user.id == currentUserId);
+          post.isLikedByUser = likes.any((like) => like.user.id == currentUserId);
         }
       } catch (e) {
         debugPrint('Error fetching details for post ${post.id}: $e');
@@ -89,22 +87,18 @@ class PostDetailController extends ChangeNotifier {
   }
 
   Future<void> toggleLike(int postId) async {
-    // Cari post di main post atau related posts
-    Post? post = (postId == _mainPost?.id)
-        ? _mainPost
-        : _relatedPosts.firstWhere((p) => p.id == postId);
-
+    Post? post = (postId == _mainPost?.id) ? _mainPost : _relatedPosts.firstWhere((p) => p.id == postId);
     if (post == null) return;
-
     final originalStatus = post.isLikedByUser;
     final originalCount = post.likesCount;
-
     post.isLikedByUser = !originalStatus;
     post.likesCount += originalStatus ? -1 : 1;
     notifyListeners();
 
     try {
-      await _likeService.toggleLike(postId);
+      // --- PERBAIKAN DI SINI ---
+      // Panggil metode HTTP yang mengembalikan Future<bool>
+      await _likeService.toggleLikeHttp(postId);
     } catch (e) {
       post.isLikedByUser = originalStatus;
       post.likesCount = originalCount;

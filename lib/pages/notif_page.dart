@@ -240,7 +240,7 @@ class _NotificationItem extends StatelessWidget {
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             padding: const EdgeInsets.symmetric(horizontal: 16),
           ),
-          child: const Text('Ikuti',
+          child: const Text('Ikuti Balik',
               style: TextStyle(fontWeight: FontWeight.bold)),
         ),
       );

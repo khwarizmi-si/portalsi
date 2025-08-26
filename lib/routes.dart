@@ -10,7 +10,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/login': (context) => LoginPage(),
   '/register': (context) => RegisterPage(),
   '/feed': (context) => FeedPage(),
-  '/home': (context) => HomePage(),
+  '/home': (context) => DashboardPage(),
   '/welcome': (context) => WelcomePage(),
   // PostDetailPage biasanya butuh parameter, jadi jangan didaftarkan langsung kecuali pakai onGenerateRoute
 };

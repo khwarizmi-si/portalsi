@@ -1,44 +1,79 @@
+// lib/services/announcement_service.dart
 import 'dart:convert';
 import 'dart:io';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:portal_si/models/announcement_model.dart';
+import 'package:portal_si/services/api_service.dart';
 
-import 'api_service.dart'; // Mengimpor kelas dasar ApiService
-
-/// Service untuk mengelola semua interaksi terkait data pengumuman dengan API.
-///
-/// Service ini menggunakan pola Singleton untuk memastikan hanya ada satu instance
-/// yang digunakan di seluruh aplikasi. Ia mewarisi (extends) `ApiService` untuk
-/// mendapatkan fungsionalitas request HTTP yang sudah terstandardisasi.
 class AnnouncementService extends ApiService {
-  // Implementasi Singleton Pattern
   static final AnnouncementService _instance = AnnouncementService._internal();
   factory AnnouncementService() => _instance;
   AnnouncementService._internal();
 
-  /// Mengambil daftar semua pengumuman dari server.
-  /// Sesuai dengan: GET /api/announcements
-  Future<List<dynamic>> getAnnouncements() async {
+  // --- Konstanta untuk Caching ---
+  static const String _cacheKey = 'pinnedAnnouncementsCache';
+  static const String _timestampKey = 'pinnedAnnouncementsTimestamp';
+  static const int _cacheDurationMinutes = 10;
+
+  /// Mengambil pengumuman yang di-pin, memprioritaskan cache jika valid.
+  Future<List<Announcement>> getPinnedAnnouncements() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cachedData = prefs.getString(_cacheKey);
+    final cachedTimestamp = prefs.getInt(_timestampKey);
+
+    if (cachedData != null && cachedTimestamp != null) {
+      final cacheTime = DateTime.fromMillisecondsSinceEpoch(cachedTimestamp);
+      if (DateTime.now().difference(cacheTime).inMinutes < _cacheDurationMinutes) {
+        print("✅ Memuat Pinned Announcements dari CACHE.");
+        final List<dynamic> jsonData = jsonDecode(cachedData);
+        return jsonData.map((item) => Announcement.fromJson(item)).toList();
+      }
+    }
+    print("⚠️ CACHE Pinned Announcements KOSONG/KADALUARSA. Mengambil dari API...");
+    return _fetchAndCachePinnedAnnouncements();
+  }
+
+  /// Memaksa pengambilan data baru dari API dan memperbarui cache.
+  Future<List<Announcement>> refreshPinnedAnnouncements() async {
+    print("🔃 Memaksa refresh Pinned Announcements dari API...");
+    return _fetchAndCachePinnedAnnouncements();
+  }
+
+  /// Fungsi internal untuk fetch dari API dan simpan ke cache.
+  Future<List<Announcement>> _fetchAndCachePinnedAnnouncements() async {
+    const String endpoint = 'announcements/pinned';
+    try {
+      final response = await get(endpoint) as List<dynamic>;
+      final announcements = response.map((json) => Announcement.fromJson(json as Map<String, dynamic>)).toList();
+
+      final prefs = await SharedPreferences.getInstance();
+      final List<Map<String, dynamic>> announcementsAsJson =
+      announcements.map((ann) => ann.toJson()).toList();
+
+      await prefs.setString(_cacheKey, jsonEncode(announcementsAsJson));
+      await prefs.setInt(_timestampKey, DateTime.now().millisecondsSinceEpoch);
+      print("📦 Pinned Announcements baru disimpan ke cache.");
+
+      return announcements;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Mengambil daftar semua pengumuman (tidak di-cache).
+  Future<List<Announcement>> getAnnouncements() async {
     const String endpoint = 'announcements';
     try {
-      final response = await get(endpoint);
-      // API mengembalikan list, jadi kita cast hasilnya.
-      // Sebaiknya dibuatkan model class (misal: Announcement.fromJson) untuk parsing yang lebih aman.
-      return response as List<dynamic>;
+      final response = await get(endpoint) as List<dynamic>;
+      final announcements = response.map((json) => Announcement.fromJson(json as Map<String, dynamic>)).toList();
+      return announcements;
     } catch (e) {
       rethrow;
     }
   }
 
   /// Mengirim data pengumuman baru ke server.
-  /// Sesuai dengan: POST /api/announcements
-  ///
-  /// [title] Judul pengumuman.
-  /// [content] Isi atau deskripsi pengumuman.
-  /// [isPinned] Status apakah pengumuman disematkan. API mengharapkan '1' (true) atau '0' (false).
-  /// [image] File gambar opsional.
-  /// [pollData] Daftar opsi polling dalam bentuk List of String.
-  // Lokasi: lib/services/announcement_service.dart
-
-  Future<void> createAnnouncement({
+  Future<Map<String, dynamic>> createAnnouncement({
     required String title,
     required String content,
     required bool isPinned,
@@ -46,74 +81,15 @@ class AnnouncementService extends ApiService {
     List<String>? pollData,
   }) async {
     const String endpoint = 'announcements';
-
     final Map<String, String> body = {
       'title': title,
       'content': content,
       'pinned': isPinned ? '1' : '0',
     };
-
-    // if (pollData != null && pollData.isNotEmpty) {
-    //   body['poll_data'] = jsonEncode(pollData);
-    // }
-
     final Map<String, File>? files = image != null ? {'image': image} : null;
-
     try {
-      // 1. Tangkap hasil dari pemanggilan API ke dalam sebuah variabel
       final response = await postMultipart(endpoint, body: body, files: files);
-
-      // 2. Cetak respons tersebut ke konsol
-      print('✅ Respons API Sukses (Create Announcement): $response');
-
-    } catch (e) {
-      // 3. (Opsional) Cetak juga jika terjadi error
-      print('❌ Error API (Create Announcement): $e');
-      rethrow;
-    }
-  }
-
-  /// Memperbarui data pengumuman yang ada di server.
-  /// Sesuai dengan: POST /api/announcements/{id}
-  ///
-  /// [announcementId] ID dari pengumuman yang akan diubah.
-  /// [title], [content], dll. adalah data baru yang opsional. Hanya data yang diisi yang akan dikirim.
-  Future<void> updateAnnouncement({
-    required String announcementId,
-    String? title,
-    String? content,
-    bool? isPinned,
-    File? image,
-    List<String>? pollData,
-  }) async {
-    // Endpoint dinamis berdasarkan ID pengumuman.
-    final String endpoint = 'announcements/$announcementId';
-    final Map<String, String> body = {};
-
-    // Tambahkan data ke body hanya jika nilainya tidak null.
-    if (title != null) body['title'] = title;
-    if (content != null) body['content'] = content;
-    if (isPinned != null) body['pinned'] = isPinned ? '1' : '0';
-    if (pollData != null) body['poll_data'] = jsonEncode(pollData);
-
-    final Map<String, File>? files = image != null ? {'image': image} : null;
-
-    try {
-      // API ini menggunakan POST untuk update, sesuai dokumentasi.
-      await postMultipart(endpoint, body: body, files: files);
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  /// Menghapus pengumuman dari server.
-  /// Sesuai dengan: DELETE /api/announcements/{id}
-  ///
-  /// [announcementId] ID dari pengumuman yang akan dihapus.
-  Future<void> deleteAnnouncement({required String announcementId}) async {
-    final String endpoint = 'announcements/$announcementId'; //
-    try {
-      await delete(endpoint);
+      return response as Map<String, dynamic>;
     } catch (e) {
       rethrow;
     }

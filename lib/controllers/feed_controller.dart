@@ -10,6 +10,7 @@ import '../services/post_service.dart';
 import '../services/like_service.dart';
 import '../utils/secure_storage.dart';
 import '../widgets/feed/filter_dialog.dart';
+import '../helper/time_helper.dart'; // <-- Pastikan import ini ada
 
 class FeedController extends ChangeNotifier {
   final BuildContext context;
@@ -21,8 +22,9 @@ class FeedController extends ChangeNotifier {
   bool isLoading = true;
   bool isSearching = false;
   bool showSearchResults = false;
-  Map<int, int> likeCounts = {};
-  Map<int, bool> likedPosts = {};
+  // Variabel ini tidak lagi diperlukan karena Post model sudah punya data like
+  // Map<int, int> likeCounts = {};
+  // Map<int, bool> likedPosts = {};
   bool isScrolled = false;
 
   // Controllers
@@ -49,9 +51,7 @@ class FeedController extends ChangeNotifier {
   }
 
   void _onScroll() {
-    // Cek apakah posisi scroll lebih dari 0
     final scrolled = scrollController.offset > 0;
-    // Hanya panggil notifyListeners jika nilainya berubah untuk efisiensi
     if (scrolled != isScrolled) {
       isScrolled = scrolled;
       notifyListeners();
@@ -62,12 +62,10 @@ class FeedController extends ChangeNotifier {
     isLoading = true;
     notifyListeners();
     try {
-      final fetchedPosts =
-      await PostService().fetchExplorePosts(tag: tag, sort: sort);
-      posts = fetchedPosts;
-      await loadLikesForPosts(fetchedPosts);
+      // fetchExplorePosts sudah mengembalikan data Post lengkap termasuk info like
+      posts = await PostService().fetchExplorePosts(tag: tag, sort: sort);
     } catch (e) {
-      print(' $e'); // Tambahkan print untuk debug
+      print('Error memuat postingan explore: $e');
       _showErrorMessage('Gagal memuat postingan. Coba lagi.');
     } finally {
       isLoading = false;
@@ -78,33 +76,8 @@ class FeedController extends ChangeNotifier {
     }
   }
 
-  // --- PERBAIKAN UTAMA DI SINI ---
-  Future<void> loadLikesForPosts(List<Post> postsToLoad) async {
-    // --- PERBAIKAN DI SINI ---
-    // Langsung dapatkan ID sebagai int? karena getUserId sudah melakukannya untuk kita.
-    final currentUserId = await SecureStorage.getUserId();
-
-    // Jika ID tidak valid (null), jangan lanjutkan proses.
-    if (currentUserId == null) return;
-
-    await Future.wait(
-      postsToLoad.map((post) async {
-        try {
-          final likes = await LikeService().getLikes(post.id);
-          likeCounts[post.id] = likes.length;
-
-          // Perbandingan sekarang sudah benar (int == int)
-          likedPosts[post.id] =
-              likes.any((like) => like.user.id == currentUserId);
-        } catch (e) {
-          // Fallback jika gagal mengambil data likes
-          likeCounts[post.id] = post.likesCount;
-          likedPosts[post.id] = post.isLikedByUser;
-        }
-      }),
-    );
-    notifyListeners();
-  }
+  // Fungsi ini tidak lagi diperlukan karena data like sudah termasuk dalam Post model
+  // Future<void> loadLikesForPosts(List<Post> postsToLoad) async { ... }
 
   Future<void> searchUsers(String query) async {
     if (query.trim().isEmpty) {
@@ -118,9 +91,8 @@ class FeedController extends ChangeNotifier {
 
     try {
       final authToken = await SecureStorage.getToken();
-      final uri = Uri.parse('https://api.portalsi.com/api/users/search')
-          .replace(
-          queryParameters: {'q': query}); // API search biasanya pakai 'q'
+      final uri = Uri.parse('https://api-new.portalsi.com/api/users/search')
+          .replace(queryParameters: {'q': query});
 
       final response = await http.get(
         uri,
@@ -138,9 +110,6 @@ class FeedController extends ChangeNotifier {
         } else {
           searchResults = [];
         }
-
-        // Ubah setiap item JSON menjadi objek User
-        searchResults = usersJson.map((item) => User.fromJson(item)).toList();
       } else {
         throw Exception('Failed to search users');
       }
@@ -162,19 +131,22 @@ class FeedController extends ChangeNotifier {
   }
 
   Future<void> onLikePost(Post post) async {
-    final postId = post.id;
-    final originalLiked = likedPosts[postId] ?? false;
-    final originalCount = likeCounts[postId] ?? 0;
+    final originalLiked = post.isLikedByUser;
+    final originalCount = post.likesCount;
 
-    likedPosts[postId] = !originalLiked;
-    likeCounts[postId] = originalCount + (!originalLiked ? 1 : -1);
+    // Optimistic Update: Langsung ubah data di model
+    post.isLikedByUser = !originalLiked;
+    post.likesCount += !originalLiked ? 1 : -1;
     notifyListeners();
 
     try {
-      await LikeService().toggleLike(postId);
+      // --- PERBAIKAN DI SINI ---
+      // Panggil metode HTTP dari LikeService
+      await LikeService().toggleLikeHttp(post.id);
     } catch (e) {
-      likedPosts[postId] = originalLiked;
-      likeCounts[postId] = originalCount;
+      // Jika gagal, kembalikan ke state semula
+      post.isLikedByUser = originalLiked;
+      post.likesCount = originalCount;
       notifyListeners();
     }
   }
@@ -194,8 +166,9 @@ class FeedController extends ChangeNotifier {
         builder: (context) => PostDetailPage(
           postId: post.id,
           initialPost: post,
+          // Parameter lain tidak perlu di-pass karena sudah ada di dalam `initialPost`
           username: post.user.username,
-          timeAgo: post.createdAt.toString(), // fungsi custom format waktu
+          timeAgo: timeAgoFromDate(post.createdAt.toIso8601String()),
           imageUrl: post.mediaUrl ?? '',
           content: post.caption ?? '',
           comments: post.commentsCount,
@@ -209,13 +182,15 @@ class FeedController extends ChangeNotifier {
   }
 
   void _showErrorMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red.shade400,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red.shade400,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override

@@ -1,5 +1,3 @@
-
-
 // lib/pages/feed_page.dart
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -60,6 +58,10 @@ class _FeedPageState extends State<FeedPage>
     if (index == 0) {
       Navigator.pushReplacementNamed(context, '/home');
     }
+    // Tambahkan navigasi lain jika perlu
+    else if (index == 4) {
+      Navigator.pushNamed(context, '/profile');
+    }
   }
 
   void _onUserTap(Map<String, dynamic> user) {
@@ -73,16 +75,15 @@ class _FeedPageState extends State<FeedPage>
 
   void _handleBackPress(bool didPop) {
     if (!didPop) {
-      Navigator.push(
-        context,
-        CupertinoPageRoute(builder: (context) => const RankingPage()),
-      );
+      // Perilaku default saat tombol back ditekan di halaman explore
+      // bisa disesuaikan, misal kembali ke dashboard
+      Navigator.pushReplacementNamed(context, '/home');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // hanya jika pakai AutomaticKeepAliveClientMixin
+    super.build(context);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: _systemUIOverlayStyle,
       child: PopScope(
@@ -110,107 +111,11 @@ class _FeedPageState extends State<FeedPage>
     );
   }
 
-  Widget _buildSIBoardButton() {
-    // Gunakan AnimatedContainer untuk animasi yang halus
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 100),
-      transform: _isSiBoardPressed
-          ? (Matrix4.identity()..scale(0.96)) // Efek mengecil saat ditekan
-          : Matrix4.identity(),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-        // Ganti GestureDetector dengan Listener untuk kontrol lebih
-        child: Listener(
-          onPointerDown: (_) => setState(() => _isSiBoardPressed = true),
-          onPointerUp: (_) {
-            setState(() => _isSiBoardPressed = false);
-            // Navigasi ke halaman ranking setelah tombol dilepas
-            Navigator.push(
-              context,
-              PageTransition(
-                type: PageTransitionType.rightToLeft, // Tipe animasi dari kanan ke kiri
-                child: const RankingPage(),
-              ),
-            );
-            HapticFeedback.lightImpact();
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  const Color(0xFFFFF9E9).withOpacity(0.8),
-                  const Color(0xFFFFEFB3).withOpacity(0.9),
-                ],
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: _isSiBoardPressed ? [] : [ // Hilangkan shadow saat ditekan
-                BoxShadow(
-                  color: Colors.amber.withOpacity(0.1),
-                  blurRadius: 20,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-              border: Border.all(color: Colors.white.withOpacity(0.5)),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.bar_chart, color: Color(0xFF2D3748), size: 32),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      RichText(
-                        text: const TextSpan(
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF2D3748),
-                            fontFamily: 'Poppins',
-                          ),
-                          children: [
-                            TextSpan(
-                              text: 'SI ',
-                              style: TextStyle(color: Color(0xFFF59E0B)),
-                            ),
-                            TextSpan(text: 'Board'),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Lihat peringkat dan portofolio santri',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey[700],
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.chevron_right, color: Color(0xFF2D3748), size: 28),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // --- PERBAIKAN UTAMA DI SINI ---
   Widget _buildBody() {
     return SafeArea(
-      // 1. Gunakan Column untuk memisahkan bagian statis dan scrollable
       child: Column(
         children: [
-          // Bagian ini sekarang statis dan TIDAK akan ikut scroll
           _buildHeader(),
-
-          // 2. Gunakan Expanded agar area scroll mengisi sisa ruang
           Expanded(
             child: RefreshIndicator(
               onRefresh: _controller.fetchPosts,
@@ -218,7 +123,6 @@ class _FeedPageState extends State<FeedPage>
               child: CustomScrollView(
                 controller: _controller.scrollController,
                 slivers: [
-                  // 3. Header sudah dipindah keluar, jadi kita hanya menampilkan konten di sini
                   _buildContentSlivers(),
                 ],
               ),
@@ -229,7 +133,6 @@ class _FeedPageState extends State<FeedPage>
     );
   }
 
-  // 4. Buat method baru untuk membangun sliver konten
   Widget _buildContentSlivers() {
     return AnimatedBuilder(
       animation: _controller,
@@ -241,15 +144,14 @@ class _FeedPageState extends State<FeedPage>
           );
         }
 
-        // Jika tidak mencari, tampilkan Tombol SI Board dan FeedGrid
         return SliverMainAxisGroup(
           slivers: [
-            // SliverToBoxAdapter(child: _buildSIBoardButton()),
             FeedGrid(
               isLoading: _controller.isLoading,
               posts: _controller.posts,
-              likeCounts: _controller.likeCounts,
-              likedPosts: _controller.likedPosts,
+              // --- 👇 PERBAIKAN DI SINI: Hapus parameter yang tidak ada ---
+              // likeCounts: _controller.likeCounts,
+              // likedPosts: _controller.likedPosts,
               fadeAnimation: _controller.fadeAnimation,
               onRefresh: _controller.fetchPosts,
               onLikePost: (post) => _controller.onLikePost(post),

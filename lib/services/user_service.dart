@@ -1,22 +1,26 @@
-// services/profile_service.dart
+// services/user_service.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:portal_si/models/user_model.dart'; // <-- Cukup import User model
+import 'package:portal_si/models/user_model.dart';
 import '../utils/secure_storage.dart';
-
-// [DIHAPUS] Class ProfileModel sudah tidak diperlukan lagi
-// karena semua fungsionalitasnya sudah diwakili oleh User model.
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 class ProfileService {
-  static const String _baseUrl = 'https://api.portalsi.com/api';
+  static const String _baseUrl = 'https://api-new.portalsi.com/api';
   final http.Client _client = http.Client();
 
   static final ProfileService _instance = ProfileService._internal();
   factory ProfileService() => _instance;
   ProfileService._internal();
+
+  // --- Konstanta untuk Caching Profil ---
+  static const String _profileCacheKey = 'userProfileCache';
+  static const String _profileTimestampKey = 'userProfileTimestamp';
+  static const int _cacheDurationMinutes = 10;
 
   Future<Map<String, String>> _getHeaders() async {
     final token = await SecureStorage.getToken();
@@ -27,46 +31,75 @@ class ProfileService {
     };
   }
 
+  /// Mengambil profil pengguna, memprioritaskan cache jika valid.
   Future<User> getProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cachedData = prefs.getString(_profileCacheKey);
+    final cachedTimestamp = prefs.getInt(_profileTimestampKey);
+
+    if (cachedData != null && cachedTimestamp != null) {
+      final cacheTime = DateTime.fromMillisecondsSinceEpoch(cachedTimestamp);
+      if (DateTime.now().difference(cacheTime).inMinutes < _cacheDurationMinutes) {
+        print("✅ Memuat profil dari CACHE.");
+        return User.fromJson(jsonDecode(cachedData));
+      }
+    }
+    print("CACHE PROFIL KADALUARSA. Mengambil dari API...");
+    return _fetchAndCacheProfile();
+  }
+
+  /// Memaksa pengambilan data profil baru dari API dan memperbarui cache.
+  Future<User> refreshProfile() async {
+    print("🔃 Memaksa refresh profil dari API...");
+    return _fetchAndCacheProfile();
+  }
+
+  /// Fungsi internal untuk fetch dari API dan simpan ke cache.
+  Future<User> _fetchAndCacheProfile() async {
     try {
       final headers = await _getHeaders();
-      final response =
-          await _client.get(Uri.parse('$_baseUrl/user'), headers: headers);
+      final response = await _client.get(Uri.parse('$_baseUrl/user'), headers: headers);
 
       if (response.statusCode == 200) {
-        final responseData = json.decode(response.body);
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        final user = User.fromJson(responseData);
 
-        // Ambil bagian "data" kalau API ada bungkusannya
-        final userJson = responseData['data'] ?? responseData;
+        // Simpan data dan timestamp baru ke cache
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_profileCacheKey, jsonEncode(user.toJson()));
+        await prefs.setInt(_profileTimestampKey, DateTime.now().millisecondsSinceEpoch);
+        print("📦 Profil baru disimpan ke cache.");
 
-        return User.fromJson(userJson);
+        // Memulai pre-caching media di latar belakang
+        _preCacheProfileMedia(user);
+
+        return user;
       } else {
-        throw Exception('Failed to load profile');
+        throw Exception('Gagal memuat profil dari API: Status ${response.statusCode}');
       }
     } catch (e) {
       rethrow;
     }
   }
 
-  // [DIUBAH] Mengembalikan Future<User>
-  Future<User> getOtherProfile(String username) async {
-    try {
-      final headers = await _getHeaders();
-      final response = await _client
-          .get(Uri.parse('$_baseUrl/profile/$username'), headers: headers);
+  /// Mengunduh dan menyimpan media ke cache di latar belakang.
+  void _preCacheProfileMedia(User user) {
+    final cacheManager = DefaultCacheManager();
 
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(response.body);
-        return User.fromJson(data); // Parse sebagai User
-      } else {
-        // ... (error handling lainnya tetap sama)
-        throw Exception('Failed to load profile for $username');
+    if (user.profilePictureUrl != null && user.profilePictureUrl!.isNotEmpty) {
+      print("Pre-caching gambar profil...");
+      cacheManager.downloadFile(user.profilePictureUrl!);
+    }
+
+    for (var post in user.recentPosts) {
+      if (post.mediaUrl.isNotEmpty) {
+        print("Pre-caching media post ID: ${post.postId}...");
+        cacheManager.downloadFile(post.mediaUrl);
       }
-    } catch (e) {
-      throw Exception('Error fetching other profile: $e');
     }
   }
 
+  /// Memperbarui profil pengguna di server dan otomatis merefresh cache.
   Future<bool> updateProfile(User user) async {
     try {
       final headers = await _getHeaders();
@@ -75,12 +108,34 @@ class ProfileService {
         headers: headers,
         body: json.encode(user.toJson()),
       );
-      return response.statusCode == 200;
+      if (response.statusCode == 200) {
+        await refreshProfile();
+        return true;
+      }
+      return false;
     } catch (e) {
       rethrow;
     }
   }
 
+  /// Mengambil profil pengguna lain berdasarkan username (tidak di-cache).
+  Future<User> getOtherProfile(String username) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await _client.get(Uri.parse('$_baseUrl/profile/$username'), headers: headers);
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        return User.fromJson(data);
+      } else {
+        throw Exception('Failed to load profile for $username');
+      }
+    } catch (e) {
+      throw Exception('Error fetching other profile: $e');
+    }
+  }
+
+  /// Mengunggah gambar profil baru ke server.
   Future<String?> uploadProfilePicture(File imageFile) async {
     try {
       final token = await SecureStorage.getToken();
@@ -101,12 +156,12 @@ class ProfileService {
       final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200) {
+        await refreshProfile();
         final Map<String, dynamic> data = json.decode(response.body);
         return data['profile_picture_url'];
       } else {
         final errorBody = json.decode(response.body);
-        final errorMessage = errorBody['message'] ??
-            'Failed to upload image: ${response.statusCode}';
+        final errorMessage = errorBody['message'] ?? 'Failed to upload image: ${response.statusCode}';
         throw Exception(errorMessage);
       }
     } catch (e) {
@@ -114,6 +169,7 @@ class ProfileService {
     }
   }
 
+  /// Memilih gambar dari galeri atau kamera.
   Future<File?> pickImage({required ImageSource source}) async {
     try {
       final ImagePicker picker = ImagePicker();
@@ -131,31 +187,5 @@ class ProfileService {
     } catch (e) {
       throw Exception('Error picking image: $e');
     }
-  }
-
-  // [DIUBAH] Mengembalikan Future<User?>
-  Future<User?> getCurrentUserForComments() async {
-    try {
-      final user =
-          await getProfile(); // Panggil saja getProfile() yang sudah ada
-      await _saveUserDataToStorage(user);
-      return user;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  // [DIUBAH] Menerima objek User
-  Future<void> _saveUserDataToStorage(User user) async {
-    await Future.wait([
-      SecureStorage.saveUsername(user.username),
-      if (user.profilePictureUrl != null)
-        SecureStorage.saveProfilePicture(user.profilePictureUrl!),
-      if (user.fullName != null) SecureStorage.saveFullName(user.fullName!),
-    ]);
-  }
-
-  void dispose() {
-    _client.close();
   }
 }

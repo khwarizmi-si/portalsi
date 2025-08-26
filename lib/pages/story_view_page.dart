@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:page_transition/page_transition.dart';
 import '../widgets/story_content_view.dart';
 import '../models/story_model.dart';
-// MODIFIKASI: Impor file ini untuk mendapatkan class StoryContentController
 import 'my_story_view_page.dart';
 
 class StoryViewPage extends StatefulWidget {
@@ -31,11 +30,10 @@ class _StoryViewPageState extends State<StoryViewPage> with SingleTickerProvider
   int _currentIndex = 0;
   late List<StoryDetail> _stories;
 
-  // MODIFIKASI: Tambahkan state untuk long-press dan map untuk controllers
   bool _isLongPressing = false;
   final Map<int, StoryContentController> _contentControllers = {};
+  final Map<int, TransformationController> _transformationControllers = {};
 
-  // State untuk gestur dismiss
   double _scale = 1.0;
   double _opacity = 1.0;
 
@@ -65,27 +63,28 @@ class _StoryViewPageState extends State<StoryViewPage> with SingleTickerProvider
   void dispose() {
     _pageController.dispose();
     _progressController.dispose();
-    // MODIFIKASI: Hapus semua controller konten
     _contentControllers.forEach((_, controller) => controller.dispose());
+    _transformationControllers.forEach((_, controller) => controller.dispose());
     super.dispose();
   }
 
-  // MODIFIKASI: Buat fungsi terpusat untuk pause
   void _pauseStory() {
     _progressController.stop();
     _contentControllers[_currentIndex]?.pause();
   }
 
-  // MODIFIKASI: Buat fungsi terpusat untuk resume
   void _resumeStory() {
     if (mounted && !_isLongPressing) {
-      _progressController.forward();
-      _contentControllers[_currentIndex]?.resume();
+      final currentScale = _transformationControllers[_currentIndex]?.value.getMaxScaleOnAxis() ?? 1.0;
+      if (currentScale <= 1.0) {
+        _progressController.forward();
+        _contentControllers[_currentIndex]?.resume();
+      }
     }
   }
 
   void _nextStory() {
-    // MODIFIKASI: Jeda konten saat ini sebelum pindah
+    _transformationControllers[_currentIndex]?.value = Matrix4.identity();
     _contentControllers[_currentIndex]?.pause();
 
     if (_currentIndex < _stories.length - 1) {
@@ -119,7 +118,7 @@ class _StoryViewPageState extends State<StoryViewPage> with SingleTickerProvider
   }
 
   void _previousStory() {
-    // MODIFIKASI: Jeda konten saat ini sebelum pindah
+    _transformationControllers[_currentIndex]?.value = Matrix4.identity();
     _contentControllers[_currentIndex]?.pause();
 
     if (_currentIndex > 0) {
@@ -191,6 +190,8 @@ class _StoryViewPageState extends State<StoryViewPage> with SingleTickerProvider
               type: MaterialType.transparency,
               child: GestureDetector(
                 onTapUp: (details) {
+                  final currentScale = _transformationControllers[_currentIndex]?.value.getMaxScaleOnAxis() ?? 1.0;
+                  if (currentScale > 1.0) return;
                   if (_isLongPressing) return;
 
                   _progressController.stop();
@@ -198,13 +199,12 @@ class _StoryViewPageState extends State<StoryViewPage> with SingleTickerProvider
 
                   final double screenWidth = MediaQuery.of(context).size.width;
                   final double dx = details.globalPosition.dx;
-                  if (dx < screenWidth / 2) { // Cukup bagi dua layar untuk navigasi
+                  if (dx < screenWidth / 2) {
                     _previousStory();
                   } else {
                     _nextStory();
                   }
                 },
-                // MODIFIKASI: Gunakan fungsi pause/resume terpusat
                 onLongPressStart: (_) {
                   setState(() => _isLongPressing = true);
                   _pauseStory();
@@ -227,23 +227,31 @@ class _StoryViewPageState extends State<StoryViewPage> with SingleTickerProvider
                             itemCount: _stories.length,
                             itemBuilder: (context, index) {
                               final story = _stories[index];
-                              // MODIFIKASI: Buat dan berikan controller ke StoryContentView
                               _contentControllers.putIfAbsent(index, () => StoryContentController());
+                              _transformationControllers.putIfAbsent(index, () => TransformationController());
+
                               return Hero(
                                 tag: widget.heroTag,
-                                child: StoryContentView(
-                                  key: ValueKey(story.storyId),
-                                  story: story,
-                                  progressController: _progressController,
-                                  controller: _contentControllers[index]!, // Berikan controller
-                                  onContentLoaded: () {
-                                    if (mounted) {
-                                      // MODIFIKASI: Gunakan _resumeStory agar konsisten
-                                      _progressController.stop();
-                                      _progressController.reset();
-                                      _resumeStory();
-                                    }
-                                  },
+                                child: InteractiveViewer(
+                                  transformationController: _transformationControllers[index],
+                                  minScale: 1.0,
+                                  maxScale: 4.0,
+                                  clipBehavior: Clip.none,
+                                  onInteractionStart: (_) => _pauseStory(),
+                                  onInteractionEnd: (_) => _resumeStory(),
+                                  child: StoryContentView(
+                                    key: ValueKey(story.storyId),
+                                    story: story,
+                                    progressController: _progressController,
+                                    controller: _contentControllers[index]!,
+                                    onContentLoaded: () {
+                                      if (mounted) {
+                                        _progressController.stop();
+                                        _progressController.reset();
+                                        _resumeStory();
+                                      }
+                                    },
+                                  ),
                                 ),
                               );
                             },
@@ -286,21 +294,16 @@ class _StoryViewPageState extends State<StoryViewPage> with SingleTickerProvider
                                   backgroundImage: NetworkImage(widget.userWithStories.profilePictureUrl),
                                 ),
                                 const SizedBox(width: 10),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                Row(
                                   children: [
-                                    Row(
-                                      children: [
-                                        Text(
-                                          widget.userWithStories.username,
-                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          _formatTimeAgo(currentStory.createdAt),
-                                          style: const TextStyle(color: Colors.white70, fontSize: 14),
-                                        ),
-                                      ],
+                                    Text(
+                                      widget.userWithStories.username,
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _formatTimeAgo(currentStory.createdAt),
+                                      style: const TextStyle(color: Colors.white70, fontSize: 14),
                                     ),
                                   ],
                                 ),

@@ -3,23 +3,29 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
-import '../utils/secure_storage.dart'; // Asumsi file ini ada untuk mengambil token
+import '../utils/secure_storage.dart';
 
-/// Kelas dasar abstrak untuk semua service yang berinteraksi dengan API.
-/// Mengelola URL, headers, dan error handling secara terpusat.
 abstract class ApiService {
   final String _scheme = 'https';
-  final String _host = 'api.portalsi.com';
+  final String _host = 'api-new.portalsi.com';
   final String _unencodedPath = '/api';
   final http.Client _client = http.Client();
   static const Duration _timeout = Duration(seconds: 15);
 
-  /// Helper untuk menambahkan header otentikasi secara otomatis.
-  Future<Map<String, String>> _getHeaders() async {
+  // --- ✨ PERUBAHAN 1: Tambahkan getter publik untuk baseUrl ---
+  String get baseUrl => '$_scheme://$_host$_unencodedPath';
+
+  // --- ✨ PERUBAHAN 2: Tambahkan metode publik untuk mendapatkan token ---
+  Future<String> getToken() async {
     final token = await SecureStorage.getToken();
     if (token == null || token.isEmpty) {
       throw Exception('Token otentikasi tidak ditemukan.');
     }
+    return token;
+  }
+
+  Future<Map<String, String>> _getHeaders() async {
+    final token = await getToken(); // Sekarang memanggil metode publik di atas
     return {
       'Authorization': 'Bearer $token',
       'Content-Type': 'application/json',
@@ -27,8 +33,6 @@ abstract class ApiService {
     };
   }
 
-  /// Helper terpusat untuk request GET.
-  /// Mendukung query parameters opsional.
   Future<dynamic> get(String endpoint,
       {Map<String, String>? queryParams}) async {
     final uri = Uri(
@@ -51,16 +55,15 @@ abstract class ApiService {
     }
   }
 
-  /// Helper terpusat untuk request POST.
   Future<dynamic> post(String endpoint, {Map<String, dynamic>? body}) async {
     final uri = Uri.https(_host, '$_unencodedPath/$endpoint');
     try {
       final response = await _client
           .post(
-            uri,
-            headers: await _getHeaders(),
-            body: body != null ? jsonEncode(body) : null,
-          )
+        uri,
+        headers: await _getHeaders(),
+        body: body != null ? jsonEncode(body) : null,
+      )
           .timeout(_timeout);
       return _handleResponse(response);
     } on SocketException {
@@ -72,16 +75,15 @@ abstract class ApiService {
     }
   }
 
-  /// Helper terpusat untuk request PUT.
   Future<dynamic> put(String endpoint, {Map<String, dynamic>? body}) async {
     final uri = Uri.https(_host, '$_unencodedPath/$endpoint');
     try {
       final response = await _client
           .put(
-            uri,
-            headers: await _getHeaders(),
-            body: body != null ? jsonEncode(body) : null,
-          )
+        uri,
+        headers: await _getHeaders(),
+        body: body != null ? jsonEncode(body) : null,
+      )
           .timeout(_timeout);
       return _handleResponse(response);
     } on SocketException {
@@ -93,7 +95,6 @@ abstract class ApiService {
     }
   }
 
-  /// Helper terpusat untuk request DELETE.
   Future<dynamic> delete(String endpoint) async {
     final uri = Uri.https(_host, '$_unencodedPath/$endpoint');
     try {
@@ -115,10 +116,10 @@ abstract class ApiService {
     try {
       final response = await _client
           .patch(
-            uri,
-            headers: await _getHeaders(),
-            body: body != null ? jsonEncode(body) : null,
-          )
+        uri,
+        headers: await _getHeaders(),
+        body: body != null ? jsonEncode(body) : null,
+      )
           .timeout(_timeout);
       return _handleResponse(response);
     } on SocketException {
@@ -130,12 +131,11 @@ abstract class ApiService {
     }
   }
 
-  /// Helper terpusat untuk request POST Multipart (upload file).
   Future<dynamic> postMultipart(
-    String endpoint, {
-    required Map<String, String> body,
-    Map<String, File>? files,
-  }) async {
+      String endpoint, {
+        required Map<String, String> body,
+        Map<String, File>? files,
+      }) async {
     final uri = Uri.https(_host, '$_unencodedPath/$endpoint');
     try {
       final request = http.MultipartRequest('POST', uri);
@@ -162,12 +162,10 @@ abstract class ApiService {
     }
   }
 
-  /// Handler terpusat untuk memproses respons HTTP.
   dynamic _handleResponse(http.Response response) {
-    // 204 No Content juga dianggap sukses
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty)
-        return null; // Untuk response sukses tanpa body
+        return null;
       return jsonDecode(response.body);
     } else if (response.statusCode == 401) {
       throw Exception('Otentikasi gagal. Sesi Anda mungkin telah berakhir.');

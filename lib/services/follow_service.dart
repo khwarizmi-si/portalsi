@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../utils/secure_storage.dart';
 
 class FollowService {
-  final String _baseUrl = 'https://api.portalsi.com/api';
+  final String _baseUrl = 'https://api-new.portalsi.com/api';
 
   // Enhanced cache dengan expiry yang berbeda per jenis data
   static final Map<String, Map<String, dynamic>> _profileCache = {};

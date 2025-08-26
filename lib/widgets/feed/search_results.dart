@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart'; // <-- 1. IMPORT PROVIDER
 import 'package:portal_si/controllers/home_controller.dart'; // <-- 2. IMPORT CONTROLLER
+import '../../utils/user_provider.dart';
 import 'user_search_item.dart';
 import '../../pages/other_profile_page.dart';
 
@@ -26,7 +27,8 @@ class SearchResults extends StatelessWidget {
 
     // [PERBAIKAN] Ambil data user langsung dari HomeController, tidak perlu FutureBuilder
     final currentUser =
-        Provider.of<HomeController>(context, listen: false).currentUser;
+    // Panggil UserProvider, bukan HomeController
+    Provider.of<UserProvider>(context, listen: false).currentUser;
 
     // Filter langsung di sini, lebih sederhana
     final filteredResults = searchResults.where((user) {

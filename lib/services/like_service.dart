@@ -1,40 +1,95 @@
 // lib/services/like_service.dart
+import 'dart:async';
+import 'dart:convert';
+import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:portal_si/utils/secure_storage.dart';
 import 'api_service.dart';
-import '../models/like_model.dart';
+import '../models/like_model.dart'; // Pastikan model ini ada
+
+// Model untuk data update dari WebSocket
+class LikeUpdate {
+  final int postId;
+  final int likesCount;
+  final bool isLiked;
+
+  LikeUpdate({required this.postId, required this.likesCount, required this.isLiked});
+}
 
 class LikeService extends ApiService {
-  // Singleton Pattern
-  LikeService._internal();
-  static final LikeService _instance = LikeService._internal();
-  factory LikeService() => _instance;
+  WebSocketChannel? _channel;
+  final StreamController<LikeUpdate> _streamController = StreamController.broadcast();
 
-  /// Toggle like/unlike pada sebuah post.
-  Future<bool> toggleLike(int postId) async {
-    await post('posts/$postId/like');
-    return true;
-  }
+  Stream<LikeUpdate> get likeUpdates => _streamController.stream;
 
-  /// Mengambil semua user yang menyukai sebuah post.
+  // --- FUNGSI LAMA (HTTP) UNTUK KOMPATIBILITAS ---
   Future<List<Like>> getLikes(int postId) async {
-    final List<dynamic> data = await get('posts/$postId/likes');
-    return data.map((item) => Like.fromJson(item)).toList();
+    final response = await get('posts/$postId/likes');
+    if (response is List) {
+      return response.map((like) => Like.fromJson(like)).toList();
+    }
+    return [];
   }
 
-  /// Mengambil HANYA jumlah like (jika API mendukung).
-  Future<int> getLikeCount(int postId) async {
-    final data = await get('posts/$postId/likes/count');
-    if (data is Map<String, dynamic> && data.containsKey('count')) {
-      return data['count'];
+  Future<bool> toggleLikeHttp(int postId) async {
+    try {
+      final response = await post('posts/$postId/like'); // Memanggil metode post dari ApiService
+
+      // --- 👇 PERUBAHAN DI SINI ---
+      // Mencetak status dan isi respons ke console untuk debugging
+      print("✅ Like Toggled for Post #$postId: Status OK");
+      print("   Response Body: $response");
+      // -----------------------------
+
+      return response != null; // Mengembalikan true jika request berhasil
+    } catch (e) {
+      // Menangkap dan mencetak error jika request gagal
+      print("❌ Gagal Toggle Like untuk Post #$postId: $e");
+      rethrow; // Melemparkan kembali error agar bisa ditangani oleh controller
     }
-    return 0;
   }
 
-  /// Mengecek apakah user saat ini sudah me-like (jika API mendukung).
-  Future<bool> isLikedByCurrentUser(int postId) async {
-    final data = await get('posts/$postId/likes/status');
-    if (data is Map<String, dynamic> && data.containsKey('is_liked')) {
-      return data['is_liked'];
+  // --- FUNGSI BARU (WEBSOCKET) UNTUK REAL-TIME ---
+  Future<void> connect() async {
+    if (_channel != null) return;
+    final token = await getToken();
+    final wsUrl = Uri.parse('wss://api-new.portalsi.com/ws/likes?token=$token');
+
+    try {
+      _channel = WebSocketChannel.connect(wsUrl);
+      print("✅ Terhubung ke WebSocket Likes Server.");
+
+      _channel!.stream.listen((message) {
+        final data = jsonDecode(message);
+        if (data['event'] == 'like_update') {
+          final updateData = data['data'];
+          _streamController.add(LikeUpdate(
+            postId: updateData['post_id'],
+            likesCount: updateData['likes_count'],
+            isLiked: updateData['is_liked_by_user'],
+          ));
+        }
+      },
+          onError: (error) {
+            print("❌ WebSocket Error: $error");
+            disconnect();
+          },
+          onDone: () {
+            print("🔌 Koneksi WebSocket ditutup.");
+            disconnect();
+          });
+    } catch (e) {
+      print("❌ Gagal terhubung ke WebSocket: $e");
     }
-    return false;
+  }
+
+  void toggleLikeSocket(int postId) {
+    if (_channel == null) return;
+    final message = jsonEncode({"action": "toggle_like", "post_id": postId});
+    _channel!.sink.add(message);
+  }
+
+  void disconnect() {
+    _channel?.sink.close();
+    _channel = null;
   }
 }
