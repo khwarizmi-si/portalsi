@@ -1,460 +1,281 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:page_transition/page_transition.dart';
-import 'package:portal_si/pages/portfolio_pages.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
-import 'package:intl/date_symbol_data_local.dart';
+import 'package:portal_si/models/user_model.dart';
+import 'package:portal_si/models/portfolio_model.dart';
+import 'package:portal_si/services/portfolio_service.dart';
+import 'add_portfolio_page.dart';
 
+class PortfolioPage extends StatefulWidget {
+  final User user;
 
-// --- MODEL DATA DIPERBARUI UNTUK LEBIH ROBUST ---
-class StudentDetail {
-  final String id;
-  final String name;
-  final String? nickname;
-  final String photo;
-  final String? birthDate;
-  final String level;
-  final String pondok;
-  final List<dynamic> projects;
-  final List<StudentClass> classes;
-
-  StudentDetail({
-    required this.id,
-    required this.name,
-    this.nickname,
-    required this.photo,
-    this.birthDate,
-    required this.level,
-    required this.pondok,
-    required this.projects,
-    required this.classes,
-  });
-
-  factory StudentDetail.fromJson(Map<String, dynamic> json) {
-    return StudentDetail(
-      id: json['id']?.toString() ?? '',
-      name: json['name'] ?? 'Tidak ada data',
-      nickname: json['nickname'],
-      photo: json['photo'] ?? '',
-      birthDate: json['birth_date'],
-
-      // --- PERBAIKAN KUNCI DI SINI ---
-      // Mengonversi semua kemungkinan tipe data (int, String, null) ke String
-      level: json['level']?.toString() ?? '-',
-      pondok: json['Pondok']?.toString() ?? '-',
-
-      projects: json['projects'] ?? [],
-
-      // Menggunakan kunci 'class' (lowercase)
-      classes: (json['classes'] as List? ?? [])
-          .map((c) => StudentClass.fromJson(c['class'] ?? {}))
-          .toList(),
-    );
-  }
-}
-
-class StudentClass {
-  final String name;
-  final String division;
-
-  StudentClass({required this.name, required this.division});
-
-  factory StudentClass.fromJson(Map<String, dynamic> json) {
-    // --- PERBAIKAN KEDUA DI SINI ---
-    // Mengambil nama divisi dari dalam objek 'division'
-    final divisionData = json['division'] as Map<String, dynamic>?;
-
-    return StudentClass(
-      name: json['name'] ?? 'Tidak ada nama kelas',
-      division: divisionData?['name'] ?? 'Tidak ada divisi',
-    );
-  }
-}
-
-// --- WIDGET UTAMA (TIDAK ADA PERUBAHAN SIGNIFIKAN) ---
-class StudentDetailPage extends StatefulWidget {
-  final String studentId;
-
-  const StudentDetailPage({super.key, required this.studentId});
+  const PortfolioPage({super.key, required this.user});
 
   @override
-  State<StudentDetailPage> createState() => _StudentDetailPageState();
+  State<PortfolioPage> createState() => _PortfolioPageState();
 }
 
-class _StudentDetailPageState extends State<StudentDetailPage> {
-  final ScrollController _scrollController = ScrollController();
-  bool _isAppBarCollapsed = false;
-  late Future<StudentDetail> _studentDetailFuture;
+class _PortfolioPageState extends State<PortfolioPage> {
+  Future<List<Portfolio>>? _portfoliosFuture;
+  final String schoolName = "Sekolah Impian";
 
   @override
   void initState() {
     super.initState();
-    initializeDateFormatting('id_ID', null);
-
-    _studentDetailFuture = _fetchStudentDetail();
-
-    _scrollController.addListener(() {
-      if (_scrollController.offset > 200 && !_isAppBarCollapsed) {
-        setState(() => _isAppBarCollapsed = true);
-      } else if (_scrollController.offset <= 200 && _isAppBarCollapsed) {
-        setState(() => _isAppBarCollapsed = false);
-      }
-    });
-  }
-
-  Future<StudentDetail> _fetchStudentDetail() async {
-    final url = 'https://santriboard.vercel.app/api/student/${widget.studentId}';
-    final response = await http.get(Uri.parse(url));
-
-    print('Respons API Detail Santri: ${response.body}');
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body)['data'];
-      return StudentDetail.fromJson(data);
-    } else {
-      throw Exception('Gagal memuat detail santri');
+    // Memeriksa apakah user.id null sebelum memuat data
+    if (widget.user.id != null) {
+      _loadPortfolios();
     }
   }
 
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
+  void _loadPortfolios() {
+    setState(() {
+      // Menggunakan '!' (bang operator) karena kita sudah yakin id tidak null dari initState
+      _portfoliosFuture = PortfolioService().getPortfolios(widget.user.id!);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Color(0xFFFFFBF0),
-      body: FutureBuilder<StudentDetail>(
-        future: _studentDetailFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-          if (snapshot.hasData) {
-            final student = snapshot.data!;
-            final photoUrl = 'https://api.portalsi.com/storage/photo/${student.photo}';
+    // Tambahan: Menampilkan pesan error jika ID user tidak ada
+    if (widget.user.id == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Error')),
+        body: const Center(
+          child: Text('ID pengguna tidak valid.'),
+        ),
+      );
+    }
 
-            return CustomScrollView(
-              controller: _scrollController,
-              slivers: [
-                _buildSliverAppBar(student, photoUrl),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      children: [
-                        _buildInfoSantriCard(student),
-                        const SizedBox(height: 20),
-                        _buildPlpCard(student),
-                        const SizedBox(height: 20),
-                        _buildPortfolioCard(context, student),
-                        const SizedBox(height: 20),
-                        _buildTahfidzCard(),
-                        const SizedBox(height: 20),
-                      ],
-                    ),
+    return Scaffold(
+      backgroundColor: const Color(0xFFFFFBF0),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFFFFBF0),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          'Portofolio',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline,
+                color: Colors.black, size: 28),
+            tooltip: 'Tambah Portofolio',
+            onPressed: () async {
+              final shouldRefresh = await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  // Menggunakan '!' karena sudah dipastikan tidak null di awal build
+                  builder: (context) =>
+                      AddPortfolioPage(userId: widget.user.id!),
+                ),
+              );
+              if (shouldRefresh == true) {
+                _loadPortfolios();
+              }
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: () async => _loadPortfolios(),
+        child: FutureBuilder<List<Portfolio>>(
+          future: _portfoliosFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Center(
+                child: Text("Gagal memuat data: ${snapshot.error}"),
+              );
+            }
+            if (snapshot.hasData) {
+              final portfolios = snapshot.data!;
+              if (portfolios.isEmpty) {
+                return _buildEmptyState();
+              }
+              return ListView.builder(
+                padding: const EdgeInsets.all(16.0),
+                itemCount: portfolios.length + 1,
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return _buildHeader();
+                  }
+                  final portfolio = portfolios[index - 1];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: _buildPortfolioItem(portfolio),
+                  );
+                },
+              );
+            }
+            return const Center(child: Text("Tidak ada data."));
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: RichText(
+        text: TextSpan(
+          style: const TextStyle(
+            fontSize: 20,
+            color: Colors.black87,
+            height: 1.5,
+            fontFamily: 'Inter',
+          ),
+          children: [
+            const TextSpan(text: 'Anda sekarang sedang melihat portofolio '),
+            WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                child: CircleAvatar(
+                  radius: 12,
+                  backgroundImage: NetworkImage(
+                      widget.user.profilePictureUrl ??
+                          'https://i.pravatar.cc/150'),
+                ),
+              ),
+            ),
+            TextSpan(
+              text: '${widget.user.fullName ?? widget.user.username} ',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const TextSpan(text: 'dari santri '),
+            TextSpan(
+              text: schoolName,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPortfolioItem(Portfolio portfolio) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(16),
+              topRight: Radius.circular(16),
+            ),
+            child: Image.network(
+              portfolio.mediaUrl,
+              width: double.infinity,
+              fit: BoxFit.fitWidth,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Container(
+                    color: Colors.grey[200],
+                    child: const Center(child: CircularProgressIndicator()),
+                  ),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Container(
+                    color: Colors.grey[200],
+                    child: Icon(Icons.image_not_supported,
+                        color: Colors.grey[400], size: 50),
+                  ),
+                );
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  portfolio.title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
                   ),
                 ),
-              ],
-            );
-          }
-          return const Center(child: Text("Tidak ada data"));
-        },
-      ),
-    );
-  }
-
-  SliverAppBar _buildSliverAppBar(StudentDetail student, String photoUrl) {
-    return SliverAppBar(
-      expandedHeight: 280.0,
-      backgroundColor: Color(0xFFFFFBF0),
-      elevation: _isAppBarCollapsed ? 2.0 : 0.0,
-      pinned: true,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back, color: Colors.black),
-        onPressed: () => Navigator.of(context).pop(),
-      ),
-      title: AnimatedOpacity(
-        duration: const Duration(milliseconds: 300),
-        opacity: _isAppBarCollapsed ? 1.0 : 0.0,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundImage: NetworkImage(photoUrl),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                student.name,
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontSize: 18.0,
-                  fontWeight: FontWeight.bold,
+                const SizedBox(height: 8),
+                Text(
+                  portfolio.description,
+                  style: TextStyle(
+                      fontSize: 14, color: Colors.grey[700], height: 1.4),
                 ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
-      flexibleSpace: FlexibleSpaceBar(
-        background: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SizedBox(height: 40),
-            CircleAvatar(
-              radius: 60,
-              backgroundImage: NetworkImage(photoUrl),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              student.name,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.black,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _formatTanggal(String? tgl) {
-    if (tgl == null || tgl.isEmpty) return 'Tidak ada data';
-    try {
-      final parts = tgl.split('/');
-      final formattedDateString = '${parts[2]}-${parts[1]}-${parts[0]}';
-      final date = DateTime.parse(formattedDateString);
-      return DateFormat('d MMMM yyyy', 'id_ID').format(date);
-    } catch (e) {
-      return tgl;
-    }
-  }
-
-  Widget _buildInfoSantriCard(StudentDetail student) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 15,
-            offset: const Offset(0, 4),
-          )
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Info Santri', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-          const SizedBox(height: 16),
-          _buildInfoRow(Icons.person_outline, 'Nama Lengkap', student.name),
-          _buildInfoRow(Icons.school_outlined, 'Kelas', 'Pondok ${student.pondok}, Level ${student.level}'),
-          _buildInfoRow(Icons.calendar_today_outlined, 'Tanggal Lahir', _formatTanggal(student.birthDate)),
-          _buildInfoRow(Icons.phone_outlined, 'Nomor Telepon', 'Tidak ada data'),
-          _buildInfoRow(Icons.email_outlined, 'Email', 'Tidak ada data'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPlpCard(StudentDetail student) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 15,
-            offset: const Offset(0, 4),
-          )
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade100,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.layers_outlined, color: Colors.orange, size: 20),
-              ),
-              const SizedBox(width: 12),
-              const Text('PLP yang diikuti', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            ],
-          ),
-          const SizedBox(height: 16),
-          if (student.classes.isEmpty)
-            const Text('Santri tidak mengikuti PLP apapun saat ini.')
-          else
-            ...student.classes.map((kelas) => _buildPlpRow(Icons.computer, '${kelas.name} (${kelas.division})', isCurrent: true)).toList(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPortfolioCard(BuildContext context, StudentDetail student) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 15,
-            offset: const Offset(0, 4),
-          )
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade100,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.edit_outlined, color: Colors.orange, size: 20),
-              ),
-              const SizedBox(width: 12),
-              const Text('Portofolio', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            ],
-          ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(student.projects.length.toString(), style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold)),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 12),
+                Row(
                   children: [
-                    const Text('Portofolio yang dimiliki oleh santri ini.'),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          PageTransition(
-                            type: PageTransitionType.rightToLeft,
-                            child: PortfolioPage(studentName: student.name),
-                          ),
-                        );
-                        HapticFeedback.lightImpact();
-                      },
-                      style: TextButton.styleFrom(padding: EdgeInsets.zero, alignment: Alignment.centerLeft),
-                      child: const Text('lihat portofolio'),
+                    _buildTag(portfolio.aspect, Colors.orange),
+                    const Spacer(),
+                    Text(
+                      'Tahun: ${portfolio.year}',
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(IconData icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.orange.shade100,
-              borderRadius: BorderRadius.circular(10),
+              ],
             ),
-            child: Icon(icon, color: Colors.orange.shade800, size: 20),
           ),
-          const SizedBox(width: 16),
-          SizedBox(width: 110, child: Text(label, style: TextStyle(color: Colors.grey.shade600))),
-          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600))),
         ],
       ),
     );
   }
 
-  Widget _buildPlpRow(IconData icon, String title, {bool isCurrent = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: Colors.orange.shade700),
-          const SizedBox(width: 12),
-          Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w500))),
-          if (isCurrent) ... [
-            const SizedBox(width: 8),
-            Text('(saat ini)', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-          ]
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTahfidzCard() {
+  Widget _buildTag(String text, Color color) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 15,
-            offset: const Offset(0, 4),
-          )
-        ],
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
       ),
+      child: Text(
+        text,
+        style: TextStyle(
+            color: Colors.grey[800], fontWeight: FontWeight.w600, fontSize: 12),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade100,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(Icons.menu_book, color: Colors.orange.shade800, size: 20),
-              ),
-              const SizedBox(width: 12),
-              const Text('Tahfidz', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            ],
-          ),
+          Icon(Icons.folder_off_outlined, size: 80, color: Colors.grey[400]),
           const SizedBox(height: 16),
-          Center(
-            child: Text(
-                'Data progres tahfidz tidak tersedia.',
-                style: TextStyle(color: Colors.grey.shade600)
-            ),
-          )
+          const Text(
+            'Belum Ada Portofolio',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Portofolio yang ditambahkan akan muncul di sini.',
+            style: TextStyle(color: Colors.grey[600]),
+          ),
         ],
       ),
     );

@@ -105,16 +105,16 @@ class PostDetailPage extends StatelessWidget {
                             relatedPost.createdAt.toIso8601String()),
                         mediaUrl: relatedPost.mediaUrl ?? '', // Ganti imageUrl -> mediaUrl
                         isVideo: relatedPost.isVideo,
-                        likes: relatedPost.likesCount,
                         comments: relatedPost.commentsCount,
                         content: relatedPost.caption ?? '',
                         isVerified: relatedPost.user.isVerified,
-                        isLiked: relatedPost.isLikedByUser,
                         isBookmarked: false, // Ganti jika ada
                         profileImageUrl:
                             relatedPost.user.profilePictureUrl ?? '',
                         user: relatedPost.user.toJson(),
                         postId: relatedPost.id,
+                        likes: relatedPost.likesCount, // <-- Pastikan ini mengambil data dari controller
+                        isLiked: relatedPost.isLikedByUser, // <-- Pastikan ini juga
                         onLike: () => controller.toggleLike(relatedPost.id),
                         onBookmark: () {},
                         onShare: () {},

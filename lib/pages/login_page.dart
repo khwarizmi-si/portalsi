@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_web_browser/flutter_web_browser.dart';
 import 'package:page_transition/page_transition.dart';
 import 'package:portal_si/pages/register_page.dart';
 import 'package:portal_si/services/auth_service.dart';
 import 'package:portal_si/utils/secure_storage.dart';
+
+import '../models/user_model.dart';
+import '../services/user_cache_service.dart';
 // Jika Anda menggunakan SVG untuk ikon, tambahkan dependency flutter_svg
 // import 'package:flutter_svg/flutter_svg.dart';
 
@@ -84,6 +88,82 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     });
   }
 
+  Future<void> _loginWithSDK() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // ⚠️ Ganti 'localhost' dengan IP Address Anda jika testing di HP
+      // final uri = Uri.parse('http://localhost:90/layanan-akun/sdk-akun-rg-v1/portal-run.php');
+      // final response = await http.get(uri);
+
+      // if (response.statusCode != 200) {
+      //   throw Exception('Gagal memuat konfigurasi: Status code ${response.statusCode}');
+      // }
+
+      // final config = jsonDecode(response.body);
+      final baseUrl = 'https://akunrg.com/au/pengenalan';
+      // final response = await http.get(baseUrl);
+      // final params = {
+      //   'client_id': config['client_id'],
+      //   'client_secret': config['client_secret'],
+      //   'auth_v1': config['auth_v1'],
+      //   'auth_v2': config['auth_v2'],
+      //   'redirect': config['redirect'],
+      //   'target': config['target'],
+      //   'redirect_from': 'https://kimo.com/',
+      //   'via': 'tombolLogin',
+      // };
+      final params = {
+        'client_id': "6ab3cbd0-51ce-4987-94fd-9e66db9f0abf",
+        'client_secret': "8c0f8331-2364-4e69-86e6-bd91b013e3ca",
+        'auth_v1': "0e3ef8f9-55fd-43cc-a52f-f7d13299dfc2",
+        'auth_v2': "047c6d2e-e0c6-459f-85a1-54e35561d2ae",
+        'redirect': "https://portalsi.com/get/larg",
+        'target': "connect",
+        'redirect_from': "https://portalsi.com",
+        'via': 'tombolLoginApp',
+      };
+
+      final finalUri = Uri.parse(baseUrl).replace(queryParameters: params);
+
+      await FlutterWebBrowser.openWebPage(
+        url: finalUri.toString(),
+        customTabsOptions: const CustomTabsOptions(
+          // Perbarui parameter ini
+          colorScheme: CustomTabsColorScheme.system,
+          showTitle: true,
+          urlBarHidingEnabled: true,
+        ),
+        safariVCOptions: const SafariViewControllerOptions(
+          barCollapsingEnabled: true,
+          preferredBarTintColor: Colors.white,
+          preferredControlTintColor: Colors.black,
+          // Perbarui parameter dan nama enum ini
+          dismissButtonStyle: SafariViewControllerDismissButtonStyle.close,
+        ),
+      );
+
+
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memproses login: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   Future<void> _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       _showLoadingAnimation();
@@ -97,6 +177,12 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       _hideLoadingAnimation();
 
       if (result['success'] == true && mounted) {
+
+        if (result['user'] != null) {
+          final user = User.fromJson(result['user']); // Asumsi API mengembalikan data user
+          await UserCacheService().saveUser(user);
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(result['message']),
@@ -205,7 +291,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                 bottomRight: Radius.circular(40),
               ),
               child: Image.asset(
-                'assets/images/food_background.png', // <-- GANTI DENGAN GAMBAR ANDA
+                'assets/images/login.webp', // <-- GANTI DENGAN GAMBAR ANDA
                 fit: BoxFit.cover,
               ),
             ),
@@ -237,7 +323,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           children: [
                             _buildCustomTextField(
                               controller: _emailController,
-                              hintText: 'Alamat Email atau Username', // Teks diubah
+                              hintText: 'Email atau Username', // Teks diubah
                               icon: Icons.person_outline, // Ikon diubah menjadi lebih generik
                               validator: (value) {
                                 // Validasi dilonggarkan, hanya cek kosong
@@ -315,7 +401,11 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                         children: [
                           _buildSocialButton(iconPath: 'assets/logo_google.png', onPressed: () {}),
                           const SizedBox(width: 20),
-                          _buildSocialButton(iconPath: 'assets/logo_la_rg.png', onPressed: () {}),
+                          _buildSocialButton(
+                            iconPath: 'assets/logo_la_rg.png',
+                            // Langsung berikan null jika loading, atau fungsi jika tidak
+                            onPressed: _isLoading ? null : _loginWithSDK,
+                          ),
                         ],
                       ),
                       const SizedBox(height: 40),
@@ -402,10 +492,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     );
   }
 
-  // Widget bantuan baru untuk tombol social
-  Widget _buildSocialButton({required String iconPath, required VoidCallback onPressed}) {
+  Widget _buildSocialButton({required String iconPath, required VoidCallback? onPressed}) {
     return ElevatedButton(
-      onPressed: onPressed,
+      onPressed: onPressed, // Langsung gunakan nilainya di sini
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFFF7F7F7),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),

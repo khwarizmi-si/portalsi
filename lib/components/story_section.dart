@@ -9,7 +9,12 @@ import 'story_circle.dart';
 import 'package:collection/collection.dart';
 
 class StorySection extends StatefulWidget {
-  const StorySection({Key? key}) : super(key: key);
+  final List<UserWithStories> stories;
+
+  const StorySection({
+    super.key,
+    required this.stories, // Jadikan parameter wajib
+  });
 
   @override
   _StorySectionState createState() => _StorySectionState();

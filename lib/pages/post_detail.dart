@@ -67,7 +67,7 @@ class _PostDetailState extends State<PostDetail> {
     });
 
     try {
-      await _likeService.toggleLike(_post.id);
+      await _likeService.toggleLikeHttp(_post.id);
     } catch (e) {
       setState(() {
         _post.isLikedByUser = originalLikedStatus;

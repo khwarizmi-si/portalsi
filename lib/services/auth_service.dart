@@ -1,24 +1,39 @@
+// lib/services/auth_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:portal_si/utils/secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'token_refresh_service.dart'; // <-- 1. Import service baru
 
 class AuthService {
-  static const String baseUrl = 'https://api.portalsi.com/api';
+  static const String baseUrl = 'https://api-new.portalsi.com/api';
+  // 2. Inisialisasi TokenRefreshService
+  final TokenRefreshService _tokenRefreshService = TokenRefreshService();
 
   Future<Map<String, dynamic>> login(String email, String password) async {
     try {
-
       final response = await http
           .post(
-            Uri.parse('$baseUrl/login'),
-            body: {'login': email, 'password': password},
-          )
+        Uri.parse('$baseUrl/login'),
+        body: {'login': email, 'password': password},
+      )
           .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+
+        // Simpan token akses dan refresh token (jika ada)
         await SecureStorage.saveToken(data['token']);
         await SecureStorage.saveUserId(data['user']['user_id'].toString());
+
+        // Asumsi API login mengembalikan 'refresh_token'
+        if (data['refresh_token'] != null) {
+          await SecureStorage.saveRefreshToken(data['refresh_token']);
+        }
+
+        // --- 👇 PERUBAHAN UTAMA: Mulai timer refresh token ---
+        _tokenRefreshService.start();
+
         return {
           'success': true,
           'message': 'Login berhasil',
@@ -31,7 +46,7 @@ class AuthService {
 
         if (data is Map<String, dynamic>) {
           final errors = data.map(
-            (key, value) => MapEntry(
+                (key, value) => MapEntry(
               key,
               (value is List && value.isNotEmpty) ? value.first : '',
             ),
@@ -48,11 +63,11 @@ class AuthService {
   }
 
   Future<Map<String, dynamic>> register(
-    String username,
-    String fullName,
-    String email,
-    String password,
-  ) async {
+      String username,
+      String fullName,
+      String email,
+      String password,
+      ) async {
     final response = await http.post(
       Uri.parse('$baseUrl/register'),
       body: {
@@ -72,12 +87,29 @@ class AuthService {
   }
 
   Future<void> logout() async {
-    final token = await SecureStorage.getToken();
-    await http.post(
-      Uri.parse('$baseUrl/logout'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
-    await SecureStorage.deleteToken();
+    _tokenRefreshService.stop(); // Hentikan timer refresh token
+
+    try {
+      final token = await SecureStorage.getToken();
+      if (token != null) {
+        await http.post(
+          Uri.parse('$baseUrl/logout'),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+      }
+    } catch (e) {
+      print("Gagal logout dari server, token akan dihapus secara lokal: $e");
+    } finally {
+      // --- 👇 PERUBAHAN DI SINI ---
+
+      // 2. Hapus semua data dari SharedPreferences (Cache)
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+      print("🧹 Cache (postingan, profil, dll.) telah dibersihkan.");
+
+      // 3. Hapus semua data dari SecureStorage (Token)
+      await SecureStorage.deleteAll();
+    }
   }
 
   Future<Map<String, dynamic>?> getUser() async {
@@ -93,11 +125,9 @@ class AuthService {
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
-        // Bisa log error atau handle unauthorized (misalnya 401)
         return null;
       }
     } catch (e) {
-      // Tangani error seperti timeout, koneksi, atau parsing
       return null;
     }
   }

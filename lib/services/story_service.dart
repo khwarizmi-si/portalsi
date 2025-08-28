@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../utils/secure_storage.dart';
 
 class StoryService {
-  final baseUrl = 'https://api.portalsi.com/api';
+  final baseUrl = 'https://api-new.portalsi.com/api';
 
   Future<bool> uploadStory(String mediaUrl) async {
     final token = await SecureStorage.getToken();

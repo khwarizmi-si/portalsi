@@ -250,7 +250,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
     try {
       // Ganti URL ini dengan endpoint API Anda yang mengembalikan data user
       final response = await dio.get(
-        'https://api.portalsi.com/api/user',
+        'https://api-new.portalsi.com/api/user',
         options: Options(
           headers: {
             'Authorization': 'Bearer $token',
@@ -391,7 +391,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
 
     // Logging untuk debugging (ini sangat membantu)
     print("================ UPLOAD STORY LOG ================");
-    print("Endpoint: https://api.portalsi.com/api/stories");
+    print("Endpoint: https://api-new.portalsi.com/api/stories");
     print("Token: Bearer $_token");
     print("--- Form Data ---");
     dataMap.forEach((key, value) {
@@ -408,7 +408,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
     try {
       final dio = Dio();
       final response = await dio.post(
-        'https://api.portalsi.com/api/stories',
+        'https://api-new.portalsi.com/api/stories',
         data: formData,
         options: Options(headers: {'Authorization': 'Bearer $_token', 'Accept': 'application/json'}),
       );
@@ -420,7 +420,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
 
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const HomePage()),
+          MaterialPageRoute(builder: (context) => const DashboardPage()),
               (Route<dynamic> route) => false,
         );
       }

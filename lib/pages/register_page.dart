@@ -113,7 +113,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 bottomRight: Radius.circular(40),
               ),
               child: Image.asset(
-                'assets/images/food_background_raw.png', // <-- GANTI DENGAN GAMBAR ANDA
+                'assets/images/register.webp', // <-- GANTI DENGAN GAMBAR ANDA
                 fit: BoxFit.cover,
               ),
             ),
@@ -144,7 +144,7 @@ class _RegisterPageState extends State<RegisterPage> {
                             // --- KOLOM INPUT BARU DITAMBAHKAN DI SINI ---
                             _buildCustomTextField(
                               controller: _fullNameController,
-                              hintText: 'Nama Lengkap',
+                              hintText: 'Nama Lengkap Kamu',
                               icon: Icons.person_outline,
                               validator: (value) {
                                 if (value == null || value.isEmpty) return 'Nama lengkap tidak boleh kosong';
@@ -154,7 +154,7 @@ class _RegisterPageState extends State<RegisterPage> {
                             const SizedBox(height: 16),
                             _buildCustomTextField(
                               controller: _usernameController,
-                              hintText: 'Username',
+                              hintText: 'Bikin Username Kamu',
                               icon: Icons.alternate_email,
                               validator: (value) {
                                 if (value == null || value.isEmpty) return 'Username tidak boleh kosong';
@@ -166,7 +166,7 @@ class _RegisterPageState extends State<RegisterPage> {
                             const SizedBox(height: 16),
                             _buildCustomTextField(
                               controller: _emailController,
-                              hintText: 'Alamat Email',
+                              hintText: 'Email Kamu',
                               icon: Icons.email_outlined,
                               validator: (value) {
                                 if (value == null || value.isEmpty) return 'Email tidak boleh kosong';
@@ -193,7 +193,7 @@ class _RegisterPageState extends State<RegisterPage> {
                             const SizedBox(height: 16),
                             _buildCustomTextField(
                               controller: _confirmPasswordController,
-                              hintText: 'Ulangi password',
+                              hintText: 'Ulangin passwordnya',
                               icon: Icons.lock_outline,
                               obscureText: _obscureConfirmPassword,
                               suffixIcon: IconButton(

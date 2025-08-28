@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+// TAMBAHAN: Import paket yang diperlukan untuk HTTP dan URL Launcher
+import 'package:flutter_web_browser/flutter_web_browser.dart';
+import 'dart:convert';
 
 import '../utils/slide_transition_route.dart';
 import 'login_page.dart';
@@ -19,6 +22,9 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
 
   late Animation<Offset> _slideInAnim1, _slideInAnim2, _slideInAnim3, _slideInAnim4, _slideInAnim5, _slideInAnim6;
   late Animation<double> _fadeInAnim1, _fadeInAnim2, _fadeInAnim3, _fadeInAnim4, _fadeInAnim5, _fadeInAnim6;
+
+  // TAMBAHAN: State untuk menampilkan loading indicator
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -67,17 +73,91 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
     super.dispose();
   }
 
-  // --- FUNGSI DIPERBARUI: TIDAK LAGI MENGGUNAKAN setState ---
   void _triggerTransition() {
-    // Cukup jalankan animasi maju
     _outController.forward();
     _inController.forward();
   }
 
   void _triggerBackTransition() {
-    // Cukup putar balik animasi
     _inController.reverse();
     _outController.reverse();
+  }
+
+  // TAMBAHAN: Fungsi untuk memulai proses login dengan SDK
+  Future<void> _loginWithSDK() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // ⚠️ Ganti 'localhost' dengan IP Address Anda jika testing di HP
+      // final uri = Uri.parse('http://localhost:90/layanan-akun/sdk-akun-rg-v1/portal-run.php');
+      // final response = await http.get(uri);
+
+      // if (response.statusCode != 200) {
+      //   throw Exception('Gagal memuat konfigurasi: Status code ${response.statusCode}');
+      // }
+
+      // final config = jsonDecode(response.body);
+      final baseUrl = 'https://akunrg.com/au/pengenalan';
+      // final response = await http.get(baseUrl);
+      // final params = {
+      //   'client_id': config['client_id'],
+      //   'client_secret': config['client_secret'],
+      //   'auth_v1': config['auth_v1'],
+      //   'auth_v2': config['auth_v2'],
+      //   'redirect': config['redirect'],
+      //   'target': config['target'],
+      //   'redirect_from': 'https://kimo.com/',
+      //   'via': 'tombolLogin',
+      // };
+      final params = {
+        'client_id': "6ab3cbd0-51ce-4987-94fd-9e66db9f0abf",
+        'client_secret': "8c0f8331-2364-4e69-86e6-bd91b013e3ca",
+        'auth_v1': "0e3ef8f9-55fd-43cc-a52f-f7d13299dfc2",
+        'auth_v2': "047c6d2e-e0c6-459f-85a1-54e35561d2ae",
+        'redirect': "https://portalsi.com/get/larg",
+        'target': "connect",
+        'redirect_from': "https://portalsi.com",
+        'via': 'tombolLoginApp',
+      };
+
+      final finalUri = Uri.parse(baseUrl).replace(queryParameters: params);
+
+      await FlutterWebBrowser.openWebPage(
+        url: finalUri.toString(),
+        customTabsOptions: const CustomTabsOptions(
+          // Perbarui parameter ini
+          colorScheme: CustomTabsColorScheme.system,
+          showTitle: true,
+          urlBarHidingEnabled: true,
+        ),
+        safariVCOptions: const SafariViewControllerOptions(
+          barCollapsingEnabled: true,
+          preferredBarTintColor: Colors.white,
+          preferredControlTintColor: Colors.black,
+          // Perbarui parameter dan nama enum ini
+          dismissButtonStyle: SafariViewControllerDismissButtonStyle.close,
+        ),
+      );
+
+
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memproses login: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   Widget _buildFirstPage() {
@@ -94,7 +174,7 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
                 borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(40), bottomRight: Radius.circular(40)),
                 child: Container(
                   color: const Color(0xFFFDE1D2),
-                  child: Image.asset('assets/images/characters.png', fit: BoxFit.cover),
+                  child: Image.asset('assets/images/welkam.webp', fit: BoxFit.cover),
                 ),
               ),
             ),
@@ -145,7 +225,7 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
                         backgroundColor: primaryOrange,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
                       ),
-                      child: const Text('Log in', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                      child: const Text('Lanjut', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
                     ),
                   ),
                 ),
@@ -158,25 +238,19 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
     );
   }
 
-  // GANTI METHOD LAMA ANDA DENGAN YANG INI
-
   Widget _buildSecondPage() {
     const Color rgRed = Color(0xFFB71C1C);
-
-    // === DIBUNGKUS DENGAN SingleChildScrollView ===
     return SingleChildScrollView(
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          // Pastikan tinggi minimal adalah setinggi layar
           minHeight: MediaQuery.of(context).size.height,
         ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 60, 24, 30),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween, // Untuk meratakan ruang
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Kumpulan widget bagian atas
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -197,8 +271,6 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
                   ),
                 ],
               ),
-
-              // Gambar di tengah (tanpa Expanded)
               FadeTransition(
                 opacity: _fadeInAnim3,
                 child: SlideTransition(
@@ -209,14 +281,11 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
                       'assets/images/muslim_man.png',
                       width: double.infinity,
                       fit: BoxFit.cover,
-                      // Beri tinggi yang wajar untuk layar kecil
                       height: MediaQuery.of(context).size.height * 0.3,
                     ),
                   ),
                 ),
               ),
-
-              // Kumpulan widget bagian bawah
               Column(
                 children: [
                   FadeTransition(
@@ -237,9 +306,20 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
                         width: double.infinity,
                         height: 50,
                         child: ElevatedButton(
-                          onPressed: () {},
+                          // TAMBAHAN: Panggil fungsi _loginWithSDK saat ditekan
+                          onPressed: _isLoading ? null : _loginWithSDK,
                           style: ElevatedButton.styleFrom(backgroundColor: rgRed, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))),
-                          child: const Text('lanjutkan dengan akun RG', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                          // TAMBAHAN: Tampilkan loading atau teks
+                          child: _isLoading
+                              ? const SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 3,
+                            ),
+                          )
+                              : const Text('Lanjutkan dengan Akun RG', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
                         ),
                       ),
                     ),
@@ -256,7 +336,7 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
                               SlideTransitionRoute(page: const LoginPage()),
                             );
                           },
-                          child: const Text('Gunakan Layanan lain', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
+                          child: const Text('Lain Kali', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
                         ),
                       ),
                     ),
@@ -273,15 +353,11 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
-      // --- LOGIKA DIPERBARUI: BERDASARKAN STATUS ANIMASI ---
       onWillPop: () async {
-        // Cek status controller (misalnya _inController)
-        // Jika animasi sedang berjalan maju atau sudah selesai, kita bisa memutarnya kembali
         if (_inController.status == AnimationStatus.forward || _inController.status == AnimationStatus.completed) {
           _triggerBackTransition();
-          return false; // Mencegah aplikasi keluar
+          return false;
         }
-        // Jika animasi sudah di awal, izinkan aplikasi keluar
         return true;
       },
       child: Scaffold(
@@ -292,10 +368,7 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
             AnimatedBuilder(
               animation: _inController,
               builder: (context, child) {
-                // IgnorePointer akan menonaktifkan interaksi sentuhan
                 return IgnorePointer(
-                  // Abaikan sentuhan JIKA animasi halaman kedua sedang di awal (dismissed)
-                  // atau sedang berjalan mundur (reverse).
                   ignoring: _inController.status == AnimationStatus.dismissed ||
                       _inController.status == AnimationStatus.reverse,
                   child: _buildSecondPage(),

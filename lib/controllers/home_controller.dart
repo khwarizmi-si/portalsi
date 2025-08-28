@@ -1,86 +1,107 @@
 // lib/controllers/home_controller.dart
-import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../models/announcement_model.dart';
 import '../models/post_model.dart';
-import '../models/user_model.dart';
-// Import Like dan Comment model tidak lagi diperlukan di sini
-import '../services/post_service.dart';
+import '../models/story_model.dart';
+import '../services/announcement_service.dart';
 import '../services/like_service.dart';
-import '../services/comment_service.dart';
-import '../services/user_service.dart';
+import '../services/post_service.dart';
+import '../services/story_service.dart';
 
-class HomeController extends ChangeNotifier {
+class HomeController with ChangeNotifier {
   final PostService _postService = PostService();
-  final LikeService _likeService = LikeService();
-  final CommentService _commentService = CommentService();
-  final ProfileService _profileService = ProfileService();
+  final AnnouncementService _announcementService = AnnouncementService();
+  final StoryService _storyService = StoryService();
 
   List<Post> _posts = [];
-  List<Post> get posts => _posts;
-
+  List<UserWithStories> _stories = [];
+  List<Announcement> _pinnedAnnouncements = [];
   Post? _pinnedPost;
-  Post? get pinnedPost => _pinnedPost;
 
-  User? _currentUser;
-  User? get currentUser => _currentUser;
-
-  // State untuk paginasi
-  int _currentPage = 1;
-  bool _hasMore = true;
-  bool _isLoading = true;
-  bool get isLoading => _isLoading;
-  bool _isLoadingMore = false;
-  bool get isLoadingMore => _isLoadingMore;
-
+  bool _isLoading = false;
   String? _errorMessage;
+
+  List<Post> get posts => _posts;
+  List<UserWithStories> get stories => _stories;
+  List<Announcement> get pinnedAnnouncements => _pinnedAnnouncements;
+  Post? get pinnedPost => _pinnedPost;
+  bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
+  static const int _cacheDurationMinutes = 10;
+
+  final LikeService _likeService = LikeService();
+  StreamSubscription? _likeUpdatesSubscription;
+
   HomeController() {
-    fetchPosts(isRefresh: true);
+    _initializeServices();
   }
 
-  Post getPostById(int postId) {
-    if (_pinnedPost?.id == postId) {
-      return _pinnedPost!;
-    }
-    return _posts.firstWhere((p) => p.id == postId, orElse: () {
-      throw Exception('Post dengan ID $postId tidak ditemukan.');
+  void _initializeServices() {
+    _likeService.connect(); // Memulai koneksi WebSocket
+
+    // Mulai mendengarkan pembaruan dari LikeService
+    _likeUpdatesSubscription = _likeService.likeUpdates.listen((update) {
+      // Cari postingan yang sesuai di dalam daftar _posts
+      final index = _posts.indexWhere((p) => p.id == update.postId);
+      if (index != -1) {
+        // Perbarui data postingan dan beri tahu UI
+        _posts[index].likesCount = update.likesCount;
+        _posts[index].isLikedByUser = update.isLiked;
+        print("🔄 UI diperbarui untuk post #${update.postId}");
+        notifyListeners();
+      }
     });
   }
 
-  Future<void> fetchPosts({bool isRefresh = false}) async {
-    _isLoading = true;
-    if (isRefresh) {
-      _currentPage = 1;
-      _hasMore = true;
-      _posts.clear();
-      _pinnedPost = null;
+  Future<void> _saveToCache(String key, List<dynamic> data) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, jsonEncode(data));
+    await prefs.setInt('${key}_timestamp', DateTime.now().millisecondsSinceEpoch);
+    print("📦 Data untuk '$key' disimpan ke cache.");
+  }
+
+  Future<List<T>> _loadFromCache<T>(String key, T Function(Map<String, dynamic>) fromJson) async {
+    final prefs = await SharedPreferences.getInstance();
+    final cachedData = prefs.getString(key);
+    final cachedTimestamp = prefs.getInt('${key}_timestamp');
+
+    if (cachedData != null && cachedTimestamp != null) {
+      final cacheTime = DateTime.fromMillisecondsSinceEpoch(cachedTimestamp);
+      if (DateTime.now().difference(cacheTime).inMinutes < _cacheDurationMinutes) {
+        print("✅ Memuat '$key' dari CACHE.");
+        final List<dynamic> jsonData = jsonDecode(cachedData);
+        return jsonData.map((item) => fromJson(item as Map<String, dynamic>)).toList();
+      }
     }
+    print("⚠️ Cache '$key' KOSONG/KADALUARSA.");
+    return [];
+  }
+
+  Future<void> loadDashboardData() async {
+    _isLoading = true;
+    _errorMessage = null;
     notifyListeners();
 
-    _errorMessage = null;
-
     try {
-      // Cukup panggil API user dan posts. Data like/comment sudah lengkap.
-      final results = await Future.wait([
-        _profileService.getProfile(),
-        _postService.fetchPosts(
-            page: 1), // [DIUBAH] Memastikan selalu mulai dari halaman 1
-      ]);
+      final cachedPosts = await _loadFromCache('posts', Post.fromJson);
+      final cachedStories = await _loadFromCache('stories', UserWithStories.fromJson);
+      final cachedAnnouncements = await _loadFromCache('announcements', Announcement.fromJson);
 
-      _currentUser = results[0] as User;
-      List<Post> allPosts = results[1] as List<Post>;
-
-      final pinnedIndex = allPosts.indexWhere((p) => p.user.role == 'admin');
-      if (pinnedIndex != -1) {
-        _pinnedPost = allPosts.removeAt(pinnedIndex);
+      if (cachedPosts.isNotEmpty || cachedStories.isNotEmpty || cachedAnnouncements.isNotEmpty) {
+        _posts = cachedPosts;
+        _stories = cachedStories;
+        _pinnedAnnouncements = cachedAnnouncements;
+        notifyListeners();
       }
 
-      _posts = allPosts;
-      _currentPage = 1;
-      _hasMore = allPosts.isNotEmpty;
+      if (cachedPosts.isEmpty || cachedStories.isEmpty || cachedAnnouncements.isEmpty) {
+        await refreshDashboardData(isInitialLoad: true);
+      }
 
-      // [OPTIMASI] Seluruh blok untuk mengambil detail like/comment per post DIHAPUS
-      // karena tidak lagi diperlukan. Ini menyelesaikan masalah N+1 dan error 429.
     } catch (e) {
       _errorMessage = e.toString();
     } finally {
@@ -89,54 +110,78 @@ class HomeController extends ChangeNotifier {
     }
   }
 
-  Future<void> fetchMorePosts() async {
-    if (_isLoadingMore || !_hasMore) return;
-    _isLoadingMore = true;
-    notifyListeners();
+  /// Memaksa refresh semua data dari API dan memperbarui cache.
+  Future<void> refreshDashboardData({bool isInitialLoad = false}) async {
+    if (!isInitialLoad) {
+      notifyListeners();
+    }
 
     try {
-      _currentPage++;
-      final newPosts = await _postService.fetchPosts(page: _currentPage);
-      if (newPosts.isEmpty) {
-        _hasMore = false;
-      } else {
-        _posts.addAll(newPosts);
-      }
+      final results = await Future.wait([
+        _postService.fetchPosts(page: 1),
+        _storyService.getStoryFeed(),
+        _announcementService.getPinnedAnnouncements(),
+        _postService.fetchPinnedPost(),
+      ]);
+
+      _posts = results[0] as List<Post>;
+      _stories = (results[1] as List<dynamic>).map((e) => UserWithStories.fromJson(e)).toList();
+      _pinnedAnnouncements = results[2] as List<Announcement>;
+      _pinnedPost = results[3] as Post?;
+
+      // --- 👇 PENAMBAHAN LOGGING DI SINI ---
+      print("===== HASIL REFRESH DASHBOARD DATA =====");
+      print("Posts: ${_posts.length} item");
+      print("Stories: ${_stories.length} item");
+      print("Pinned Announcements: ${_pinnedAnnouncements.length} item");
+      print("Pinned Post: ${_pinnedPost != null ? 'Ada' : 'Tidak Ada'}");
+
+      // Untuk melihat detail data dalam format JSON (bisa sangat panjang di console)
+      // Uncomment baris di bawah ini jika Anda ingin melihat output JSON lengkapnya
+      final jsonData = {
+        // "posts": _posts.map((p) => p.toJson()).toList(),
+        // "stories": _stories.map((s) => s.toJson()).toList(),
+        "pinned_announcements": _pinnedAnnouncements.map((a) => a.toJson()).toList(),
+      };
+      print("Detail JSON: ${jsonEncode(jsonData)}");
+
+      print("========================================");
+      // -----------------------------------------
+
+      await _saveToCache('posts', _posts.map((p) => p.toJson()).toList());
+      await _saveToCache('stories', _stories.map((s) => s.toJson()).toList());
+      await _saveToCache('announcements', _pinnedAnnouncements.map((a) => a.toJson()).toList());
+
+      _errorMessage = null;
     } catch (e) {
-      _currentPage--; // Kembalikan nomor halaman jika gagal
       _errorMessage = e.toString();
     } finally {
-      _isLoadingMore = false;
+      if(isInitialLoad) _isLoading = false;
       notifyListeners();
     }
   }
 
   Future<void> toggleLike(int postId) async {
-    final post = getPostById(postId);
-    // Optimistic UI update
-    post.isLikedByUser = !post.isLikedByUser;
-    post.isLikedByUser ? post.likesCount++ : post.likesCount--;
-    notifyListeners();
-
-    try {
-      await _likeService.toggleLike(postId);
-    } catch (e) {
-      debugPrint("Gagal toggle like, melakukan rollback: $e");
-      // Rollback jika gagal
+    final index = _posts.indexWhere((p) => p.id == postId);
+    if (index != -1) {
+      final post = _posts[index];
+      // Optimistic update
       post.isLikedByUser = !post.isLikedByUser;
-      post.isLikedByUser ? post.likesCount++ : post.likesCount--;
+      post.likesCount += post.isLikedByUser ? 1 : -1;
       notifyListeners();
     }
+
+    // Kirim event ke server melalui WebSocket
+    _likeService.toggleLikeSocket(postId);
+    LikeService().toggleLikeHttp(postId);
+
   }
 
-  Future<void> postComment(int postId, String content) async {
-    try {
-      await _commentService.addComment(postId, content);
-      final post = getPostById(postId);
-      post.commentsCount++;
-      notifyListeners();
-    } catch (e) {
-      debugPrint("Gagal mengirim komentar dari controller: $e");
-    }
+  @override
+  void dispose() {
+    // Hentikan langganan dan putuskan koneksi saat controller tidak lagi digunakan
+    _likeUpdatesSubscription?.cancel();
+    _likeService.disconnect();
+    super.dispose();
   }
 }

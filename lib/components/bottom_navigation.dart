@@ -6,6 +6,9 @@ import 'package:portal_si/pages/notif_page.dart';
 import 'package:portal_si/pages/create_post_page.dart';
 import 'package:flutter/services.dart';
 import 'package:portal_si/services/notification_service.dart';
+import 'package:provider/provider.dart';
+
+import '../utils/user_provider.dart';
 
 import '../pages/create_announcement_page.dart'; // Import service API Anda
 
@@ -30,15 +33,29 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
   late Animation<double> _fabScaleAnimation;
   late Animation<double> _fabRotationAnimation;
   late Animation<Offset> _slideAnimation;
-
   bool _isFabPressed = false;
+  bool isAdmin = false;
 
   List<AnimationController> _iconAnimationControllers = [];
   List<Animation<double>> _iconScaleAnimations = [];
   List<Animation<double>> _iconBounceAnimations = [];
-
   // Variabel untuk menampung jumlah notifikasi yang belum dibaca
   int _unreadNotificationCount = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // 💡 Asumsi Anda menggunakan Provider atau state management serupa.
+    // Jika tidak, sesuaikan cara mendapatkan instance UserProvider
+    // Anda dengan metode yang Anda gunakan.
+    final userProvider = Provider.of<UserProvider>(context);
+
+    // Perbarui nilai isAdmin dengan data dari provider
+    setState(() {
+      isAdmin = userProvider.currentUser?.isVerified == true;
+    });
+  }
 
   @override
   void initState() {
@@ -147,7 +164,7 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
       // Kembali ke HomePage
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => HomePage()),
+        MaterialPageRoute(builder: (_) => DashboardPage()),
       );
     } else if (index == 1) {
       // Arahkan ke FeedPage
@@ -296,7 +313,17 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
                   // Mendeteksi saat jari diangkat dari tombol
                   onTapUp: (_) {
                     setState(() => _isFabPressed = false);
-                    _showCreateOptions(); // Panggil fungsi bottom sheet
+                    if(isAdmin) {
+                      _showCreateOptions();
+                      // Panggil fungsi bottom sheet
+                    } else {
+                      HapticFeedback.mediumImpact();
+                      Navigator.pop(context); // Tutup bottom sheet
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => CreatePostPage()),
+                      );
+                    }
                   },
                   // Mendeteksi jika sentuhan dibatalkan
                   onTapCancel: () => setState(() => _isFabPressed = false),

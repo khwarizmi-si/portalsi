@@ -62,7 +62,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
         if (!didPop) {
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (context) => HomePage()),
+            MaterialPageRoute(builder: (context) => DashboardPage()),
             (route) => false,
           );
         }
@@ -810,7 +810,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('https://api.portalsi.com/api/posts'),
+        Uri.parse('https://api-new.portalsi.com/api/posts'),
       );
 
       request.headers['Authorization'] = 'Bearer $_token';
@@ -854,7 +854,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
         );
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (context) => HomePage()),
+          MaterialPageRoute(builder: (context) => DashboardPage()),
               (route) => false,
         );
       } else {

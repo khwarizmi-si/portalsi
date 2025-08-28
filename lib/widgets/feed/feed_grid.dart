@@ -7,8 +7,8 @@ import 'animated_feed_grid_item.dart';
 class FeedGrid extends StatelessWidget {
   final bool isLoading;
   final List<Post> posts;
-  final Map<int, int> likeCounts;
-  final Map<int, bool> likedPosts;
+  // final Map<int, int> likeCounts;
+  // final Map<int, bool> likedPosts;
   // 1. Hapus scrollController dari parameter
   // final ScrollController scrollController;
   final Animation<double> fadeAnimation;
@@ -21,8 +21,8 @@ class FeedGrid extends StatelessWidget {
     super.key,
     required this.isLoading,
     required this.posts,
-    required this.likeCounts,
-    required this.likedPosts,
+    // required this.likeCounts,
+    // required this.likedPosts,
     // required this.scrollController, // Hapus
     required this.fadeAnimation,
     required this.onRefresh,
@@ -60,7 +60,7 @@ class FeedGrid extends StatelessWidget {
         delegate: SliverChildBuilderDelegate(
               (context, index) {
             final Post post = posts[index];
-            final bool isLiked = likedPosts[post.id] ?? false;
+            final bool isLiked = post.isLikedByUser;
 
             // Logika item tidak berubah
             return AnimatedFeedGridItem(

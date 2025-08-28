@@ -11,7 +11,8 @@ class CreateAnnouncementPage extends StatefulWidget {
   State<CreateAnnouncementPage> createState() => _CreateAnnouncementPageState();
 }
 
-class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
+class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
@@ -19,6 +20,18 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
   File? _imageFile;
   bool _isPinned = false;
   bool _isLoading = false;
+
+  late AnimationController _animationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000), // Durasi sedikit diperpanjang
+    );
+    _animationController.forward();
+  }
 
   Future<void> _pickImage() async {
     final pickedFile =
@@ -37,47 +50,36 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
   }
 
   Future<void> _submitAnnouncement() async {
-    // Validasi form seperti biasa
     if (_formKey.currentState!.validate() == false) {
       return;
     }
-
     setState(() {
       _isLoading = true;
     });
-
     try {
-      // Panggil service menggunakan singleton instance
       await AnnouncementService().createAnnouncement(
         title: _titleController.text,
         content: _contentController.text,
         isPinned: _isPinned,
         image: _imageFile,
       );
-
-      // Jika kode sampai di sini, berarti API call berhasil
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Pengumuman berhasil dibuat!'),
           backgroundColor: Colors.green,
         ),
       );
       Navigator.pop(context);
-
     } catch (e) {
-      // Jika terjadi error (misal: 401, 500, atau tidak ada koneksi),
-      // service akan melempar exception yang akan ditangkap di sini.
-      print('Error saat membuat pengumuman: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Gagal membuat pengumuman. Silakan coba lagi.'),
+          content: Text('Gagal membuat pengumuman: $e'),
           backgroundColor: Colors.red,
         ),
       );
     } finally {
-      // Pastikan loading indicator selalu berhenti, baik berhasil maupun gagal
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -88,123 +90,317 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
 
   @override
   void dispose() {
+    _animationController.dispose();
     _titleController.dispose();
     _contentController.dispose();
     super.dispose();
+  }
+
+  // Widget ini tetap ada untuk text field
+  Widget _buildAnimatedTextField({
+    required TextEditingController controller,
+    required String labelText,
+    required IconData icon,
+    required double delay,
+    required Color color,
+    int maxLines = 1,
+    bool isOptional = false,
+  }) {
+    // ... (Isi fungsi ini sama seperti sebelumnya, tidak perlu diubah)
+    final animation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Interval(delay, 1.0, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
+            .animate(animation),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(15),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: TextFormField(
+            controller: controller,
+            decoration: InputDecoration(
+              labelText: labelText,
+              labelStyle: TextStyle(
+                  color: Colors.grey[600], fontWeight: FontWeight.w500),
+              prefixIcon: Container(
+                margin: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+                borderSide: BorderSide.none,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+                borderSide: BorderSide(color: Colors.grey.shade200, width: 1.5),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+                borderSide: BorderSide(color: color, width: 2),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+                borderSide: const BorderSide(color: Colors.red, width: 1.5),
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            ),
+            maxLines: maxLines,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            validator: isOptional
+                ? null
+                : (value) => (value?.isEmpty ?? true)
+                ? '$labelText tidak boleh kosong'
+                : null,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 1. WIDGET BARU untuk membungkus konten dengan animasi dan gaya container
+  Widget _buildAnimatedContainer({
+    required Widget child,
+    required double delay,
+    Color shadowColor = Colors.grey,
+  }) {
+    final animation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Interval(delay, 1.0, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
+            .animate(animation),
+        child: Container(
+          decoration: BoxDecoration(
+              color: Colors.white, // Beri warna dasar putih
+              borderRadius: BorderRadius.circular(15),
+              boxShadow: [
+                BoxShadow(
+                  color: shadowColor.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+              // Beri border agar seragam dengan textfield
+              border: Border.all(color: Colors.grey.shade200, width: 1.5)
+          ),
+          child: child,
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Buat Pengumuman'),
+        title: const Text('Buat Pengumuman', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: Colors.black,
         actions: [
-          _isLoading
-              ? Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: Center(
-                child:
-                SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white))),
-          )
-              : IconButton(
-            icon: Icon(Icons.check),
-            onPressed: _submitAnnouncement,
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0, top: 8.0, bottom: 8.0),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : ElevatedButton(
+              onPressed: _submitAnnouncement,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange.shade700,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child:
+              const Text('Simpan', style: TextStyle(color: Colors.white)),
+            ),
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(16.0),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              Color(0xFFFFF0D0),
+              Color(0xFFFFFFFF),
+              Color(0xFFDFFEF8),
+            ],
+            stops: [0.0, 0.5, 1.0],
+          ),
+        ),
         child: Form(
           key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: ListView(
+            padding: const EdgeInsets.only(top: 24),
             children: [
-              // Judul
-              TextFormField(
-                controller: _titleController,
-                decoration: InputDecoration(
-                  labelText: 'Judul Pengumuman',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.title),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Judul tidak boleh kosong';
-                  }
-                  return null;
-                },
-              ),
-              SizedBox(height: 16),
-
-              // Konten
-              TextFormField(
-                controller: _contentController,
-                decoration: InputDecoration(
-                  labelText: 'Isi Pengumuman',
-                  border: OutlineInputBorder(),
-                  alignLabelWithHint: true,
-                  prefixIcon: Icon(Icons.notes),
-                ),
-                maxLines: 5,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Konten tidak boleh kosong';
-                  }
-                  return null;
-                },
-              ),
-              SizedBox(height: 24),
-
-              // Pinned Switch
-              SwitchListTile(
-                title: Text('Sematkan Pengumuman'),
-                subtitle: Text('Pengumuman ini akan selalu di atas.'),
-                value: _isPinned,
-                onChanged: (bool value) {
-                  setState(() {
-                    _isPinned = value;
-                  });
-                },
-                secondary: Icon(Icons.push_pin_outlined),
-              ),
-              SizedBox(height: 16),
-              Divider(),
-              SizedBox(height: 16),
-
-              // Gambar
-              Text('Gambar (Opsional)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              SizedBox(height: 12),
-              _imageFile == null
-                  ? OutlinedButton.icon(
-                icon: Icon(Icons.add_photo_alternate_outlined),
-                label: Text('Pilih Gambar'),
-                onPressed: _pickImage,
-                style: OutlinedButton.styleFrom(
-                  minimumSize: Size(double.infinity, 50),
-                ),
-              )
-                  : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    height: 200,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      image: DecorationImage(
-                        image: FileImage(_imageFile!),
-                        fit: BoxFit.cover,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+                decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(40),
+                      topRight: Radius.circular(40),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Color.fromRGBO(0, 0, 0, 0.05),
+                        blurRadius: 15,
+                        offset: Offset(0, -5),
+                      )
+                    ]),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ... (bagian judul "Informasi Pengumuman" tetap sama)
+                    const Text(
+                      'Informasi Pengumuman',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ),
-                  SizedBox(height: 8),
-                  TextButton.icon(
-                    icon: Icon(Icons.close, color: Colors.red),
-                    label: Text('Hapus Gambar', style: TextStyle(color: Colors.red)),
-                    onPressed: _removeImage,
-                  )
-                ],
+                    const SizedBox(height: 8),
+                    Text(
+                      'Lengkapi informasi pengumuman dengan data yang akurat',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 24),
+
+                    _buildAnimatedTextField(
+                      controller: _titleController,
+                      labelText: 'Judul Pengumuman',
+                      icon: Icons.title_rounded,
+                      delay: 0.1,
+                      color: Colors.orange.shade700,
+                    ),
+                    const SizedBox(height: 20),
+
+                    _buildAnimatedTextField(
+                      controller: _contentController,
+                      labelText: 'Isi Pengumuman',
+                      icon: Icons.notes_rounded,
+                      delay: 0.2,
+                      color: Colors.blue.shade700,
+                      maxLines: 5,
+                    ),
+                    const SizedBox(height: 24),
+
+                    // 2. Menerapkan _buildAnimatedContainer pada "Opsi Tambahan"
+                    _buildAnimatedContainer(
+                      delay: 0.3,
+                      shadowColor: Colors.purple,
+                      child: SwitchListTile(
+                        title: const Text('Sematkan Pengumuman', style: TextStyle(fontWeight: FontWeight.w500)),
+                        subtitle: Text('Selalu tampil di paling atas.', style: TextStyle(color: Colors.grey[600])),
+                        value: _isPinned,
+                        onChanged: (bool value) {
+                          setState(() {
+                            _isPinned = value;
+                          });
+                        },
+                        activeColor: Colors.purple.shade600,
+                        secondary: Container(
+                          margin: const EdgeInsets.only(left: 10),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.purple.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(Icons.push_pin_outlined, color: Colors.purple.shade600, size: 20,),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // 3. Menerapkan _buildAnimatedContainer pada "Gambar"
+                    const Text('Gambar (Opsional)',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    _buildAnimatedContainer(
+                      delay: 0.4,
+                      shadowColor: Colors.green,
+                      child: _imageFile == null
+                          ? GestureDetector(
+                        onTap: _pickImage,
+                        child: Container(
+                          height: 150,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                              color: Colors.transparent, // Warna dari container induk
+                              borderRadius: BorderRadius.circular(14)
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.add_photo_alternate_outlined, size: 40, color: Colors.grey[600]),
+                              const SizedBox(height: 8),
+                              const Text('Ketuk untuk memilih gambar')
+                            ],
+                          ),
+                        ),
+                      )
+                          : ClipRRect( // Menggunakan ClipRRect agar gambar mengikuti sudut container
+                        borderRadius: BorderRadius.circular(14),
+                        child: Stack(
+                          children: [
+                            Container(
+                              height: 200,
+                              width: double.infinity,
+                              child: Image.file(_imageFile!, fit: BoxFit.cover),
+                            ),
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: GestureDetector(
+                                onTap: _removeImage,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.black54,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.close, color: Colors.white, size: 20),
+                                ),
+                              ),
+                            )
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

@@ -36,6 +36,8 @@ class _EditProfilePageState extends State<EditProfilePage>
   String _profilePictureUrl = '';
   late User _currentProfile;
 
+  bool _isFetchingLatest = true;
+
   late AnimationController _animationController;
   late AnimationController _buttonAnimationController;
 
@@ -43,7 +45,7 @@ class _EditProfilePageState extends State<EditProfilePage>
   void initState() {
     super.initState();
     _initializeControllers();
-    _setProfileData(widget.initialProfile);
+    _fetchLatestProfile();
 
     _animationController = AnimationController(
       vsync: this,
@@ -83,6 +85,27 @@ class _EditProfilePageState extends State<EditProfilePage>
     _fullNameController.text = profile.fullName ?? '';
     _bioController.text = profile.bio ?? '';
     _profilePictureUrl = profile.profilePictureUrl ?? '';
+  }
+
+  Future<void> _fetchLatestProfile() async {
+    setState(() => _isFetchingLatest = true);
+    try {
+      // Panggil refreshProfile untuk memastikan data terbaru
+      final latestProfile = await ProfileService().refreshProfile();
+      if (mounted) {
+        _setProfileData(latestProfile); // Set data ke controller setelah fetch berhasil
+      }
+    } catch (e) {
+      if (mounted) {
+        _showErrorDialog("Gagal memuat data terbaru: $e");
+        // Jika gagal, fallback ke data awal
+        _setProfileData(widget.initialProfile);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isFetchingLatest = false);
+      }
+    }
   }
 
   Future<void> _pickImage() async {
