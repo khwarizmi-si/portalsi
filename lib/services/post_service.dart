@@ -4,8 +4,10 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
 import 'api_service.dart';
+
 import '../models/post_model.dart';
 
+// --- PERBAIKAN: Tambahkan kembali "extends ApiService" ---
 class PostService extends ApiService {
   PostService._internal();
   static final PostService _instance = PostService._internal();
@@ -52,6 +54,7 @@ class PostService extends ApiService {
   }
 
   Future<List<dynamic>> fetchPosts({int page = 1}) async {
+
     final dynamic responseData = await get('posts', queryParams: {
       'page': page.toString(),
     });
@@ -62,6 +65,7 @@ class PostService extends ApiService {
       return responseData['data'];
     } else if (responseData is List) {
       return responseData;
+
     } else {
       print(
           '⚠️ Peringatan: Endpoint /posts tidak mengembalikan format list yang diharapkan. Data: $responseData');

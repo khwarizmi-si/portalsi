@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
+
 // Halaman & Komponen UI
 import '../components/bottom_navigation.dart';
 import 'edit_profile_page.dart';
@@ -22,7 +23,7 @@ import '../services/user_service.dart';
 // Helper & Util
 import '../utils/zoom_page_route.dart';
 
-// WIDGET POPUP
+
 class PostPopupContent extends StatefulWidget {
   final SimplePost post;
   final User user;
@@ -40,6 +41,7 @@ class PostPopupContent extends StatefulWidget {
 }
 
 class _PostPopupContentState extends State<PostPopupContent> {
+
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -54,11 +56,13 @@ class _PostPopupContentState extends State<PostPopupContent> {
                 CircleAvatar(
                   radius: 16,
                   backgroundImage: NetworkImage(widget.user.profilePictureUrl ?? ''),
+
                 ),
                 const SizedBox(width: 8),
                 Text(
                   widget.user.username,
                   style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+
                 ),
                 const Spacer(),
                 PopupMenuButton<String>(
@@ -71,6 +75,7 @@ class _PostPopupContentState extends State<PostPopupContent> {
                   },
                   itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
                     const PopupMenuItem<String>(value: 'delete', child: Text('Hapus Postingan')),
+
                   ],
                 ),
               ],
@@ -93,6 +98,7 @@ class _PostPopupContentState extends State<PostPopupContent> {
 }
 
 // WIDGET GRID ITEM
+
 class PressableGridItem extends StatefulWidget {
   final SimplePost post;
   final VoidCallback onTap;
@@ -161,7 +167,7 @@ class _PressableGridItemState extends State<PressableGridItem> {
   }
 }
 
-// ROUTE DIALOG
+
 class HeroDialogRoute<T> extends PageRoute<T> {
   HeroDialogRoute({required this.builder}) : super();
   final WidgetBuilder builder;
@@ -184,7 +190,7 @@ class HeroDialogRoute<T> extends PageRoute<T> {
   }
 }
 
-// HALAMAN PROFIL UTAMA
+
 class ProfilePage extends StatefulWidget {
   const ProfilePage({Key? key}) : super(key: key);
   @override
@@ -218,6 +224,7 @@ class _ProfilePageState extends State<ProfilePage> {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => EditProfilePage(initialProfile: currentUser)),
+
     );
     if (result == true && mounted) {
       _handleRefresh();
@@ -226,6 +233,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   void _navigateToSettings() {
     Navigator.of(context).push(ZoomPageRoute(page: const SettingsPage(), buttonKey: _menuKey));
+
   }
 
   void _showPostPopup(BuildContext context, SimplePost post, User user) {
@@ -269,6 +277,7 @@ class _ProfilePageState extends State<ProfilePage> {
       try {
         await PostService().deletePost(postId);
         _handleRefresh();
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Postingan berhasil dihapus.'), backgroundColor: Colors.green),
@@ -308,6 +317,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   Text("Gagal memuat data: ${snapshot.error}"),
                   const SizedBox(height: 16),
                   ElevatedButton(onPressed: _handleRefresh, child: const Text("Coba Lagi"))
+
                 ],
               ),
             );
@@ -315,6 +325,7 @@ class _ProfilePageState extends State<ProfilePage> {
           if (!snapshot.hasData) {
             return const Center(child: Text("Data pengguna tidak ditemukan."));
           }
+
           final user = snapshot.data!;
           return RefreshIndicator(
             onRefresh: _handleRefresh,
@@ -327,6 +338,7 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           );
         },
+
       ),
       bottomNavigationBar: CustomBottomNavigation(selectedIndex: 4, onTap: _onBottomNavTapped),
     );
@@ -344,6 +356,7 @@ class _ProfilePageState extends State<ProfilePage> {
       title: Text(
         user.username,
         style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Colors.black),
+
       ),
       actions: [
         IconButton(
@@ -362,6 +375,7 @@ class _ProfilePageState extends State<ProfilePage> {
           decoration: BoxDecoration(
             image: DecorationImage(
               image: CachedNetworkImageProvider(user.profilePictureUrl ?? 'https://i.pinimg.com/1200x/8c/56/c4/8c56c483afc07fbbc8d1c937c53c26b1.jpg'),
+
               fit: BoxFit.cover,
             ),
           ),
@@ -398,6 +412,7 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+
   Widget _buildProfileSection(User user) {
     return Container(
       color: Colors.white,
@@ -419,6 +434,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       ],
                       image: DecorationImage(
                         image: CachedNetworkImageProvider(user.profilePictureUrl ?? 'https://via.placeholder.com/150'),
+
                         fit: BoxFit.cover,
                       ),
                     ),
@@ -456,6 +472,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       onTap: () => _navigateToFollowersFollowing(user, 1),
                       child: _buildStatItem(user.followingCount.toString(), 'mengikuti'),
                     ),
+
                   ],
                 ),
               ),
@@ -470,11 +487,13 @@ class _ProfilePageState extends State<ProfilePage> {
                 Text(
                   user.fullName ?? 'Nama tidak tersedia',
                   style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+
                 ),
                 const SizedBox(height: 8),
                 Text(
                   user.bio ?? 'Tidak ada bio',
                   style: TextStyle(fontSize: 14, color: Colors.grey[700], height: 1.3),
+
                 ),
               ],
             ),
@@ -524,6 +543,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       foregroundColor: Colors.grey[800],
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+
                     ),
                     child: const Text('Bagikan Profile', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                   ),
@@ -569,6 +589,7 @@ class _ProfilePageState extends State<ProfilePage> {
               post: post,
               onTap: () {
                 Navigator.push(context, MaterialPageRoute(builder: (context) => PostDetail(postId: post.postId)));
+
               },
               onLongPress: () {
                 _showPostPopup(context, post, user);

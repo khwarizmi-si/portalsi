@@ -91,10 +91,10 @@ class FeedController extends ChangeNotifier {
 
     try {
       final authToken = await SecureStorage.getToken();
-
       // --- 👇 PERBAIKAN DI SINI ---
       final uri = Uri.parse('https://api-new.portalsi.com/api/users/search')
           .replace(queryParameters: {'username': query}); // Diubah dari 'q'
+
 
       final response = await http.get(
         uri,

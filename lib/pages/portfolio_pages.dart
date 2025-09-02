@@ -4,6 +4,7 @@ import 'package:portal_si/models/portfolio_model.dart';
 import 'package:portal_si/services/portfolio_service.dart';
 import 'package:provider/provider.dart';
 import '../utils/user_provider.dart';
+
 import 'add_portfolio_page.dart';
 
 class PortfolioPage extends StatefulWidget {
@@ -48,6 +49,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
     }
     final userProvider = context.watch<UserProvider>();
     final bool isAdmin = userProvider.currentUser?.isVerified ?? false;
+
     return Scaffold(
       backgroundColor: const Color(0xFFFFFBF0),
       appBar: AppBar(
@@ -82,6 +84,7 @@ class _PortfolioPageState extends State<PortfolioPage> {
                 }
               },
             ),
+
           const SizedBox(width: 8),
         ],
       ),

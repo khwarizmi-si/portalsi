@@ -17,6 +17,7 @@ class HomeController with ChangeNotifier {
   final StoryService _storyService = StoryService();
 
   List<dynamic> _feedItems = []; // Sebelumnya: _posts
+
   List<UserWithStories> _stories = [];
   List<Announcement> _pinnedAnnouncements = [];
   Post? _pinnedPost;
@@ -25,6 +26,7 @@ class HomeController with ChangeNotifier {
   String? _errorMessage;
 
   List<dynamic> get feedItems => _feedItems; // Sebelumnya: posts
+
   List<UserWithStories> get stories => _stories;
   List<Announcement> get pinnedAnnouncements => _pinnedAnnouncements;
   Post? get pinnedPost => _pinnedPost;
@@ -58,6 +60,7 @@ class HomeController with ChangeNotifier {
         _feedItems[index] = postMap;
 
         print("🔄 UI diperbarui via WebSocket untuk post #${update.postId}");
+
         notifyListeners();
       }
     });
@@ -70,8 +73,6 @@ class HomeController with ChangeNotifier {
     print("📦 Data untuk '$key' disimpan ke cache.");
   }
 
-  // --- 👇 PERBAIKAN 2: Tambahkan kembali _loadFromCache yang asli ---
-  // Fungsi ini tetap dibutuhkan untuk stories dan announcements
   Future<List<T>> _loadFromCache<T>(String key, T Function(Map<String, dynamic>) fromJson) async {
     final prefs = await SharedPreferences.getInstance();
     final cachedData = prefs.getString(key);
@@ -119,12 +120,14 @@ class HomeController with ChangeNotifier {
 
       if (cachedFeed.isNotEmpty || cachedStories.isNotEmpty || cachedAnnouncements.isNotEmpty) {
         _feedItems = cachedFeed;
+
         _stories = cachedStories;
         _pinnedAnnouncements = cachedAnnouncements;
         notifyListeners();
       }
 
       if (cachedFeed.isEmpty || cachedStories.isEmpty || cachedAnnouncements.isEmpty) {
+
         await refreshDashboardData(isInitialLoad: true);
       }
 
@@ -151,6 +154,7 @@ class HomeController with ChangeNotifier {
       ]);
 
       _feedItems = results[0] as List<dynamic>;
+
       _stories = (results[1] as List<dynamic>).map((e) => UserWithStories.fromJson(e)).toList();
       _pinnedAnnouncements = results[2] as List<Announcement>;
       _pinnedPost = results[3] as Post?;
@@ -163,6 +167,7 @@ class HomeController with ChangeNotifier {
       print("========================================");
 
       await _saveToCache('posts', _feedItems);
+
       await _saveToCache('stories', _stories.map((s) => s.toJson()).toList());
       await _saveToCache('announcements', _pinnedAnnouncements.map((a) => a.toJson()).toList());
 
@@ -199,6 +204,7 @@ class HomeController with ChangeNotifier {
 
   @override
   void dispose() {
+
     _likeUpdatesSubscription?.cancel();
     _likeService.disconnect();
     super.dispose();

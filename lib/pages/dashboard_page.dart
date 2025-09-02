@@ -43,6 +43,7 @@ class _HomePageState extends State<DashboardPage> {
   final GlobalKey _anncIconKey = GlobalKey();
   final GlobalKey _msgIconKey = GlobalKey();
 
+
   @override
   void initState() {
     super.initState();
@@ -215,12 +216,14 @@ class _HomePageState extends State<DashboardPage> {
       builder: (context, controller, child) {
         // --- 👇 PERUBAHAN DI SINI: Cek controller.feedItems ---
         if (controller.isLoading && controller.feedItems.isEmpty) {
+
           return const Center(child: CircularProgressIndicator());
         }
         if (controller.errorMessage != null) {
           return Center(child: Text('Error: ${controller.errorMessage}'));
         }
         if (controller.feedItems.isEmpty && controller.pinnedPost == null && controller.pinnedAnnouncements.isEmpty) {
+
           return RefreshIndicator(
             onRefresh: () => controller.refreshDashboardData(),
             child: const CustomScrollView(
@@ -756,4 +759,5 @@ class SuggestionCard extends StatelessWidget {
       ),
     );
   }
+
 }

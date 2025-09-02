@@ -1,5 +1,3 @@
-// lib/pages/other_profile_page.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:page_transition/page_transition.dart';
@@ -21,6 +19,7 @@ class OtherProfilePage extends StatefulWidget {
 
 class _OtherProfilePageState extends State<OtherProfilePage> with TickerProviderStateMixin {
   User? _profileData;
+
   bool _isLoading = true;
   bool _isFollowing = false;
   bool _isFollowActionLoading = false;
@@ -60,6 +59,7 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
     try {
       final profile = await _profileService.getOtherProfile(widget.username);
       final followStatus = await _followService.getFollowStatus(widget.username);
+
 
       if (mounted) {
         setState(() {
@@ -102,6 +102,7 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
 
       if (!success && mounted) {
         // Revert UI if API call fails
+
         setState(() {
           _isFollowing = originalFollowingState;
           _profileData = _profileData!.copyWith(followersCount: originalFollowersCount);
@@ -127,6 +128,7 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
         ),
       ),
     );
+
   }
 
   @override
@@ -261,17 +263,20 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
                 onPressed: _isFollowActionLoading ? null : _handleFollowAction,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _isFollowing ? Colors.grey[200] : Colors.blueAccent,
+
                   foregroundColor: _isFollowing ? Colors.black : Colors.white,
                   elevation: _isFollowing ? 0 : 2,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                     side: _isFollowing ? BorderSide(color: Colors.grey[300]!) : BorderSide.none,
+
                   ),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
                 child: _isFollowActionLoading
                     ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : Text(_isFollowing ? 'Mengikuti' : 'Ikuti', style: const TextStyle(fontWeight: FontWeight.w600)),
+
               ),
             ),
             const SizedBox(width: 12),
@@ -284,6 +289,7 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
                 child: const Text('Pesan', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600)),
+
               ),
             ),
           ],
@@ -296,6 +302,7 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
                 decoration: BoxDecoration(
                   boxShadow: [
                     BoxShadow(color: const Color(0x83B98946), offset: const Offset(0, 3), blurRadius: 10, spreadRadius: -2),
+
                   ],
                   borderRadius: BorderRadius.circular(10),
                 ),
@@ -303,6 +310,7 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
                   onPressed: () {
                     if (_profileData != null) {
                       Navigator.push(context, PageTransition(type: PageTransitionType.rightToLeft, child: PortfolioPage(user: _profileData!)));
+
                       HapticFeedback.lightImpact();
                     }
                   },
@@ -314,6 +322,7 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   child: const Text('Lihat Portofolio', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+
                 ),
               ),
             ),
@@ -391,6 +400,7 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
             child: Hero(
               tag: 'post_${post.postId}_$index',
               child: InteractiveViewer(child: Image.network(post.mediaUrl, fit: BoxFit.contain)),
+
             ),
           ),
         ),
@@ -412,6 +422,7 @@ extension UserCopyWith on User {
     int? followingCount,
     int? postsCount,
     List<SimplePost>? recentPosts,
+
   }) {
     return User(
       id: id ?? this.id,
@@ -426,6 +437,7 @@ extension UserCopyWith on User {
       followingCount: followingCount ?? this.followingCount,
       postsCount: postsCount ?? this.postsCount,
       recentPosts: recentPosts ?? this.recentPosts,
+
     );
   }
 }
