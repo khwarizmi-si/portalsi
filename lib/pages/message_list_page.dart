@@ -6,20 +6,25 @@ import 'package:intl/intl.dart';
 import '../controllers/message_list_controller.dart';
 import '../models/chat.dart';
 import '../models/user_model.dart';
+import '../services/user_service.dart';
 import 'chat_room.dart';
+import 'create_group_page.dart';
+import 'new_message_page.dart';
 
 class MessageListPage extends StatelessWidget {
   const MessageListPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final themeColor = const Color(0xFFFFA726);
+
     return ChangeNotifierProvider(
       create: (_) => MessageListController(),
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.grey.shade50,
         appBar: AppBar(
-          backgroundColor: Colors.white,
-          elevation: 0.5,
+          backgroundColor: Colors.grey.shade50,
+          elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.black87),
             onPressed: () => Navigator.of(context).pop(),
@@ -31,39 +36,59 @@ class MessageListPage extends StatelessWidget {
           ),
           actions: [
             IconButton(
-              icon: const Icon(Icons.edit_note_outlined,
-                  color: Colors.black87, size: 28),
-              onPressed: () {},
+              icon: const Icon(Icons.edit_note_outlined, color: Colors.black87, size: 28),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const NewMessagePage()),
+                );
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.group_add_outlined, color: Colors.black87, size: 28),
+              onPressed: () {
+                // Navigasi ke halaman buat grup
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateGroupPage()));
+              },
             ),
           ],
         ),
         body: Column(
           children: [
-            // --- Search Bar ---
+            // Search Bar
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: Consumer<MessageListController>(
                 builder: (context, controller, _) {
-                  return TextField(
-                    onChanged: (value) => controller.filterConversations(value),
-                    decoration: InputDecoration(
-                      hintText: 'Cari percakapan...',
-                      hintStyle: TextStyle(color: Colors.grey.shade500),
-                      prefixIcon:
-                          Icon(Icons.search, color: Colors.grey.shade600),
-                      filled: true,
-                      fillColor: Colors.grey.shade100,
-                      contentPadding: const EdgeInsets.all(12),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(25),
-                        borderSide: BorderSide.none,
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        )
+                      ],
+                    ),
+                    child: TextField(
+                      onChanged: (value) => controller.filterConversations(value),
+                      decoration: InputDecoration(
+                        hintText: 'Cari percakapan...',
+                        hintStyle: TextStyle(color: Colors.grey.shade500),
+                        prefixIcon: Icon(Icons.search, color: Colors.grey.shade600),
+                        filled: true,
+                        fillColor: Colors.transparent,
+                        contentPadding: const EdgeInsets.all(16),
+                        border: InputBorder.none,
                       ),
                     ),
                   );
                 },
               ),
             ),
-            // --- Daftar Percakapan ---
+            // Daftar Percakapan
             Expanded(
               child: Consumer<MessageListController>(
                 builder: (context, controller, _) {
@@ -77,20 +102,15 @@ class MessageListPage extends StatelessWidget {
                     return const Center(
                         child: Text('Mulai percakapan baru!',
                             style:
-                                TextStyle(fontSize: 16, color: Colors.grey)));
+                            TextStyle(fontSize: 16, color: Colors.grey)));
                   }
-                  return ListView.separated(
+                  return ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: controller.filteredConversations.length,
-                    separatorBuilder: (context, index) => const Divider(
-                      height: 1,
-                      thickness: 1,
-                      indent: 80,
-                      endIndent: 16,
-                    ),
                     itemBuilder: (context, index) {
-                      final conversation =
-                          controller.filteredConversations[index];
-                      return _ConversationTile(conversation: conversation);
+                      final conversation = controller.filteredConversations[index];
+                      // Kirim objek Conversation (bisa User- atau GroupConversation) ke tile
+                      return _ConversationTile(conversation: conversation, themeColor: themeColor);
                     },
                   );
                 },
@@ -104,14 +124,19 @@ class MessageListPage extends StatelessWidget {
 }
 
 /// ================================================================
-/// WIDGET TILE PERCAKAPAN DENGAN UI/UX BARU
+/// WIDGET TILE PERCAKAPAN YANG SUDAH FLEKSIBEL
 /// ================================================================
 class _ConversationTile extends StatelessWidget {
+  // Terima abstract class Conversation, bukan lagi model yang spesifik.
   final Conversation conversation;
-  const _ConversationTile({required this.conversation});
+  final Color themeColor;
 
-  // Helper untuk format waktu
-  String _formatTimestamp(DateTime dt) {
+  const _ConversationTile({required this.conversation, required this.themeColor});
+
+  String _formatTimestamp(DateTime? dt) {
+    // Tambahkan pengecekan null, karena grup baru mungkin tidak punya timestamp
+    if (dt == null) return '';
+
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final messageDate = DateTime(dt.year, dt.month, dt.day);
@@ -127,107 +152,136 @@ class _ConversationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final User partner = conversation.partner;
     final bool isUnread = conversation.unreadCount > 0;
 
-    return InkWell(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => ChatRoomPage(user: partner)),
-        );
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-        child: Row(
-          children: [
-            // --- Foto Profil ---
-            CircleAvatar(
-              radius: 30,
-              backgroundColor: Colors.grey.shade200,
-              backgroundImage: partner.profilePictureUrl != null &&
-                      partner.profilePictureUrl!.isNotEmpty
-                  ? NetworkImage(partner.profilePictureUrl!)
-                  : null,
-              child: partner.profilePictureUrl == null ||
-                      partner.profilePictureUrl!.isEmpty
-                  ? Text(
-                      partner.username.substring(0, 1).toUpperCase(),
-                      style: const TextStyle(
-                          fontSize: 24, fontWeight: FontWeight.bold),
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 16),
-            // --- Nama dan Pesan Terakhir ---
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    partner.fullName ?? partner.username,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    conversation.lastMessage,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: isUnread ? Colors.black87 : Colors.grey.shade600,
-                      fontWeight:
-                          isUnread ? FontWeight.bold : FontWeight.normal,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+    // ==== PERUBAHAN UTAMA DI SINI ====
+    // Gunakan getter abstrak. Flutter akan otomatis memanggil implementasi
+    // yang benar (dari User- atau GroupConversation).
+    final String name = conversation.displayName;
+    final String? imageUrl = conversation.displayImageUrl;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: InkWell(
+        onTap: () {
+          // Tambahkan logika untuk membedakan navigasi
+          if (conversation is UserConversation) {
+            // Jika ini percakapan user, navigasi ke ChatRoomPage
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => ChatRoomPage(user: (conversation as UserConversation).partner)),
+            );
+          } else if (conversation is GroupConversation) {
+            // Jika ini percakapan grup, navigasi ke GroupChatPage (buat halaman ini nanti)
+            // Navigator.push(context, MaterialPageRoute(builder: (_) => GroupChatPage(group: conversation)));
+            print("Navigasi ke halaman chat grup: ${conversation.displayName}");
+          }
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
+            children: [
+              // --- Foto Profil atau Avatar Grup ---
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: Colors.grey.shade200,
+                // Gunakan imageUrl yang sudah didapat dari getter
+                backgroundImage: imageUrl != null && imageUrl.isNotEmpty
+                    ? NetworkImage(imageUrl)
+                    : null,
+                child: imageUrl == null || imageUrl.isEmpty
+                    ? Text(
+                  // Gunakan name yang sudah didapat dari getter
+                  name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?',
+                  style: const TextStyle(
+                      fontSize: 24, fontWeight: FontWeight.bold),
+                )
+                    : null,
               ),
-            ),
-            const SizedBox(width: 10),
-            // --- Waktu dan Indikator Unread ---
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  _formatTimestamp(conversation.timestamp),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isUnread
-                        ? Theme.of(context).primaryColor
-                        : Colors.grey.shade500,
-                    fontWeight: isUnread ? FontWeight.bold : FontWeight.normal,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                if (isUnread)
-                  Container(
-                    width: 22,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).primaryColor,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(
-                        conversation.unreadCount.toString(),
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold),
+              const SizedBox(width: 16),
+
+              // --- Nama dan Pesan Terakhir ---
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      // Gunakan name dari getter
+                      name,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
                       ),
                     ),
-                  )
-                else
-                  const SizedBox(
-                      height: 22), // Placeholder agar alignment tetap sama
-              ],
-            ),
-          ],
+                    const SizedBox(height: 5),
+                    Text(
+                      conversation.lastMessage,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isUnread ? Colors.black87 : Colors.grey.shade600,
+                        fontWeight:
+                        isUnread ? FontWeight.bold : FontWeight.normal,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+
+              // --- Waktu dan Indikator Unread ---
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    _formatTimestamp(conversation.timestamp),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isUnread ? themeColor : Colors.grey.shade500,
+                      fontWeight: isUnread ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (isUnread)
+                    Container(
+                      width: 22,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        color: themeColor,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          conversation.unreadCount.toString(),
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    )
+                  else
+                    const SizedBox(
+                        height: 22), // Placeholder agar alignment tetap sama
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

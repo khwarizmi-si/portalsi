@@ -12,8 +12,8 @@ class FollowersFollowingPage extends StatefulWidget {
     Key? key,
     required this.userId,
     this.initialTab = 0,
-    required this.followers,
-    required this.following,
+    this.followers = const [], // Hapus 'required', beri nilai default
+    this.following = const [], // Hapus 'required', beri nilai default
   }) : super(key: key);
 
   @override
@@ -40,12 +40,9 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
     _tabController = TabController(length: 2, vsync: this);
     _tabController.index = widget.initialTab;
 
-    // Initialize dengan data yang diberikan
-    followers = List.from(widget.followers);
-    following = List.from(widget.following);
+    _loadData(); // <-- TAMBAHKAN BARIS INI
 
-    _initializeFollowingCache();
-    _getCurrentUserId();
+    _getCurrentUserId(); // Asumsi Anda masih memiliki fungsi ini
   }
 
   void _initializeFollowingCache() {
@@ -69,34 +66,44 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
     }
   }
 
-  Future<void> _refreshData() async {
-    if (isLoading) return; // Prevent multiple concurrent refreshes
-
-    setState(() => isLoading = true);
+  Future<void> _loadData({bool forceRefresh = false}) async {
+    // Tampilkan loading indicator hanya jika belum ada data sama sekali
+    if (followers.isEmpty && following.isEmpty) {
+      if (mounted) setState(() => isLoading = true);
+    }
 
     try {
+      // Menggunakan Future.wait agar request API berjalan bersamaan
       final results = await Future.wait([
-        _followService.getFollowers(widget.userId),
-        _followService.getFollowing(widget.userId),
+        _followService.getFollowers(widget.userId, forceRefresh: forceRefresh),
+        _followService.getFollowing(widget.userId, forceRefresh: forceRefresh),
       ]);
 
       if (mounted) {
         setState(() {
           followers = results[0];
           following = results[1];
-          hasChanges = true;
         });
-        _initializeFollowingCache();
       }
     } catch (e) {
       if (mounted) {
-        _showErrorSnackBar('Gagal memuat data: ${e.toString()}');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memuat data: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } finally {
       if (mounted) {
         setState(() => isLoading = false);
       }
     }
+  }
+
+  // 🔄 Fungsi refresh yang ada di UI akan memanggil _loadData dengan paksa
+  Future<void> _refreshData() async {
+    await _loadData(forceRefresh: true);
   }
 
   Future<void> _handleFollowAction(

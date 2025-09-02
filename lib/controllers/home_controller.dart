@@ -16,7 +16,8 @@ class HomeController with ChangeNotifier {
   final AnnouncementService _announcementService = AnnouncementService();
   final StoryService _storyService = StoryService();
 
-  List<Post> _posts = [];
+  List<dynamic> _feedItems = []; // Sebelumnya: _posts
+
   List<UserWithStories> _stories = [];
   List<Announcement> _pinnedAnnouncements = [];
   Post? _pinnedPost;
@@ -24,7 +25,8 @@ class HomeController with ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
 
-  List<Post> get posts => _posts;
+  List<dynamic> get feedItems => _feedItems; // Sebelumnya: posts
+
   List<UserWithStories> get stories => _stories;
   List<Announcement> get pinnedAnnouncements => _pinnedAnnouncements;
   Post? get pinnedPost => _pinnedPost;
@@ -41,17 +43,24 @@ class HomeController with ChangeNotifier {
   }
 
   void _initializeServices() {
-    _likeService.connect(); // Memulai koneksi WebSocket
+    _likeService.connect();
 
-    // Mulai mendengarkan pembaruan dari LikeService
     _likeUpdatesSubscription = _likeService.likeUpdates.listen((update) {
-      // Cari postingan yang sesuai di dalam daftar _posts
-      final index = _posts.indexWhere((p) => p.id == update.postId);
+      // --- 👇 PERBAIKAN 1: Gunakan _feedItems, bukan _posts ---
+      final index = _feedItems.indexWhere((item) =>
+      item is Map<String, dynamic> &&
+          item['type'] == 'post' &&
+          item['post_id'] == update.postId);
+
       if (index != -1) {
-        // Perbarui data postingan dan beri tahu UI
-        _posts[index].likesCount = update.likesCount;
-        _posts[index].isLikedByUser = update.isLiked;
-        print("🔄 UI diperbarui untuk post #${update.postId}");
+        // Buat salinan map agar bisa diubah dan memicu UI update
+        final postMap = Map<String, dynamic>.from(_feedItems[index]);
+        postMap['likes_count'] = update.likesCount;
+        postMap['is_liked'] = update.isLiked;
+        _feedItems[index] = postMap;
+
+        print("🔄 UI diperbarui via WebSocket untuk post #${update.postId}");
+
         notifyListeners();
       }
     });
@@ -81,24 +90,44 @@ class HomeController with ChangeNotifier {
     return [];
   }
 
+  // Fungsi baru ini khusus untuk memuat feed yang berisi mixed-types
+  Future<List<dynamic>> _loadRawListFromCache(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    final cachedData = prefs.getString(key);
+    final cachedTimestamp = prefs.getInt('${key}_timestamp');
+
+    if (cachedData != null && cachedTimestamp != null) {
+      final cacheTime = DateTime.fromMillisecondsSinceEpoch(cachedTimestamp);
+      if (DateTime.now().difference(cacheTime).inMinutes < _cacheDurationMinutes) {
+        print("✅ Memuat '$key' dari CACHE.");
+        return jsonDecode(cachedData) as List<dynamic>;
+      }
+    }
+    print("⚠️ Cache '$key' KOSONG/KADALUARSA.");
+    return [];
+  }
+
   Future<void> loadDashboardData() async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final cachedPosts = await _loadFromCache('posts', Post.fromJson);
+      // Panggil fungsi cache yang sesuai untuk setiap tipe data
+      final cachedFeed = await _loadRawListFromCache('posts');
       final cachedStories = await _loadFromCache('stories', UserWithStories.fromJson);
       final cachedAnnouncements = await _loadFromCache('announcements', Announcement.fromJson);
 
-      if (cachedPosts.isNotEmpty || cachedStories.isNotEmpty || cachedAnnouncements.isNotEmpty) {
-        _posts = cachedPosts;
+      if (cachedFeed.isNotEmpty || cachedStories.isNotEmpty || cachedAnnouncements.isNotEmpty) {
+        _feedItems = cachedFeed;
+
         _stories = cachedStories;
         _pinnedAnnouncements = cachedAnnouncements;
         notifyListeners();
       }
 
-      if (cachedPosts.isEmpty || cachedStories.isEmpty || cachedAnnouncements.isEmpty) {
+      if (cachedFeed.isEmpty || cachedStories.isEmpty || cachedAnnouncements.isEmpty) {
+
         await refreshDashboardData(isInitialLoad: true);
       }
 
@@ -124,31 +153,21 @@ class HomeController with ChangeNotifier {
         _postService.fetchPinnedPost(),
       ]);
 
-      _posts = results[0] as List<Post>;
+      _feedItems = results[0] as List<dynamic>;
+
       _stories = (results[1] as List<dynamic>).map((e) => UserWithStories.fromJson(e)).toList();
       _pinnedAnnouncements = results[2] as List<Announcement>;
       _pinnedPost = results[3] as Post?;
 
-      // --- 👇 PENAMBAHAN LOGGING DI SINI ---
       print("===== HASIL REFRESH DASHBOARD DATA =====");
-      print("Posts: ${_posts.length} item");
+      print("Feed Items: ${_feedItems.length} item");
       print("Stories: ${_stories.length} item");
       print("Pinned Announcements: ${_pinnedAnnouncements.length} item");
       print("Pinned Post: ${_pinnedPost != null ? 'Ada' : 'Tidak Ada'}");
-
-      // Untuk melihat detail data dalam format JSON (bisa sangat panjang di console)
-      // Uncomment baris di bawah ini jika Anda ingin melihat output JSON lengkapnya
-      final jsonData = {
-        // "posts": _posts.map((p) => p.toJson()).toList(),
-        // "stories": _stories.map((s) => s.toJson()).toList(),
-        "pinned_announcements": _pinnedAnnouncements.map((a) => a.toJson()).toList(),
-      };
-      print("Detail JSON: ${jsonEncode(jsonData)}");
-
       print("========================================");
-      // -----------------------------------------
 
-      await _saveToCache('posts', _posts.map((p) => p.toJson()).toList());
+      await _saveToCache('posts', _feedItems);
+
       await _saveToCache('stories', _stories.map((s) => s.toJson()).toList());
       await _saveToCache('announcements', _pinnedAnnouncements.map((a) => a.toJson()).toList());
 
@@ -162,24 +181,30 @@ class HomeController with ChangeNotifier {
   }
 
   Future<void> toggleLike(int postId) async {
-    final index = _posts.indexWhere((p) => p.id == postId);
+    final index = _feedItems.indexWhere((item) =>
+    item is Map<String, dynamic> &&
+        item['type'] == 'post' &&
+        item['post_id'] == postId);
+
     if (index != -1) {
-      final post = _posts[index];
-      // Optimistic update
-      post.isLikedByUser = !post.isLikedByUser;
-      post.likesCount += post.isLikedByUser ? 1 : -1;
+      final postMap = Map<String, dynamic>.from(_feedItems[index]);
+      final isLiked = postMap['is_liked'] ?? false;
+      final likesCount = postMap['likes_count'] ?? 0;
+
+      postMap['is_liked'] = !isLiked;
+      postMap['likes_count'] = likesCount + (!isLiked ? 1 : -1);
+
+      _feedItems[index] = postMap;
       notifyListeners();
     }
 
-    // Kirim event ke server melalui WebSocket
     _likeService.toggleLikeSocket(postId);
     LikeService().toggleLikeHttp(postId);
-
   }
 
   @override
   void dispose() {
-    // Hentikan langganan dan putuskan koneksi saat controller tidak lagi digunakan
+
     _likeUpdatesSubscription?.cancel();
     _likeService.disconnect();
     super.dispose();

@@ -1,31 +1,109 @@
 // lib/pages/post_detail.dart
 
 import 'package:flutter/material.dart';
-// --- [PERUBAHAN] --- Import widget PostCard dan helper lainnya
 import '../components/post_card.dart';
 import '../models/post_model.dart';
 import '../models/comment_model.dart';
+import '../services/post_service.dart'; // Pastikan Anda memiliki service ini
 import '../services/comment_service.dart';
 import '../services/like_service.dart';
 import '../helper/time_helper.dart';
 import '../utils/navigation_helper.dart';
 
-
 class PostDetail extends StatefulWidget {
-  final Post post;
+  // 1. Menerima postId, bukan lagi objek Post
+  final int postId;
 
-  const PostDetail({Key? key, required this.post}) : super(key: key);
+  const PostDetail({Key? key, required this.postId}) : super(key: key);
 
   @override
   State<PostDetail> createState() => _PostDetailState();
 }
 
 class _PostDetailState extends State<PostDetail> {
+  // 2. Gunakan Future untuk menampung proses pengambilan data
+  late Future<Post> _postFuture;
+  final PostService _postService = PostService();
+
+  @override
+  void initState() {
+    super.initState();
+    // 3. Ambil data post berdasarkan ID saat halaman pertama kali dibuka
+    _fetchPostData();
+  }
+
+  void _fetchPostData() {
+    setState(() {
+      _postFuture = _postService.getPostDetail(widget.postId);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text('Postingan', style: TextStyle(color: Colors.black)),
+        backgroundColor: Colors.white,
+        elevation: 0.5,
+        iconTheme: const IconThemeData(color: Colors.black),
+      ),
+      // 4. Gunakan FutureBuilder untuk menampilkan UI berdasarkan status pengambilan data
+      body: FutureBuilder<Post>(
+        future: _postFuture,
+        builder: (context, snapshot) {
+          // Saat data masih dimuat
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          // Jika terjadi error saat mengambil data
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text("Gagal memuat data: ${snapshot.error}"),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: _fetchPostData,
+                    child: const Text("Coba Lagi"),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          // Jika data tidak ditemukan
+          if (!snapshot.hasData) {
+            return const Center(child: Text("Data postingan tidak ditemukan."));
+          }
+
+          // Jika data berhasil didapat, tampilkan UI utama
+          final post = snapshot.data!;
+          return PostDetailView(post: post);
+        },
+      ),
+    );
+  }
+}
+
+// Widget baru untuk menampung UI utama agar kode lebih rapi
+class PostDetailView extends StatefulWidget {
+  final Post post;
+
+  const PostDetailView({Key? key, required this.post}) : super(key: key);
+
+  @override
+  State<PostDetailView> createState() => _PostDetailViewState();
+}
+
+class _PostDetailViewState extends State<PostDetailView> {
   late Post _post;
   final CommentService _commentService = CommentService();
   final LikeService _likeService = LikeService();
   final TextEditingController _commentController = TextEditingController();
-  final FocusNode _commentFocusNode = FocusNode(); // Untuk fokus ke input komentar
+  final FocusNode _commentFocusNode = FocusNode();
 
   List<Comment> _comments = [];
   bool _isLoadingComments = true;
@@ -38,6 +116,13 @@ class _PostDetailState extends State<PostDetail> {
     _fetchComments();
   }
 
+  @override
+  void dispose() {
+    _commentController.dispose();
+    _commentFocusNode.dispose();
+    super.dispose();
+  }
+
   Future<void> _fetchComments() async {
     setState(() => _isLoadingComments = true);
     try {
@@ -48,7 +133,7 @@ class _PostDetailState extends State<PostDetail> {
         });
       }
     } catch (e) {
-      print("Error fetching comments: $e");
+      // Handle error
     } finally {
       if (mounted) {
         setState(() => _isLoadingComments = false);
@@ -57,29 +142,29 @@ class _PostDetailState extends State<PostDetail> {
   }
 
   Future<void> _toggleLike() async {
-    // Fungsi ini sama, tapi sekarang akan mengupdate state _post
-    // yang kemudian akan di-pass ke PostCard untuk re-render
     final originalLikedStatus = _post.isLikedByUser;
     final originalLikesCount = _post.likesCount;
     setState(() {
-      _post.isLikedByUser = !originalLikedStatus;
-      _post.likesCount += originalLikedStatus ? -1 : 1;
+      _post = _post.copyWith(
+        isLikedByUser: !originalLikedStatus,
+        likesCount: originalLikesCount + (originalLikedStatus ? -1 : 1),
+      );
     });
 
     try {
       await _likeService.toggleLikeHttp(_post.id);
     } catch (e) {
       setState(() {
-        _post.isLikedByUser = originalLikedStatus;
-        _post.likesCount = originalLikesCount;
+        _post = _post.copyWith(
+          isLikedByUser: originalLikedStatus,
+          likesCount: originalLikesCount,
+        );
       });
     }
   }
 
   Future<void> _postComment() async {
-    if (_commentController.text.trim().isEmpty || _isPostingComment) {
-      return;
-    }
+    if (_commentController.text.trim().isEmpty || _isPostingComment) return;
 
     setState(() => _isPostingComment = true);
 
@@ -90,10 +175,10 @@ class _PostDetailState extends State<PostDetail> {
       );
 
       _commentController.clear();
-      FocusScope.of(context).unfocus(); // Tutup keyboard
+      FocusScope.of(context).unfocus();
       setState(() {
         _comments.insert(0, newComment);
-        _post.commentsCount++;
+        _post = _post.copyWith(commentsCount: _post.commentsCount + 1);
       });
     } catch (e) {
       if (mounted) {
@@ -111,84 +196,57 @@ class _PostDetailState extends State<PostDetail> {
   }
 
   void _focusCommentField() {
-    // Fungsi untuk memberi fokus pada input text field komentar
     FocusScope.of(context).requestFocus(_commentFocusNode);
   }
 
   @override
-  void dispose() {
-    _commentController.dispose();
-    _commentFocusNode.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text('Postingan', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white,
-        elevation: 0.5,
-        iconTheme: const IconThemeData(color: Colors.black),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: CustomScrollView(
-              slivers: [
-                // --- [PERUBAHAN UTAMA] ---
-                // Layout kustom diganti dengan satu widget PostCard
-                SliverToBoxAdapter(
-                  child: PostCard(
-                    // Menggunakan data dari state `_post`
-                    username: _post.user.username,
-                    timeAgo: timeAgoFromDate(_post.createdAt.toIso8601String()),
-                    mediaUrl: _post.mediaUrl ?? '',
-                    isVideo: _post.isVideo, // Penting untuk membedakan video
-                    likes: _post.likesCount,
-                    comments: _post.commentsCount,
-                    content: _post.caption ?? '',
-                    isVerified: _post.user.isVerified,
-                    isLiked: _post.isLikedByUser,
-                    isBookmarked: false, // Ganti jika ada datanya
-                    profileImageUrl: _post.user.profilePictureUrl ?? '',
-                    user: _post.user.toJson(),
-                    postId: _post.id,
-                    onLike: _toggleLike, // Hubungkan dengan fungsi like
-                    onBookmark: () {},
-                    onShare: () {},
-                    onComment: _focusCommentField, // Arahkan ke input komentar
-                    onProfileTap: () => NavigationHelper.navigateToProfile(context, _post.user.toJson()),
-                    // Hilangkan dekorasi kartu agar menyatu dengan halaman
-                    hasCardDecoration: false,
+    return Column(
+      children: [
+        Expanded(
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: PostCard(
+                  username: _post.user.username,
+                  timeAgo: timeAgoFromDate(_post.createdAt.toIso8601String()),
+                  mediaUrl: _post.mediaUrl ?? '',
+                  isVideo: _post.isVideo,
+                  likes: _post.likesCount,
+                  comments: _post.commentsCount,
+                  content: _post.caption ?? '',
+                  isVerified: _post.user.isVerified,
+                  isLiked: _post.isLikedByUser,
+                  isBookmarked: false,
+                  profileImageUrl: _post.user.profilePictureUrl ?? '',
+                  user: _post.user.toJson(),
+                  postId: _post.id,
+                  onLike: _toggleLike,
+                  onBookmark: () {},
+                  onShare: () {},
+                  onComment: _focusCommentField,
+                  onProfileTap: () => NavigationHelper.navigateToProfile(context, _post.user.toJson()),
+                  hasCardDecoration: false,
+                ),
+              ),
+              const SliverToBoxAdapter(child: Divider(height: 1)),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                  child: Text(
+                    'Komentar (${_comments.length})',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
-                // --- AKHIR PERUBAHAN ---
-                const SliverToBoxAdapter(child: Divider(height: 1)),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16.0, vertical: 12.0),
-                    child: Text(
-                      'Komentar (${_comments.length})',
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-                _buildCommentList(),
-              ],
-            ),
+              ),
+              _buildCommentList(),
+            ],
           ),
-          _buildCommentInputField(),
-        ],
-      ),
+        ),
+        _buildCommentInputField(),
+      ],
     );
   }
-
-  // --- [DIHAPUS] ---
-  // Widget `_buildPostContent()` yang panjang tidak lagi diperlukan.
 
   Widget _buildCommentList() {
     if (_isLoadingComments) {
@@ -234,18 +292,18 @@ class _PostDetailState extends State<PostDetail> {
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      padding: EdgeInsets.fromLTRB(16.0, 8.0, 16.0, MediaQuery.of(context).padding.bottom + 8.0),
       child: Row(
         children: [
           const CircleAvatar(
             radius: 18,
-            // Anda mungkin ingin menampilkan foto profil user yang sedang login di sini
+            // Tampilkan foto profil user yang login
           ),
           const SizedBox(width: 12),
           Expanded(
             child: TextField(
               controller: _commentController,
-              focusNode: _commentFocusNode, // Hubungkan focus node
+              focusNode: _commentFocusNode,
               decoration: InputDecoration(
                 hintText: 'Tambahkan komentar...',
                 border: OutlineInputBorder(

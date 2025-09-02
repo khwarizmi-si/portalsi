@@ -4,8 +4,7 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:video_player/video_player.dart';
-import 'package:video_thumbnail/video_thumbnail.dart';
+
 
 // Halaman & Komponen UI
 import '../components/bottom_navigation.dart';
@@ -24,7 +23,7 @@ import '../services/user_service.dart';
 // Helper & Util
 import '../utils/zoom_page_route.dart';
 
-// --- WIDGET POPUP (dari kode lama) ---
+
 class PostPopupContent extends StatefulWidget {
   final SimplePost post;
   final User user;
@@ -42,7 +41,7 @@ class PostPopupContent extends StatefulWidget {
 }
 
 class _PostPopupContentState extends State<PostPopupContent> {
-  // Logika VideoPlayer bisa ditambahkan di sini jika recent_posts bisa berupa video
+
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -51,23 +50,19 @@ class _PostPopupContentState extends State<PostPopupContent> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
+            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
             child: Row(
               children: [
                 CircleAvatar(
                   radius: 16,
-                  backgroundImage:
-                  NetworkImage(widget.user.profilePictureUrl ?? ''),
+                  backgroundImage: NetworkImage(widget.user.profilePictureUrl ?? ''),
+
                 ),
                 const SizedBox(width: 8),
                 Text(
                   widget.user.username,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+
                 ),
                 const Spacer(),
                 PopupMenuButton<String>(
@@ -78,28 +73,21 @@ class _PostPopupContentState extends State<PostPopupContent> {
                       widget.onDelete(widget.post);
                     }
                   },
-                  itemBuilder: (BuildContext context) =>
-                  <PopupMenuEntry<String>>[
-                    const PopupMenuItem<String>(
-                      value: 'delete',
-                      child: Text('Hapus Postingan'),
-                    ),
+                  itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                    const PopupMenuItem<String>(value: 'delete', child: Text('Hapus Postingan')),
+
                   ],
                 ),
               ],
             ),
           ),
           Padding(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 8.0, vertical: 0.0),
+            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 0.0),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: Hero(
                 tag: 'post-hero-${widget.post.postId}',
-                child: Image.network(
-                  widget.post.mediaUrl,
-                  fit: BoxFit.contain,
-                ),
+                child: Image.network(widget.post.mediaUrl, fit: BoxFit.contain),
               ),
             ),
           ),
@@ -109,7 +97,8 @@ class _PostPopupContentState extends State<PostPopupContent> {
   }
 }
 
-// --- WIDGET GRID ITEM (dari kode lama, disesuaikan untuk SimplePost) ---
+// WIDGET GRID ITEM
+
 class PressableGridItem extends StatefulWidget {
   final SimplePost post;
   final VoidCallback onTap;
@@ -179,7 +168,6 @@ class _PressableGridItemState extends State<PressableGridItem> {
 }
 
 
-// --- ROUTE DIALOG (dari kode lama) ---
 class HeroDialogRoute<T> extends PageRoute<T> {
   HeroDialogRoute({required this.builder}) : super();
   final WidgetBuilder builder;
@@ -190,13 +178,11 @@ class HeroDialogRoute<T> extends PageRoute<T> {
   @override Color get barrierColor => Colors.black.withOpacity(0.6);
   @override String get barrierLabel => 'Popup';
   @override
-  Widget buildPage(BuildContext context, Animation<double> animation,
-      Animation<double> secondaryAnimation) {
+  Widget buildPage(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation) {
     return builder(context);
   }
   @override
-  Widget buildTransitions(BuildContext context, Animation<double> animation,
-      Animation<double> secondaryAnimation, Widget child) {
+  Widget buildTransitions(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation, Widget child) {
     return FadeTransition(
       opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
       child: child,
@@ -204,7 +190,7 @@ class HeroDialogRoute<T> extends PageRoute<T> {
   }
 }
 
-// --- HALAMAN PROFIL UTAMA ---
+
 class ProfilePage extends StatefulWidget {
   const ProfilePage({Key? key}) : super(key: key);
   @override
@@ -237,8 +223,8 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _navigateToEditProfile(User currentUser) async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(
-          builder: (context) => EditProfilePage(initialProfile: currentUser)),
+      MaterialPageRoute(builder: (context) => EditProfilePage(initialProfile: currentUser)),
+
     );
     if (result == true && mounted) {
       _handleRefresh();
@@ -246,12 +232,8 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   void _navigateToSettings() {
-    Navigator.of(context).push(
-      ZoomPageRoute(
-        page: const SettingsPage(),
-        buttonKey: _menuKey,
-      ),
-    );
+    Navigator.of(context).push(ZoomPageRoute(page: const SettingsPage(), buttonKey: _menuKey));
+
   }
 
   void _showPostPopup(BuildContext context, SimplePost post, User user) {
@@ -291,24 +273,20 @@ class _ProfilePageState extends State<ProfilePage> {
         );
       },
     );
-
     if (confirmDelete == true) {
       try {
         await PostService().deletePost(postId);
-        _handleRefresh(); // Refresh halaman untuk memperbarui daftar postingan
+        _handleRefresh();
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Postingan berhasil dihapus.'),
-                backgroundColor: Colors.green),
+            const SnackBar(content: Text('Postingan berhasil dihapus.'), backgroundColor: Colors.green),
           );
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text('Gagal menghapus postingan: $e'),
-                backgroundColor: Colors.red),
+            SnackBar(content: Text('Gagal menghapus postingan: $e'), backgroundColor: Colors.red),
           );
         }
       }
@@ -318,6 +296,7 @@ class _ProfilePageState extends State<ProfilePage> {
   void _onBottomNavTapped(int index) {
     if (index == 4) return;
     if (index == 0) Navigator.pushReplacementNamed(context, '/home');
+    // Tambahkan navigasi lain jika perlu
   }
 
   @override
@@ -337,8 +316,8 @@ class _ProfilePageState extends State<ProfilePage> {
                 children: [
                   Text("Gagal memuat data: ${snapshot.error}"),
                   const SizedBox(height: 16),
-                  ElevatedButton(
-                      onPressed: _handleRefresh, child: const Text("Coba Lagi"))
+                  ElevatedButton(onPressed: _handleRefresh, child: const Text("Coba Lagi"))
+
                 ],
               ),
             );
@@ -359,11 +338,9 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
           );
         },
+
       ),
-      bottomNavigationBar: CustomBottomNavigation(
-          selectedIndex: 4,
-          onTap: _onBottomNavTapped
-      ),
+      bottomNavigationBar: CustomBottomNavigation(selectedIndex: 4, onTap: _onBottomNavTapped),
     );
   }
 
@@ -378,8 +355,8 @@ class _ProfilePageState extends State<ProfilePage> {
       centerTitle: true,
       title: Text(
         user.username,
-        style: const TextStyle(
-            fontWeight: FontWeight.w600, fontSize: 16, color: Colors.black),
+        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Colors.black),
+
       ),
       actions: [
         IconButton(
@@ -397,18 +374,15 @@ class _ProfilePageState extends State<ProfilePage> {
         background: Container(
           decoration: BoxDecoration(
             image: DecorationImage(
-              image: CachedNetworkImageProvider(user.profilePictureUrl ??
-                  'https://i.pinimg.com/1200x/8c/56/c4/8c56c483afc07fbbc8d1c937c53c26b1.jpg'),
+              image: CachedNetworkImageProvider(user.profilePictureUrl ?? 'https://i.pinimg.com/1200x/8c/56/c4/8c56c483afc07fbbc8d1c937c53c26b1.jpg'),
+
               fit: BoxFit.cover,
             ),
           ),
           child: Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [
-                  Colors.black.withOpacity(0.3),
-                  Colors.black.withOpacity(0.7)
-                ],
+                colors: [Colors.black.withOpacity(0.3), Colors.black.withOpacity(0.7)],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
               ),
@@ -416,11 +390,7 @@ class _ProfilePageState extends State<ProfilePage> {
             child: Center(
               child: Text(
                 user.username,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 2),
+                style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold, letterSpacing: 2),
               ),
             ),
           ),
@@ -428,6 +398,20 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
     );
   }
+
+  void _navigateToFollowersFollowing(User user, int initialTab) {
+    if (user.id == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FollowersFollowingPage( // Gunakan 'const' jika memungkinkan
+          userId: user.id!,
+          initialTab: initialTab,
+        ),
+      ),
+    );
+  }
+
 
   Widget _buildProfileSection(User user) {
     return Container(
@@ -446,16 +430,11 @@ class _ProfilePageState extends State<ProfilePage> {
                       shape: BoxShape.circle,
                       border: Border.all(color: Colors.grey[200]!, width: 2),
                       boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                          spreadRadius: -2,
-                        ),
+                        BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, 4), spreadRadius: -2),
                       ],
                       image: DecorationImage(
-                        image: CachedNetworkImageProvider(user.profilePictureUrl ??
-                            'https://via.placeholder.com/150'),
+                        image: CachedNetworkImageProvider(user.profilePictureUrl ?? 'https://via.placeholder.com/150'),
+
                         fit: BoxFit.cover,
                       ),
                     ),
@@ -473,8 +452,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 2),
                         ),
-                        child: const Icon(Icons.edit,
-                            color: Colors.white, size: 12),
+                        child: const Icon(Icons.edit, color: Colors.white, size: 12),
                       ),
                     ),
                   ),
@@ -486,8 +464,15 @@ class _ProfilePageState extends State<ProfilePage> {
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     _buildStatItem(user.postsCount.toString(), 'postingan'),
-                    _buildStatItem(user.followersCount.toString(), 'pengikut'),
-                    _buildStatItem(user.followingCount.toString(), 'mengikuti'),
+                    GestureDetector(
+                      onTap: () => _navigateToFollowersFollowing(user, 0),
+                      child: _buildStatItem(user.followersCount.toString(), 'pengikut'),
+                    ),
+                    GestureDetector(
+                      onTap: () => _navigateToFollowersFollowing(user, 1),
+                      child: _buildStatItem(user.followingCount.toString(), 'mengikuti'),
+                    ),
+
                   ],
                 ),
               ),
@@ -501,14 +486,14 @@ class _ProfilePageState extends State<ProfilePage> {
               children: [
                 Text(
                   user.fullName ?? 'Nama tidak tersedia',
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 16),
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+
                 ),
                 const SizedBox(height: 8),
                 Text(
                   user.bio ?? 'Tidak ada bio',
-                  style: TextStyle(
-                      fontSize: 14, color: Colors.grey[700], height: 1.3),
+                  style: TextStyle(fontSize: 14, color: Colors.grey[700], height: 1.3),
+
                 ),
               ],
             ),
@@ -520,12 +505,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 child: Container(
                   decoration: BoxDecoration(
                     boxShadow: [
-                      BoxShadow(
-                        color: Colors.blue.withOpacity(0.12),
-                        offset: const Offset(0, 3),
-                        blurRadius: 10,
-                        spreadRadius: -2,
-                      ),
+                      BoxShadow(color: Colors.blue.withOpacity(0.12), offset: const Offset(0, 3), blurRadius: 10, spreadRadius: -2),
                     ],
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -534,11 +514,9 @@ class _ProfilePageState extends State<ProfilePage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue[600],
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    child: const Text('Edit profile',
-                        style: TextStyle(fontWeight: FontWeight.w600)),
+                    child: const Text('Edit profile', style: TextStyle(fontWeight: FontWeight.w600)),
                   ),
                 ),
               ),
@@ -547,12 +525,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 child: Container(
                   decoration: BoxDecoration(
                     boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.12),
-                        offset: const Offset(0, 3),
-                        blurRadius: 10,
-                        spreadRadius: -2,
-                      ),
+                      BoxShadow(color: Colors.black.withOpacity(0.12), offset: const Offset(0, 3), blurRadius: 10, spreadRadius: -2),
                     ],
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -569,17 +542,10 @@ class _ProfilePageState extends State<ProfilePage> {
                       backgroundColor: Colors.grey[200],
                       foregroundColor: Colors.grey[800],
                       elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+
                     ),
-                    child: const Text(
-                      'Bagikan Profile',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
+                    child: const Text('Bagikan Profile', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                   ),
                 ),
               ),
@@ -594,8 +560,7 @@ class _ProfilePageState extends State<ProfilePage> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(count,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+        Text(count, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
         const SizedBox(height: 2),
         Text(label, style: TextStyle(fontSize: 13, color: Colors.grey[600])),
       ],
@@ -623,7 +588,8 @@ class _ProfilePageState extends State<ProfilePage> {
             return PressableGridItem(
               post: post,
               onTap: () {
-                // Navigator.push(context, MaterialPageRoute(builder: (context) => PostDetail(postId: post.postId)));
+                Navigator.push(context, MaterialPageRoute(builder: (context) => PostDetail(postId: post.postId)));
+
               },
               onLongPress: () {
                 _showPostPopup(context, post, user);
