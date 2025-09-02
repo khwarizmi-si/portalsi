@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import '../models/chat.dart';
-import '../services/message_service.dart'; // Pastikan path ini benar
+import '../services/message_service.dart';
 
 class MessageListController extends ChangeNotifier {
   final ChatService _chatService = ChatService();
@@ -11,7 +11,7 @@ class MessageListController extends ChangeNotifier {
   List<Conversation> _filteredConversations = [];
   List<Conversation> get filteredConversations => _filteredConversations;
 
-  bool _isLoading = true;
+  bool _isLoading = false; // Awalnya false untuk menghindari loading yang tidak perlu
   bool get isLoading => _isLoading;
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
@@ -20,38 +20,78 @@ class MessageListController extends ChangeNotifier {
     fetchConversations();
   }
 
+  /// Menerapkan strategi cache-then-network.
+  /// 1. Muat data dari cache untuk tampilan instan.
+  /// 2. Ambil data baru dari API di latar belakang dan perbarui UI.
   Future<void> fetchConversations() async {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
+    // Hanya tampilkan loading indicator jika daftar benar-benar kosong di awal.
+    if (_allConversations.isEmpty) {
+      _isLoading = true;
+      notifyListeners();
+    }
+
+    // 1. Muat dari cache terlebih dahulu untuk tampilan instan
     try {
-      _allConversations = await _chatService.getAllConversations();
-
-      // ==== PERUBAHAN DI SINI ====
-      // Urutkan daftar percakapan berdasarkan waktu pesan terakhir (terbaru di atas)
-      _allConversations.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
-      _filteredConversations = _allConversations;
+      final cachedData = await _chatService.getConversationsFromCache();
+      if (cachedData != null && cachedData.isNotEmpty) {
+        _allConversations = cachedData;
+        _sortAndFilterConversations();
+        // Hentikan loading jika data cache berhasil dimuat
+        if (_isLoading) {
+          _isLoading = false;
+        }
+        notifyListeners();
+      }
     } catch (e) {
-      _errorMessage = "Gagal memuat pesan: ${e.toString()}";
+      print("Gagal memuat cache, akan melanjutkan dengan panggilan API. Error: $e");
+    }
+
+    // 2. Selalu coba ambil data terbaru dari API di latar belakang
+    try {
+      final networkData = await _chatService.getAllConversations();
+      _allConversations = networkData;
+      _errorMessage = null; // Hapus pesan error jika panggilan API berhasil
+      _sortAndFilterConversations();
+    } catch (e) {
+      print("Gagal mengambil data dari API: $e");
+      // Hanya tampilkan pesan error di UI jika tidak ada data sama sekali
+      // (baik dari cache maupun API).
+      if (_allConversations.isEmpty) {
+        _errorMessage = "Gagal memuat pesan: ${e.toString()}";
+      }
     } finally {
-      _isLoading = false;
+      // Pastikan loading indicator selalu berhenti pada akhirnya
+      if (_isLoading) {
+        _isLoading = false;
+      }
       notifyListeners();
     }
   }
 
+  /// Helper method untuk mengurutkan dan menerapkan filter pada daftar percakapan.
+  /// Ini untuk menghindari duplikasi kode.
+  void _sortAndFilterConversations() {
+    // Urutkan berdasarkan timestamp, yang terbaru di atas
+    _allConversations.sort((a, b) {
+      if (a.timestamp == null && b.timestamp == null) return 0;
+      if (a.timestamp == null) return 1; // Anggap null lebih lama
+      if (b.timestamp == null) return -1;
+      return b.timestamp!.compareTo(a.timestamp!);
+    });
+
+    // Terapkan filter yang sedang aktif (jika ada)
+    // Untuk saat ini, kita asumsikan filter kosong saat pertama kali memuat
+    _filteredConversations = _allConversations;
+  }
+
+  /// Memfilter daftar percakapan berdasarkan query dari search bar.
   void filterConversations(String query) {
     if (query.isEmpty) {
       _filteredConversations = _allConversations;
     } else {
       _filteredConversations = _allConversations
           .where((convo) =>
-              (convo.partner.fullName ?? '')
-                  .toLowerCase()
-                  .contains(query.toLowerCase()) ||
-              convo.partner.username
-                  .toLowerCase()
-                  .contains(query.toLowerCase()))
+          convo.displayName.toLowerCase().contains(query.toLowerCase()))
           .toList();
     }
     notifyListeners();

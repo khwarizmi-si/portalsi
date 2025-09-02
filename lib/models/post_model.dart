@@ -52,4 +52,27 @@ class Post {
       'user': user.toJson(),
     };
   }
+  Post copyWith({
+    int? id,
+    String? caption,
+    String? mediaUrl,
+    bool? isVideo,
+    DateTime? createdAt,
+    User? user,
+    int? likesCount,
+    int? commentsCount,
+    bool? isLikedByUser,
+  }) {
+    return Post(
+      id: id ?? this.id,
+      caption: caption ?? this.caption,
+      mediaUrl: mediaUrl ?? this.mediaUrl,
+      isVideo: isVideo ?? this.isVideo,
+      createdAt: createdAt ?? this.createdAt,
+      user: user ?? this.user,
+      likesCount: likesCount ?? this.likesCount,
+      commentsCount: commentsCount ?? this.commentsCount,
+      isLikedByUser: isLikedByUser ?? this.isLikedByUser,
+    );
+  }
 }

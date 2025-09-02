@@ -46,7 +46,7 @@ class FeedHeader extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Discover',
+                    'Temukan',
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w800,
@@ -55,7 +55,7 @@ class FeedHeader extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    'Explore amazing content',
+                    'Eksplor konten menarik di Portal SI!',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey[600],
@@ -99,7 +99,7 @@ class FeedHeader extends StatelessWidget {
         style: TextStyle(fontSize: 16),
         decoration: InputDecoration(
           isDense: true,
-          hintText: 'Search users...',
+          hintText: 'Cari pengguna...',
           hintStyle: TextStyle(
             color: Colors.grey[500],
             fontWeight: FontWeight.w500,

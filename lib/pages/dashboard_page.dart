@@ -41,6 +41,7 @@ class _HomePageState extends State<DashboardPage> {
   int _unreadNotificationCount = 0;
   final GlobalKey _notificationIconKey = GlobalKey();
   final GlobalKey _anncIconKey = GlobalKey();
+  final GlobalKey _msgIconKey = GlobalKey();
 
   @override
   void initState() {
@@ -190,9 +191,12 @@ class _HomePageState extends State<DashboardPage> {
                   ],
                 ),
                 IconButton(
+                  key: _msgIconKey,
                   onPressed: () {
                     HapticFeedback.lightImpact();
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const MessageListPage()));
+                    final RenderBox renderBox = _msgIconKey.currentContext!.findRenderObject() as RenderBox;
+                    final originOffset = renderBox.localToGlobal(Offset.zero) + Offset(renderBox.size.width / 2, renderBox.size.height / 2);
+                    Navigator.push(context, ScaleFromPositionRoute(widget: const MessageListPage(), originOffset: originOffset)).then((_) => _loadNotificationCount());
                   },
                   icon: const Icon(Icons.send_outlined, color: Colors.black),
                   tooltip: 'Pesan',
@@ -209,13 +213,14 @@ class _HomePageState extends State<DashboardPage> {
   Widget _buildBody(BuildContext context) {
     return Consumer<HomeController>(
       builder: (context, controller, child) {
-        if (controller.isLoading && controller.posts.isEmpty) {
+        // --- 👇 PERUBAHAN DI SINI: Cek controller.feedItems ---
+        if (controller.isLoading && controller.feedItems.isEmpty) {
           return const Center(child: CircularProgressIndicator());
         }
         if (controller.errorMessage != null) {
           return Center(child: Text('Error: ${controller.errorMessage}'));
         }
-        if (controller.posts.isEmpty && controller.pinnedPost == null && controller.pinnedAnnouncements.isEmpty) {
+        if (controller.feedItems.isEmpty && controller.pinnedPost == null && controller.pinnedAnnouncements.isEmpty) {
           return RefreshIndicator(
             onRefresh: () => controller.refreshDashboardData(),
             child: const CustomScrollView(
@@ -235,31 +240,44 @@ class _HomePageState extends State<DashboardPage> {
               SliverToBoxAdapter(child: PinnedAnnouncementsSection(announcements: controller.pinnedAnnouncements)),
               _buildPinnedPost(context, controller),
               SliverList(
+                // --- 👇 PERUBAHAN UTAMA DI SINI ---
                 delegate: SliverChildBuilderDelegate(
                       (context, index) {
-                    final Post post = controller.posts[index];
-                    return PostCard(
-                      username: post.user.username,
-                      timeAgo: timeAgoFromDate(post.createdAt.toIso8601String()),
-                      mediaUrl: post.mediaUrl ?? '',
-                      isVideo: post.isVideo,
-                      comments: post.commentsCount,
-                      content: post.caption ?? '',
-                      isVerified: post.user.isVerified,
-                      isBookmarked: false,
-                      profileImageUrl: post.user.profilePictureUrl ?? '',
-                      user: post.user.toJson(),
-                      likes: post.likesCount, // <-- Pastikan ini mengambil data dari controller
-                      isLiked: post.isLikedByUser, // <-- Pastikan ini juga
-                      onLike: () => controller.toggleLike(post.id),
-                      onBookmark: () {},
-                      onShare: () {},
-                      onComment: () => _showCommentSheet(context, post.id),
-                      postId: post.id,
-                      onProfileTap: () => NavigationHelper.navigateToProfile(context, post.user.toJson()),
-                    );
+                    final dynamic item = controller.feedItems[index];
+                    final String itemType = item is Map ? item['type'] ?? '' : '';
+
+                    if (itemType == 'post') {
+                      final Post post = Post.fromJson(item as Map<String, dynamic>);
+                      return PostCard(
+                        username: post.user.username,
+                        timeAgo: timeAgoFromDate(post.createdAt.toIso8601String()),
+                        mediaUrl: post.mediaUrl ?? '',
+                        isVideo: post.isVideo,
+                        comments: post.commentsCount,
+                        content: post.caption ?? '',
+                        isVerified: post.user.isVerified,
+                        isBookmarked: false,
+                        profileImageUrl: post.user.profilePictureUrl ?? '',
+                        user: post.user.toJson(),
+                        likes: post.likesCount,
+                        isLiked: post.isLikedByUser,
+                        onLike: () => controller.toggleLike(post.id),
+                        onBookmark: () {},
+                        onShare: () {},
+                        onComment: () => _showCommentSheet(context, post.id),
+                        postId: post.id,
+                        onProfileTap: () => NavigationHelper.navigateToProfile(context, post.user.toJson()),
+                      );
+                    } else if (itemType == 'suggestion') {
+                      final List<dynamic> users = item['users'] ?? [];
+                      return SuggestionCard(users: users);
+                    } else {
+                      // Return widget kosong jika tipe tidak dikenali
+                      return const SizedBox.shrink();
+                    }
                   },
-                  childCount: controller.posts.length,
+                  // Gunakan panjang dari feedItems
+                  childCount: controller.feedItems.length,
                 ),
               ),
             ],
@@ -628,6 +646,113 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class SuggestionCard extends StatelessWidget {
+  final List<dynamic> users;
+  const SuggestionCard({super.key, required this.users});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 230,
+      margin: const EdgeInsets.symmetric(vertical: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text(
+              'Mungkin Anda Kenal',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              itemCount: users.length,
+              itemBuilder: (context, index) {
+                final user = users[index];
+                // Pastikan user adalah Map sebelum diakses
+                if (user is! Map<String, dynamic>) return const SizedBox.shrink();
+
+                final profilePic = user['profile_picture_url'] ?? '';
+                final username = user['username'] ?? 'No Username';
+                final fullName = user['full_name'] ?? 'No Name';
+
+                // --- 👇 PERUBAHAN UTAMA DIMULAI DARI SINI ---
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                  child: InkWell(
+                    // 1. Tambahkan fungsi onTap untuk navigasi
+                    onTap: () {
+                      // Gunakan helper navigasi yang sama seperti di PostCard
+                      // Pastikan Anda sudah mengimpor NavigationHelper di file ini
+                      NavigationHelper.navigateToProfile(context, user);
+                    },
+                    // 2. Sesuaikan borderRadius agar efek ripple sesuai dengan bentuk kartu
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: 140,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircleAvatar(
+                            radius: 30,
+                            backgroundImage: profilePic.isNotEmpty
+                                ? CachedNetworkImageProvider(profilePic)
+                                : null,
+                            child: profilePic.isEmpty ? const Icon(Icons.person) : null,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            username,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            fullName,
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const Spacer(),
+                          // Tombol ini akan tetap berfungsi secara independen
+                          ElevatedButton(
+                            onPressed: () {
+                              // TODO: Implement follow logic
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                            ),
+                            child: const Text('Ikuti'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+                // --- PERUBAHAN BERAKHIR DI SINI ---
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

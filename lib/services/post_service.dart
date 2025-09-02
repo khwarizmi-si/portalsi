@@ -3,93 +3,21 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
-import 'package:shared_preferences/shared_preferences.dart';
-import 'api_service.dart'; // <-- Pastikan import ini ada
+import 'api_service.dart';
 import '../models/post_model.dart';
 
-// --- PERBAIKAN: Tambahkan kembali "extends ApiService" ---
 class PostService extends ApiService {
   PostService._internal();
   static final PostService _instance = PostService._internal();
   factory PostService() => _instance;
 
-  // --- KONSTANTA UNTUK CACHING ---
-  static const String _cacheKey = 'homeFeedCache';
-  static const String _timestampKey = 'homeFeedTimestamp';
-  static const int _cacheDurationMinutes = 10;
-
-  // =======================================================================
-  // == FUNGSI UNTUK BERANDA DENGAN SISTEM CACHE ==
-  // =======================================================================
-
-  Future<List<Post>> getHomeFeedPosts() async {
-    final prefs = await SharedPreferences.getInstance();
-    final cachedData = prefs.getString(_cacheKey);
-    final cachedTimestamp = prefs.getInt(_timestampKey);
-
-    if (cachedData != null && cachedTimestamp != null) {
-      final cacheTime = DateTime.fromMillisecondsSinceEpoch(cachedTimestamp);
-      final now = DateTime.now();
-
-      if (now.difference(cacheTime).inMinutes < _cacheDurationMinutes) {
-        print("✅ Memuat postingan beranda dari CACHE.");
-        final List<dynamic> jsonData = jsonDecode(cachedData);
-        return jsonData.map((item) => Post.fromJson(item)).toList();
-      }
-    }
-
-    print("CACHE KADALUARSA/KOSONG. Mengambil postingan beranda dari API...");
-    return _fetchAndCacheHomeFeed();
-  }
-
-  Future<List<Post>> refreshHomeFeedPosts() async {
-    print("🔃 Memaksa refresh postingan beranda dari API...");
-    return _fetchAndCacheHomeFeed();
-  }
-
-  Future<List<Post>> _fetchAndCacheHomeFeed() async {
-    try {
-      final List<Post> posts = await fetchPosts(page: 1);
-      final List<Map<String, dynamic>> postsAsJson =
-      posts.map((post) => post.toJson()).toList();
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_cacheKey, jsonEncode(postsAsJson));
-      await prefs.setInt(_timestampKey, DateTime.now().millisecondsSinceEpoch);
-      print("📦 Postingan beranda baru disimpan ke cache.");
-
-      return posts;
-    } catch (e) {
-      print("Error saat mengambil dan caching postingan beranda: $e");
-      rethrow;
-    }
-  }
-
-  Future<void> addPostToCache(Post newPost) async {
-    final prefs = await SharedPreferences.getInstance();
-    final cachedData = prefs.getString(_cacheKey);
-
-    List<dynamic> cachedPostsJson = [];
-    if (cachedData != null) {
-      cachedPostsJson = jsonDecode(cachedData);
-    }
-
-    cachedPostsJson.insert(0, newPost.toJson());
-
-    await prefs.setString(_cacheKey, jsonEncode(cachedPostsJson));
-    await prefs.setInt(_timestampKey, DateTime.now().millisecondsSinceEpoch);
-    print("➕ Postingan baru ditambahkan ke cache beranda.");
-  }
-
-  // =======================================================================
-  // == FUNGSI-FUNGSI ANDA YANG SUDAH ADA ==
-  // =======================================================================
+  // --- SEMUA KODE CACHE LAMA DIHAPUS DARI SINI ---
 
   Future<Post?> createPost(Map<String, String> fields, {File? mediaFile}) async {
-    final token = await getToken(); // Sekarang bisa diakses
+    final token = await getToken();
     var request = http.MultipartRequest(
       'POST',
-      Uri.parse('$baseUrl/posts'), // Sekarang bisa diakses
+      Uri.parse('$baseUrl/posts'),
     );
 
     request.headers['Authorization'] = 'Bearer $token';
@@ -123,19 +51,20 @@ class PostService extends ApiService {
     return null;
   }
 
-  Future<List<Post>> fetchPosts({int page = 1}) async {
+  Future<List<dynamic>> fetchPosts({int page = 1}) async {
     final dynamic responseData = await get('posts', queryParams: {
       'page': page.toString(),
     });
 
-    if (responseData is Map<String, dynamic> && responseData['data'] is List) {
-      final List<dynamic> postsData = responseData['data'];
-      return postsData.map((item) => Post.fromJson(item)).toList();
+    if (responseData is Map<String, dynamic> && responseData['feed'] is List) {
+      return responseData['feed'] as List<dynamic>;
+    } else if (responseData is Map<String, dynamic> && responseData['data'] is List) {
+      return responseData['data'];
     } else if (responseData is List) {
-      return responseData.map((item) => Post.fromJson(item)).toList();
+      return responseData;
     } else {
       print(
-          '⚠️ Peringatan: Endpoint /posts dengan paginasi tidak mengembalikan format yang diharapkan. Data: $responseData');
+          '⚠️ Peringatan: Endpoint /posts tidak mengembalikan format list yang diharapkan. Data: $responseData');
       return [];
     }
   }

@@ -1,11 +1,13 @@
+// lib/pages/other_profile_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:page_transition/page_transition.dart';
 import 'package:portal_si/models/user_model.dart';
 import 'package:portal_si/pages/portfolio_pages.dart';
 import '../components/bottom_navigation.dart';
-import '../services/user_service.dart';
-import '../services/follow_service.dart';
+import '../services/user_service.dart'; // Hanya import service yang benar
+import '../services/follow_service.dart'; // Hanya import service yang benar
 import 'followers_following_page.dart';
 
 class OtherProfilePage extends StatefulWidget {
@@ -17,17 +19,18 @@ class OtherProfilePage extends StatefulWidget {
   State<OtherProfilePage> createState() => _OtherProfilePageState();
 }
 
-class _OtherProfilePageState extends State<OtherProfilePage>
-    with TickerProviderStateMixin {
+class _OtherProfilePageState extends State<OtherProfilePage> with TickerProviderStateMixin {
   User? _profileData;
-  List<dynamic> _followers = [];
-  List<dynamic> _following = [];
   bool _isLoading = true;
   bool _isFollowing = false;
   bool _isFollowActionLoading = false;
   String? _error;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
+
+  // Pisahkan instance service agar lebih rapi
+  final ProfileService _profileService = ProfileService();
+  final FollowService _followService = FollowService();
 
   @override
   void initState() {
@@ -55,9 +58,8 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     });
 
     try {
-      final profile = await ProfileService().getOtherProfile(widget.username);
-      final followStatus =
-      await FollowService().getFollowStatus(widget.username);
+      final profile = await _profileService.getOtherProfile(widget.username);
+      final followStatus = await _followService.getFollowStatus(widget.username);
 
       if (mounted) {
         setState(() {
@@ -77,24 +79,6 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     }
   }
 
-  Future<void> _fetchFollowData() async {
-    if (_profileData == null) return;
-    try {
-      final fetchedFollowers =
-      await FollowService().getFollowers(_profileData!.id);
-      final fetchedFollowing =
-      await FollowService().getFollowing(_profileData!.id);
-      if (mounted) {
-        setState(() {
-          _followers = fetchedFollowers;
-          _following = fetchedFollowing;
-        });
-      }
-    } catch (e) {
-      print("Gagal memuat data follow: $e");
-    }
-  }
-
   Future<void> _handleFollowAction() async {
     if (_isFollowActionLoading || _profileData == null) return;
     setState(() => _isFollowActionLoading = true);
@@ -102,22 +86,28 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     try {
       final username = _profileData!.username;
       final originalFollowersCount = _profileData!.followersCount;
+      final originalFollowingState = _isFollowing;
 
-      if (_isFollowing) {
+      // Optimistic UI update
+      setState(() {
+        _isFollowing = !_isFollowing;
+        _profileData = _profileData!.copyWith(
+          followersCount: originalFollowersCount + (_isFollowing ? 1 : -1),
+        );
+      });
+
+      bool success = _isFollowing
+          ? await _followService.followUser(username)
+          : await _followService.unfollowUser(username);
+
+      if (!success && mounted) {
+        // Revert UI if API call fails
         setState(() {
-          _isFollowing = false;
-          _profileData = _profileData!
-              .copyWith(followersCount: originalFollowersCount - 1);
+          _isFollowing = originalFollowingState;
+          _profileData = _profileData!.copyWith(followersCount: originalFollowersCount);
         });
-        await FollowService().unfollowUser(username);
-      } else {
-        setState(() {
-          _isFollowing = true;
-          _profileData = _profileData!
-              .copyWith(followersCount: originalFollowersCount + 1);
-        });
-        await FollowService().followUser(username);
       }
+
     } catch (e) {
       await _loadAllData();
     } finally {
@@ -126,22 +116,17 @@ class _OtherProfilePageState extends State<OtherProfilePage>
   }
 
   void _navigateToFollowersFollowing(int initialTab) {
-    if (_profileData == null) return;
-    _fetchFollowData().then((_) {
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => FollowersFollowingPage(
-              userId: _profileData!.id!,
-              initialTab: initialTab,
-              followers: _followers,
-              following: _following,
-            ),
-          ),
-        );
-      }
-    });
+    if (_profileData == null || _profileData!.id == null) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FollowersFollowingPage(
+          userId: _profileData!.id!,
+          initialTab: initialTab,
+        ),
+      ),
+    );
   }
 
   @override
@@ -149,8 +134,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     return Scaffold(
       backgroundColor: Colors.white,
       body: _buildBody(),
-      bottomNavigationBar:
-      CustomBottomNavigation(selectedIndex: 0, onTap: (_) {}),
+      bottomNavigationBar: CustomBottomNavigation(selectedIndex: 0, onTap: (_) {}),
     );
   }
 
@@ -162,8 +146,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(_error!),
-            ElevatedButton(
-                onPressed: _loadAllData, child: const Text('Coba Lagi')),
+            ElevatedButton(onPressed: _loadAllData, child: const Text('Coba Lagi')),
           ],
         ),
       );
@@ -195,8 +178,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
       ),
       title: Text(
         _profileData?.username ?? 'Profil',
-        style: const TextStyle(
-            color: Colors.black, fontSize: 18, fontWeight: FontWeight.w600),
+        style: const TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.w600),
       ),
       flexibleSpace: FlexibleSpaceBar(
         background: Hero(
@@ -204,8 +186,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
           child: Container(
             decoration: BoxDecoration(
               image: DecorationImage(
-                image: NetworkImage(_profileData?.profilePictureUrl ??
-                    'https://via.placeholder.com/400'),
+                image: NetworkImage(_profileData?.profilePictureUrl ?? 'https://via.placeholder.com/400'),
                 fit: BoxFit.cover,
               ),
             ),
@@ -232,8 +213,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
                 child: CircleAvatar(
                   radius: 45,
                   backgroundColor: Colors.grey[200],
-                  backgroundImage: _profileData!.profilePictureUrl != null &&
-                      _profileData!.profilePictureUrl!.isNotEmpty
+                  backgroundImage: _profileData!.profilePictureUrl != null && _profileData!.profilePictureUrl!.isNotEmpty
                       ? NetworkImage(_profileData!.profilePictureUrl!)
                       : null,
                 ),
@@ -243,12 +223,9 @@ class _OtherProfilePageState extends State<OtherProfilePage>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _buildStatItem(
-                        _profileData!.postsCount.toString(), 'Postingan', null),
-                    _buildStatItem(_profileData!.followersCount.toString(),
-                        'Pengikut', () => _navigateToFollowersFollowing(0)),
-                    _buildStatItem(_profileData!.followingCount.toString(),
-                        'Mengikuti', () => _navigateToFollowersFollowing(1)),
+                    _buildStatItem(_profileData!.postsCount.toString(), 'Postingan', null),
+                    _buildStatItem(_profileData!.followersCount.toString(), 'Pengikut', () => _navigateToFollowersFollowing(0)),
+                    _buildStatItem(_profileData!.followingCount.toString(), 'Mengikuti', () => _navigateToFollowersFollowing(1)),
                   ],
                 ),
               ),
@@ -263,8 +240,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
             const SizedBox(height: 8),
             Text(
               _profileData!.bio!,
-              style:
-              TextStyle(color: Colors.grey[700], height: 1.5, fontSize: 15),
+              style: TextStyle(color: Colors.grey[700], height: 1.5, fontSize: 15),
             ),
           ],
           const SizedBox(height: 20),
@@ -284,26 +260,18 @@ class _OtherProfilePageState extends State<OtherProfilePage>
               child: ElevatedButton(
                 onPressed: _isFollowActionLoading ? null : _handleFollowAction,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                  _isFollowing ? Colors.grey[200] : Colors.blueAccent,
+                  backgroundColor: _isFollowing ? Colors.grey[200] : Colors.blueAccent,
                   foregroundColor: _isFollowing ? Colors.black : Colors.white,
                   elevation: _isFollowing ? 0 : 2,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
-                    side: _isFollowing
-                        ? BorderSide(color: Colors.grey[300]!)
-                        : BorderSide.none,
+                    side: _isFollowing ? BorderSide(color: Colors.grey[300]!) : BorderSide.none,
                   ),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
                 child: _isFollowActionLoading
-                    ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
-                    : Text(_isFollowing ? 'Mengikuti' : 'Ikuti',
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : Text(_isFollowing ? 'Mengikuti' : 'Ikuti', style: const TextStyle(fontWeight: FontWeight.w600)),
               ),
             ),
             const SizedBox(width: 12),
@@ -312,13 +280,10 @@ class _OtherProfilePageState extends State<OtherProfilePage>
                 onPressed: () {},
                 style: OutlinedButton.styleFrom(
                   side: BorderSide(color: Colors.grey[300]!),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
-                child: const Text('Pesan',
-                    style: TextStyle(
-                        color: Colors.black, fontWeight: FontWeight.w600)),
+                child: const Text('Pesan', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600)),
               ),
             ),
           ],
@@ -330,25 +295,14 @@ class _OtherProfilePageState extends State<OtherProfilePage>
               child: Container(
                 decoration: BoxDecoration(
                   boxShadow: [
-                    BoxShadow(
-                      color: const Color(0x83B98946),
-                      offset: const Offset(0, 3),
-                      blurRadius: 10,
-                      spreadRadius: -2,
-                    ),
+                    BoxShadow(color: const Color(0x83B98946), offset: const Offset(0, 3), blurRadius: 10, spreadRadius: -2),
                   ],
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: ElevatedButton(
                   onPressed: () {
                     if (_profileData != null) {
-                      Navigator.push(
-                        context,
-                        PageTransition(
-                          type: PageTransitionType.rightToLeft,
-                          child: PortfolioPage(user: _profileData!),
-                        ),
-                      );
+                      Navigator.push(context, PageTransition(type: PageTransitionType.rightToLeft, child: PortfolioPage(user: _profileData!)));
                       HapticFeedback.lightImpact();
                     }
                   },
@@ -357,17 +311,9 @@ class _OtherProfilePageState extends State<OtherProfilePage>
                     foregroundColor: Colors.grey[800],
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
-                  child: const Text(
-                    'Lihat Portofolio',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
-                  ),
+                  child: const Text('Lihat Portofolio', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                 ),
               ),
             ),
@@ -383,15 +329,9 @@ class _OtherProfilePageState extends State<OtherProfilePage>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(count,
-              style:
-              const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          Text(count, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
           const SizedBox(height: 2),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.grey[600],
-                  fontWeight: FontWeight.w500)),
+          Text(label, style: TextStyle(fontSize: 13, color: Colors.grey[600], fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -401,10 +341,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     if (_profileData == null || _profileData!.recentPosts.isEmpty) {
       return const SliverToBoxAdapter(
         child: Center(
-          child: Padding(
-            padding: EdgeInsets.symmetric(vertical: 50.0),
-            child: Text('Belum ada postingan.'),
-          ),
+          child: Padding(padding: EdgeInsets.symmetric(vertical: 50.0), child: Text('Belum ada postingan.')),
         ),
       );
     }
@@ -448,15 +385,12 @@ class _OtherProfilePageState extends State<OtherProfilePage>
               icon: const Icon(Icons.close, color: Colors.white),
               onPressed: () => Navigator.pop(context),
             ),
-            title: Text(post.caption ?? '',
-                style: const TextStyle(color: Colors.white)),
+            title: Text(post.caption ?? '', style: const TextStyle(color: Colors.white)),
           ),
           body: Center(
             child: Hero(
               tag: 'post_${post.postId}_$index',
-              child: InteractiveViewer(
-                child: Image.network(post.mediaUrl, fit: BoxFit.contain),
-              ),
+              child: InteractiveViewer(child: Image.network(post.mediaUrl, fit: BoxFit.contain)),
             ),
           ),
         ),
@@ -469,21 +403,29 @@ extension UserCopyWith on User {
   User copyWith({
     int? id,
     String? username,
+    String? fullName,
+    String? bio,
+    String? profilePictureUrl,
+    bool? isVerified,
+    bool? isPrivate,
     int? followersCount,
+    int? followingCount,
+    int? postsCount,
+    List<SimplePost>? recentPosts,
   }) {
     return User(
       id: id ?? this.id,
       username: username ?? this.username,
       followersCount: followersCount ?? this.followersCount,
       email: this.email,
-      fullName: this.fullName,
-      bio: this.bio,
-      profilePictureUrl: this.profilePictureUrl,
-      isVerified: this.isVerified,
-      isPrivate: this.isPrivate,
-      followingCount: this.followingCount,
-      postsCount: this.postsCount,
-      recentPosts: this.recentPosts,
+      fullName: fullName ?? this.fullName,
+      bio: bio ?? this.bio,
+      profilePictureUrl: profilePictureUrl ?? this.profilePictureUrl,
+      isVerified: isVerified ?? this.isVerified,
+      isPrivate: isPrivate ?? this.isPrivate,
+      followingCount: followingCount ?? this.followingCount,
+      postsCount: postsCount ?? this.postsCount,
+      recentPosts: recentPosts ?? this.recentPosts,
     );
   }
 }

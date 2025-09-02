@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:portal_si/models/user_model.dart';
 import 'package:portal_si/models/portfolio_model.dart';
 import 'package:portal_si/services/portfolio_service.dart';
+import 'package:provider/provider.dart';
+import '../utils/user_provider.dart';
 import 'add_portfolio_page.dart';
 
 class PortfolioPage extends StatefulWidget {
@@ -44,7 +46,8 @@ class _PortfolioPageState extends State<PortfolioPage> {
         ),
       );
     }
-
+    final userProvider = context.watch<UserProvider>();
+    final bool isAdmin = userProvider.currentUser?.isVerified ?? false;
     return Scaffold(
       backgroundColor: const Color(0xFFFFFBF0),
       appBar: AppBar(
@@ -60,24 +63,25 @@ class _PortfolioPageState extends State<PortfolioPage> {
         ),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline,
-                color: Colors.black, size: 28),
-            tooltip: 'Tambah Portofolio',
-            onPressed: () async {
-              final shouldRefresh = await Navigator.push<bool>(
-                context,
-                MaterialPageRoute(
-                  // Menggunakan '!' karena sudah dipastikan tidak null di awal build
-                  builder: (context) =>
-                      AddPortfolioPage(userId: widget.user.id!),
-                ),
-              );
-              if (shouldRefresh == true) {
-                _loadPortfolios();
-              }
-            },
-          ),
+          if (isAdmin)
+            IconButton(
+              icon: const Icon(Icons.add_circle_outline,
+                  color: Colors.black, size: 28),
+              tooltip: 'Tambah Portofolio',
+              onPressed: () async {
+                final shouldRefresh = await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(
+                    // Menggunakan '!' karena sudah dipastikan tidak null di awal build
+                    builder: (context) =>
+                        AddPortfolioPage(userId: widget.user.id!),
+                  ),
+                );
+                if (shouldRefresh == true) {
+                  _loadPortfolios();
+                }
+              },
+            ),
           const SizedBox(width: 8),
         ],
       ),

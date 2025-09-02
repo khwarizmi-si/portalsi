@@ -91,8 +91,10 @@ class FeedController extends ChangeNotifier {
 
     try {
       final authToken = await SecureStorage.getToken();
+
+      // --- 👇 PERBAIKAN DI SINI ---
       final uri = Uri.parse('https://api-new.portalsi.com/api/users/search')
-          .replace(queryParameters: {'q': query});
+          .replace(queryParameters: {'username': query}); // Diubah dari 'q'
 
       final response = await http.get(
         uri,
@@ -104,16 +106,20 @@ class FeedController extends ChangeNotifier {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final usersJson = (data['data'] ?? data['users'] ?? []);
-        if (usersJson is List) {
+        // Anda bisa sederhanakan ini jika kunci respons sudah pasti
+        final usersJson = data['data'] as List?;
+        if (usersJson != null) {
           searchResults = usersJson.map((item) => User.fromJson(item)).toList();
         } else {
           searchResults = [];
         }
       } else {
+        // Log error untuk debugging
+        print('Failed to search users. Status: ${response.statusCode}, Body: ${response.body}');
         throw Exception('Failed to search users');
       }
     } catch (e) {
+      print('Error searching users: $e');
       searchResults = [];
       _showErrorMessage('Gagal mencari pengguna. Coba lagi.');
     } finally {

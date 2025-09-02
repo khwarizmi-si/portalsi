@@ -1,32 +1,31 @@
-// lib/services/chat_service.dart
+// lib/services/message_service.dart
 
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:web_socket_channel/web_socket_channel.dart'; // BARU: Import WebSocket
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../models/chat.dart';
 import '../models/user_model.dart';
+import '../utils/secure_storage.dart';
 import 'api_service.dart';
+import 'package:http/http.dart' as http;
 
 class ChatService extends ApiService {
   ChatService._internal();
   static final ChatService _instance = ChatService._internal();
   factory ChatService() => _instance;
 
-  // ===============================================================
-  // BARU: Properti untuk WebSocket
-  // ===============================================================
+  static const String _cacheKey = 'conversations_cache';
+
   WebSocketChannel? _channel;
   final StreamController<ChatMessage> _messageController =
-      StreamController.broadcast();
+  StreamController.broadcast();
 
-  /// Stream ini akan didengarkan oleh UI (halaman chat) untuk pesan realtime.
   Stream<ChatMessage> get messages => _messageController.stream;
-  // ===============================================================
 
-  /// BARU: Menghubungkan ke server WebSocket.
   void connect(String userId,
       {required User currentUser, required User recipient}) {
     if (_channel != null && _channel!.closeCode == null) {
@@ -35,7 +34,6 @@ class ChatService extends ApiService {
     }
 
     try {
-      // GANTI ALAMAT IP SESUAI KONDISI ANDA (Emulator: 10.0.2.2, Device Fisik: IP Lokal)
       final uri = Uri.parse('ws://10.0.2.2:8080?userId=$userId');
       _channel = WebSocketChannel.connect(uri);
 
@@ -43,19 +41,19 @@ class ChatService extends ApiService {
         print('✅ Berhasil terhubung ke WebSocket sebagai user $userId');
 
       _channel!.stream.listen(
-        (data) {
+            (data) {
           if (kDebugMode) print('📥 Pesan realtime diterima: $data');
           try {
             final Map<String, dynamic> messageData = jsonDecode(data);
 
-            // Konversi data JSON dari WebSocket menjadi objek ChatMessage
+            // [PERBAIKAN 1 DI SINI]
+            // Tambahkan argumen currentUser dan recipient yang sudah ada
             final chatMessage = ChatMessage.fromJson(
               messageData,
-              currentUser: currentUser,
-              recipient: recipient,
+              currentUser, // <-- Argumen kedua ditambahkan
+              recipient,   // <-- Argumen ketiga ditambahkan
             );
 
-            // Tambahkan pesan baru ke stream controller agar UI bisa menerimanya
             _messageController.add(chatMessage);
           } catch (e) {
             if (kDebugMode) print('⚠️ Gagal parsing pesan realtime: $e');
@@ -69,55 +67,79 @@ class ChatService extends ApiService {
     }
   }
 
-  /// BARU: Memutuskan koneksi WebSocket.
   void disconnect() {
     _channel?.sink.close();
     _channel = null;
     if (kDebugMode) print('🔌 Koneksi WebSocket diputus.');
   }
 
-  /// BARU: Membersihkan StreamController (panggil saat user logout).
   void dispose() {
     _messageController.close();
     disconnect();
   }
 
-  /// Mengambil riwayat percakapan dengan user tertentu.
-  /// GET /api/messages/conversation/{user_id}
-  Future<List<ChatMessage>> getConversation(
-      User currentUser, User recipient) async {
+  Future<void> _saveConversationsToCache(String jsonString) async {
     try {
-      final List<dynamic> data =
-          await get('messages/conversation/${recipient.id}');
-
-      return data
-          .map((item) => ChatMessage.fromJson(
-                item,
-                currentUser: currentUser,
-                recipient: recipient,
-              ))
-          .toList();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_cacheKey, jsonString);
+      if (kDebugMode) {
+        print('💾 Cache percakapan berhasil disimpan.');
+      }
     } catch (e) {
-      print("Error fetching conversation: $e");
-      rethrow;
+      if (kDebugMode) {
+        print('⚠️ Gagal menyimpan cache: $e');
+      }
     }
   }
 
-  /// Mengambil semua percakapan user
-  /// GET /api/messages/chat-list
+  Future<List<ChatMessage>> getConversation(User currentUser, User recipientUser) async {
+    final token = await SecureStorage.getToken();
+    if (token == null) throw Exception("Token tidak ditemukan");
+
+    final response = await http.get(
+      Uri.parse('https://api-new.portalsi.com/api/messages/conversation/${recipientUser.id}'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
+      // Panggilan di sini sudah benar, tidak perlu diubah
+      return data.map((json) => ChatMessage.fromJson(json, currentUser, recipientUser)).toList();
+    } else {
+      throw Exception('Gagal memuat percakapan dari API: ${response.statusCode}');
+    }
+  }
+
   Future<List<Conversation>> getAllConversations() async {
     try {
+      // 1. Ambil data mentah (sebagai List<dynamic>) dari API
       final List<dynamic> data = await get('messages/chat-list');
-      // Tidak ada perubahan di sini, karena logika parsing sudah dipindah ke model
-      return data.map((item) => Conversation.fromJson(item)).toList();
+
+      // 2. Ubah data mentah menjadi string JSON untuk disimpan di cache
+      final jsonString = jsonEncode(data);
+      await _saveConversationsToCache(jsonString);
+
+      // 3. Parse data mentah menjadi List<Conversation> untuk dikembalikan ke controller
+      return data.map((item) {
+        if (item is Map<String, dynamic> && item.containsKey('type')) {
+          if (item['type'] == 'group') {
+            return GroupConversation.fromJson(item);
+          } else if (item['type'] == 'user') {
+            return UserConversation.fromJson(item);
+          }
+        }
+        return null;
+      }).whereType<Conversation>().toList();
+
     } catch (e) {
-      print("Error fetching all conversations: $e");
-      rethrow;
+      print("Error fetching all conversations from API: $e");
+      rethrow; // Lemparkan lagi error agar controller bisa menanganinya
     }
   }
 
-  /// Mengirim pesan ke user lain
-  /// POST /api/messages/send
   Future<ChatMessage> sendMessage({
     required int receiverId,
     required String content,
@@ -137,12 +159,12 @@ class ChatService extends ApiService {
         files: media != null ? {'media': media} : null,
       );
 
-      // Setelah mengirim via API, pesan akan kembali via WebSocket.
-      // Kita tetap return respons API untuk konfirmasi pengiriman awal.
+      // [PERBAIKAN 2 DI SINI]
+      // Tambahkan argumen currentUser dan recipient yang sudah ada
       return ChatMessage.fromJson(
         response['data'], // Sesuaikan dengan struktur respons API Anda
-        currentUser: currentUser,
-        recipient: recipient,
+        currentUser,     // <-- Argumen kedua ditambahkan
+        recipient,       // <-- Argumen ketiga ditambahkan
       );
     } catch (e) {
       print("Error sending message: $e");
@@ -150,10 +172,6 @@ class ChatService extends ApiService {
     }
   }
 
-  // ... (Metode deleteMessage dan markAsRead tetap sama) ...
-
-  /// Menghapus pesan tertentu
-  /// DELETE /api/messages/{id}
   Future<void> deleteMessage(int messageId) async {
     try {
       await delete('messages/$messageId');
@@ -163,8 +181,6 @@ class ChatService extends ApiService {
     }
   }
 
-  /// Menandai pesan sebagai sudah dibaca
-  /// PATCH /api/messages/{id}/read
   Future<void> markAsRead(int messageId) async {
     try {
       await patch('messages/$messageId/read');
@@ -172,5 +188,37 @@ class ChatService extends ApiService {
       print("Error marking message as read: $e");
       rethrow;
     }
+  }
+
+  /// [BARU] Mengambil daftar percakapan dari cache lokal.
+  /// Mengembalikan null jika tidak ada cache atau terjadi error.
+  Future<List<Conversation>?> getConversationsFromCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonString = prefs.getString(_cacheKey);
+
+      if (jsonString != null) {
+        final List<dynamic> data = jsonDecode(jsonString);
+        if (kDebugMode) {
+          print('📦 Cache percakapan berhasil dimuat.');
+        }
+        // Logika parsing yang sama seperti sebelumnya
+        return data.map((item) {
+          if (item is Map<String, dynamic> && item.containsKey('type')) {
+            if (item['type'] == 'group') {
+              return GroupConversation.fromJson(item);
+            } else if (item['type'] == 'user') {
+              return UserConversation.fromJson(item);
+            }
+          }
+          return null;
+        }).whereType<Conversation>().toList();
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('⚠️ Gagal memuat cache: $e');
+      }
+    }
+    return null;
   }
 }
