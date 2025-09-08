@@ -157,6 +157,20 @@ class WebSocketService {
       case 'notification.created':
         _notificationController?.add(payload);
         break;
+      // Add cases for new events
+      case 'user.online':
+      case 'user.offline':
+        _userStatusController?.add({'event': event, 'data': payload});
+        break;
+      case 'story.created':
+        _storyController?.add(payload);
+        break;
+      case 'like.created':
+        _likeController?.add(payload);
+        break;
+      case 'comment.created':
+        _commentController?.add(payload);
+        break;
       // ... tambahkan case untuk event-event lain
       default:
         print('ℹ️ Unhandled event: $event');

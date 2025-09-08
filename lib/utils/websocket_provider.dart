@@ -24,6 +24,23 @@ class WebSocketProvider with ChangeNotifier {
   List<NotificationModel> get notifications =>
       List.unmodifiable(_notifications);
 
+  final Map<int, bool> _onlineUsers = {};
+  final List<Map<String, dynamic>> _recentStories = [];
+  final Map<int, int> _likeCounts = {}; // Key: postId, Value: count
+  final Map<int, int> _commentCounts = {}; // Key: postId, Value: count
+  final Map<int, Map<String, dynamic>> _latestMessages =
+      {}; // Key: roomId, Value: message data
+
+  // Getters for the new state
+  bool isUserOnline(int userId) => _onlineUsers[userId] ?? false;
+  List<Map<String, dynamic>> get recentStories =>
+      List.unmodifiable(_recentStories);
+  int getLikeCount(int postId, int initialCount) =>
+      _likeCounts[postId] ?? initialCount;
+  int getCommentCount(int postId, int initialCount) =>
+      _commentCounts[postId] ?? initialCount;
+  Map<String, dynamic>? getLatestMessage(int roomId) => _latestMessages[roomId];
+
   /// Initializes the provider, service, and connects to WebSocket.
   /// Call this after user logs in or on app start if token exists.
   Future<void> initializeAndConnect() async {
@@ -127,6 +144,13 @@ class WebSocketProvider with ChangeNotifier {
       notif.isRead = true;
     }
     notifyListeners();
+  }
+
+  Future<void> reconnect() async {
+    // Reset attempts if the user manually retries, allowing a fresh sequence of backoff delays.
+    // This is optional but can provide a better user experience.
+    // _webSocketService.resetReconnectAttempts(); // You would need to add this method to the service
+    await _webSocketService.connect();
   }
 
   /// Disconnects and cleans up resources.
