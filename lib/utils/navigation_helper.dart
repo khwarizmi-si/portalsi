@@ -1,6 +1,8 @@
 // lib/utils/navigation_helper.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import '../providers/navigation_provider.dart';
 import 'secure_storage.dart';
 import '../pages/other_profile_page.dart';
 
@@ -38,8 +40,7 @@ class NavigationHelper {
         if (debugMode) {
           debugPrint('✅ NavigationHelper: Navigating to own profile');
         }
-
-        Navigator.pushReplacementNamed(context, '/profile');
+        Provider.of<NavigationProvider>(context, listen: false).navigateToTab(4);
         return;
       }
 
@@ -48,13 +49,8 @@ class NavigationHelper {
         debugPrint('✅ NavigationHelper: Navigating to other profile');
       }
 
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => OtherProfilePage(
-            username: username,
-          ),
-        ),
+      Provider.of<NavigationProvider>(context, listen: false).showOverlay(
+        OtherProfilePage(username: username),
       );
     } catch (e) {
       if (debugMode) {

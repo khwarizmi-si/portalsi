@@ -197,7 +197,7 @@ class ProfilePage extends StatefulWidget {
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> {
+class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClientMixin{
   final ProfileService _profileService = ProfileService();
   late Future<User> _userFuture;
   final GlobalKey _menuKey = GlobalKey();
@@ -300,10 +300,13 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: FutureBuilder<User>(
+    return Material(
+      color: Colors.transparent,
+      child: FutureBuilder<User>(
         future: _userFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -327,6 +330,7 @@ class _ProfilePageState extends State<ProfilePage> {
           }
 
           final user = snapshot.data!;
+          // 2. RefreshIndicator langsung dikembalikan
           return RefreshIndicator(
             onRefresh: _handleRefresh,
             child: CustomScrollView(
@@ -340,13 +344,13 @@ class _ProfilePageState extends State<ProfilePage> {
         },
 
       ),
-      bottomNavigationBar: CustomBottomNavigation(selectedIndex: 4, onTap: _onBottomNavTapped),
+      // bottomNavigationBar: CustomBottomNavigation(selectedIndex: 4, onTap: _onBottomNavTapped),
     );
   }
 
   Widget _buildHeader(User user) {
     return SliverAppBar(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.transparent,
       expandedHeight: 200,
       pinned: false,
       floating: true,
@@ -415,7 +419,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Widget _buildProfileSection(User user) {
     return Container(
-      color: Colors.white,
+      color: Colors.transparent,
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
@@ -543,7 +547,6 @@ class _ProfilePageState extends State<ProfilePage> {
                       foregroundColor: Colors.grey[800],
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-
                     ),
                     child: const Text('Bagikan Profile', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                   ),

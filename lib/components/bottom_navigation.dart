@@ -92,27 +92,29 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
     // Initialize icon animations
     for (int i = 0; i < 5; i++) {
       final controller = AnimationController(
-        duration: Duration(milliseconds: 200),
+        // Durasi sedikit lebih lama untuk gerakan yang lebih halus
+        duration: const Duration(milliseconds: 250), // Diubah dari 200
         vsync: this,
       );
       _iconAnimationControllers.add(controller);
 
+      // Animasi skala yang lebih lembut
       _iconScaleAnimations.add(
-        Tween<double>(begin: 1.0, end: 1.2).animate(
-          CurvedAnimation(parent: controller, curve: Curves.elasticOut),
+        Tween<double>(begin: 1.0, end: 1.15).animate( // Diubah dari 1.2
+          // Gunakan kurva yang lebih halus, tidak memantul
+          CurvedAnimation(parent: controller, curve: Curves.easeOutCubic), // Diubah dari elasticOut
         ),
       );
-
+      // Animasi pantulan (bounce) yang lebih rendah
       _iconBounceAnimations.add(
-        Tween<double>(begin: 0.0, end: -8.0).animate(
-          CurvedAnimation(parent: controller, curve: Curves.elasticOut),
+        Tween<double>(begin: 0.0, end: -5.0).animate( // Diubah dari -8.0
+          // Gunakan kurva yang sama untuk konsistensi
+          CurvedAnimation(parent: controller, curve: Curves.easeOutCubic), // Diubah dari elasticOut
         ),
       );
     }
 
     _slideAnimationController.forward();
-
-    // Load notification count saat widget diinisialisasi
     _loadNotificationCount();
   }
 
@@ -151,6 +153,8 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
   }
 
   void _onItemTapped(int index) {
+    // Hapus semua logika Navigator.push dari sini
+
     // Animate the tapped icon
     _iconAnimationControllers[index].forward().then((_) {
       _iconAnimationControllers[index].reverse();
@@ -160,35 +164,8 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
     _slideAnimationController.reset();
     _slideAnimationController.forward();
 
-    if (index == 0) {
-      // Kembali ke HomePage
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => DashboardPage()),
-      );
-    } else if (index == 1) {
-      // Arahkan ke FeedPage
-      Navigator.push(context, MaterialPageRoute(builder: (_) => FeedPage()));
-    } else if (index == 2) {
-      // Arahkan ke FeedPage
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => CreatePostPage()),
-      );
-    } else if (index == 3) {
-      // Arahkan ke notif dan refresh count setelah kembali
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => NotificationPage()),
-      ).then((_) {
-        // Refresh notification count ketika kembali dari halaman notifikasi
-        _loadNotificationCount();
-      });
-    } else if (index == 4) {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => ProfilePage()));
-    } else {
-      widget.onTap(index); // tetap jalankan untuk icon lain
-    }
+    // Panggil callback onTap yang diberikan oleh parent (MainScaffold)
+    widget.onTap(index);
   }
 
   void _showCreateOptions() {
@@ -266,16 +243,15 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
       child: Container(
         height: 70,
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.95),
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(20),
-            topRight: Radius.circular(20),
-          ),
+          // --- PERUBAHAN DI SINI ---
+          color: Colors.white, // Diubah dari Colors.white.withOpacity(0.95)
+          // --- Batas Perubahan ---
+          borderRadius: BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20), bottomLeft: Radius.circular(0), bottomRight: Radius.circular(0)), // Dibuat sama semua sisinya untuk estetika
           boxShadow: [
             BoxShadow(
-              color: Colors.black12,
-              blurRadius: 8,
-              offset: Offset(0, -2),
+              color: Colors.black.withOpacity(0.1), // Sedikit pudar agar lebih soft
+              blurRadius: 12,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
@@ -291,12 +267,11 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  _buildNavItem(Icons.home, 0),
-                  _buildNavItem(Icons.search, 1),
-                  SizedBox(width: 56), // Space for FAB
-                  // _buildNotificationNavItem(), // Widget khusus untuk notifikasi
-                  _buildNavItem(Icons.shopping_cart, 2),
-                  _buildNavItem(Icons.person_outline, 4),
+                  Expanded(child: _buildNavItem(Icons.home, 0)),
+                  Expanded(child: _buildNavItem(Icons.search, 1)),
+                  const SizedBox(width: 53), // Spasi untuk FAB tetap sama
+                  Expanded(child: _buildNavItem(Icons.shopping_cart, 3)), // Ganti ikon & indeks jika perlu
+                  Expanded(child: _buildNavItem(Icons.person_outline, 4)),
                 ],
               ),
             ),

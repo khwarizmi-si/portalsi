@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as path;
+import 'package:portal_si/pages/main_scaffold.dart';
 import '../utils/secure_storage.dart'; // Import file SecureStorage
 import 'dashboard_page.dart'; // Import HomePage
 
@@ -62,7 +63,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
         if (!didPop) {
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (context) => DashboardPage()),
+            MaterialPageRoute(builder: (context) => MainScaffold()),
             (route) => false,
           );
         }
@@ -854,7 +855,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
         );
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (context) => DashboardPage()),
+          MaterialPageRoute(builder: (context) => MainScaffold()),
               (route) => false,
         );
       } else {

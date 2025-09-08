@@ -89,25 +89,13 @@ class _FeedPageState extends State<FeedPage>
       child: PopScope(
         canPop: false,
         onPopInvoked: _handleBackPress,
-        child: Scaffold(
-          body: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  Color(0xFFFFF0D0),
-                  Color(0xFFFFFFFF),
-                  Color(0xFFDFFEF8),
-                ],
-                stops: [0.0, 0.5, 1.0],
-              ),
-            ),
-            child: _buildBody(),
+        // 1. HAPUS Scaffold, GANTI DENGAN Material
+        child: Material(
+          // 2. Beri warna transparan agar gradient terlihat
+          color: Colors.transparent,
+          child: _buildBody(),
           ),
-          bottomNavigationBar: _buildBottomNavigation(),
         ),
-      ),
     );
   }
 

@@ -22,6 +22,7 @@ class ChatMessage {
   final DateTime timestamp;
   MessageStatus status;
   final String? mediaUrl;
+  String? localMediaPath;
   final String? mediaType;
   final File? localFile;
   final ValueNotifier<double>? uploadProgress;
@@ -38,12 +39,42 @@ class ChatMessage {
     this.mediaType,
     this.localFile,
     this.uploadProgress,
+    this.localMediaPath,
   });
 
-  factory ChatMessage.fromJson(Map<String, dynamic> json, User currentUser, User recipientUser) {
-    final bool isFromCurrentUser = json['sender_id'] == currentUser.id;
-    final User sender = isFromCurrentUser ? currentUser : recipientUser;
-    final User recipient = isFromCurrentUser ? recipientUser : currentUser;
+  Map<String, dynamic> toJson() {
+    return {
+      'message_id': id,
+      'content': text,
+      'media_url': mediaUrl,
+      'local_media_path': localMediaPath,
+      'sender_id': sender.id,
+      'receiver_id': recipient.id,
+      'sent_at': timestamp.toIso8601String(),
+      'is_read': status == MessageStatus.read,
+      // Kita juga simpan data sender dan recipient untuk rehidrasi
+      'sender_data': sender.toJson(),
+      'recipient_data': recipient.toJson(),
+    };
+  }
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json, [User? currentUser, User? recipientUser]) {
+
+    User sender, recipient;
+
+    // Logika jika data berasal dari cache yang sudah menyimpan sender_data & recipient_data
+    if (json.containsKey('sender_data') && json.containsKey('recipient_data')) {
+      sender = User.fromJson(json['sender_data']);
+      recipient = User.fromJson(json['recipient_data']);
+    }
+    // Logika lama jika data dari API dan butuh currentUser/recipientUser
+    else if (currentUser != null && recipientUser != null) {
+      final bool isFromCurrentUser = json['sender_id'] == currentUser.id;
+      sender = isFromCurrentUser ? currentUser : recipientUser;
+      recipient = isFromCurrentUser ? recipientUser : currentUser;
+    } else {
+      throw ArgumentError('fromJson requires either full sender/recipient data or currentUser/recipientUser context.');
+    }
 
     final bool hasMedia = json['media_url'] != null;
     final MessageType type = hasMedia ? MessageType.image : MessageType.text;
@@ -54,8 +85,10 @@ class ChatMessage {
       recipient: recipient,
       text: json['content'],
       mediaUrl: json['media_url'],
+      localMediaPath: json['local_media_path'],
       timestamp: DateTime.parse(json['sent_at']),
-      status: json['is_read'] ? MessageStatus.read : MessageStatus.sent,
+      // 'is_read' bisa null di beberapa response, default ke false
+      status: (json['is_read'] ?? false) ? MessageStatus.read : MessageStatus.sent,
       type: type,
     );
   }
