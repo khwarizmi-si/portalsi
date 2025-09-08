@@ -761,5 +761,4 @@ class SuggestionCard extends StatelessWidget {
       ),
     );
   }
-
 }
