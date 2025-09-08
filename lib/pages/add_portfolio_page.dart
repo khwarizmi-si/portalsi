@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:file_selector/file_selector.dart'; // DIUBAH: Menggunakan file_selector
 import 'package:portal_si/services/portfolio_service.dart';
 
 class AddPortfolioPage extends StatefulWidget {
@@ -31,15 +31,18 @@ class _AddPortfolioPageState extends State<AddPortfolioPage> {
     super.dispose();
   }
 
+  // DIUBAH: Fungsi ini sekarang menggunakan file_selector
   Future<void> _pickFile() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
+    const XTypeGroup typeGroup = XTypeGroup(
+      label: 'images & pdf',
+      extensions: <String>['jpg', 'jpeg', 'png', 'pdf'],
     );
 
-    if (result != null) {
+    final XFile? file = await openFile(acceptedTypeGroups: <XTypeGroup>[typeGroup]);
+
+    if (file != null) {
       setState(() {
-        _selectedMedia = File(result.files.single.path!);
+        _selectedMedia = File(file.path);
       });
     }
   }

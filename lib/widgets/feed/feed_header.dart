@@ -28,15 +28,15 @@ class FeedHeader extends StatelessWidget {
           bottomLeft: Radius.circular(24),
           bottomRight: Radius.circular(24),
         ),
-        boxShadow: isScrolled
-            ? [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 20,
-                  offset: Offset(0, 4),
-                ),
-              ]
-            : [],
+        // boxShadow: isScrolled
+        //     ? [
+        //         BoxShadow(
+        //           color: Colors.black.withOpacity(0.08),
+        //           blurRadius: 20,
+        //           offset: Offset(0, 4),
+        //         ),
+        //       ]
+        //     : [],
       ),
       child: Column(
         children: [

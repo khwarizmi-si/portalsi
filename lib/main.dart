@@ -2,7 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'; // for kDebugMode
+import 'package:portal_si/pages/main_scaffold.dart';
 import 'package:portal_si/pages/welcome_page.dart';
+import 'package:portal_si/providers/navigation_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:portal_si/controllers/home_controller.dart';
 import 'package:portal_si/pages/notif_page.dart';
@@ -31,6 +33,7 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => NavigationProvider()),
         ChangeNotifierProvider(create: (_) => HomeController()),
         ChangeNotifierProvider(create: (_) => UserProvider()),
       ],
@@ -127,7 +130,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       routes: {
         '/login': (context) => const LoginPage(),
         '/register': (context) => RegisterPage(),
-        '/home': (context) => const DashboardPage(),
+        '/home': (context) => const MainScaffold(),
         '/feed': (context) => FeedPage(),
         '/profile': (context) => const ProfilePage(),
         '/story': (context) => InstagramStoryPage(),

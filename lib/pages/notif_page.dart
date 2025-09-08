@@ -60,10 +60,10 @@ class NotificationPage extends StatelessWidget {
             body: _buildBody(context, controller),
 
             // 4. Tambahkan properti bottomNavigationBar ke Scaffold
-            bottomNavigationBar: CustomBottomNavigation(
-              selectedIndex: _selectedIndex,
-              onTap: (index) => _onItemTapped(index, context),
-            ),
+            // bottomNavigationBar: CustomBottomNavigation(
+            //   selectedIndex: _selectedIndex,
+            //   onTap: (index) => _onItemTapped(index, context),
+            // ),
           );
         },
       ),
@@ -94,7 +94,7 @@ class _NotificationList extends StatelessWidget {
     final groupOrder = ['Minggu Ini', 'Bulan Ini', 'Lebih Awal'];
 
     return RefreshIndicator(
-      onRefresh: () => controller.loadNotifications(isRefresh: true),
+      onRefresh: () => controller.refreshNotifications(),
       child: ListView(
         padding: const EdgeInsets.symmetric(vertical: 8.0),
         children: groupOrder.map((groupName) {
@@ -164,7 +164,7 @@ class _NotificationItem extends StatelessWidget {
       case 'follow':
         return 'mulai mengikuti Anda.';
       case 'mention':
-        return 'menyebut Anda dalam komentar.';
+        return 'menyebut Anda dalam postingannya.';
       default:
         return 'berinteraksi dengan Anda.';
     }

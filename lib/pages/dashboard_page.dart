@@ -35,7 +35,7 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<DashboardPage> {
+class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientMixin{
   final ScrollController _scrollController = ScrollController();
   bool _isScrolled = false;
   int _unreadNotificationCount = 0;
@@ -101,30 +101,32 @@ class _HomePageState extends State<DashboardPage> {
   }
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [ Color(0xFFFFF0D0), Color(0xFFFFFFFF), Color(0xFFDFFEF8) ],
-          stops: [0.0, 0.5, 1.0],
-        ),
-      ),
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: _buildAppBar(context),
-        body: _buildBody(context),
-        bottomNavigationBar: CustomBottomNavigation(
-          selectedIndex: 0,
-          onTap: (index) {
-            if (index == 1) {
-              Navigator.pushNamed(context, '/explore');
-            } else if (index == 4) {
-              Navigator.pushNamed(context, '/profile');
-            }
-          },
-        ),
+    super.build(context); // Penting untuk AutomaticKeepAliveClientMixin
+
+    // 1. Hapus Scaffold, bungkus dengan Material
+    return Material(
+      color: Colors.transparent, // Agar background terlihat
+      child: Stack(
+        children: [
+          // Konten utama
+          SafeArea(
+            child: Column(
+              children: [
+                // 2. AppBar sekarang menjadi widget biasa
+                _buildAppBar(context),
+
+                // 3. Pastikan body di-wrap dengan Expanded
+                Expanded(
+                  child: _buildBody(context),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -140,16 +142,16 @@ class _HomePageState extends State<DashboardPage> {
             duration: const Duration(milliseconds: 200),
             decoration: BoxDecoration(
               color: Colors.white,
-              boxShadow: _isScrolled ? [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ] : [],
+              // boxShadow: _isScrolled ? [
+              //   BoxShadow(
+              //     color: Colors.black.withOpacity(0.05),
+              //     blurRadius: 10,
+              //     offset: const Offset(0, 2),
+              //   ),
+              // ] : [],
             ),
             child: AppBar(
-              backgroundColor: Colors.transparent,
+              backgroundColor: Colors.white,
               elevation: 0,
               title: const Text('Portal SI', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 24)),
               actions: [
@@ -759,5 +761,4 @@ class SuggestionCard extends StatelessWidget {
       ),
     );
   }
-
 }

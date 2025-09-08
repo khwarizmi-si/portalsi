@@ -11,6 +11,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:palette_generator/palette_generator.dart';
+import 'package:portal_si/pages/main_scaffold.dart';
 import 'package:video_player/video_player.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import 'package:dio/dio.dart';
@@ -420,7 +421,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
 
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const DashboardPage()),
+          MaterialPageRoute(builder: (context) => const MainScaffold()),
               (Route<dynamic> route) => false,
         );
       }

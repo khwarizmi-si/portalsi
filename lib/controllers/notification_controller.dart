@@ -10,6 +10,11 @@ class NotificationController extends ChangeNotifier {
   final NotificationService _notificationService = NotificationService();
   final PostService _postService = PostService();
 
+  // [MODIFIKASI 1] Tambahkan variabel cache statis.
+  // 'static' berarti variabel ini akan bertahan nilainya selama aplikasi berjalan,
+  // bahkan jika halaman notifikasi ditutup dan dibuka kembali.
+  static List<NotificationModel>? _cachedNotifications;
+
   List<NotificationModel> _notifications = [];
   List<NotificationModel> get notifications => _notifications;
 
@@ -22,7 +27,6 @@ class NotificationController extends ChangeNotifier {
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
-  // Getter untuk memeriksa apakah ada notifikasi yang belum dibaca
   bool get hasUnreadNotifications => _notifications.any((n) => !n.isRead);
 
   Map<String, List<NotificationModel>> get groupedNotifications {
@@ -45,25 +49,60 @@ class NotificationController extends ChangeNotifier {
     return 'Lebih Awal';
   }
 
+  // [MODIFIKASI 2] Ubah konstruktor untuk logika cache.
   NotificationController() {
-    loadNotifications();
+    // Cek apakah ada data di cache.
+    if (_cachedNotifications != null) {
+      // Jika ada, langsung gunakan data cache untuk tampilan awal.
+      _notifications = _cachedNotifications!;
+      _isLoading = false; // Data sudah siap, jadi tidak perlu loading screen.
+
+      // Kemudian, panggil API di latar belakang untuk mendapatkan data terbaru.
+      fetchLatestNotifications();
+    } else {
+      // Jika tidak ada cache (pembukaan pertama kali), panggil API dengan state loading.
+      loadInitialNotifications();
+    }
   }
 
-  Future<void> loadNotifications({bool isRefresh = false}) async {
-    if (!isRefresh) {
-      _isLoading = true;
-      notifyListeners();
-    }
-    _errorMessage = null;
+  // [MODIFIKASI 3] Buat metode terpisah untuk pengambilan data awal (dengan loader).
+  Future<void> loadInitialNotifications() async {
+    _isLoading = true;
+    notifyListeners(); // Tampilkan CircularProgressIndicator di UI
+    await fetchLatestNotifications();
+  }
 
+  // [MODIFIKASI 4] Ganti nama metode 'loadNotifications' menjadi 'refreshNotifications'
+  // Metode ini digunakan untuk fitur pull-to-refresh dan tidak menampilkan loader layar penuh.
+  Future<void> refreshNotifications() async {
+    await fetchLatestNotifications();
+  }
+
+  // [MODIFIKASI 5] Buat metode inti untuk mengambil data dari API.
+  // Metode ini akan dipanggil oleh semua skenario (awal, background, refresh).
+  Future<void> fetchLatestNotifications() async {
+    _errorMessage = null;
     try {
+      // 1. Ambil data baru dari service.
       final notificationData = await _notificationService.getNotifications();
-      _notifications =
-          notificationData.map((n) => NotificationModel.fromJson(n)).toList();
+      final newNotifications =
+      notificationData.map((n) => NotificationModel.fromJson(n)).toList();
+
+      // 2. Perbarui state notifikasi utama yang akan ditampilkan di UI.
+      _notifications = newNotifications;
+
+      // 3. Simpan data baru yang berhasil didapat ke dalam cache.
+      _cachedNotifications = newNotifications;
+
       await _preloadPostData(_notifications);
     } catch (e) {
-      _errorMessage = e.toString();
+      // Hanya tampilkan pesan error jika tidak ada data sama sekali (bahkan dari cache).
+      if (_notifications.isEmpty) {
+        _errorMessage = e.toString();
+      }
+      debugPrint("Gagal mengambil notifikasi terbaru: $e");
     } finally {
+      // Hentikan state loading (jika sedang aktif) dan perbarui UI.
       _isLoading = false;
       notifyListeners();
     }
@@ -72,7 +111,7 @@ class NotificationController extends ChangeNotifier {
   Future<void> _preloadPostData(List<NotificationModel> notifications) async {
     final postIds = notifications
         .where((n) =>
-            n.relatedPostId != null && !_postCache.containsKey(n.relatedPostId))
+    n.relatedPostId != null && !_postCache.containsKey(n.relatedPostId))
         .map((n) => n.relatedPostId!)
         .toSet();
 
@@ -86,30 +125,26 @@ class NotificationController extends ChangeNotifier {
         debugPrint('Gagal preload post $id: $e');
       }
     }));
-    notifyListeners();
+    // Tidak perlu notifyListeners() di sini karena sudah dipanggil di fetchLatestNotifications()
   }
 
   /// Aksi saat notifikasi di-tap.
   void onNotificationTapped(
       BuildContext context, NotificationModel notification) {
-    // 1. Tandai sebagai sudah dibaca (optimistic update)
     if (!notification.isRead) {
       notification.isRead = true;
       notifyListeners();
       _notificationService.markAsRead(notification.id).catchError((e) {
-        // Jika gagal, kembalikan statusnya (opsional)
         notification.isRead = false;
         notifyListeners();
       });
     }
 
-    // 2. Lakukan navigasi berdasarkan tipe notifikasi
     if (notification.type == 'follow') {
       NavigationHelper.navigateToProfile(context, notification.sender.toJson());
     } else if (notification.relatedPostId != null) {
       final post = _postCache[notification.relatedPostId];
       if (post != null) {
-        // Navigasi ke halaman detail post
         Navigator.push(
             context,
             MaterialPageRoute(
