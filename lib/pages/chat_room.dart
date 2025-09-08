@@ -1,6 +1,7 @@
 // lib/pages/chat_room.dart
 
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
+import 'package:shimmer/shimmer.dart';
 import '../controllers/chat_room_controller.dart';
 import '../models/chat.dart';
 import '../models/user_model.dart';
@@ -446,12 +448,39 @@ class ChatRoomPage extends StatelessWidget {
               Expanded(
                 child: Consumer<ChatRoomController>(
                   builder: (context, controller, _) {
+                    // [MODIFIKASI UTAMA]
+                    // Cek jika ada error message
+                    if (controller.errorMessage != null && !controller.isLoading) {
+                      // Tampilkan dialog setelah frame selesai di-build
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        // Cek lagi untuk menghindari dialog ganda jika rebuild terjadi cepat
+                        if (ModalRoute.of(context)?.isCurrent != true) return;
+
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false, // TIDAK BISA DITUTUP DENGAN TAP DI LUAR
+                          builder: (BuildContext dialogContext) {
+                            return NetworkErrorDialog(
+                              errorMessage: controller.errorMessage!,
+                              onRetry: () {
+                                Navigator.of(dialogContext).pop(); // Tutup dialog dulu
+                                controller.fetchMessages(); // Panggil fetchMessages lagi
+                              },
+                            );
+                          },
+                        );
+                      });
+
+                      // Tampilkan skeleton loader atau container kosong di belakang dialog
+                      return const _ChatRoomSkeletonLoader();
+                    }
+
+                    // Logika loading yang sudah ada
                     if (controller.isLoading) {
-                      return const Center(child: CircularProgressIndicator());
+                      return const _ChatRoomSkeletonLoader();
                     }
-                    if (controller.errorMessage != null) {
-                      return Center(child: Text(controller.errorMessage!));
-                    }
+
+                    // Tampilkan daftar pesan jika tidak ada error dan tidak loading
                     return _MessageList();
                   },
                 ),
@@ -893,6 +922,137 @@ class _MessageInputBarState extends State<_MessageInputBar> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// [BARU] WIDGET UNTUK SKELETON LOADING
+class _ChatRoomSkeletonLoader extends StatelessWidget {
+  const _ChatRoomSkeletonLoader({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey.shade300,
+      highlightColor: Colors.grey.shade100,
+      child: ListView.builder(
+        itemCount: 10, // Tampilkan 10 bubble skeleton
+        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 20),
+        itemBuilder: (context, index) {
+          // Buat lebar acak agar terlihat lebih natural
+          final randomWidth = 100.0 + Random().nextDouble() * 150.0;
+          final isMe = index.isEven; // Ganti-ganti posisi bubble
+
+          return Align(
+            alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 6.0),
+              height: 40.0,
+              width: randomWidth,
+              decoration: BoxDecoration(
+                color: Colors.white, // Warna ini akan ditimpa oleh shimmer
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class NetworkErrorDialog extends StatelessWidget {
+  final String errorMessage;
+  final VoidCallback onRetry;
+
+  const NetworkErrorDialog({
+    super.key,
+    required this.errorMessage,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.0)),
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.all(24.0),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.rectangle,
+          borderRadius: BorderRadius.circular(20.0),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 10.0,
+              offset: Offset(0.0, 10.0),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min, // Agar dialog tidak memenuhi layar
+          children: <Widget>[
+            const Text(
+              '😩',
+              style: TextStyle(fontSize: 60),
+            ),
+            const SizedBox(height: 16.0),
+            const Text(
+              'Jaringan Anda Bermasalah',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 22.0,
+                color: Color(0xFF4D0015),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16.0),
+            const Text(
+              'Terdapat masalah pada jaringan Anda. Klik tombol muat ulang dibawah ini atau coba untuk mulai ulang aplikasi.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16.0, color: Colors.black54),
+            ),
+            const SizedBox(height: 24.0),
+            ElevatedButton(
+              onPressed: onRetry,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4F46E5),
+                padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12.0),
+                ),
+              ),
+              child: const Text(
+                'Muat Ulang',
+                style: TextStyle(fontSize: 18, color: Colors.white),
+              ),
+            ),
+            const SizedBox(height: 20.0),
+            Text(
+              'Laporkan ke Admin: $errorMessage',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12.0, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 8.0),
+            const Text.rich(
+              TextSpan(
+                style: TextStyle(fontSize: 14.0, color: Colors.black87),
+                children: [
+                  TextSpan(text: 'Bentuk partisipasi Anda adalah '),
+                  TextSpan(
+                    text: 'sangat bermanfaat',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  TextSpan(text: ' bagi kami.'),
+                ],
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

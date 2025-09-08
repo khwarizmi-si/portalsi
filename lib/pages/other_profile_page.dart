@@ -3,7 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:page_transition/page_transition.dart';
 import 'package:portal_si/models/user_model.dart';
 import 'package:portal_si/pages/portfolio_pages.dart';
+import 'package:provider/provider.dart';
+import 'package:shimmer/shimmer.dart';
 import '../components/bottom_navigation.dart';
+import '../providers/navigation_provider.dart';
 import '../services/user_service.dart'; // Hanya import service yang benar
 import '../services/follow_service.dart'; // Hanya import service yang benar
 import 'followers_following_page.dart';
@@ -128,20 +131,39 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
         ),
       ),
     );
-
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: _buildBody(),
-      bottomNavigationBar: CustomBottomNavigation(selectedIndex: 0, onTap: (_) {}),
+    // BUNGKUS DENGAN PADDING DI SINI
+    return Padding(
+      // Beri jarak di bawah setinggi navigasi bar + margin-nya
+      // Anda bisa sesuaikan nilai 100.0 ini jika perlu
+      padding: const EdgeInsets.only(bottom: 100.0),
+      child: PopScope(
+        canPop: false,
+        onPopInvoked: (didPop) {
+          if (didPop) return;
+          Provider.of<NavigationProvider>(context, listen: false).hideOverlay();
+        },
+        child: Material(
+          color: Colors.transparent,
+          // Tambahkan clipRRect agar sudutnya melengkung, serasi dengan nav bar
+          clipBehavior: Clip.antiAlias,
+          borderRadius: BorderRadius.circular(20.0),
+          child: _buildBody(),
+        ),
+      ),
     );
   }
 
   Widget _buildBody() {
-    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    // --- PERUBAHAN DI SINI ---
+    // Jika sedang loading, tampilkan widget skeleton
+    if (_isLoading) return const ProfilePageSkeleton();
+    // return const ProfilePageSkeleton();
+    // --- Batas Perubahan ---
+
     if (_error != null) {
       return Center(
         child: Column(
@@ -174,9 +196,13 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
       pinned: true,
       backgroundColor: Colors.white,
       elevation: 1,
+      // 2. Perbarui aksi tombol kembali di SliverAppBar
       leading: IconButton(
         icon: const Icon(Icons.arrow_back),
-        onPressed: () => Navigator.pop(context),
+        onPressed: () {
+          // Panggil provider untuk menyembunyikan overlay
+          Provider.of<NavigationProvider>(context, listen: false).hideOverlay();
+        },
       ),
       title: Text(
         _profileData?.username ?? 'Profil',
@@ -202,7 +228,7 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
     if (_profileData == null) return const SizedBox.shrink();
 
     return Container(
-      color: Colors.white,
+      color: Colors.transparent,
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -438,6 +464,136 @@ extension UserCopyWith on User {
       postsCount: postsCount ?? this.postsCount,
       recentPosts: recentPosts ?? this.recentPosts,
 
+    );
+  }
+}
+// lib/pages/other_profile_page.dart
+
+/// Widget skeleton loading yang bisa di-scroll.
+class ProfilePageSkeleton extends StatelessWidget {
+  const ProfilePageSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey.shade200,
+      highlightColor: Colors.grey.shade50,
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        child: Column(
+          children: [
+            // 1. Kerangka untuk Cover
+            Container(
+              height: 250,
+              color: Colors.white,
+            ),
+
+            // 2. Kerangka untuk Konten Profil
+            Container(
+              color: Colors.transparent,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // --- Bagian Avatar & Statistik ---
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const CircleAvatar(
+                        radius: 50,
+                        backgroundColor: Colors.white,
+                      ),
+                      const SizedBox(width: 24),
+                      Expanded(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _buildStatSkeleton(),
+                            _buildStatSkeleton(),
+                            _buildStatSkeleton(),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  // --- Bagian Nama & Bio ---
+                  _buildLineSkeleton(height: 18, width: 200),
+                  const SizedBox(height: 12),
+                  _buildLineSkeleton(height: 16),
+                  const SizedBox(height: 24),
+
+                  // --- Bagian Tombol Aksi ---
+                  Row(
+                    children: [
+                      Expanded(child: _buildLineSkeleton(height: 48, radius: 10)),
+                      const SizedBox(width: 16),
+                      Expanded(child: _buildLineSkeleton(height: 48, radius: 10)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4), // Sedikit spasi tambahan sebelum grid
+
+            // --- 3. PERUBAHAN UTAMA: GUNAKAN GridView.count ---
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: GridView.count(
+                crossAxisCount: 3, // Jumlah kolom
+
+                // --- KONTROL PENUH JARAK (GAP) DI SINI ---
+                crossAxisSpacing: 16, // Jarak horizontal
+                mainAxisSpacing: 16,  // Jarak vertikal
+                // --- Batas Kontrol Jarak ---
+
+                shrinkWrap: true, // Wajib agar GridView di dalam Column tahu ukurannya
+                physics: const NeverScrollableScrollPhysics(), // Wajib agar tidak bisa di-scroll
+                children: List.generate(3, (index) => _buildGridItemSkeleton()),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Helper untuk membuat satu item grid
+  Widget _buildGridItemSkeleton() {
+    return AspectRatio(
+      aspectRatio: 1 / 1,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+  }
+
+  // Helper untuk membuat kerangka statistik
+  Widget _buildStatSkeleton() {
+    return Column(
+      children: [
+        _buildLineSkeleton(width: 45, height: 12),
+        const SizedBox(height: 8),
+        _buildLineSkeleton(width: 45, height: 12),
+      ],
+    );
+  }
+
+  // Helper utama untuk membuat satu baris/kotak kerangka
+  Widget _buildLineSkeleton({double? width, double height = 16, double radius = 8}) {
+    return Container(
+      width: width ?? double.infinity,
+      // margin: EdgeInsets.only(bottom: 20),
+      padding: EdgeInsets.only(bottom: 40),
+      height: height,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(radius),
+      ),
     );
   }
 }
