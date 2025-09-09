@@ -43,7 +43,9 @@ class WebSocketProvider with ChangeNotifier {
   Future<void> initializeAndConnect() async {
     _authToken = await SecureStorage.getToken();
     final userIdStr = await SecureStorage.getUserId();
+
     _userId = userIdStr;
+
 
     if (_authToken == null || _userId == null) {
       debugPrint('❌ Cannot init WebSocket: Token or UserID missing.');
@@ -53,7 +55,9 @@ class WebSocketProvider with ChangeNotifier {
     _setupListeners();
     // PERBAIKAN 1: Buat URL WebSocket yang benar sebelum memanggil connect
     final wsUrl = ApiEndpoints.getWebSocketUrl(
+
         'fiouy3umnruqcwdsoxni'); // Ganti dengan App Key Anda
+
     await _webSocketService.connect(wsUrl);
   }
 
@@ -142,6 +146,7 @@ class WebSocketProvider with ChangeNotifier {
 
   // ================= Channels =================
 
+
   Future<void> subscribeToUserChannel() async {
     if (_userId == null || _authToken == null) return;
 
@@ -154,6 +159,7 @@ class WebSocketProvider with ChangeNotifier {
       _authToken!,
       ApiEndpoints.baseUrl,
       // isPresence: false // Opsional, defaultnya sudah false
+
     );
   }
 
@@ -172,7 +178,9 @@ class WebSocketProvider with ChangeNotifier {
     // PERBAIKAN 4: Gunakan cara yang sama seperti inisialisasi
     if (_authToken != null) {
       final wsUrl = ApiEndpoints.getWebSocketUrl(
+
           'fiouy3umnruqcwdsoxni'); // Ganti dengan App Key Anda
+
       await _webSocketService.connect(wsUrl);
     }
   }
