@@ -53,7 +53,7 @@ class WebSocketProvider with ChangeNotifier {
     _setupListeners();
     // PERBAIKAN 1: Buat URL WebSocket yang benar sebelum memanggil connect
     final wsUrl = ApiEndpoints.getWebSocketUrl(
-        'YOUR_REVERB_APP_KEY'); // Ganti dengan App Key Anda
+        'fiouy3umnruqcwdsoxni'); // Ganti dengan App Key Anda
     await _webSocketService.connect(wsUrl);
   }
 
@@ -172,7 +172,7 @@ class WebSocketProvider with ChangeNotifier {
     // PERBAIKAN 4: Gunakan cara yang sama seperti inisialisasi
     if (_authToken != null) {
       final wsUrl = ApiEndpoints.getWebSocketUrl(
-          'YOUR_REVERB_APP_KEY'); // Ganti dengan App Key Anda
+          'fiouy3umnruqcwdsoxni'); // Ganti dengan App Key Anda
       await _webSocketService.connect(wsUrl);
     }
   }
