@@ -15,6 +15,14 @@ class WebSocketService {
   final StreamController<Map<String, dynamic>> _eventController =
       StreamController.broadcast();
 
+  final _messageController = StreamController<Map<String, dynamic>>.broadcast();
+  final _chatListController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
+  Stream<Map<String, dynamic>> get chatListStream => _chatListController.stream;
+
+
   Stream<String> get statusStream => _statusController.stream;
   Stream<Map<String, dynamic>> get notificationStream =>
       _notificationController.stream;
@@ -60,7 +68,15 @@ class WebSocketService {
   /// Subscribe ke channel (auto request auth ke Laravel)
   /// Subscribe ke channel (sudah termasuk proses otentikasi)
   Future<void> subscribeToChannel(
-      String channelName, String authToken, String apiBaseUrl) async {
+
+    String channelBase,
+    String authToken,
+    String apiBaseUrl, {
+    bool isPresence = false,
+  }) async {
+    final prefix = isPresence ? "presence-" : "private-";
+    final channelName = "$prefix$channelBase";
+
     if (_channel == null || _socketId == null) {
       debugPrint(
           "⚠️ Cannot subscribe: WebSocket not connected or socket_id is null.");
@@ -116,6 +132,7 @@ class WebSocketService {
     try {
       final Map<String, dynamic> decoded = jsonDecode(message);
 
+
       final event = decoded["event"];
       final data = decoded["data"];
 
@@ -137,6 +154,15 @@ class WebSocketService {
 
         case "notification.new":
           _notificationController.add(decoded);
+          break;
+
+        case "message.sent":
+          _messageController.add(decoded);
+          break;
+
+        case "chat.updated":
+          _chatListController.add(decoded);
+
           break;
 
         default:
