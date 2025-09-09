@@ -43,7 +43,7 @@ class WebSocketProvider with ChangeNotifier {
   Future<void> initializeAndConnect() async {
     _authToken = await SecureStorage.getToken();
     final userIdStr = await SecureStorage.getUserId();
-    _userId = userIdStr != null ? int.tryParse(userIdStr as String) : null;
+    _userId = userIdStr;
 
     if (_authToken == null || _userId == null) {
       debugPrint('❌ Cannot init WebSocket: Token or UserID missing.');
@@ -145,14 +145,15 @@ class WebSocketProvider with ChangeNotifier {
   Future<void> subscribeToUserChannel() async {
     if (_userId == null || _authToken == null) return;
 
-    final channelName = 'private-user.$_userId';
+    // PERBAIKAN: Kirimkan hanya nama dasar channel.
+    // Jangan sertakan 'private-' di sini.
+    final channelBase = 'user.$_userId';
 
-    // PERBAIKAN 3: Panggil metode service yang sudah benar
-    // Provider tidak perlu tahu tentang 'signature', serahkan pada service
     await _webSocketService.subscribeToChannel(
-      channelName,
+      channelBase, // Kirim nama dasar
       _authToken!,
       ApiEndpoints.baseUrl,
+      // isPresence: false // Opsional, defaultnya sudah false
     );
   }
 
