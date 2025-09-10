@@ -18,6 +18,14 @@ class WebSocketService {
   final StreamController<Map<String, dynamic>> _eventController =
   StreamController.broadcast();
 
+  final _messageController = StreamController<Map<String, dynamic>>.broadcast();
+  final _chatListController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
+  Stream<Map<String, dynamic>> get chatListStream => _chatListController.stream;
+
+
   Stream<String> get statusStream => _statusController.stream;
   Stream<Map<String, dynamic>> get notificationStream =>
       _notificationController.stream;
@@ -110,13 +118,17 @@ class WebSocketService {
   }
 
   /// Subscribe ke channel (sudah termasuk proses otentikasi)
-  Future<void> subscribeToChannel(String channelName, String authToken, String apiBaseUrl) async {
-    await _connectionCompleter?.future;
 
-    if (_channel == null || _socketId == null) {
-      debugPrint("⚠️ Cannot subscribe: WebSocket not connected or socket_id is null.");
-      return;
-    }
+  Future<void> subscribeToChannel(
+
+    String channelBase,
+    String authToken,
+    String apiBaseUrl, {
+    bool isPresence = false,
+  }) async {
+    final prefix = isPresence ? "presence-" : "private-";
+    final channelName = "$prefix$channelBase";
+
     if (_channel == null || _socketId == null) {
       debugPrint(
           "⚠️ Cannot subscribe: WebSocket not connected or socket_id is null.");
@@ -173,11 +185,23 @@ class WebSocketService {
       final Map<String, dynamic> decoded = jsonDecode(message);
       final String eventName = decoded["event"];
 
-      // Tangani event internal dari Pusher/Reverb
-      if (eventName.startsWith('pusher:')) {
-        _handlePusherEvent(eventName, decoded["data"]);
-        return;
-      }
+
+
+      final event = decoded["event"];
+      final data = decoded["data"];
+
+      switch (event) {
+        case "pusher:connection_established":
+          final parsed = jsonDecode(data);
+          _socketId = parsed["socket_id"];
+          debugPrint("✅ Connected with socket_id: $_socketId");
+          _statusController.add("connected:$_socketId");
+          break;
+
+        case "pusher:error":
+          debugPrint("⚠️ Pusher error: $data");
+          break;
+
 
       // Tangani event dari channel aplikasi kita (misalnya: private-chat.1)
       if (decoded.containsKey("channel")) {
@@ -190,8 +214,19 @@ class WebSocketService {
           'data': dataPayload,
         };
 
-        debugPrint("✅ App event received: Type=${appEvent['type']}");
-        _eventController.add(appEvent);
+
+        case "message.sent":
+          _messageController.add(decoded);
+          break;
+
+        case "chat.updated":
+          _chatListController.add(decoded);
+
+          break;
+
+        default:
+          _eventController.add(decoded);
+
       }
     } catch (e) {
       debugPrint("⚠️ Error parsing message: $e");

@@ -43,7 +43,9 @@ class WebSocketProvider with ChangeNotifier {
   Future<void> initializeAndConnect() async {
     _authToken = await SecureStorage.getToken();
     final userIdStr = await SecureStorage.getUserId();
-    _userId = userIdStr != null ? int.tryParse(userIdStr as String) : null;
+
+    _userId = userIdStr;
+
 
     if (_authToken == null || _userId == null) {
       debugPrint('❌ Cannot init WebSocket: Token or UserID missing.');
@@ -53,7 +55,9 @@ class WebSocketProvider with ChangeNotifier {
     _setupListeners();
     // PERBAIKAN 1: Buat URL WebSocket yang benar sebelum memanggil connect
     final wsUrl = ApiEndpoints.getWebSocketUrl(
-        'YOUR_REVERB_APP_KEY'); // Ganti dengan App Key Anda
+
+        'fiouy3umnruqcwdsoxni'); // Ganti dengan App Key Anda
+
     await _webSocketService.connect(wsUrl);
   }
 
@@ -142,17 +146,20 @@ class WebSocketProvider with ChangeNotifier {
 
   // ================= Channels =================
 
+
   Future<void> subscribeToUserChannel() async {
     if (_userId == null || _authToken == null) return;
 
-    final channelName = 'private-user.$_userId';
+    // PERBAIKAN: Kirimkan hanya nama dasar channel.
+    // Jangan sertakan 'private-' di sini.
+    final channelBase = 'user.$_userId';
 
-    // PERBAIKAN 3: Panggil metode service yang sudah benar
-    // Provider tidak perlu tahu tentang 'signature', serahkan pada service
     await _webSocketService.subscribeToChannel(
-      channelName,
+      channelBase, // Kirim nama dasar
       _authToken!,
       ApiEndpoints.baseUrl,
+      // isPresence: false // Opsional, defaultnya sudah false
+
     );
   }
 
@@ -171,7 +178,9 @@ class WebSocketProvider with ChangeNotifier {
     // PERBAIKAN 4: Gunakan cara yang sama seperti inisialisasi
     if (_authToken != null) {
       final wsUrl = ApiEndpoints.getWebSocketUrl(
-          'YOUR_REVERB_APP_KEY'); // Ganti dengan App Key Anda
+
+          'fiouy3umnruqcwdsoxni'); // Ganti dengan App Key Anda
+
       await _webSocketService.connect(wsUrl);
     }
   }
