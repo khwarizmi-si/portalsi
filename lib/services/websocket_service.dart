@@ -12,11 +12,11 @@ class WebSocketService {
   StreamSubscription? _subscription;
 
   final StreamController<String> _statusController =
-  StreamController.broadcast();
+      StreamController.broadcast();
   final StreamController<Map<String, dynamic>> _notificationController =
-  StreamController.broadcast();
+      StreamController.broadcast();
   final StreamController<Map<String, dynamic>> _eventController =
-  StreamController.broadcast();
+      StreamController.broadcast();
 
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
   final _chatListController =
@@ -24,7 +24,6 @@ class WebSocketService {
 
   Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
   Stream<Map<String, dynamic>> get chatListStream => _chatListController.stream;
-
 
   Stream<String> get statusStream => _statusController.stream;
   Stream<Map<String, dynamic>> get notificationStream =>
@@ -50,7 +49,7 @@ class WebSocketService {
       _statusController.add("connecting");
 
       _subscription = _channel!.stream.listen(
-            (message) {
+        (message) {
           debugPrint("📩 WebSocket received: $message");
           _handleMessage(message);
         },
@@ -78,7 +77,6 @@ class WebSocketService {
       _activityTimer = Timer.periodic(const Duration(seconds: 2), (_) {
         updateActivity();
       });
-
     } catch (e) {
       debugPrint("❌ Failed to connect: $e");
 
@@ -120,7 +118,6 @@ class WebSocketService {
   /// Subscribe ke channel (sudah termasuk proses otentikasi)
 
   Future<void> subscribeToChannel(
-
     String channelBase,
     String authToken,
     String apiBaseUrl, {
@@ -183,50 +180,55 @@ class WebSocketService {
   void _handleMessage(String message) {
     try {
       final Map<String, dynamic> decoded = jsonDecode(message);
-      final String eventName = decoded["event"];
 
+      final String event = decoded["event"];
+      final String? channel = decoded["channel"];
+      final dynamic rawData = decoded["data"];
 
-
-      final event = decoded["event"];
-      final data = decoded["data"];
+      // Kalau data dari Pusher/Laravel, biasanya string JSON
+      dynamic parsedData;
+      try {
+        parsedData = rawData is String ? jsonDecode(rawData) : rawData;
+      } catch (_) {
+        parsedData = rawData;
+      }
 
       switch (event) {
         case "pusher:connection_established":
-          final parsed = jsonDecode(data);
+          final parsed = parsedData;
           _socketId = parsed["socket_id"];
           debugPrint("✅ Connected with socket_id: $_socketId");
           _statusController.add("connected:$_socketId");
           break;
 
         case "pusher:error":
-          debugPrint("⚠️ Pusher error: $data");
+          debugPrint("⚠️ Pusher error: $parsedData");
           break;
 
-
-      // Tangani event dari channel aplikasi kita (misalnya: private-chat.1)
-      if (decoded.containsKey("channel")) {
-        // Data dari Pusher seringkali berupa string JSON, perlu di-decode lagi
-        final dynamic dataPayload = jsonDecode(decoded["data"]);
-
-        // Buat format event yang konsisten untuk aplikasi
-        final Map<String, dynamic> appEvent = {
-          'type': eventName, // Contoh: "message.new" atau "message.read"
-          'data': dataPayload,
-        };
-
-
         case "message.sent":
-          _messageController.add(decoded);
+          _messageController.add({
+            "channel": channel,
+            "event": event,
+            "data": parsedData,
+          });
           break;
 
         case "chat.updated":
-          _chatListController.add(decoded);
-
+          _chatListController.add({
+            "channel": channel,
+            "event": event,
+            "data": parsedData,
+          });
           break;
 
         default:
-          _eventController.add(decoded);
-
+          // Event custom lain → lempar ke eventStream umum
+          _eventController.add({
+            "channel": channel,
+            "event": event,
+            "data": parsedData,
+          });
+          break;
       }
     } catch (e) {
       debugPrint("⚠️ Error parsing message: $e");
@@ -255,9 +257,10 @@ class WebSocketService {
         send({"event": "pusher:pong", "data": {}});
         break;
 
-    // Anda bisa menambahkan case lain jika perlu, misal: pusher_internal:subscription_succeeded
+      // Anda bisa menambahkan case lain jika perlu, misal: pusher_internal:subscription_succeeded
       case "pusher_internal:subscription_succeeded":
-        debugPrint("✅ Successfully subscribed to channel: ${jsonDecode(data)['channel']}");
+        debugPrint(
+            "✅ Successfully subscribed to channel: ${jsonDecode(data)['channel']}");
         break;
     }
   }
