@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.example.portal_si"
 
-    compileSdk = 35
+    compileSdk = 36
 
     ndkVersion = "27.0.12077973"
 
@@ -20,11 +20,10 @@ android {
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_11.toString()
     }
-
 defaultConfig {
     applicationId = "com.example.portalsi"
     minSdk = flutter.minSdkVersion
-    targetSdk = flutter.targetSdkVersion
+    targetSdk = 36
     versionCode = flutter.versionCode.toInt()
     versionName = flutter.versionName
 }

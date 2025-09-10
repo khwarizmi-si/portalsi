@@ -1,19 +1,22 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:portal_si/utils/secure_storage.dart'; // [BARU] Import untuk ambil token
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:http/http.dart' as http;
+
+final WebSocketService webSocketService = WebSocketService();
 
 class WebSocketService {
   WebSocketChannel? _channel;
   StreamSubscription? _subscription;
 
   final StreamController<String> _statusController =
-      StreamController.broadcast();
+  StreamController.broadcast();
   final StreamController<Map<String, dynamic>> _notificationController =
-      StreamController.broadcast();
+  StreamController.broadcast();
   final StreamController<Map<String, dynamic>> _eventController =
-      StreamController.broadcast();
+  StreamController.broadcast();
 
   final _messageController = StreamController<Map<String, dynamic>>.broadcast();
   final _chatListController =
@@ -29,16 +32,25 @@ class WebSocketService {
   Stream<Map<String, dynamic>> get eventStream => _eventController.stream;
 
   Timer? _heartbeatTimer;
+  Timer? _activityTimer; // [BARU] Timer untuk update aktivitas
   String? _socketId;
+
+  Completer<void>? _connectionCompleter;
 
   /// Connect ke Laravel Reverb (Pusher protocol)
   Future<void> connect(String wsUrl) async {
+    if (_channel != null && _channel!.closeCode == null) {
+      // Jika sudah terhubung, langsung selesaikan completer
+      if (!_connectionCompleter!.isCompleted) _connectionCompleter!.complete();
+      return;
+    }
+    _connectionCompleter = Completer<void>();
     try {
       _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
       _statusController.add("connecting");
 
       _subscription = _channel!.stream.listen(
-        (message) {
+            (message) {
           debugPrint("📩 WebSocket received: $message");
           _handleMessage(message);
         },
@@ -55,18 +67,58 @@ class WebSocketService {
 
       _statusController.add("connected");
 
+      // Setup heartbeat (ping/pong)
       _heartbeatTimer?.cancel();
-      _heartbeatTimer = Timer.periodic(const Duration(seconds: 25), (_) {
+      _heartbeatTimer = Timer.periodic(const Duration(seconds: 2), (_) {
         send({"event": "pusher:ping", "data": {}});
       });
+
+      // [BARU] Setup timer untuk update aktivitas setiap 2 menit
+      _activityTimer?.cancel();
+      _activityTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+        updateActivity();
+      });
+
     } catch (e) {
       debugPrint("❌ Failed to connect: $e");
+
+      _connectionCompleter!.completeError(e);
       _statusController.add("error");
     }
   }
 
-  /// Subscribe ke channel (auto request auth ke Laravel)
+  // [BARU] Fungsi untuk memanggil endpoint update-activity
+  Future<void> updateActivity() async {
+    try {
+      final token = await SecureStorage.getToken();
+      if (token == null) {
+        debugPrint("⚠️ Tidak bisa update aktivitas: Token tidak ditemukan.");
+        return;
+      }
+
+      // Ganti dengan base URL API Anda dari ApiEndpoints
+      const String apiBaseUrl = 'https://api-new.portalsi.com/api';
+
+      final response = await http.post(
+        Uri.parse("$apiBaseUrl/websocket/update-activity"),
+        headers: {
+          "Authorization": "Bearer $token",
+          "Accept": "application/json",
+        },
+      );
+
+      if (response.statusCode == 200) {
+        debugPrint("🏃‍♂️ Aktivitas pengguna berhasil diperbarui.");
+      } else {
+        debugPrint("❌ Gagal memperbarui aktivitas: ${response.statusCode}");
+      }
+    } catch (e) {
+      debugPrint("⚠️ Error saat update aktivitas: $e");
+    }
+  }
+
   /// Subscribe ke channel (sudah termasuk proses otentikasi)
+
   Future<void> subscribeToChannel(
 
     String channelBase,
@@ -83,7 +135,7 @@ class WebSocketService {
       return;
     }
 
-    // Pindahkan logika otentikasi ke sini, ini adalah tempat yang tepat.
+    // ... (sisa kode subscribeToChannel tidak berubah)
     try {
       final response = await http.post(
         Uri.parse("$apiBaseUrl/broadcasting/auth"),
@@ -109,7 +161,7 @@ class WebSocketService {
             "auth": authSignature,
           }
         };
-        send(payload); // Gunakan fungsi send yang sudah ada
+        send(payload);
         debugPrint("📡 Subscribing to $channelName...");
       } else {
         debugPrint(
@@ -127,10 +179,12 @@ class WebSocketService {
     }
   }
 
-  /// Handler pesan masuk
+  // [MODIFIKASI UTAMA] Logika parsing pesan yang disempurnakan
   void _handleMessage(String message) {
     try {
       final Map<String, dynamic> decoded = jsonDecode(message);
+      final String eventName = decoded["event"];
+
 
 
       final event = decoded["event"];
@@ -148,13 +202,18 @@ class WebSocketService {
           debugPrint("⚠️ Pusher error: $data");
           break;
 
-        case "pusher:ping":
-          send({"event": "pusher:pong", "data": {}});
-          break;
 
-        case "notification.new":
-          _notificationController.add(decoded);
-          break;
+      // Tangani event dari channel aplikasi kita (misalnya: private-chat.1)
+      if (decoded.containsKey("channel")) {
+        // Data dari Pusher seringkali berupa string JSON, perlu di-decode lagi
+        final dynamic dataPayload = jsonDecode(decoded["data"]);
+
+        // Buat format event yang konsisten untuk aplikasi
+        final Map<String, dynamic> appEvent = {
+          'type': eventName, // Contoh: "message.new" atau "message.read"
+          'data': dataPayload,
+        };
+
 
         case "message.sent":
           _messageController.add(decoded);
@@ -167,9 +226,39 @@ class WebSocketService {
 
         default:
           _eventController.add(decoded);
+
       }
     } catch (e) {
       debugPrint("⚠️ Error parsing message: $e");
+    }
+  }
+
+  // [BARU] Fungsi terpisah untuk menangani event internal Pusher
+  void _handlePusherEvent(String event, dynamic data) {
+    switch (event) {
+      case "pusher:connection_established":
+        final parsed = jsonDecode(data);
+        _socketId = parsed["socket_id"];
+        debugPrint("✅ Connected with socket_id: $_socketId");
+
+        if (!_connectionCompleter!.isCompleted) {
+          _connectionCompleter!.complete();
+        }
+
+        break;
+
+      case "pusher:error":
+        debugPrint("⚠️ Pusher error: $data");
+        break;
+
+      case "pusher:ping":
+        send({"event": "pusher:pong", "data": {}});
+        break;
+
+    // Anda bisa menambahkan case lain jika perlu, misal: pusher_internal:subscription_succeeded
+      case "pusher_internal:subscription_succeeded":
+        debugPrint("✅ Successfully subscribed to channel: ${jsonDecode(data)['channel']}");
+        break;
     }
   }
 
@@ -182,6 +271,7 @@ class WebSocketService {
 
   void disconnect() {
     _heartbeatTimer?.cancel();
+    _activityTimer?.cancel(); // [BARU] Hentikan timer aktivitas saat disconnect
     _subscription?.cancel();
     _channel?.sink.close();
     _statusController.add("disconnected");
