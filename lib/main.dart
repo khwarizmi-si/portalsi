@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart'; // for kDebugMode
 import 'package:portal_si/pages/main_scaffold.dart';
 import 'package:portal_si/pages/welcome_page.dart';
 import 'package:portal_si/providers/navigation_provider.dart';
+import 'package:portal_si/widgets/app_lifecycle_observer.dart';
 import 'package:provider/provider.dart';
 import 'package:portal_si/controllers/home_controller.dart';
 import 'package:portal_si/pages/notif_page.dart';
@@ -116,37 +117,39 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     // MultiProvider sudah dipindahkan ke atas di `runApp`
     // untuk memastikan provider tersedia sebelum MaterialApp dibuat.
-    return MaterialApp(
-      title: 'Portal SI',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        fontFamily: 'Roboto',
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-      ),
-      navigatorObservers: [
-        CacheNavigationObserver(),
-      ],
-      initialRoute: widget.startPage,
-      routes: {
-        '/login': (context) => const LoginPage(),
-        '/register': (context) => RegisterPage(),
-        '/home': (context) => const MainScaffold(),
-        '/feed': (context) => FeedPage(),
-        '/profile': (context) => const ProfilePage(),
-        '/story': (context) => InstagramStoryPage(),
-        '/notif': (context) => const NotificationPage(),
-        '/message': (context) => MessageListPage(),
-        '/welcome': (context) => WelcomePage(),
-        '/other-profile': (context) {
-          final args = ModalRoute.of(context)!.settings.arguments
-          as Map<String, dynamic>;
-          return OtherProfilePage(
-            username: args['username'],
-          );
-        },
-        if (kDebugMode) '/debug_cache': (context) => const CacheDebugPage(),
-      },
-      debugShowCheckedModeBanner: kDebugMode,
+    return AppLifecycleObserver(
+        child: MaterialApp(
+          title: 'Portal SI',
+          theme: ThemeData(
+            primarySwatch: Colors.blue,
+            fontFamily: 'Roboto',
+            visualDensity: VisualDensity.adaptivePlatformDensity,
+          ),
+          navigatorObservers: [
+            CacheNavigationObserver(),
+          ],
+          initialRoute: widget.startPage,
+          routes: {
+            '/login': (context) => const LoginPage(),
+            '/register': (context) => RegisterPage(),
+            '/home': (context) => const MainScaffold(),
+            '/feed': (context) => FeedPage(),
+            '/profile': (context) => const ProfilePage(),
+            '/story': (context) => InstagramStoryPage(),
+            '/notif': (context) => const NotificationPage(),
+            '/message': (context) => MessageListPage(),
+            '/welcome': (context) => WelcomePage(),
+            '/other-profile': (context) {
+              final args = ModalRoute.of(context)!.settings.arguments
+              as Map<String, dynamic>;
+              return OtherProfilePage(
+                username: args['username'],
+              );
+            },
+            if (kDebugMode) '/debug_cache': (context) => const CacheDebugPage(),
+          },
+          debugShowCheckedModeBanner: kDebugMode,
+        ),
     );
   }
 }

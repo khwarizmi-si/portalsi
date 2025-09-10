@@ -11,10 +11,34 @@ import '../models/chat.dart';
 import '../models/user_model.dart';
 import '../utils/secure_storage.dart';
 import 'api_service.dart';
+import 'websocket_service.dart';
+import '../config/api_endpoint.dart';
 import 'package:http/http.dart' as http;
 
 class ChatService extends ApiService {
-  ChatService._internal();
+  ChatService._internal() {
+    // [MODIFIKASI UTAMA]
+    // Mulai mendengarkan stream event dari WebSocketService secara global
+    _webSocketListener = webSocketService.eventStream.listen((appEvent) {
+      final String eventType = appEvent['type'];
+      final dynamic eventData = appEvent['data'];
+
+      // Cek apakah event adalah pesan baru
+      if (eventType == 'message.new') {
+        try {
+          // Karena service tidak tahu currentUser & recipient,
+          // kita perlu memodifikasi ChatMessage.fromJson untuk menangani data mentah
+          // yang berisi info sender & recipient.
+          final chatMessage = ChatMessage.fromJson(eventData);
+          _messageController.add(chatMessage);
+
+          if (kDebugMode) print('📥 Pesan realtime berhasil diproses oleh ChatService');
+        } catch (e) {
+          if (kDebugMode) print('⚠️ Gagal parsing pesan di ChatService: $e');
+        }
+      }
+    });
+  }
   static final ChatService _instance = ChatService._internal();
   factory ChatService() => _instance;
 
@@ -26,44 +50,31 @@ class ChatService extends ApiService {
 
   Stream<ChatMessage> get messages => _messageController.stream;
 
-  void connect(String userId,
-      {required User currentUser, required User recipient}) {
-    if (_channel != null && _channel!.closeCode == null) {
-      if (kDebugMode) print('🔌 WebSocket sudah terhubung untuk user $userId.');
-      return;
-    }
+  StreamSubscription? _webSocketListener; // Listener untuk stream dari WebSocketService
 
+  // [MODIFIKASI UTAMA] Sesuaikan fungsi connect
+  void connect({required User currentUser, required User recipient}) {
+    final channelName = 'private-chat.${currentUser.id}.${recipient.id}';
+    _subscribeToChatChannel(channelName);
+  }
+
+  // [BARU] Fungsi helper untuk melakukan subscribe dengan otentikasi
+  Future<void> _subscribeToChatChannel(String channelName) async {
     try {
-      final uri = Uri.parse('ws://10.0.2.2:8080?userId=$userId');
-      _channel = WebSocketChannel.connect(uri);
+      final token = await SecureStorage.getToken();
+      if (token == null) {
+        if (kDebugMode) print("Gagal subscribe: Token tidak ditemukan.");
+        return;
+      }
 
-      if (kDebugMode)
-        print('✅ Berhasil terhubung ke WebSocket sebagai user $userId');
-
-      _channel!.stream.listen(
-            (data) {
-          if (kDebugMode) print('📥 Pesan realtime diterima: $data');
-          try {
-            final Map<String, dynamic> messageData = jsonDecode(data);
-
-            // [PERBAIKAN 1 DI SINI]
-            // Tambahkan argumen currentUser dan recipient yang sudah ada
-            final chatMessage = ChatMessage.fromJson(
-              messageData,
-              currentUser, // <-- Argumen kedua ditambahkan
-              recipient,   // <-- Argumen ketiga ditambahkan
-            );
-
-            _messageController.add(chatMessage);
-          } catch (e) {
-            if (kDebugMode) print('⚠️ Gagal parsing pesan realtime: $e');
-          }
-        },
-        onDone: () => print('❌ Koneksi WebSocket ditutup.'),
-        onError: (error) => print('⚠️ Error pada WebSocket: $error'),
+      await webSocketService.subscribeToChannel(
+        channelName,
+        token,
+        ApiEndpoints.baseUrl,
       );
+
     } catch (e) {
-      if (kDebugMode) print('❌ Gagal terhubung ke WebSocket: $e');
+      if (kDebugMode) print("Error saat subscribe ke channel chat: $e");
     }
   }
 
@@ -75,6 +86,7 @@ class ChatService extends ApiService {
 
   void dispose() {
     _messageController.close();
+    _webSocketListener?.cancel();
     disconnect();
   }
 

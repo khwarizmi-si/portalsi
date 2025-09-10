@@ -3,7 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:gal/gal.dart'; // DIUBAH: Menggunakan gal
 import 'package:path/path.dart' as path;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -32,6 +32,10 @@ class ChatRoomController extends ChangeNotifier {
 
   StreamSubscription? _messageSubscription;
 
+  bool _isRecipientOnline = false;
+  bool get isRecipientOnline => _isRecipientOnline;
+  Timer? _statusTimer;
+
   ChatRoomController({required this.recipient}) {
     _initialize();
   }
@@ -43,10 +47,48 @@ class ChatRoomController extends ChangeNotifier {
       await fetchMessages();
       _markMessagesAsRead();
       _connectAndListen();
+
+      _checkOnlineStatus();
+      _statusTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
+        _checkOnlineStatus();
+      });
     } else {
       _errorMessage = "Tidak bisa memuat data pengguna saat ini.";
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> _checkOnlineStatus() async {
+    if (recipient.id == null) return;
+
+    try {
+      final token = await SecureStorage.getToken();
+      if (token == null) return;
+
+      final url = Uri.parse('https://api-new.portalsi.com/api/websocket/online-status/${recipient.id}');
+      final response = await http.get(
+        url,
+        headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final bool isOnline = data['is_online'] ?? false;
+
+        // Hanya update jika statusnya berubah
+        if (_isRecipientOnline != isOnline) {
+          _isRecipientOnline = isOnline;
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint("Gagal memeriksa status online: $e");
+      // Jika error, anggap offline
+      if (_isRecipientOnline) {
+        _isRecipientOnline = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -113,6 +155,7 @@ class ChatRoomController extends ChangeNotifier {
   void dispose() {
     debugPrint("ChatRoomController disposed. Disconnecting WebSocket.");
     _messageSubscription?.cancel();
+    _statusTimer?.cancel();
     _chatService.disconnect();
     super.dispose();
   }
@@ -120,18 +163,22 @@ class ChatRoomController extends ChangeNotifier {
   void _connectAndListen() {
     if (_currentUser == null) return;
 
+    // Panggil connect dengan argumen yang benar
     _chatService.connect(
-      _currentUser!.id.toString(),
       currentUser: _currentUser!,
       recipient: recipient,
     );
+
     _messageSubscription?.cancel();
+
+    // Logika ini sekarang akan berfungsi karena ChatService sudah terhubung
     _messageSubscription = _chatService.messages.listen(
           (newMessage) {
         if (newMessage.sender.id != _currentUser!.id) {
           final isMessageExist = _messages.any((m) => m.id == newMessage.id);
           if (!isMessageExist) {
             _messages.insert(0, newMessage);
+            _saveMessagesToCache();
             notifyListeners();
           }
         }
@@ -144,6 +191,37 @@ class ChatRoomController extends ChangeNotifier {
       },
       cancelOnError: false,
     );
+  }
+
+
+  // [PERBAIKAN] Menggunakan metode yang benar untuk 'gal'
+  Future<void> _downloadAndSaveMedia(ChatMessage message) async {
+    if (message.mediaUrl == null) return;
+    try {
+      debugPrint("Mengunduh media dari: ${message.mediaUrl}");
+      final response = await http.get(Uri.parse(message.mediaUrl!));
+      if (response.statusCode != 200) throw Exception("Gagal mengunduh file.");
+
+      final tempDir = await getTemporaryDirectory();
+      final fileName = message.mediaUrl!.split('/').last;
+      final tempPath = '${tempDir.path}/$fileName';
+      final file = File(tempPath);
+      await file.writeAsBytes(response.bodyBytes);
+
+      final isVideo = fileName.toLowerCase().endsWith('.mp4');
+
+      if (isVideo) {
+        await Gal.putVideo(tempPath, album: 'Portal SI Pictures');
+      } else {
+        await Gal.putImage(tempPath, album: 'Portal SI Pictures');
+      }
+
+      message.localMediaPath = tempPath;
+      await _saveMessagesToCache();
+      debugPrint("Media berhasil disimpan di album 'Portal SI Pictures'.");
+    } catch (e) {
+      debugPrint("Gagal mengunduh atau menyimpan media: $e");
+    }
   }
 
   Future<void> _loadCurrentUser() async {
@@ -246,41 +324,6 @@ class ChatRoomController extends ChangeNotifier {
       if (message.mediaUrl != null && message.localMediaPath == null) {
         _downloadAndSaveMedia(message);
       }
-    }
-  }
-
-  Future<void> _downloadAndSaveMedia(ChatMessage message) async {
-    try {
-      debugPrint("Mengunduh media dari: ${message.mediaUrl}");
-
-      // 1. Unduh file menggunakan HTTP
-      final response = await http.get(Uri.parse(message.mediaUrl!));
-      if (response.statusCode != 200) throw Exception("Gagal mengunduh file.");
-
-      // 2. Dapatkan nama file dari URL
-      final String fileName = message.mediaUrl!.split('/').last;
-
-      // 3. Simpan langsung dari memory (Uint8List) ke galeri
-      final result = await ImageGallerySaver.saveImage(
-        response.bodyBytes,
-        quality: 90, // Kualitas gambar (opsional)
-        name: fileName, // Nama file di galeri
-        isReturnImagePathOfIOS: true, // Diperlukan untuk iOS
-      );
-
-      if (result['isSuccess'] == true) {
-        // 4. Update path lokal di objek pesan dan simpan ke cache
-        // `image_gallery_saver` mengembalikan path file yang sudah disimpan
-        final String savedPath = result['filePath'].replaceAll('file://', '');
-        message.localMediaPath = savedPath;
-        await _saveMessagesToCache();
-        debugPrint("Media berhasil disimpan di galeri: $savedPath");
-      } else {
-        debugPrint("Gagal menyimpan ke galeri.");
-      }
-
-    } catch (e) {
-      debugPrint("Gagal mengunduh atau menyimpan media: $e");
     }
   }
 

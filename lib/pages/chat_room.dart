@@ -500,64 +500,73 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          )
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 10.0),
-        child: Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.black87),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            CircleAvatar(
-              radius: 22,
-              backgroundColor: Colors.grey[300],
-              backgroundImage: user.profilePictureUrl != null &&
-                  user.profilePictureUrl!.isNotEmpty
-                  ? NetworkImage(user.profilePictureUrl!)
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    user.fullName ?? user.username,
-                    style: const TextStyle(
-                        color: Colors.black,
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold),
-                    overflow: TextOverflow.ellipsis,
+    // [MODIFIKASI] Gunakan Consumer untuk mendapatkan status online
+    return Consumer<ChatRoomController>(
+      builder: (context, controller, child) {
+        return Container(
+          padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              )
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 10.0),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.black87),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: Colors.grey[300],
+                  backgroundImage: user.profilePictureUrl != null &&
+                      user.profilePictureUrl!.isNotEmpty
+                      ? NetworkImage(user.profilePictureUrl!)
+                      : null,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        user.fullName ?? user.username,
+                        style: const TextStyle(
+                            color: Colors.black,
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      // [MODIFIKASI] Tampilkan status Online/Offline secara dinamis
+                      Text(
+                        controller.isRecipientOnline ? 'Online' : 'Offline',
+                        style: TextStyle(
+                            color: controller.isRecipientOnline ? Colors.green.shade600 : Colors.grey.shade600,
+                            fontSize: 13
+                        ),
+                      ),
+                    ],
                   ),
-                  Text(
-                    'Online',
-                    style: TextStyle(color: Colors.green.shade600, fontSize: 13),
-                  ),
-                ],
-              ),
+                ),
+                IconButton(
+                    icon: const Icon(Icons.call_outlined, color: Colors.black87),
+                    onPressed: () {}),
+                IconButton(
+                    icon: const Icon(Icons.more_vert, color: Colors.black87),
+                    onPressed: () {}),
+              ],
             ),
-            IconButton(
-                icon: const Icon(Icons.call_outlined, color: Colors.black87),
-                onPressed: () {}),
-            IconButton(
-                icon: const Icon(Icons.more_vert, color: Colors.black87),
-                onPressed: () {}),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
