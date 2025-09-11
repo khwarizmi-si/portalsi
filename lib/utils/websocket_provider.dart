@@ -1,189 +1,101 @@
 import 'package:flutter/foundation.dart';
-import 'dart:async';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:portal_si/config/api_endpoint.dart';
 import 'package:portal_si/services/websocket_service.dart';
-import 'package:portal_si/models/notification_model.dart';
 import 'package:portal_si/utils/secure_storage.dart';
+import 'package:portal_si/config/api_endpoint.dart';
 
 class WebSocketProvider with ChangeNotifier {
-  final WebSocketService _webSocketService = WebSocketService();
+  final WebSocketService _service = WebSocketService();
   String? _authToken;
   int? _userId;
 
-  // ================= State =================
   bool _isConnected = false;
-  int _unreadNotifications = 0;
-  final List<NotificationModel> _notifications = [];
+  Map<int, bool> _onlineUsers = {};
+  Map<int, dynamic> _latestMessages = {};
+  Map<int, int> _likeCounts = {};
+  Map<int, int> _commentCounts = {};
 
-  // Chat & Social features
-  final Map<int, bool> _onlineUsers = {};
-  final List<Map<String, dynamic>> _recentStories = [];
-  final Map<int, int> _likeCounts = {};
-  final Map<int, int> _commentCounts = {};
-  final Map<int, Map<String, dynamic>> _latestMessages = {};
-
-  // ================= Getters =================
   bool get isConnected => _isConnected;
-  int get unreadNotifications => _unreadNotifications;
-  List<NotificationModel> get notifications =>
-      List.unmodifiable(_notifications);
-
   bool isUserOnline(int userId) => _onlineUsers[userId] ?? false;
-  List<Map<String, dynamic>> get recentStories =>
-      List.unmodifiable(_recentStories);
-  int getLikeCount(int postId, int initialCount) =>
-      _likeCounts[postId] ?? initialCount;
-  int getCommentCount(int postId, int initialCount) =>
-      _commentCounts[postId] ?? initialCount;
-  Map<String, dynamic>? getLatestMessage(int roomId) => _latestMessages[roomId];
+  Map<int, dynamic>? getLatestMessage(int roomId) => _latestMessages[roomId];
+  int getLikeCount(int postId, int defaultCount) =>
+      _likeCounts[postId] ?? defaultCount;
+  int getCommentCount(int postId, int defaultCount) =>
+      _commentCounts[postId] ?? defaultCount;
 
-  // ================= Initialization =================
   Future<void> initializeAndConnect() async {
     _authToken = await SecureStorage.getToken();
     final userIdStr = await SecureStorage.getUserId();
-    _userId = userIdStr != null ? int.tryParse(userIdStr as String) : null;
-
-    if (_authToken == null || _userId == null) {
-      debugPrint('❌ Cannot init WebSocket: Token or UserID missing.');
-      return;
-    }
+    if (_authToken == null || userIdStr == null) return;
+    _userId = userIdStr;
 
     _setupListeners();
-    // PERBAIKAN 1: Buat URL WebSocket yang benar sebelum memanggil connect
-    final wsUrl = ApiEndpoints.getWebSocketUrl(
-        'YOUR_REVERB_APP_KEY'); // Ganti dengan App Key Anda
-    await _webSocketService.connect(wsUrl);
+    final wsUrl = ApiEndpoints.getWebSocketUrl('fiouy3umnruqcwdsoxni');
+    await _service.connect(wsUrl);
   }
 
   void _setupListeners() {
-    // PERBAIKAN: Gunakan stream yang benar dari service
-    _webSocketService.statusStream.listen((status) {
-      final newConnectionState = status.startsWith("connected");
-      if (_isConnected == newConnectionState) return;
+    _service.statusStream.listen((status) {
+      final newState = status.startsWith("connected");
+      if (_isConnected == newState) return;
+      _isConnected = newState;
 
-      _isConnected = newConnectionState;
-      debugPrint('🔌 WebSocket connection status: $status');
-
-      if (_isConnected) {
-        // Otomatis subscribe setelah koneksi berhasil
-        subscribeToUserChannel();
-      }
+      if (_isConnected) subscribeToUserChannel();
       notifyListeners();
     });
 
-    _webSocketService.notificationStream.listen(_handleNotification);
-    _webSocketService.eventStream.listen(_handleCustomEvent);
-  }
-
-  // ================= Handlers =================
-  void _handleNotification(Map<String, dynamic> data) {
-    try {
-      final notification = NotificationModel.fromJson(data);
-      _notifications.insert(0, notification);
-
-      if (!notification.isRead) {
-        _unreadNotifications++;
-      }
+    _service.messageStream.listen((msg) {
+      final channel = msg["channel"];
+      final data = msg["data"];
+      final roomId = data["room_id"];
+      _latestMessages[roomId] = data;
       notifyListeners();
-    } catch (e) {
-      debugPrint('❌ Error parsing notification: $e');
-    }
+    });
+
+    _service.eventStream.listen((event) {
+      final channel = event["channel"];
+      final eventName = event["event"];
+      final data = event["data"];
+
+      switch (eventName) {
+        case "pusher_internal:member_added":
+          _onlineUsers[data["user_id"]] = true;
+          notifyListeners();
+          break;
+        case "pusher_internal:member_removed":
+          _onlineUsers[data["user_id"]] = false;
+          notifyListeners();
+          break;
+        case "post.liked":
+          _likeCounts[data["post_id"]] =
+              (_likeCounts[data["post_id"]] ?? 0) + 1;
+          notifyListeners();
+          break;
+        case "post.commented":
+          _commentCounts[data["post_id"]] =
+              (_commentCounts[data["post_id"]] ?? 0) + 1;
+          notifyListeners();
+          break;
+        default:
+          debugPrint("ℹ️ Unhandled event: $eventName");
+      }
+    });
   }
-
-  void _handleCustomEvent(Map<String, dynamic> event) {
-    final channel = event['channel'];
-    final eventName = event['event'];
-    final data = event['data'];
-
-    debugPrint("📩 Event received: $channel | $eventName | $data");
-
-    switch (eventName) {
-      case "message.new":
-        final roomId = data['room_id'];
-        _latestMessages[roomId] = data;
-        notifyListeners();
-        break;
-
-      case "user.online":
-        final uid = data['user_id'];
-        _onlineUsers[uid] = true;
-        notifyListeners();
-        break;
-
-      case "user.offline":
-        final uid = data['user_id'];
-        _onlineUsers[uid] = false;
-        notifyListeners();
-        break;
-
-      case "post.liked":
-        final postId = data['post_id'];
-        _likeCounts[postId] = (_likeCounts[postId] ?? 0) + 1;
-        notifyListeners();
-        break;
-
-      case "post.commented":
-        final postId = data['post_id'];
-        _commentCounts[postId] = (_commentCounts[postId] ?? 0) + 1;
-        notifyListeners();
-        break;
-
-      case "story.new":
-        _recentStories.add(data);
-        notifyListeners();
-        break;
-
-      default:
-        debugPrint("ℹ️ Unhandled event: $eventName");
-    }
-  }
-
-  // ================= Channels =================
 
   Future<void> subscribeToUserChannel() async {
     if (_userId == null || _authToken == null) return;
-
-    final channelName = 'private-user.$_userId';
-
-    // PERBAIKAN 3: Panggil metode service yang sudah benar
-    // Provider tidak perlu tahu tentang 'signature', serahkan pada service
-    await _webSocketService.subscribeToChannel(
-      channelName,
-      _authToken!,
-      ApiEndpoints.baseUrl,
-    );
+    await _service.subscribeToChannel(
+        "user.$_userId", _authToken!, ApiEndpoints.baseUrl);
   }
 
-  // ================= Utils =================
-  void markNotificationsAsRead() {
-    if (_unreadNotifications == 0) return;
-
-    _unreadNotifications = 0;
-    for (var notif in _notifications) {
-      notif.isRead = true;
-    }
-    notifyListeners();
+  Future<void> subscribeToChatRoom(int roomId) async {
+    if (_authToken == null) return;
+    await _service.subscribeToChannel(
+        "chat.$roomId", _authToken!, ApiEndpoints.baseUrl);
   }
 
+  void disconnect() => _service.disconnect();
   Future<void> reconnect() async {
-    // PERBAIKAN 4: Gunakan cara yang sama seperti inisialisasi
-    if (_authToken != null) {
-      final wsUrl = ApiEndpoints.getWebSocketUrl(
-          'YOUR_REVERB_APP_KEY'); // Ganti dengan App Key Anda
-      await _webSocketService.connect(wsUrl);
-    }
-  }
-
-  void disconnect() {
-    // PERBAIKAN 5: Panggil nama fungsi yang benar
-    _webSocketService.disconnect();
-  }
-
-  @override
-  void dispose() {
-    disconnect(); // Panggil fungsi disconnect yang sudah benar
-    super.dispose();
+    final wsUrl = ApiEndpoints.getWebSocketUrl('fiouy3umnruqcwdsoxni');
+    await _service.connect(wsUrl);
   }
 }
