@@ -8,6 +8,7 @@ import '../models/post_model.dart';
 import '../models/user_model.dart';
 import '../services/post_service.dart';
 import '../services/like_service.dart';
+import '../utils/navigation_helper.dart';
 import '../utils/secure_storage.dart';
 import '../widgets/feed/filter_dialog.dart';
 import '../helper/time_helper.dart'; // <-- Pastikan import ini ada
@@ -91,7 +92,6 @@ class FeedController extends ChangeNotifier {
 
     try {
       final authToken = await SecureStorage.getToken();
-      // --- 👇 PERBAIKAN DI SINI ---
       final uri = Uri.parse('https://api-new.portalsi.com/api/users/search')
           .replace(queryParameters: {'username': query}); // Diubah dari 'q'
 
@@ -105,16 +105,34 @@ class FeedController extends ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        // Anda bisa sederhanakan ini jika kunci respons sudah pasti
-        final usersJson = data['data'] as List?;
-        if (usersJson != null) {
-          searchResults = usersJson.map((item) => User.fromJson(item)).toList();
+        final dynamic responseData = json.decode(response.body);
+        List<dynamic>? usersListToProcess;
+
+        if (responseData is List) {
+          // If the API response is a JSON list directly
+          usersListToProcess = responseData;
+        } else if (responseData is Map<String, dynamic> && responseData.containsKey('data') && responseData['data'] is List) {
+          // If the API response is a JSON object with a 'data' key which is a list (original expectation)
+          usersListToProcess = responseData['data'] as List<dynamic>;
+        } else {
+          // If the response format is neither a direct list nor a map with 'data':[List]
+          print('Unexpected JSON format from API. Body: ${response.body}');
+          // usersListToProcess remains null
+        }
+
+        if (usersListToProcess != null) {
+          searchResults = usersListToProcess
+              .map((item) => User.fromJson(item as Map<String, dynamic>)) // Added cast to Map<String, dynamic>
+              .toList();
         } else {
           searchResults = [];
+          // Only show error if the format was truly unexpected.
+          if (!(responseData is List || (responseData is Map<String, dynamic> && responseData.containsKey('data') && responseData['data'] is List))) {
+            _showErrorMessage('Format respons dari server tidak dikenal.');
+          }
         }
       } else {
-        // Log error untuk debugging
+        // Log error for debugging
         print('Failed to search users. Status: ${response.statusCode}, Body: ${response.body}');
         throw Exception('Failed to search users');
       }
@@ -165,14 +183,17 @@ class FeedController extends ChangeNotifier {
     );
   }
 
-  void navigateToPostDetail(Post post) {
-    Navigator.push(
+  Future<void> navigateToPostDetail(Post post) async {
+    // Gunakan 'await' untuk menunggu halaman PostDetailPage ditutup
+    final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
         builder: (context) => PostDetailPage(
           postId: post.id,
           initialPost: post,
-          // Parameter lain tidak perlu di-pass karena sudah ada di dalam `initialPost`
+          // Parameter di bawah ini sebenarnya tidak diperlukan lagi
+          // karena PostDetailPage akan mengambilnya dari 'initialPost'.
+          // Namun, membiarkannya di sini tidak akan menyebabkan error.
           username: post.user.username,
           timeAgo: timeAgoFromDate(post.createdAt.toIso8601String()),
           imageUrl: post.mediaUrl ?? '',
@@ -185,6 +206,12 @@ class FeedController extends ChangeNotifier {
         ),
       ),
     );
+
+    // Jika ada data yang dikembalikan (artinya pengguna mengklik profil di dalam halaman detail),
+    // maka jalankan navigasi ke profil tersebut.
+    if (result != null && context.mounted) { // <-- Ganti menjadi 'context.mounted'
+      NavigationHelper.navigateToProfile(context, result);
+    }
   }
 
   void _showErrorMessage(String message) {

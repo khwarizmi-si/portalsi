@@ -3,8 +3,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:page_transition/page_transition.dart';
+import 'package:portal_si/pages/post_detail.dart';
 import 'package:portal_si/pages/ranking_page.dart';
 import '../components/bottom_navigation.dart';
+import '../models/post_model.dart';
+import '../models/user_model.dart';
 import '../widgets/feed/feed_header.dart';
 import '../widgets/feed/feed_grid.dart';
 import '../widgets/feed/search_results.dart';
@@ -25,13 +28,13 @@ class _FeedPageState extends State<FeedPage>
   final int _selectedIndex = 1;
   bool _isSiBoardPressed = false;
 
-  static const SystemUiOverlayStyle _systemUIOverlayStyle =
-  SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.dark,
-    systemNavigationBarColor: Colors.white,
-    systemNavigationBarIconBrightness: Brightness.dark,
-  );
+  // static const SystemUiOverlayStyle _systemUIOverlayStyle =
+  // SystemUiOverlayStyle(
+  //   statusBarColor: Colors.transparent,
+  //   statusBarIconBrightness: Brightness.dark,
+  //   systemNavigationBarColor: Colors.white,
+  //   systemNavigationBarIconBrightness: Brightness.dark,
+  // );
 
   @override
   bool get wantKeepAlive => true;
@@ -64,11 +67,14 @@ class _FeedPageState extends State<FeedPage>
     }
   }
 
-  void _onUserTap(Map<String, dynamic> user) {
-    NavigationHelper.navigateToProfile(context, user);
+  // Ubah parameter menjadi objek User
+  void _onUserTap(User user) {
+    // Pastikan NavigationHelper juga sudah diupdate untuk menerima User
+    NavigationHelper.navigateToProfile2(context, user);
   }
 
-  void _onSearchUserTap(Map<String, dynamic> user) {
+// Ubah parameter menjadi objek User
+  void _onSearchUserTap(User user) {
     _controller.clearSearch();
     _onUserTap(user);
   }
@@ -85,36 +91,53 @@ class _FeedPageState extends State<FeedPage>
   Widget build(BuildContext context) {
     super.build(context);
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: _systemUIOverlayStyle,
-      child: PopScope(
-        canPop: false,
-        onPopInvoked: _handleBackPress,
-        // 1. HAPUS Scaffold, GANTI DENGAN Material
-        child: Material(
-          // 2. Beri warna transparan agar gradient terlihat
-          color: Colors.transparent,
-          child: _buildBody(),
-          ),
-        ),
+      value: SystemUiOverlayStyle.dark, // Sesuaikan jika perlu
+      child: Material(
+        color: Colors.transparent, // Beri warna dasar
+        child: _buildBody(),
+      ),
     );
   }
 
   Widget _buildBody() {
     return SafeArea(
-      child: Column(
-        children: [
-          _buildHeader(),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _controller.fetchPosts,
-              color: Theme.of(context).primaryColor,
-              child: CustomScrollView(
-                controller: _controller.scrollController,
-                slivers: [
-                  _buildContentSlivers(),
-                ],
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          // Ganti seluruh isi Column berdasarkan state pencarian
+          return Column(
+            children: [
+              _buildHeader(),
+              Expanded(
+                // Jika sedang mencari, tampilkan hasil pencarian.
+                // Jika tidak, tampilkan feed grid.
+                child: _controller.showSearchResults
+                    ? _buildSearchResults()
+                    : _buildFeedContent(),
               ),
-            ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildFeedContent() {
+    return RefreshIndicator(
+      onRefresh: _controller.fetchPosts,
+      color: Theme.of(context).primaryColor,
+      child: CustomScrollView(
+        controller: _controller.scrollController,
+        slivers: [
+          // Panggil FeedGrid secara langsung di sini
+          FeedGrid(
+            isLoading: _controller.isLoading,
+            posts: _controller.posts,
+            fadeAnimation: _controller.fadeAnimation,
+            onRefresh: _controller.fetchPosts,
+            onLikePost: (post) => _controller.onLikePost(post),
+            onPostTap: (post) => _controller.navigateToPostDetail(post),
+            onUserTap: (user) => NavigationHelper.navigateToProfile2(context, user),
           ),
         ],
       ),
@@ -153,23 +176,25 @@ class _FeedPageState extends State<FeedPage>
   }
 
   Widget _buildHeader() {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (_, __) => FeedHeader(
-        searchController: _controller.searchController,
-        isScrolled: _controller.isScrolled,
-        onSearchChanged: _controller.searchUsers,
-        onClearSearch: _controller.clearSearch,
-        onFilterTap: _controller.showFilterDialog,
-      ),
+    return FeedHeader(
+      searchController: _controller.searchController,
+      isScrolled: _controller.isScrolled,
+      onSearchChanged: _controller.searchUsers,
+      onClearSearch: _controller.clearSearch,
+      onFilterTap: _controller.showFilterDialog,
     );
   }
 
   Widget _buildSearchResults() {
+    // SearchResults sekarang menjadi widget utama di dalam Expanded
+    // jadi tidak perlu lagi SliverFillRemaining
     return SearchResults(
       isSearching: _controller.isSearching,
       searchResults: _controller.searchResults,
-      onUserTap: _onSearchUserTap,
+      onUserTap: (user) {
+        _controller.clearSearch();
+        NavigationHelper.navigateToProfile2(context, user);
+      },
     );
   }
 

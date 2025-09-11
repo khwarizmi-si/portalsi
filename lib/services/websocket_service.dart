@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:portal_si/utils/secure_storage.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+final webSocketService = WebSocketService();
+
 class WebSocketService {
   WebSocketChannel? _channel;
   StreamSubscription? _subscription;
@@ -123,6 +125,7 @@ class WebSocketService {
   void _handleMessage(String message) {
     try {
       final decoded = jsonDecode(message);
+
       final event = decoded["event"];
       final channel = decoded["channel"];
       dynamic data = decoded["data"];
@@ -143,16 +146,10 @@ class WebSocketService {
           debugPrint("✅ Subscribed to $channel");
           break;
 
+      // GABUNGKAN SEMUA EVENT YANG PERLU DI-BROADCAST KE SATU STREAM
         case "pusher_internal:member_added":
         case "pusher_internal:member_removed":
-          _eventController
-              .add({"event": event, "channel": channel, "data": data});
-          break;
-
-        case "message.new":
-          _messageController.add({"channel": channel, "data": data});
-          break;
-
+        case "message.new": // <-- PINDAHKAN KE SINI
         default:
           _eventController
               .add({"event": event, "channel": channel, "data": data});

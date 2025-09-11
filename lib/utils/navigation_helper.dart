@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../models/user_model.dart';
 import '../providers/navigation_provider.dart';
 import 'secure_storage.dart';
 import '../pages/other_profile_page.dart';
@@ -10,6 +11,64 @@ class NavigationHelper {
   /// Navigate ke profile berdasarkan user data
   /// Jika user_id sama dengan current user, navigate ke ProfilePage
   /// Jika berbeda, navigate ke OtherProfilePage
+
+  static Future<void> navigateToProfile2(
+      BuildContext context,
+      User user, // <-- 2. UBAH DARI MAP MENJADI OBJEK USER
+          {
+        bool showHapticFeedback = true,
+        bool debugMode = false,
+      }) async {
+    if (showHapticFeedback) {
+      HapticFeedback.lightImpact();
+    }
+
+    // 3. AKSES PROPERTI LANGSUNG, TIDAK PERLU MAP LAGI
+    final username = user.username ?? 'Unknown User';
+    final userId = user.id;
+
+    if (debugMode) {
+      debugPrint('🔍 NavigationHelper: Navigating to profile: $username (user_id: $userId)');
+    }
+
+    try {
+      final currentUserId = await SecureStorage.getUserId();
+
+      if (debugMode) {
+        debugPrint('🔍 NavigationHelper: Current user_id: $currentUserId');
+      }
+
+      if (currentUserId != null && userId != null && userId == currentUserId) {
+        if (debugMode) {
+          debugPrint('✅ NavigationHelper: Navigating to own profile');
+        }
+        Provider.of<NavigationProvider>(context, listen: false).navigateToTab(4);
+        return;
+      }
+
+      if (debugMode) {
+        debugPrint('✅ NavigationHelper: Navigating to other profile');
+      }
+
+      Provider.of<NavigationProvider>(context, listen: false).showOverlay(
+        OtherProfilePage(username: username),
+      );
+    } catch (e) {
+      if (debugMode) {
+        debugPrint('❌ NavigationHelper Error: $e');
+      }
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => OtherProfilePage(
+            username: username,
+          ),
+        ),
+      );
+    }
+  }
+
+
   static Future<void> navigateToProfile(
     BuildContext context,
     Map<String, dynamic> user, {
