@@ -125,7 +125,6 @@ class WebSocketService {
   void _handleMessage(String message) {
     try {
       final decoded = jsonDecode(message);
-
       final event = decoded["event"];
       final channel = decoded["channel"];
       dynamic data = decoded["data"];
@@ -136,6 +135,12 @@ class WebSocketService {
           _socketId = data["socket_id"];
           debugPrint("✅ Connected with socket_id: $_socketId");
           _statusController.add("connected:$_socketId");
+          break;
+
+
+        case "dm.new":
+          _messageController.add({"channel": channel, "data": data});
+          debugPrint("💬 New DM: $data");
           break;
 
         case "pusher:ping":

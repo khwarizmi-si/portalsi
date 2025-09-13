@@ -66,10 +66,14 @@ class ChatRoomController extends ChangeNotifier {
       final token = await SecureStorage.getToken();
       if (token == null) return;
 
-      final url = Uri.parse('https://api-new.portalsi.com/api/websocket/online-status/${recipient.id}');
+      final url = Uri.parse(
+          'https://api-new.portalsi.com/api/websocket/online-status/${recipient.id}');
       final response = await http.get(
         url,
-        headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json'
+        },
       );
 
       if (response.statusCode == 200) {
@@ -105,7 +109,7 @@ class ChatRoomController extends ChangeNotifier {
       // Urutkan pesan dari yang terlama ke terbaru sebelum menyimpan
       _messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
       final List<Map<String, dynamic>> messagesJson =
-      _messages.map((m) => m.toJson()).toList();
+          _messages.map((m) => m.toJson()).toList();
       await prefs.setString(key, jsonEncode(messagesJson));
       // Kembalikan urutan reverse untuk tampilan UI
       _messages = _messages.reversed.toList();
@@ -113,7 +117,6 @@ class ChatRoomController extends ChangeNotifier {
       debugPrint("Gagal menyimpan cache: $e");
     }
   }
-
 
   // [TAMBAHAN] Metode baru untuk menjalankan API PATCH
   Future<void> _markMessagesAsRead() async {
@@ -130,7 +133,8 @@ class ChatRoomController extends ChangeNotifier {
       }
 
       // Ganti dengan base URL API Anda
-      final url = Uri.parse('https://api-new.portalsi.com/api/messages/user/${recipient.id}/read');
+      final url = Uri.parse(
+          'https://api-new.portalsi.com/api/messages/user/${recipient.id}/read');
 
       final response = await http.patch(
         url,
@@ -141,22 +145,23 @@ class ChatRoomController extends ChangeNotifier {
       );
 
       if (response.statusCode == 200) {
-        debugPrint("Successfully marked messages from user ${recipient.id} as read.");
+        debugPrint(
+            "Successfully marked messages from user ${recipient.id} as read.");
       } else {
-        debugPrint("Failed to mark messages as read. Status: ${response.statusCode}, Body: ${response.body}");
+        debugPrint(
+            "Failed to mark messages as read. Status: ${response.statusCode}, Body: ${response.body}");
       }
     } catch (e) {
       debugPrint("An error occurred while marking messages as read: $e");
     }
   }
 
-
   @override
   void dispose() {
     debugPrint("ChatRoomController disposed. Disconnecting WebSocket.");
     _messageSubscription?.cancel();
     _statusTimer?.cancel();
-    _chatService.disconnect();
+    // _chatService.disconnect();
     super.dispose();
   }
 
@@ -173,7 +178,7 @@ class ChatRoomController extends ChangeNotifier {
 
     // Logika ini sekarang akan berfungsi karena ChatService sudah terhubung
     _messageSubscription = _chatService.messages.listen(
-          (newMessage) {
+      (newMessage) {
         if (newMessage.sender.id != _currentUser!.id) {
           final isMessageExist = _messages.any((m) => m.id == newMessage.id);
           if (!isMessageExist) {
@@ -192,7 +197,6 @@ class ChatRoomController extends ChangeNotifier {
       cancelOnError: false,
     );
   }
-
 
   // [PERBAIKAN] Menggunakan metode yang benar untuk 'gal'
   Future<void> _downloadAndSaveMedia(ChatMessage message) async {
@@ -251,9 +255,14 @@ class ChatRoomController extends ChangeNotifier {
 
       if (cachedData != null) {
         // --- Scenario 1: Cache Ditemukan ---
-        debugPrint("Cache ditemukan untuk user ${recipient.id}. Memuat dari cache.");
+        debugPrint(
+            "Cache ditemukan untuk user ${recipient.id}. Memuat dari cache.");
         final List<dynamic> messagesJson = jsonDecode(cachedData);
-        _messages = messagesJson.map((json) => ChatMessage.fromJson(json)).toList().reversed.toList();
+        _messages = messagesJson
+            .map((json) => ChatMessage.fromJson(json))
+            .toList()
+            .reversed
+            .toList();
         _isLoading = false;
         notifyListeners(); // Tampilkan data cache ke UI secepatnya
 
@@ -263,7 +272,8 @@ class ChatRoomController extends ChangeNotifier {
       } else {
         // --- Scenario 2: Cache Tidak Ditemukan ---
         debugPrint("Cache tidak ditemukan. Mengambil data lengkap dari API.");
-        _messages = await _chatService.getConversation(_currentUser!, recipient);
+        _messages =
+            await _chatService.getConversation(_currentUser!, recipient);
         _messages = _messages.reversed.toList();
         await _saveMessagesToCache(); // Simpan ke cache setelah fetch berhasil
       }
@@ -282,7 +292,8 @@ class ChatRoomController extends ChangeNotifier {
       final token = await SecureStorage.getToken();
       if (token == null) throw Exception("Token tidak ditemukan.");
 
-      final url = Uri.parse('https://api-new.portalsi.com/api/messages/conversation-from/${recipient.id}');
+      final url = Uri.parse(
+          'https://api-new.portalsi.com/api/messages/conversation-from/${recipient.id}');
       final response = await http.get(url, headers: {
         'Authorization': 'Bearer $token',
         'Accept': 'application/json',
@@ -297,13 +308,17 @@ class ChatRoomController extends ChangeNotifier {
         // Filter hanya pesan yang belum ada di cache (berdasarkan ID)
         // dan yang 'is_read' nya false sesuai permintaan
         final existingMessageIds = _messages.map((m) => m.id).toSet();
-        final List<ChatMessage> newUnreadMessages = fetchedMessages.where((newMessage) {
-          return !existingMessageIds.contains(newMessage.id) && newMessage.status != MessageStatus.read;
+        final List<ChatMessage> newUnreadMessages =
+            fetchedMessages.where((newMessage) {
+          return !existingMessageIds.contains(newMessage.id) &&
+              newMessage.status != MessageStatus.read;
         }).toList();
 
         if (newUnreadMessages.isNotEmpty) {
-          debugPrint("${newUnreadMessages.length} pesan baru ditemukan dan ditambahkan.");
-          _messages.insertAll(0, newUnreadMessages); // Tambahkan ke paling atas (terbaru)
+          debugPrint(
+              "${newUnreadMessages.length} pesan baru ditemukan dan ditambahkan.");
+          _messages.insertAll(
+              0, newUnreadMessages); // Tambahkan ke paling atas (terbaru)
           await _saveMessagesToCache(); // Update cache dengan data gabungan
           notifyListeners();
           _processMediaMessages();
@@ -453,14 +468,14 @@ class ChatRoomController extends ChangeNotifier {
       if (response.statusCode == 201) {
         final jsonResponse = jsonDecode(responseBody);
         final realMessageData = jsonResponse['data'];
-        final finalMessage = ChatMessage.fromJson(realMessageData, _currentUser!, recipient);
+        final finalMessage =
+            ChatMessage.fromJson(realMessageData, _currentUser!, recipient);
 
         final index = _messages.indexWhere((m) => m.id == tempId);
         if (index != -1) {
           _messages[index] = finalMessage;
           await _saveMessagesToCache();
         }
-
       } else {
         throw Exception('Gagal mengirim media: Error ${response.statusCode}');
       }
