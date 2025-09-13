@@ -135,6 +135,11 @@ class WebSocketService {
           _statusController.add("connected:$_socketId");
           break;
 
+        case "dm.new":
+          _messageController.add({"channel": channel, "data": data});
+          debugPrint("💬 New DM: $data");
+          break;
+
         case "pusher:ping":
           send({"event": "pusher:pong", "data": {}});
           break;
