@@ -447,7 +447,10 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation>
     final isSelected = widget.selectedIndex == index;
 
     return GestureDetector(
-      onTap: () => _onItemTapped(index),
+      onTap: () => {
+        HapticFeedback.mediumImpact(),
+        _onItemTapped(index),
+      },
       child: AnimatedBuilder(
         animation: _iconAnimationControllers[index],
         builder: (context, child) {

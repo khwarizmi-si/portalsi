@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/follow_service.dart';
+import '../utils/navigation_helper.dart';
 import '../utils/secure_storage.dart';
 
 class FollowersFollowingPage extends StatefulWidget {
@@ -207,6 +208,7 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
         'username': username,
       },
     );
+
   }
 
   Widget _buildProfileImage(String? profilePicture, String username) {
@@ -426,7 +428,7 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
         borderRadius: BorderRadius.circular(12),
         onTap: isCurrentUser
             ? null
-            : () => _navigateToOtherProfile(userId, username),
+            : () => Navigator.of(context).pop(user),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -436,7 +438,7 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
               GestureDetector(
                 onTap: isCurrentUser
                     ? null
-                    : () => _navigateToOtherProfile(userId, username),
+                    : () => Navigator.of(context).pop(user),
                 child: Hero(
                   tag: 'profile_$userId',
                   child: Container(
@@ -461,7 +463,7 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
                 child: GestureDetector(
                   onTap: isCurrentUser
                       ? null
-                      : () => _navigateToOtherProfile(userId, username),
+                      : () => Navigator.of(context).pop(user),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

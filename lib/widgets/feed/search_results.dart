@@ -3,14 +3,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart'; // <-- 1. IMPORT PROVIDER
 import 'package:portal_si/controllers/home_controller.dart'; // <-- 2. IMPORT CONTROLLER
+import '../../models/user_model.dart';
+import '../../utils/navigation_helper.dart';
 import '../../utils/user_provider.dart';
 import 'user_search_item.dart';
 import '../../pages/other_profile_page.dart';
 
 class SearchResults extends StatelessWidget {
   final bool isSearching;
-  final List<dynamic> searchResults;
-  final Function(Map<String, dynamic>)? onUserTap; // Jadikan opsional
+  final List<User> searchResults;
+  final Function(User)? onUserTap;
 
   const SearchResults({
     Key? key,
@@ -32,9 +34,8 @@ class SearchResults extends StatelessWidget {
 
     // Filter langsung di sini, lebih sederhana
     final filteredResults = searchResults.where((user) {
-      // Pastikan data tidak null sebelum membandingkan
-      final resultUserId = user['user_id'] ?? user['id'];
-      return resultUserId != null && resultUserId != currentUser?.id;
+      // Akses properti .id langsung dari objek User
+      return user.id != currentUser?.id;
     }).toList();
 
     // Tampilkan pesan jika setelah difilter hasilnya kosong
@@ -43,25 +44,26 @@ class SearchResults extends StatelessWidget {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 106),
       itemCount: filteredResults.length,
       itemBuilder: (context, index) {
-        final user = Map<String, dynamic>.from(filteredResults[index]);
+        // `user` sudah merupakan objek User, tidak perlu konversi
+        final user = filteredResults[index];
         return UserSearchItem(
-          user: user,
-          onTap: () => _navigateToProfile(context, user),
+          user: user, // Kirim objek User langsung ke UserSearchItem
+          onTap: () => NavigationHelper.navigateToProfile2(context, user),
         );
       },
     );
   }
 
-  void _navigateToProfile(BuildContext context, Map<String, dynamic> user) {
+  void _navigateToProfile(BuildContext context, User user) {
     // Panggil callback jika ada
     onUserTap?.call(user);
 
-    final username = user['username']?.toString();
-    if (username != null && username.isNotEmpty) {
-      // Gunakan Navigator.pushNamed jika Anda sudah mendaftarkan rutenya
+    // Akses properti .username langsung
+    final username = user.username;
+    if (username.isNotEmpty) {
       Navigator.pushNamed(context, '/other-profile',
           arguments: {'username': username});
     } else {

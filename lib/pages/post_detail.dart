@@ -225,7 +225,7 @@ class _PostDetailViewState extends State<PostDetailView> {
                   onBookmark: () {},
                   onShare: () {},
                   onComment: _focusCommentField,
-                  onProfileTap: () => NavigationHelper.navigateToProfile(context, _post.user.toJson()),
+                  onProfileTap: () =>  Navigator.of(context).pop(_post.user.toJson()),
                   hasCardDecoration: false,
                 ),
               ),

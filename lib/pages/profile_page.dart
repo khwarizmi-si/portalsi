@@ -8,6 +8,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 // Halaman & Komponen UI
 import '../components/bottom_navigation.dart';
+import '../utils/navigation_helper.dart';
 import 'edit_profile_page.dart';
 import 'followers_following_page.dart';
 import 'post_detail.dart';
@@ -403,17 +404,26 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
     );
   }
 
-  void _navigateToFollowersFollowing(User user, int initialTab) {
+  void _navigateToFollowersFollowing(User user, int initialTab) async { // <-- Tambahkan async
     if (user.id == null) return;
-    Navigator.push(
+
+    // Lakukan perubahan yang sama seperti di other_profile_page
+    final result = await Navigator.push<Map<dynamic, dynamic>>( // <-- Tambahkan await
       context,
       MaterialPageRoute(
-        builder: (context) => FollowersFollowingPage( // Gunakan 'const' jika memungkinkan
+        builder: (context) => FollowersFollowingPage(
           userId: user.id!,
           initialTab: initialTab,
         ),
       ),
     );
+
+    if (result != null && mounted) {
+      NavigationHelper.navigateToProfile(
+        context,
+        Map<String, dynamic>.from(result),
+      );
+    }
   }
 
 

@@ -102,7 +102,6 @@ class _MainScaffoldState extends State<MainScaffold> {
           systemNavigationBarColor: Colors.white,
           systemNavigationBarIconBrightness: Brightness.dark,
         ),
-        // --- Batas Penambahan ---
         child: Scaffold(
           body: Consumer<NavigationProvider>(
             builder: (context, navProvider, child) {
