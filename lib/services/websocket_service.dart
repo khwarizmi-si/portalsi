@@ -135,6 +135,7 @@ class WebSocketService {
           _statusController.add("connected:$_socketId");
           break;
 
+
         case "dm.new":
           _messageController.add({"channel": channel, "data": data});
           debugPrint("💬 New DM: $data");
@@ -157,6 +158,7 @@ class WebSocketService {
         case "message.new":
           _messageController.add({"channel": channel, "data": data});
           break;
+
 
         default:
           _eventController
