@@ -32,7 +32,8 @@ class ChatService extends ApiService {
           final chatMessage = ChatMessage.fromJson(eventData);
           _messageController.add(chatMessage);
 
-          if (kDebugMode) print('📥 Pesan realtime berhasil diproses oleh ChatService');
+          if (kDebugMode)
+            print('📥 Pesan realtime berhasil diproses oleh ChatService');
         } catch (e) {
           if (kDebugMode) print('⚠️ Gagal parsing pesan di ChatService: $e');
         }
@@ -46,11 +47,12 @@ class ChatService extends ApiService {
 
   WebSocketChannel? _channel;
   final StreamController<ChatMessage> _messageController =
-  StreamController.broadcast();
+      StreamController.broadcast();
 
   Stream<ChatMessage> get messages => _messageController.stream;
 
-  StreamSubscription? _webSocketListener; // Listener untuk stream dari WebSocketService
+  StreamSubscription?
+      _webSocketListener; // Listener untuk stream dari WebSocketService
 
   // [MODIFIKASI UTAMA] Sesuaikan fungsi connect
   void connect({required User currentUser, required User recipient}) {
@@ -72,7 +74,6 @@ class ChatService extends ApiService {
         token,
         ApiEndpoints.baseUrl,
       );
-
     } catch (e) {
       if (kDebugMode) print("Error saat subscribe ke channel chat: $e");
     }
@@ -104,12 +105,14 @@ class ChatService extends ApiService {
     }
   }
 
-  Future<List<ChatMessage>> getConversation(User currentUser, User recipientUser) async {
+  Future<List<ChatMessage>> getConversation(
+      User currentUser, User recipientUser) async {
     final token = await SecureStorage.getToken();
     if (token == null) throw Exception("Token tidak ditemukan");
 
     final response = await http.get(
-      Uri.parse('https://api-new.portalsi.com/api/messages/conversation/${recipientUser.id}'),
+      Uri.parse(
+          'https://api-new.portalsi.com/api/messages/conversation/${recipientUser.id}'),
       headers: {
         'Authorization': 'Bearer $token',
         'Accept': 'application/json',
@@ -119,9 +122,12 @@ class ChatService extends ApiService {
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
       // Panggilan di sini sudah benar, tidak perlu diubah
-      return data.map((json) => ChatMessage.fromJson(json, currentUser, recipientUser)).toList();
+      return data
+          .map((json) => ChatMessage.fromJson(json, currentUser, recipientUser))
+          .toList();
     } else {
-      throw Exception('Gagal memuat percakapan dari API: ${response.statusCode}');
+      throw Exception(
+          'Gagal memuat percakapan dari API: ${response.statusCode}');
     }
   }
 
@@ -135,17 +141,19 @@ class ChatService extends ApiService {
       await _saveConversationsToCache(jsonString);
 
       // 3. Parse data mentah menjadi List<Conversation> untuk dikembalikan ke controller
-      return data.map((item) {
-        if (item is Map<String, dynamic> && item.containsKey('type')) {
-          if (item['type'] == 'group') {
-            return GroupConversation.fromJson(item);
-          } else if (item['type'] == 'user') {
-            return UserConversation.fromJson(item);
-          }
-        }
-        return null;
-      }).whereType<Conversation>().toList();
-
+      return data
+          .map((item) {
+            if (item is Map<String, dynamic> && item.containsKey('type')) {
+              if (item['type'] == 'group') {
+                return GroupConversation.fromJson(item);
+              } else if (item['type'] == 'user') {
+                return UserConversation.fromJson(item);
+              }
+            }
+            return null;
+          })
+          .whereType<Conversation>()
+          .toList();
     } catch (e) {
       print("Error fetching all conversations from API: $e");
       rethrow; // Lemparkan lagi error agar controller bisa menanganinya
@@ -175,8 +183,8 @@ class ChatService extends ApiService {
       // Tambahkan argumen currentUser dan recipient yang sudah ada
       return ChatMessage.fromJson(
         response['data'], // Sesuaikan dengan struktur respons API Anda
-        currentUser,     // <-- Argumen kedua ditambahkan
-        recipient,       // <-- Argumen ketiga ditambahkan
+        currentUser, // <-- Argumen kedua ditambahkan
+        recipient, // <-- Argumen ketiga ditambahkan
       );
     } catch (e) {
       print("Error sending message: $e");
@@ -215,16 +223,19 @@ class ChatService extends ApiService {
           print('📦 Cache percakapan berhasil dimuat.');
         }
         // Logika parsing yang sama seperti sebelumnya
-        return data.map((item) {
-          if (item is Map<String, dynamic> && item.containsKey('type')) {
-            if (item['type'] == 'group') {
-              return GroupConversation.fromJson(item);
-            } else if (item['type'] == 'user') {
-              return UserConversation.fromJson(item);
-            }
-          }
-          return null;
-        }).whereType<Conversation>().toList();
+        return data
+            .map((item) {
+              if (item is Map<String, dynamic> && item.containsKey('type')) {
+                if (item['type'] == 'group') {
+                  return GroupConversation.fromJson(item);
+                } else if (item['type'] == 'user') {
+                  return UserConversation.fromJson(item);
+                }
+              }
+              return null;
+            })
+            .whereType<Conversation>()
+            .toList();
       }
     } catch (e) {
       if (kDebugMode) {
