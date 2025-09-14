@@ -16,13 +16,11 @@ class _AppLifecycleObserverState extends State<AppLifecycleObserver>
   @override
   void initState() {
     super.initState();
-    // Daftarkan observer
     WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
-    // Hapus observer untuk mencegah memory leak
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -34,24 +32,23 @@ class _AppLifecycleObserverState extends State<AppLifecycleObserver>
     switch (state) {
       case AppLifecycleState.resumed:
         print("App is resumed (online)");
-        AuthService.updateUserActivity();
+        // <-- PERUBAHAN 1: Panggil method baru untuk notifikasi online.
+        AuthService.notifyBackendOnline();
         break;
 
-    // [PERBAIKAN] Gabungkan semua case saat aplikasi tidak aktif
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
       case AppLifecycleState.detached:
       case AppLifecycleState.hidden:
         print("App is inactive/paused/detached (offline)");
-        AuthService.disconnectWebSocket();
+        // <-- PERUBAHAN 2: Panggil method baru untuk notifikasi offline.
+        AuthService.notifyBackendOffline();
         break;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Widget ini hanya bertugas sebagai pengamat,
-    // dan menampilkan child yang diberikan padanya.
     return widget.child;
   }
 }
