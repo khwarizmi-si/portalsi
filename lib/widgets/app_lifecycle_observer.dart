@@ -29,10 +29,15 @@ class _AppLifecycleObserverState extends State<AppLifecycleObserver>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
+    // Pastikan hanya berjalan jika user sudah login (ada instance websocket)
+    if (AuthService.webSocketService == null) return;
+
     switch (state) {
       case AppLifecycleState.resumed:
         print("App is resumed (online)");
-        // <-- PERUBAHAN 1: Panggil method baru untuk notifikasi online.
+
+        // PERBAIKAN 1: Panggil method baru untuk notifikasi online
+
         AuthService.notifyBackendOnline();
         break;
 
@@ -41,7 +46,9 @@ class _AppLifecycleObserverState extends State<AppLifecycleObserver>
       case AppLifecycleState.detached:
       case AppLifecycleState.hidden:
         print("App is inactive/paused/detached (offline)");
-        // <-- PERUBAHAN 2: Panggil method baru untuk notifikasi offline.
+
+        // PERBAIKAN 2: Panggil method baru untuk notifikasi offline
+
         AuthService.notifyBackendOffline();
         break;
     }

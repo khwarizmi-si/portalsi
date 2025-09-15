@@ -8,6 +8,8 @@ import 'package:path/path.dart' as path;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:photo_manager/photo_manager.dart';
+import 'package:portal_si/services/auth_service.dart';
+import 'package:portal_si/services/websocket_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/chat.dart';
 import '../models/user_model.dart';
@@ -46,8 +48,7 @@ class ChatRoomController extends ChangeNotifier {
       // Alur fetchMessages sekarang sudah termasuk logika cache
       await fetchMessages();
       _markMessagesAsRead();
-      _connectAndListen();
-
+      _startRealtimeListeners();
       _checkOnlineStatus();
       _statusTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
         _checkOnlineStatus();
@@ -158,43 +159,77 @@ class ChatRoomController extends ChangeNotifier {
 
   @override
   void dispose() {
-    debugPrint("ChatRoomController disposed. Disconnecting WebSocket.");
+    debugPrint("ChatRoomController disposed. Unsubscribing from channels.");
+
+    // <-- PERUBAIKAN 2: Panggil unsubscribe dan batalkan listener
+    if (_currentUser != null) {
+      final ids = [_currentUser!.id, recipient.id]..sort();
+      final roomId = ids.join('-');
+      final channelName = 'private-dm.$roomId';
+      AuthService.webSocketService?.unsubscribeFromChannel(channelName);
+    }
     _messageSubscription?.cancel();
     _statusTimer?.cancel();
-    // _chatService.disconnect();
+
     super.dispose();
   }
 
-  void _connectAndListen() {
+  // <-- PERUBAIKAN 1: Ganti nama dan logika method ini
+  void _startRealtimeListeners() {
     if (_currentUser == null) return;
+    if (AuthService.webSocketService == null) {
+      debugPrint("WebSocketService belum siap.");
+      return;
+    }
 
-    // Panggil connect dengan argumen yang benar
-    _chatService.connect(
-      currentUser: _currentUser!,
-      recipient: recipient,
-    );
+    // Bangun nama channel yang akan didengarkan
+    final ids = [_currentUser!.id, recipient.id]..sort();
+    final roomId = ids.join('-');
+    final channelName = 'private-dm.$roomId';
 
-    _messageSubscription?.cancel();
+    // 1. Subscribe ke channel spesifik untuk room ini
+    AuthService.webSocketService!.subscribeToChannel(channelName);
 
-    // Logika ini sekarang akan berfungsi karena ChatService sudah terhubung
-    _messageSubscription = _chatService.messages.listen(
-      (newMessage) {
-        if (newMessage.sender.id != _currentUser!.id) {
-          final isMessageExist = _messages.any((m) => m.id == newMessage.id);
-          if (!isMessageExist) {
-            _messages.insert(0, newMessage);
-            _saveMessagesToCache();
-            notifyListeners();
+    // 2. Dengarkan stream event global dari WebSocketService
+    _messageSubscription = AuthService.webSocketService!.eventStream.listen(
+      (AppEvent appEvent) {
+        // 3. Filter hanya event yang relevan untuk room ini
+        if (appEvent.channel == channelName && appEvent.event == 'dm.new') {
+          // Logika Anda untuk menangani pesan masuk sudah benar
+          try {
+            // final newMessage = ChatMessage.fromJson(
+            //     appEvent.data['message'], _currentUser!, recipient);
+
+            // final isMessageExist = _messages.any((m) => m.id == newMessage.id);
+            // if (!isMessageExist && newMessage.sender.id != _currentUser!.id) {
+            //   _messages.insert(0, newMessage);
+            //   _saveMessagesToCache();
+            //   notifyListeners();
+            //   _markMessagesAsRead(); // Tandai sebagai terbaca saat pesan baru masuk
+            final messageData = appEvent.data['message'];
+
+            // Baru berikan messageData ke fromJson
+            final newMessage =
+                ChatMessage.fromJson(messageData, _currentUser!, recipient);
+            // ...
+
+            final isMessageExist = _messages.any((m) => m.id == newMessage.id);
+            if (!isMessageExist && newMessage.sender.id != _currentUser!.id) {
+              _messages.insert(0, newMessage);
+              _saveMessagesToCache();
+              notifyListeners();
+              _markMessagesAsRead();
+            }
+          } catch (e, s) {
+            debugPrint("Error parsing pesan dari event 'dm.new': $e");
+            debugPrint("Stack trace: $s");
+
           }
         }
       },
       onError: (error) {
-        debugPrint("Error on message stream: $error");
+        debugPrint("Error on event stream: $error");
       },
-      onDone: () {
-        debugPrint("Message stream was closed.");
-      },
-      cancelOnError: false,
     );
   }
 

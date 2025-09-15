@@ -10,20 +10,42 @@ class AuthService {
   static const String baseUrl = 'https://api-new.portalsi.com/api';
   final TokenRefreshService _tokenRefreshService = TokenRefreshService();
 
-  // <-- PERUBAHAN: Buat instance WebSocketService yang bisa diakses secara global
+
+  // PERBAIKAN 1: Deklarasikan _webSocketService sebagai static member
   static WebSocketService? _webSocketService;
   static WebSocketService? get webSocketService => _webSocketService;
 
-  // <-- PERUBAHAN: Method ini dihapus karena logikanya sudah pindah ke WebSocketService
+// File: lib/services/auth_service.dart
+
+  Future<void> initSession() async {
+    final token = await SecureStorage.getToken();
+    if (token != null && _webSocketService == null) {
+      print("🚀 Sesi aktif terdeteksi. Menginisialisasi WebSocketService...");
+      _webSocketService = WebSocketService(token: token);
+
+      // 👇 PERBAIKAN DI SINI: Ganti .init() menjadi .connect()
+      _webSocketService!.connect();
+
+      // Anda juga bisa memanggil notifikasi online di sini jika perlu
+      await AuthService.notifyBackendOnline();
+      _tokenRefreshService.start();
+    }
+  }
+
+  // SARAN 1: Method ini dihapus dari AuthService, karena logikanya
+  // sudah sepenuhnya otomatis di dalam WebSocketService.
   // static Future<void> updateUserActivity() async { ... }
 
-  // <-- PERUBAHAN: Nama method diubah agar lebih jelas
+  // SARAN 2: Nama method diubah agar lebih jelas
+
   static Future<void> notifyBackendOnline() async {
     try {
       final token = await SecureStorage.getToken();
       if (token == null) return;
 
+
       // Endpoint ini BUKAN untuk koneksi, tapi untuk update status 'is_online' di DB
+
       await http.post(
         Uri.parse('$baseUrl/websocket/authenticate'),
         headers: {'Authorization': 'Bearer $token'},
@@ -34,7 +56,9 @@ class AuthService {
     }
   }
 
+
   // <-- PERUBAHAN: Nama method diubah agar lebih jelas
+
   static Future<void> notifyBackendOffline() async {
     try {
       final token = await SecureStorage.getToken();
@@ -61,16 +85,22 @@ class AuthService {
         final data = json.decode(response.body);
         final token = data['token'];
 
-        await SecureStorage.saveToken(token);
+
+        // Simpan semua token
+        await SecureStorage.saveToken(data['token']);
+
         await SecureStorage.saveUserId(data['user']['user_id'].toString());
         if (data['refresh_token'] != null) {
           await SecureStorage.saveRefreshToken(data['refresh_token']);
         }
 
-        // <-- PERUBAHAN UTAMA: Inisialisasi WebSocketService di sini
-        print("🚀 Menginisialisasi WebSocketService setelah login...");
-        _webSocketService = WebSocketService(token: token);
-        _webSocketService!.init();
+
+        // Inisialisasi WebSocketService setelah login
+        print("🚀 Menginisialisasi WebSocketService...");
+        // PERBAIKAN 2: Gunakan token yang benar dari variabel 'data'
+        _webSocketService = WebSocketService(token: data['token']);
+        _webSocketService!.connect();
+
 
         // Panggil method dengan nama baru
         await AuthService.notifyBackendOnline();
@@ -85,18 +115,8 @@ class AuthService {
         };
       } else {
         final data = json.decode(response.body);
-        String message = 'Login gagal';
 
-        if (data is Map<String, dynamic>) {
-          final errors = data.map(
-            (key, value) => MapEntry(
-              key,
-              (value is List && value.isNotEmpty) ? value.first : '',
-            ),
-          );
-          final allErrors = errors.values.where((e) => e != '').toList();
-          if (allErrors.isNotEmpty) message = allErrors.first;
-        }
+        String message = data['message'] ?? 'Login gagal';
 
         return {'success': false, 'message': message};
       }
@@ -136,7 +156,9 @@ class AuthService {
       // Panggil method dengan nama baru
       await AuthService.notifyBackendOffline();
 
-      // <-- PERUBAHAN: Panggil disconnect dari instance WebSocketService
+
+      // Panggil disconnect dari instance WebSocketService
+
       _webSocketService?.disconnect();
       _webSocketService = null; // Hapus instance
 
