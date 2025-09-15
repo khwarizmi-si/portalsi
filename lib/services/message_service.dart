@@ -73,15 +73,15 @@ class ChatService extends ApiService {
       // 3. Parse data mentah menjadi List<Conversation> untuk dikembalikan ke controller
       return data
           .map((item) {
-            if (item is Map<String, dynamic> && item.containsKey('type')) {
-              if (item['type'] == 'group') {
-                return GroupConversation.fromJson(item);
-              } else if (item['type'] == 'user') {
-                return UserConversation.fromJson(item);
-              }
-            }
-            return null;
-          })
+        if (item is Map<String, dynamic> && item.containsKey('type')) {
+          if (item['type'] == 'group') {
+            return GroupConversation.fromJson(item);
+          } else if (item['type'] == 'user') {
+            return UserConversation.fromJson(item);
+          }
+        }
+        return null;
+      })
           .whereType<Conversation>()
           .toList();
     } catch (e) {
@@ -140,6 +140,62 @@ class ChatService extends ApiService {
     }
   }
 
+  Future<void> updateConversationCacheWithNewMessage(ChatMessage newMessage) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonString = prefs.getString(_cacheKey);
+
+      // Jika cache belum ada sama sekali, buat cache baru dengan satu percakapan ini.
+      if (jsonString == null) {
+        final newConversation = {
+          "type": "user",
+          "user": newMessage.sender.toJson(), // Asumsi ada method toJson() di model User
+          "last_message": newMessage.toJson(),
+          "unread_count": 0,
+        };
+        await _saveConversationsToCache(jsonEncode([newConversation]));
+        debugPrint("✅ Cache baru dibuat dengan pesan pertama dari user ID: ${newMessage.sender.id}");
+        return;
+      }
+
+      // Jika cache sudah ada, lanjutkan logika update/tambah.
+      List<dynamic> conversationsJson = jsonDecode(jsonString);
+      final otherUserId = newMessage.sender.id;
+      final int conversationIndex = conversationsJson.indexWhere((conv) =>
+      conv['type'] == 'user' &&
+          conv['user'] != null &&
+          conv['user']['id'] == otherUserId);
+
+      if (conversationIndex != -1) {
+        // [Logika Lama] Jika percakapan DITEMUKAN (update).
+        var conversationToUpdate = conversationsJson.removeAt(conversationIndex);
+        conversationToUpdate['last_message'] = newMessage.toJson();
+        conversationToUpdate['unread_count'] = 0;
+        conversationsJson.insert(0, conversationToUpdate);
+        debugPrint("✅ Cache percakapan berhasil diupdate dengan pesan baru dari user ID: $otherUserId");
+
+      } else {
+        // [BARU] Logika jika percakapan TIDAK ditemukan (chat baru).
+        debugPrint("Percakapan dengan user ID $otherUserId tidak ditemukan di cache. Membuat entri baru...");
+        final newConversation = {
+          "type": "user",
+          "user": newMessage.sender.toJson(),
+          "last_message": newMessage.toJson(),
+          "unread_count": 0,
+        };
+        // Tambahkan percakapan baru ini ke paling atas daftar.
+        conversationsJson.insert(0, newConversation);
+        debugPrint("✅ Entri percakapan baru untuk user ID $otherUserId berhasil ditambahkan ke cache.");
+      }
+
+      // Simpan kembali cache yang sudah diperbarui.
+      await _saveConversationsToCache(jsonEncode(conversationsJson));
+
+    } catch (e) {
+      debugPrint("⚠️ Gagal mengupdate cache percakapan dengan pesan baru: $e");
+    }
+  }
+
   /// [BARU] Mengambil daftar percakapan dari cache lokal.
   /// Mengembalikan null jika tidak ada cache atau terjadi error.
   Future<List<Conversation>?> getConversationsFromCache() async {
@@ -155,15 +211,15 @@ class ChatService extends ApiService {
         // Logika parsing yang sama seperti sebelumnya
         return data
             .map((item) {
-              if (item is Map<String, dynamic> && item.containsKey('type')) {
-                if (item['type'] == 'group') {
-                  return GroupConversation.fromJson(item);
-                } else if (item['type'] == 'user') {
-                  return UserConversation.fromJson(item);
-                }
-              }
-              return null;
-            })
+          if (item is Map<String, dynamic> && item.containsKey('type')) {
+            if (item['type'] == 'group') {
+              return GroupConversation.fromJson(item);
+            } else if (item['type'] == 'user') {
+              return UserConversation.fromJson(item);
+            }
+          }
+          return null;
+        })
             .whereType<Conversation>()
             .toList();
       }

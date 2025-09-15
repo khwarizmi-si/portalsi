@@ -3,34 +3,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'; // for kDebugMode
 import 'package:portal_si/pages/main_scaffold.dart';
+import 'package:portal_si/pages/splash_screen.dart'; // [DIUBAH] Import SplashScreen
 import 'package:portal_si/pages/welcome_page.dart';
 import 'package:portal_si/providers/navigation_provider.dart';
+import 'package:portal_si/services/notification_system_service.dart';
+import 'package:portal_si/utils/app_lifecycle_manager.dart';
 import 'package:portal_si/widgets/app_lifecycle_observer.dart';
 import 'package:provider/provider.dart';
 import 'package:portal_si/controllers/home_controller.dart';
 import 'package:portal_si/pages/notif_page.dart';
-import 'package:portal_si/utils/user_provider.dart'; // Import UserProvider
+import 'package:portal_si/utils/user_provider.dart';
 import 'pages/login_page.dart';
 import 'pages/register_page.dart';
-import 'pages/dashboard_page.dart';
 import 'pages/profile_page.dart';
 import 'pages/feed_page.dart';
 import 'pages/other_profile_page.dart';
 import 'pages/message_list_page.dart';
 import 'pages/story_page.dart';
-import 'utils/secure_storage.dart';
 import 'managers/cache_manager.dart';
 import 'services/follow_service.dart';
 
-void main() async {
+// [DIUBAH] Fungsi main menjadi lebih sederhana
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final hasToken = await SecureStorage.hasToken();
-
-  if (hasToken) {
-    print('🚀 User logged in - initializing cache system...');
-    CacheManager.initialize();
-  }
-
+  await NotificationSystemService.instance.initialize();
   runApp(
     MultiProvider(
       providers: [
@@ -38,23 +34,14 @@ void main() async {
         ChangeNotifierProvider(create: (_) => HomeController()),
         ChangeNotifierProvider(create: (_) => UserProvider()),
       ],
-      child: MyApp(
-        startPage: hasToken ? '/home' : '/welcome',
-        hasToken: hasToken,
-      ),
+      child: const MyApp(), // MyApp tidak lagi butuh parameter
     ),
   );
 }
 
+// [DIUBAH] MyApp menjadi lebih sederhana
 class MyApp extends StatefulWidget {
-  final String startPage;
-  final bool hasToken;
-
-  const MyApp({
-    super.key,
-    required this.startPage,
-    required this.hasToken,
-  });
+  const MyApp({super.key});
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -65,9 +52,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    if (widget.hasToken) {
-      _initializeAppData();
-    }
+    // [DIHAPUS] Logika inisialisasi dipindah ke SplashScreen
   }
 
   @override
@@ -79,14 +64,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // ... (kode ini tetap sama)
     switch (state) {
-      case AppLifecycleState.paused:
-        print('⏸️ App paused - optimizing cache...');
-        CacheManager.onAppPaused();
-        break;
       case AppLifecycleState.resumed:
-        print('▶️ App resumed - refreshing data...');
+        AppLifecycleManager.isAppInForeground = true;
+        print('▶️ App resumed - now in foreground.');
         CacheManager.onAppResumed();
+        break;
+      case AppLifecycleState.paused:
+        AppLifecycleManager.isAppInForeground = false;
+        print('⏸️ App paused - now in background.');
+        CacheManager.onAppPaused();
         break;
       case AppLifecycleState.detached:
         print('🛑 App detached - cleaning up...');
@@ -99,57 +87,50 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   void didHaveMemoryPressure() {
+    // ... (kode ini tetap sama)
     print('⚠️ Memory pressure detected - clearing cache...');
     CacheManager.onMemoryPressure();
   }
 
-  Future<void> _initializeAppData() async {
-    try {
-      print('🚀 Preloading critical app data...');
-      await CacheManager.preloadCriticalData();
-      print('✅ App initialization completed');
-    } catch (e) {
-      print('❌ App initialization failed: $e');
-    }
-  }
+  // [DIHAPUS] Fungsi _initializeAppData sudah dipindah ke SplashScreen
 
   @override
   Widget build(BuildContext context) {
-    // MultiProvider sudah dipindahkan ke atas di `runApp`
-    // untuk memastikan provider tersedia sebelum MaterialApp dibuat.
     return AppLifecycleObserver(
-        child: MaterialApp(
-          title: 'Portal SI',
-          theme: ThemeData(
-            primarySwatch: Colors.blue,
-            fontFamily: 'Roboto',
-            visualDensity: VisualDensity.adaptivePlatformDensity,
-          ),
-          navigatorObservers: [
-            CacheNavigationObserver(),
-          ],
-          initialRoute: widget.startPage,
-          routes: {
-            '/login': (context) => const LoginPage(),
-            '/register': (context) => RegisterPage(),
-            '/home': (context) => const MainScaffold(),
-            '/feed': (context) => FeedPage(),
-            '/profile': (context) => const ProfilePage(),
-            '/story': (context) => InstagramStoryPage(),
-            '/notif': (context) => const NotificationPage(),
-            '/message': (context) => MessageListPage(),
-            '/welcome': (context) => WelcomePage(),
-            '/other-profile': (context) {
-              final args = ModalRoute.of(context)!.settings.arguments
-              as Map<String, dynamic>;
-              return OtherProfilePage(
-                username: args['username'],
-              );
-            },
-            if (kDebugMode) '/debug_cache': (context) => const CacheDebugPage(),
-          },
-          debugShowCheckedModeBanner: kDebugMode,
+      child: MaterialApp(
+        title: 'Portal SI',
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+          fontFamily: 'Roboto',
+          visualDensity: VisualDensity.adaptivePlatformDensity,
         ),
+        navigatorObservers: [
+          CacheNavigationObserver(),
+        ],
+        // [DIUBAH] Halaman awal aplikasi sekarang SELALU SplashScreen
+        home: const SplashScreen(),
+        // [DIUBAH] initialRoute dihapus dan diganti 'home'
+        routes: {
+          '/login': (context) => const LoginPage(),
+          '/register': (context) => RegisterPage(),
+          '/home': (context) => const MainScaffold(),
+          '/feed': (context) => FeedPage(),
+          '/profile': (context) => const ProfilePage(),
+          '/story': (context) => InstagramStoryPage(),
+          '/notif': (context) => const NotificationPage(),
+          '/message': (context) => MessageListPage(),
+          '/welcome': (context) => WelcomePage(),
+          '/other-profile': (context) {
+            final args =
+            ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+            return OtherProfilePage(
+              username: args['username'],
+            );
+          },
+          if (kDebugMode) '/debug_cache': (context) => const CacheDebugPage(),
+        },
+        debugShowCheckedModeBanner: kDebugMode,
+      ),
     );
   }
 }

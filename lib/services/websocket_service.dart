@@ -2,7 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:portal_si/services/notification_system_service.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+
+import '../utils/app_lifecycle_manager.dart';
 
 
 // Model sederhana untuk event yang masuk
@@ -28,9 +31,9 @@ class WebSocketService {
 
   // Stream Controllers
   final StreamController<String> _statusController =
-      StreamController.broadcast();
+  StreamController.broadcast();
   final StreamController<AppEvent> _eventController =
-      StreamController.broadcast();
+  StreamController.broadcast();
 
   // Getters untuk didengarkan oleh bagian lain dari aplikasi
   Stream<String> get statusStream => _statusController.stream;
@@ -86,34 +89,54 @@ class WebSocketService {
   void _handleMessage(dynamic message) {
     final decoded = jsonDecode(message as String);
     final eventName = decoded["event"] as String;
+
     debugPrint(
         "===[ RAW WEBSOCKET MESSAGE RECEIVED ]===\n$message\n========================================");
-    // Tangani event internal Pusher
+
+    // Tangani event internal Pusher terlebih dahulu
     switch (eventName) {
       case "pusher:connection_established":
         _socketId = jsonDecode(decoded["data"])["socket_id"];
         _statusController.add("connected");
         debugPrint("✅ WebSocket Connected with socket_id: $_socketId");
         _startHeartbeat();
-        break;
+        return; // Keluar dari fungsi setelah menangani event ini
 
       case "pusher:ping":
         _send({"event": "pusher:pong", "data": {}});
-        break;
+        return; // Keluar dari fungsi
 
       case "pusher_internal:subscription_succeeded":
         debugPrint("✅ Berhasil subscribe ke channel: ${decoded['channel']}");
-        break;
+        return; // Keluar dari fungsi
+    }
 
-      default:
-        // Siarkan semua event lain ke aplikasi
-        if (decoded["channel"] != null) {
-          _eventController.add(AppEvent(
-            channel: decoded["channel"],
-            event: eventName,
-            data: jsonDecode(decoded["data"]),
-          ));
+    // [LOGIKA BARU] Setelah event Pusher ditangani, proses event aplikasi
+    if (decoded["channel"] != null) {
+
+      // Cek notifikasi HANYA untuk event 'dm.new'
+      if (eventName == 'dm.new') {
+        if (!AppLifecycleManager.isAppInForeground) {
+          final messageData = jsonDecode(decoded["data"])['message'];
+          final senderId = messageData['sender_id'];
+          final senderName = "Pesan Baru"; // Placeholder
+          final content = messageData['content'] ?? 'Mengirim media';
+
+          // Panggil notifikasi
+          NotificationSystemService.instance.showNewMessageNotification(
+            id: senderId,
+            title: senderName,
+            body: content,
+          );
         }
+      }
+
+      // Siarkan SEMUA event yang memiliki channel ke aplikasi (HANYA SEKALI)
+      _eventController.add(AppEvent(
+        channel: decoded["channel"],
+        event: eventName,
+        data: jsonDecode(decoded["data"]),
+      ));
     }
   }
 
@@ -174,4 +197,10 @@ class WebSocketService {
     });
     debugPrint("🛑 Mengirim permintaan unsubscribe dari $channelName...");
   }
+}
+
+extension WebSocketStatus on WebSocketService {
+  /// Memeriksa apakah channel WebSocket aktif dan belum ditutup.
+  /// Mengembalikan `true` jika terhubung, `false` jika tidak.
+  bool get isConnected => _channel != null && _channel?.closeCode == null;
 }

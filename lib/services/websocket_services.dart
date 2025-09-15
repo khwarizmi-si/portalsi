@@ -1,145 +1,121 @@
+// lib/services/websocket_service.dart
+
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:laravel_echo/laravel_echo.dart';
-import 'package:pusher_client/pusher_client.dart';
+import 'package:http/http.dart' as http;
+import 'package:web_socket_channel/io.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
-// Service class untuk mengelola semua logika WebSocket
+// [PENTING] Kita buat satu instance global (Singleton) agar mudah diakses
+// dari mana saja tanpa perlu Provider.of berkali-kali.
+final WebSocketService webSocketService = WebSocketService();
+
 class WebSocketService {
-  final String token;
-  Echo? echo;
+  WebSocketChannel? _channel;
+  String? _socketId;
+  String? _token; // Simpan token untuk re-autentikasi jika perlu
 
-  // StreamControllers untuk menyiarkan data yang diterima ke seluruh aplikasi
-  final StreamController<String> _statusController =
-      StreamController.broadcast();
-  final StreamController<Map<String, dynamic>> _messageController =
-      StreamController.broadcast();
-  final StreamController<Map<String, dynamic>> _eventController =
-      StreamController.broadcast();
+  final StreamController<String> _statusController = StreamController.broadcast();
+  final StreamController<Map<String, dynamic>> _messageController = StreamController.broadcast();
+  final StreamController<Map<String, dynamic>> _eventController = StreamController.broadcast();
 
-  // Getters agar bagian lain dari aplikasi bisa mendengarkan stream ini
   Stream<String> get statusStream => _statusController.stream;
   Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
   Stream<Map<String, dynamic>> get eventStream => _eventController.stream;
 
-  WebSocketService({required this.token});
-
-  // ========== 1. INISIALISASI ==========
-  void init() {
-    if (echo != null) {
-      print('Echo sudah diinisialisasi.');
+  // [MODIFIKASI] Method ini sekarang kita sebut 'initialize'
+  void initialize({required String token}) {
+    if (_channel != null && _channel?.closeCode == null) {
+      debugPrint("WebSocket already initialized and connected.");
       return;
     }
+    _token = token;
+    final uri = Uri.parse('wss://api-new.portalsi.com:443/app/fiouy3umnruqcwdsoxni');
 
-    // Konfigurasi PusherClient untuk terhubung ke Laravel Reverb Anda
-    PusherClient pusherClient = PusherClient(
-      'fiouy3umnruqcwdsoxni', // ✅ Diambil dari REVERB_APP_KEY
-      PusherOptions(
-        // ❗️ Cluster Dihapus! Ini hanya untuk cloud Pusher.
+    try {
+      _statusController.add('connecting');
+      debugPrint('🔄 WebSocket Connecting to Reverb...');
+      _channel = IOWebSocketChannel.connect(uri);
+      _channel!.stream.listen(
+        _handleMessage,
+        onDone: () {
+          _statusController.add('disconnected');
+          debugPrint('🔌 WebSocket Disconnected from Reverb');
+        },
+        onError: (error) {
+          _statusController.add('error');
+          debugPrint('❌ WebSocket Error: $error');
+        },
+      );
+    } catch (e) {
+      debugPrint('‼️ GAGAL TOTAL SAAT INISIALISASI WEBSOCKETSERVICE: $e');
+      rethrow;
+    }
+  }
 
-        // ✅ Tambahkan konfigurasi ini untuk Reverb (self-hosted)
-        host: 'api-new.portalsi.com', // ✅ Diambil dari REVERB_HOST
-        wssPort: 443, // ✅ Diambil dari REVERB_PORT
-        encrypted: true, // ✅ true karena REVERB_SCHEME adalah https
+  void _handleMessage(dynamic message) {
+    debugPrint("RECV: $message");
+    final data = jsonDecode(message as String);
+    final event = data['event'] as String;
 
-        // Konfigurasi otentikasi tetap sama
-        auth: PusherAuth(
-          'https://api-new.portalsi.com/api/broadcasting/auth',
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Accept': 'application/json',
-          },
-        ),
-      ),
-      enableLogging: kDebugMode, // Tampilkan log hanya saat debug
-    );
+    if (event.contains('NewDirectMessage')) {
+      _messageController.add({'event': event, 'data': jsonDecode(data['data'])});
+    } else {
+      _eventController.add({'event': event, 'data': data['data']});
+    }
 
-    echo = Echo(
-      broadcaster: EchoBroadcasterType.Pusher,
-      client: pusherClient,
-    );
-
-    // Dengarkan perubahan status koneksi (sisanya tetap sama)
-    echo?.connector.onConnect((_) {
+    if (event == 'pusher:connection_established') {
+      final eventData = jsonDecode(data['data'] as String);
+      _socketId = eventData['socket_id'];
       _statusController.add('connected');
-      debugPrint('✅ WebSocket Connected to Reverb: ${echo?.socketId()}');
-    });
-
-    echo?.connector.onDisconnect((_) {
-      _statusController.add('disconnected');
-      debugPrint('🔌 WebSocket Disconnected from Reverb');
-    });
-
-    echo?.connector.onError((error) {
-      _statusController.add('error');
-      debugPrint('❌ WebSocket Error: ${error.toString()}');
-    });
-
-    // Mulai koneksi
-    pusherClient.connect();
+      debugPrint('✅ WebSocket Connected. Socket ID: $_socketId');
+    }
   }
 
-  // ========== 2. METHOD UNTUK MENDENGARKAN CHANNEL ==========
+  Future<void> _subscribeToPrivateChannel(String channelName) async {
+    if (_socketId == null || _token == null) return;
+    try {
+      final authResponse = await http.post(
+        Uri.parse('https://api-new.portalsi.com/api/broadcasting/auth'),
+        headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
+        body: jsonEncode({'socket_id': _socketId, 'channel_name': channelName}),
+      );
+      if (authResponse.statusCode != 200) return;
 
-  /// Mendengarkan pesan baru dalam sebuah percakapan direct message.
+      final authToken = jsonDecode(authResponse.body)['auth'];
+      _sendMessage({'event': 'pusher:subscribe', 'data': {'channel': channelName, 'auth': authToken}});
+      debugPrint("📡 Sending subscription request for: $channelName");
+    } catch (e) {
+      debugPrint("❌ Error subscribing to private channel $channelName: $e");
+    }
+  }
+
+  // [MODIFIKASI] Nama method disesuaikan agar konsisten
   void listenToDirectMessages(int currentUserId, int otherUserId) {
-    if (echo == null) return;
-
-    // Pastikan Room ID konsisten
     final ids = [currentUserId, otherUserId]..sort();
-    final roomId = ids.join('-');
-
-    echo?.private('chat.direct.$roomId').listen('.NewDirectMessage', (e) {
-      if (e is PusherEvent && e.data != null) {
-        try {
-          final data = jsonDecode(e.data!);
-          final message = data['message'];
-
-          // Cek untuk menghindari duplikasi pesan dari pengirim
-          if (message['sender_id'] != currentUserId) {
-            // Kirim pesan ke stream agar bisa ditangkap oleh UI
-            _messageController.add(message);
-          }
-        } catch (err) {
-          debugPrint('⚠️ Gagal parsing pesan DM: $err');
-        }
-      }
-    });
-    debugPrint("📡 Listening for DMs on: chat.direct.$roomId");
+    final channelName = 'private-chat.direct.${ids.join('-')}';
+    _subscribeToPrivateChannel(channelName);
   }
 
-  /// Mendengarkan update untuk daftar obrolan (chat list).
-  void listenToChatListUpdates(int currentUserId) {
-    if (echo == null) return;
-
-    echo?.private('user.$currentUserId').listen('.ChatListUpdated', (e) {
-      if (e is PusherEvent && e.data != null) {
-        try {
-          final data = jsonDecode(e.data!);
-          // Kirim data ke stream event
-          _eventController.add({
-            'event': 'ChatListUpdated',
-            'data': data['data'],
-          });
-        } catch (err) {
-          debugPrint('⚠️ Gagal parsing update chat list: $err');
-        }
-      }
-    });
-    debugPrint("📡 Listening for chat list updates on: user.$currentUserId");
+  void listenToUserChannel(int userId) {
+    final channelName = 'private-user.$userId';
+    _subscribeToPrivateChannel(channelName);
   }
 
-  /// Berhenti mendengarkan channel tertentu
+  void _sendMessage(Map<String, dynamic> message) {
+    if (_channel?.closeCode != null) return;
+    _channel?.sink.add(jsonEncode(message));
+  }
+
   void leaveChannel(String channelName) {
-    echo?.leave(channelName);
+    _sendMessage({'event': 'pusher:unsubscribe', 'data': {'channel': channelName}});
     debugPrint("🛑 Left channel: $channelName");
   }
 
-  // ========== 3. DISCONNECT ==========
   void disconnect() {
-    echo?.disconnect();
-    _statusController.close();
-    _messageController.close();
-    _eventController.close();
+    _channel?.sink.close();
+    _channel = null;
+    debugPrint("🔌 WebSocket connection terminated.");
   }
 }

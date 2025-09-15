@@ -83,34 +83,13 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
     _outController.reverse();
   }
 
-  // TAMBAHAN: Fungsi untuk memulai proses login dengan SDK
   Future<void> _loginWithSDK() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
-      // ⚠️ Ganti 'localhost' dengan IP Address Anda jika testing di HP
-      // final uri = Uri.parse('http://localhost:90/layanan-akun/sdk-akun-rg-v1/portal-run.php');
-      // final response = await http.get(uri);
-
-      // if (response.statusCode != 200) {
-      //   throw Exception('Gagal memuat konfigurasi: Status code ${response.statusCode}');
-      // }
-
-      // final config = jsonDecode(response.body);
       final baseUrl = 'https://akunrg.com/au/pengenalan';
-      // final response = await http.get(baseUrl);
-      // final params = {
-      //   'client_id': config['client_id'],
-      //   'client_secret': config['client_secret'],
-      //   'auth_v1': config['auth_v1'],
-      //   'auth_v2': config['auth_v2'],
-      //   'redirect': config['redirect'],
-      //   'target': config['target'],
-      //   'redirect_from': 'https://kimo.com/',
-      //   'via': 'tombolLogin',
-      // };
       final params = {
         'client_id': "6ab3cbd0-51ce-4987-94fd-9e66db9f0abf",
         'client_secret': "8c0f8331-2364-4e69-86e6-bd91b013e3ca",
@@ -127,7 +106,6 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
       await FlutterWebBrowser.openWebPage(
         url: finalUri.toString(),
         customTabsOptions: const CustomTabsOptions(
-          // Perbarui parameter ini
           colorScheme: CustomTabsColorScheme.system,
           showTitle: true,
           urlBarHidingEnabled: true,
@@ -136,11 +114,9 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
           barCollapsingEnabled: true,
           preferredBarTintColor: Colors.white,
           preferredControlTintColor: Colors.black,
-          // Perbarui parameter dan nama enum ini
           dismissButtonStyle: SafariViewControllerDismissButtonStyle.close,
         ),
       );
-
 
     } catch (e) {
       if (mounted) {
@@ -153,12 +129,14 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        // MODIFIKASI: Kita tidak lagi set _isLoading ke false di sini
+        // karena kita menunggu redirect untuk menutup halaman.
+        // Jika pengguna menutup browser secara manual, kita perlu cara lain
+        // untuk menghandle-nya, tapi untuk alur sukses, ini lebih baik.
       }
     }
   }
+
 
   Widget _buildFirstPage() {
     const Color primaryOrange = Color(0xFFF97C33);
