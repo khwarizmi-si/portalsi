@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
 import '../utils/secure_storage.dart'; // Sesuaikan path jika perlu
@@ -47,13 +48,24 @@ class GroupService {
     try {
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
+
+      // ================================================================
+      // 👇 BLOK DEBUGGING - KITA AKAN MELIHAT APA YANG SEBENARNYA DIKIRIM SERVER
+      // ================================================================
+      debugPrint("--- [SERVER RESPONSE RECEIVED] ---");
+      debugPrint("Status Code: ${response.statusCode}");
+      debugPrint("Response Body: ${response.body}");
+      debugPrint("----------------------------------");
+      // ================================================================
+
       final responseData = jsonDecode(response.body);
 
-      if (response.statusCode == 201) {
+      if (response.statusCode == 201 || response.statusCode == 200) {
         print('✅ Grup berhasil dibuat!');
-        return responseData['data'] as Map<String, dynamic>?;
+        return responseData['group'] as Map<String, dynamic>?;
       } else {
-        throw Exception('Gagal membuat grup: ${responseData['message']}');
+        throw Exception(
+            'Gagal membuat grup: ${responseData['message'] ?? response.body}');
       }
     } catch (e) {
       throw Exception('Error saat membuat grup: $e');

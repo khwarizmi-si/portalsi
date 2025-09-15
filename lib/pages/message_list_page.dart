@@ -1,6 +1,7 @@
 // lib/pages/message_list_page.dart
 
 import 'package:flutter/material.dart';
+import 'package:portal_si/pages/group_chat_room_page.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../controllers/message_list_controller.dart';
@@ -36,7 +37,8 @@ class MessageListPage extends StatelessWidget {
           ),
           actions: [
             IconButton(
-              icon: const Icon(Icons.edit_note_outlined, color: Colors.black87, size: 28),
+              icon: const Icon(Icons.edit_note_outlined,
+                  color: Colors.black87, size: 28),
               onPressed: () {
                 Navigator.push(
                   context,
@@ -45,10 +47,12 @@ class MessageListPage extends StatelessWidget {
               },
             ),
             IconButton(
-              icon: const Icon(Icons.group_add_outlined, color: Colors.black87, size: 28),
+              icon: const Icon(Icons.group_add_outlined,
+                  color: Colors.black87, size: 28),
               onPressed: () {
                 // Navigasi ke halaman buat grup
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateGroupPage()));
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const CreateGroupPage()));
               },
             ),
           ],
@@ -73,11 +77,13 @@ class MessageListPage extends StatelessWidget {
                       ],
                     ),
                     child: TextField(
-                      onChanged: (value) => controller.filterConversations(value),
+                      onChanged: (value) =>
+                          controller.filterConversations(value),
                       decoration: InputDecoration(
                         hintText: 'Cari percakapan...',
                         hintStyle: TextStyle(color: Colors.grey.shade500),
-                        prefixIcon: Icon(Icons.search, color: Colors.grey.shade600),
+                        prefixIcon:
+                            Icon(Icons.search, color: Colors.grey.shade600),
                         filled: true,
                         fillColor: Colors.transparent,
                         contentPadding: const EdgeInsets.all(16),
@@ -102,15 +108,17 @@ class MessageListPage extends StatelessWidget {
                     return const Center(
                         child: Text('Mulai percakapan baru!',
                             style:
-                            TextStyle(fontSize: 16, color: Colors.grey)));
+                                TextStyle(fontSize: 16, color: Colors.grey)));
                   }
                   return ListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: controller.filteredConversations.length,
                     itemBuilder: (context, index) {
-                      final conversation = controller.filteredConversations[index];
+                      final conversation =
+                          controller.filteredConversations[index];
                       // Kirim objek Conversation (bisa User- atau GroupConversation) ke tile
-                      return _ConversationTile(conversation: conversation, themeColor: themeColor);
+                      return _ConversationTile(
+                          conversation: conversation, themeColor: themeColor);
                     },
                   );
                 },
@@ -131,7 +139,8 @@ class _ConversationTile extends StatelessWidget {
   final Conversation conversation;
   final Color themeColor;
 
-  const _ConversationTile({required this.conversation, required this.themeColor});
+  const _ConversationTile(
+      {required this.conversation, required this.themeColor});
 
   String _formatTimestamp(DateTime? dt) {
     // Tambahkan pengecekan null, karena grup baru mungkin tidak punya timestamp
@@ -175,17 +184,31 @@ class _ConversationTile extends StatelessWidget {
       ),
       child: InkWell(
         onTap: () {
-          // Tambahkan logika untuk membedakan navigasi
+          // Cek apakah ini percakapan dengan user
           if (conversation is UserConversation) {
-            // Jika ini percakapan user, navigasi ke ChatRoomPage
+            final userChat = conversation as UserConversation;
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => ChatRoomPage(user: (conversation as UserConversation).partner)),
+              MaterialPageRoute(
+                  builder: (_) => ChatRoomPage(user: userChat.partner)),
             );
-          } else if (conversation is GroupConversation) {
-            // Jika ini percakapan grup, navigasi ke GroupChatPage (buat halaman ini nanti)
-            // Navigator.push(context, MaterialPageRoute(builder: (_) => GroupChatPage(group: conversation)));
-            print("Navigasi ke halaman chat grup: ${conversation.displayName}");
+          }
+          // Cek apakah ini percakapan grup
+          else if (conversation is GroupConversation) {
+            // Buat variabel lokal untuk memastikan tipe data
+            final groupChat = conversation as GroupConversation;
+
+            // ================================================================
+            // 👇 HAPUS TANDA COMMENT DARI BARIS INI UNTUK MENGAKTIFKAN NAVIGASI
+            // ================================================================
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                // Teruskan objek groupChat ke halaman chat grup
+                builder: (_) => GroupChatRoomPage(group: groupChat.group),
+              ),
+            );
+            // ================================================================
           }
         },
         borderRadius: BorderRadius.circular(16),
@@ -203,11 +226,13 @@ class _ConversationTile extends StatelessWidget {
                     : null,
                 child: imageUrl == null || imageUrl.isEmpty
                     ? Text(
-                  // Gunakan name yang sudah didapat dari getter
-                  name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?',
-                  style: const TextStyle(
-                      fontSize: 24, fontWeight: FontWeight.bold),
-                )
+                        // Gunakan name yang sudah didapat dari getter
+                        name.isNotEmpty
+                            ? name.substring(0, 1).toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                            fontSize: 24, fontWeight: FontWeight.bold),
+                      )
                     : null,
               ),
               const SizedBox(width: 16),
@@ -216,27 +241,40 @@ class _ConversationTile extends StatelessWidget {
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  // 👇 WIDGET HARUS BERADA DI DALAM LIST `children:`
                   children: [
+                    Row(
+                      children: [
+                        // Teks nama
+                        Text(
+                          name,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        // Spacer
+                        const Spacer(),
+                        // Ikon
+                        if (conversation is GroupConversation)
+                          Icon(
+                            Icons.group,
+                            size: 18,
+                            color: Colors.grey.shade600,
+                          ),
+                      ],
+                    ),
+
+                    // Di bawah sini Anda akan meletakkan widget Text untuk pesan terakhir
+                    const SizedBox(height: 5),
                     Text(
-                      // Gunakan name dari getter
                       name,
                       style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w600,
                         color: Colors.black87,
                       ),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      conversation.lastMessage,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: isUnread ? Colors.black87 : Colors.grey.shade600,
-                        fontWeight:
-                        isUnread ? FontWeight.bold : FontWeight.normal,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -253,7 +291,8 @@ class _ConversationTile extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       color: isUnread ? themeColor : Colors.grey.shade500,
-                      fontWeight: isUnread ? FontWeight.bold : FontWeight.normal,
+                      fontWeight:
+                          isUnread ? FontWeight.bold : FontWeight.normal,
                     ),
                   ),
                   const SizedBox(height: 8),

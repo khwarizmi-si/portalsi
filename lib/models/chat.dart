@@ -2,6 +2,7 @@
 
 import 'dart:io';
 import 'package:flutter/cupertino.dart';
+import 'package:portal_si/models/group_model.dart';
 import 'user_model.dart'; // Pastikan import model User sudah ada
 
 // Enum untuk tipe pesan
@@ -58,8 +59,8 @@ class ChatMessage {
     };
   }
 
-  factory ChatMessage.fromJson(Map<String, dynamic> json, [User? currentUser, User? recipientUser]) {
-
+  factory ChatMessage.fromJson(Map<String, dynamic> json,
+      [User? currentUser, User? recipientUser]) {
     User sender, recipient;
 
     // Logika jika data berasal dari cache yang sudah menyimpan sender_data & recipient_data
@@ -73,7 +74,8 @@ class ChatMessage {
       sender = isFromCurrentUser ? currentUser : recipientUser;
       recipient = isFromCurrentUser ? recipientUser : currentUser;
     } else {
-      throw ArgumentError('fromJson requires either full sender/recipient data or currentUser/recipientUser context.');
+      throw ArgumentError(
+          'fromJson requires either full sender/recipient data or currentUser/recipientUser context.');
     }
 
     final bool hasMedia = json['media_url'] != null;
@@ -88,12 +90,12 @@ class ChatMessage {
       localMediaPath: json['local_media_path'],
       timestamp: DateTime.parse(json['sent_at']),
       // 'is_read' bisa null di beberapa response, default ke false
-      status: (json['is_read'] ?? false) ? MessageStatus.read : MessageStatus.sent,
+      status:
+          (json['is_read'] ?? false) ? MessageStatus.read : MessageStatus.sent,
       type: type,
     );
   }
 }
-
 
 //================================================================
 // MODEL BARU UNTUK HALAMAN DAFTAR PERCAKAPAN (FLEKSIBEL)
@@ -123,7 +125,6 @@ abstract class Conversation {
   String? get displayImageUrl;
 }
 
-
 /// Model spesifik untuk percakapan antar pengguna (type: "user").
 class UserConversation extends Conversation {
   final User partner;
@@ -144,12 +145,12 @@ class UserConversation extends Conversation {
   @override
   String? get displayImageUrl => partner.profilePictureUrl;
 
-
   factory UserConversation.fromJson(Map<String, dynamic> json) {
     final partnerUser = User(
       id: json['id'], // Disesuaikan dengan JSON: 'id' bukan 'user_id'
       username: json['username'] ?? 'unknown',
-      fullName: json['name'], // Disesuaikan dengan JSON: 'name' bukan 'full_name'
+      fullName:
+          json['name'], // Disesuaikan dengan JSON: 'name' bukan 'full_name'
       profilePictureUrl: json['profile_picture_url'],
     );
 
@@ -163,20 +164,23 @@ class UserConversation extends Conversation {
       partner: partnerUser,
       lastMessage: displayMessage,
       timestamp: DateTime.parse(json['sent_at']),
-      unreadCount: (json['is_read'] == 0) ? 1 : 0, // Asumsi 1 pesan belum dibaca jika is_read = 0
+      unreadCount: (json['is_read'] == 0)
+          ? 1
+          : 0, // Asumsi 1 pesan belum dibaca jika is_read = 0
       lastMediaUrl: json['last_media'],
     );
   }
 }
 
-
 /// Model spesifik untuk percakapan grup (type: "group").
 class GroupConversation extends Conversation {
+  final Group group;
   final String groupName;
   final String? avatarUrl;
   final String? description;
 
   GroupConversation({
+    required this.group,
     required super.id,
     required super.lastMessage,
     required super.timestamp,
@@ -194,7 +198,6 @@ class GroupConversation extends Conversation {
   @override
   String? get displayImageUrl => avatarUrl;
 
-
   factory GroupConversation.fromJson(Map<String, dynamic> json) {
     // Tangani kasus di mana 'sent_at' mungkin kosong atau null untuk grup baru
     DateTime? timestamp;
@@ -203,6 +206,7 @@ class GroupConversation extends Conversation {
     }
 
     return GroupConversation(
+      group: Group.fromJson(json),
       id: json['id'],
       groupName: json['name'],
       avatarUrl: json['avatar_url'],
