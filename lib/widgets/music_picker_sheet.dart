@@ -170,7 +170,8 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      children: ['Untuk Anda', 'Ngetrend', 'Tersimpan', 'Audio Original']
+                      // children: ['Untuk Anda', 'Ngetrend', 'Tersimpan', 'Audio Original']
+                      children: ['Untuk Anda']
                           .map((label) => Padding(
                         padding: const EdgeInsets.only(right: 8.0),
                         child: Chip(

@@ -34,6 +34,7 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
 
   // Cache untuk optimasi network request
   final Set<int> _followingIds = <int>{};
+  final Map<int, String?> _followingStatusMap = {};
 
   @override
   void initState() {
@@ -41,9 +42,9 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
     _tabController = TabController(length: 2, vsync: this);
     _tabController.index = widget.initialTab;
 
-    _loadData(); // <-- TAMBAHKAN BARIS INI
+    _loadData();
 
-    _getCurrentUserId(); // Asumsi Anda masih memiliki fungsi ini
+    _getCurrentUserId();
   }
 
   void _initializeFollowingCache() {
@@ -54,27 +55,40 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
     }
   }
 
+  void _initializeFollowingStatusMap() {
+    _followingStatusMap.clear();
+    for (final user in following) {
+      final id = _extractUserId(user);
+      final pivot = user['pivot'] as Map<dynamic, dynamic>?;
+      final status = pivot?['status'] as String?;
+      if (id != null) {
+        _followingStatusMap[id] = status ?? 'accepted';
+      }
+    }
+  }
+
+
   int? _extractUserId(Map<dynamic, dynamic> user) {
     return user['user_id'] as int? ?? user['id'] as int?;
   }
 
   Future<void> _getCurrentUserId() async {
     try {
-      final userIdStr = await SecureStorage.getToken();
-      currentUserId = int.tryParse(userIdStr ?? '');
+      // Assuming getMyProfile returns a map with user ID.
+      final myProfile = await _followService.getMyProfile();
+      currentUserId = _extractUserId(myProfile);
+      if (mounted) setState(() {});
     } catch (e) {
       debugPrint('Error getting current user ID: $e');
     }
   }
 
   Future<void> _loadData({bool forceRefresh = false}) async {
-    // Tampilkan loading indicator hanya jika belum ada data sama sekali
     if (followers.isEmpty && following.isEmpty) {
       if (mounted) setState(() => isLoading = true);
     }
 
     try {
-      // Menggunakan Future.wait agar request API berjalan bersamaan
       final results = await Future.wait([
         _followService.getFollowers(widget.userId, forceRefresh: forceRefresh),
         _followService.getFollowing(widget.userId, forceRefresh: forceRefresh),
@@ -84,6 +98,8 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
         setState(() {
           followers = results[0];
           following = results[1];
+          _initializeFollowingCache();
+          _initializeFollowingStatusMap();
         });
       }
     } catch (e) {
@@ -102,67 +118,59 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
     }
   }
 
-  // 🔄 Fungsi refresh yang ada di UI akan memanggil _loadData dengan paksa
   Future<void> _refreshData() async {
     await _loadData(forceRefresh: true);
   }
 
   Future<void> _handleFollowAction(
-      Map<dynamic, dynamic> user, bool isCurrentlyFollowing) async {
+      Map<dynamic, dynamic> user, {required bool isUnfollow}) async {
     final targetUserId = _extractUserId(user);
     if (targetUserId == null || currentUserId == null) return;
 
-    // Prevent multiple taps
     final button = context.findRenderObject();
     if (button != null && !button.attached) return;
 
-    // Optimistic update - update UI immediately
+    // Backup current state for potential revert
+    final List<dynamic> originalFollowing = List.from(following);
+
+    // Optimistic update
     setState(() {
-      if (isCurrentlyFollowing) {
-        // Unfollow - remove from following list and cache
+      if (isUnfollow) {
         following.removeWhere((item) => _extractUserId(item) == targetUserId);
-        _followingIds.remove(targetUserId);
       } else {
-        // Follow - add to following list and cache
-        following.add(user);
-        _followingIds.add(targetUserId);
+        following.removeWhere((item) => _extractUserId(item) == targetUserId);
+        final updatedUser = Map<dynamic, dynamic>.from(user);
+        updatedUser['pivot'] = {'status': 'accepted'};
+        following.add(updatedUser);
       }
+      _initializeFollowingCache();
+      _initializeFollowingStatusMap();
       hasChanges = true;
     });
 
     try {
-      final success = isCurrentlyFollowing
+      final success = isUnfollow
           ? await _followService.unfollowUser(targetUserId)
           : await _followService.followUser(targetUserId);
 
       if (!success) {
-        _revertOptimisticUpdate(user, targetUserId, isCurrentlyFollowing);
-        _showErrorSnackBar(
-            isCurrentlyFollowing ? 'Gagal unfollow user' : 'Gagal follow user');
-      } else {
-        _showSuccessSnackBar(isCurrentlyFollowing
-            ? 'Berhasil unfollow user'
-            : 'Berhasil follow user');
+        // Revert on failure
+        setState(() {
+          following = originalFollowing;
+          _initializeFollowingCache();
+          _initializeFollowingStatusMap();
+        });
+        _showErrorSnackBar(isUnfollow ? 'Gagal unfollow' : 'Gagal mengikuti');
       }
     } catch (e) {
-      _revertOptimisticUpdate(user, targetUserId, isCurrentlyFollowing);
+      // Revert on error
+      setState(() {
+        following = originalFollowing;
+        _initializeFollowingCache();
+        _initializeFollowingStatusMap();
+      });
       _showErrorSnackBar('Error: ${e.toString()}');
     }
-  }
-
-  void _revertOptimisticUpdate(
-      Map<dynamic, dynamic> user, int targetUserId, bool wasFollowing) {
-    setState(() {
-      if (wasFollowing) {
-        // Was unfollowing, add back
-        following.add(user);
-        _followingIds.add(targetUserId);
-      } else {
-        // Was following, remove
-        following.removeWhere((item) => _extractUserId(item) == targetUserId);
-        _followingIds.remove(targetUserId);
-      }
-    });
   }
 
   bool _isUserFollowing(Map<dynamic, dynamic> user) {
@@ -208,7 +216,6 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
         'username': username,
       },
     );
-
   }
 
   Widget _buildProfileImage(String? profilePicture, String username) {
@@ -235,22 +242,12 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
   }
 
   Widget _buildDefaultAvatar(String username) {
-    // Generate color based on username
     final colors = [
-      Colors.blue,
-      Colors.green,
-      Colors.orange,
-      Colors.purple,
-      Colors.red,
-      Colors.teal,
-      Colors.indigo,
-      Colors.pink,
+      Colors.blue, Colors.green, Colors.orange, Colors.purple,
+      Colors.red, Colors.teal, Colors.indigo, Colors.pink,
     ];
-
     final colorIndex = username.hashCode % colors.length;
     final color = colors[colorIndex.abs()];
-
-    // Get first letter of username
     final firstLetter = username.isNotEmpty ? username[0].toUpperCase() : '?';
 
     return Container(
@@ -274,7 +271,7 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
       canPop: false,
       onPopInvoked: (didPop) {
         if (!didPop) {
-          Navigator.pop(context, hasChanges);
+          Navigator.pop(context);
         }
       },
       child: Scaffold(
@@ -284,7 +281,7 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.black),
-            onPressed: () => Navigator.pop(context, hasChanges),
+            onPressed: () => Navigator.pop(context),
           ),
           title: const Text(
             'Koneksi',
@@ -325,16 +322,14 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
           ),
         ),
         body: isLoading
-            ? const Center(
-                child: CircularProgressIndicator(),
-              )
+            ? const Center(child: CircularProgressIndicator())
             : TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildUserList(followers, isFollowersTab: true),
-                  _buildUserList(following, isFollowersTab: false),
-                ],
-              ),
+          controller: _tabController,
+          children: [
+            _buildUserList(followers, isFollowersTab: true),
+            _buildUserList(following, isFollowersTab: false),
+          ],
+        ),
       ),
     );
   }
@@ -343,7 +338,6 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
     if (users.isEmpty) {
       return _buildEmptyState(isFollowersTab);
     }
-
     return RefreshIndicator(
       onRefresh: _refreshData,
       child: ListView.separated(
@@ -372,18 +366,14 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                isFollowersTab
-                    ? Icons.people_outline
-                    : Icons.person_add_outlined,
+                isFollowersTab ? Icons.people_outline : Icons.person_add_outlined,
                 size: 48,
                 color: Colors.grey[400],
               ),
             ),
             const SizedBox(height: 24),
             Text(
-              isFollowersTab
-                  ? 'Belum ada pengikut'
-                  : 'Belum mengikuti siapa pun',
+              isFollowersTab ? 'Belum ada pengikut' : 'Belum mengikuti siapa pun',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -411,13 +401,9 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
   Widget _buildUserCard(Map<dynamic, dynamic> user, bool isFollowersTab) {
     final userId = _extractUserId(user);
     final username = user['username']?.toString() ?? 'Unknown';
-    final fullName =
-        user['full_name']?.toString() ?? user['name']?.toString() ?? username;
-    final profilePicture = user['profile_picture_url']?.toString() ??
-        user['profile_picture']?.toString();
+    final fullName = user['full_name']?.toString() ?? user['name']?.toString() ?? username;
+    final profilePicture = user['profile_picture_url']?.toString() ?? user['profile_picture']?.toString();
     final bio = user['bio']?.toString() ?? '';
-
-    final isFollowing = _isUserFollowing(user);
     final isCurrentUser = userId == currentUserId;
 
     return Card(
@@ -432,38 +418,27 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Profile Picture with better loading state
               GestureDetector(
                 onTap: isCurrentUser
                     ? null
                     : () => Navigator.of(context).pop(user),
                 child: Hero(
                   tag: 'profile_$userId',
-                  child: Container(
+                  child: SizedBox(
                     width: 50,
                     height: 50,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.grey[200]!, width: 2),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(25),
+                    child: ClipOval(
                       child: _buildProfileImage(profilePicture, username),
                     ),
                   ),
                 ),
               ),
-
               const SizedBox(width: 16),
-
-              // User Info
               Expanded(
                 child: GestureDetector(
-                  onTap: isCurrentUser
-                      ? null
-                      : () => Navigator.of(context).pop(user),
+                  onTap: isCurrentUser ? null : () => _navigateToOtherProfile(userId, username),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -503,12 +478,12 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
                   ),
                 ),
               ),
-
               const SizedBox(width: 12),
-
-              // Action Button
               if (!isCurrentUser)
-                _buildFollowButton(user, isFollowing)
+                if (isFollowersTab)
+                  _buildFollowerTabButton(user)
+                else
+                  const SizedBox.shrink()
               else
                 _buildCurrentUserBadge(),
             ],
@@ -518,30 +493,43 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
     );
   }
 
-  Widget _buildFollowButton(Map<dynamic, dynamic> user, bool isFollowing) {
+  Widget _buildFollowerTabButton(Map<dynamic, dynamic> user) {
+    final targetUserId = _extractUserId(user);
+    final status = targetUserId != null ? _followingStatusMap[targetUserId] : null;
+
+    String buttonText;
+    bool isUnfollowAction;
+    bool isAccepted = status == 'accepted';
+
+    if (isAccepted) {
+      buttonText = 'Diikuti';
+      isUnfollowAction = true;
+    } else {
+      buttonText = 'Ikuti Balik';
+      isUnfollowAction = false;
+    }
+
     return SizedBox(
-      width: 90,
+      width: 95,
       height: 36,
       child: ElevatedButton(
-        onPressed: () => _handleFollowAction(user, isFollowing),
+        onPressed: () => _handleFollowAction(user, isUnfollow: isUnfollowAction),
         style: ElevatedButton.styleFrom(
-          backgroundColor:
-              isFollowing ? Colors.grey[100] : Theme.of(context).primaryColor,
-          foregroundColor: isFollowing ? Colors.grey[700] : Colors.white,
+          backgroundColor: isAccepted ? Colors.grey[100] : Theme.of(context).primaryColor,
+          foregroundColor: isAccepted ? Colors.grey[700] : Colors.white,
           elevation: 0,
-          padding: EdgeInsets.zero,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
             side: BorderSide(
-              color: isFollowing
-                  ? Colors.grey[300]!
-                  : Theme.of(context).primaryColor,
+              color: isAccepted ? Colors.grey[300]! : Theme.of(context).primaryColor,
               width: 1,
             ),
           ),
         ),
         child: Text(
-          isFollowing ? 'Mengikuti' : 'Ikuti',
+          buttonText,
+          textAlign: TextAlign.center,
           style: const TextStyle(
             fontWeight: FontWeight.w600,
             fontSize: 12,

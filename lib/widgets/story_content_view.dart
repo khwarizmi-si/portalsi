@@ -548,62 +548,64 @@ class _AudioDetailsSheet extends StatelessWidget {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Text('0:30 · ${54} reels', style: const TextStyle(color: Colors.white70)),
-                    const Spacer(),
-                    const Icon(Icons.music_note, color: Colors.green, size: 20),
-                    const SizedBox(width: 4),
-                    const Text('Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    const SizedBox(width: 16),
-                    const Icon(Icons.bookmark_border, color: Colors.white, size: 28),
-                    const SizedBox(width: 16),
-                    const Icon(Icons.send_outlined, color: Colors.white, size: 28),
+                    // Text('0:30 · ${54} reels', style: const TextStyle(color: Colors.white70)),
+                    // const Spacer(),
+                    // const Icon(Icons.music_note, color: Colors.green, size: 20),
+                    // const SizedBox(width: 4),
+                    // const Text('Add', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    // const SizedBox(width: 16),
+                    // const Icon(Icons.bookmark_border, color: Colors.white, size: 28),
+                    // const SizedBox(width: 16),
+                    // const Icon(Icons.send_outlined, color: Colors.white, size: 28),
                   ],
                 ),
                 const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueAccent,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                  child: const Text('Use audio', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                ),
+                // ElevatedButton(
+                //   onPressed: () {},
+                //   style: ElevatedButton.styleFrom(
+                //     backgroundColor: Colors.blueAccent,
+                //     padding: const EdgeInsets.symmetric(vertical: 14),
+                //     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                //   ),
+                //   child:
+                //   const Text('Use audio', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)
+                //   ),
+                // ),
                 const SizedBox(height: 16),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    crossAxisSpacing: 4,
-                    mainAxisSpacing: 4,
-                    childAspectRatio: 9 / 16,
-                  ),
-                  itemCount: reelsGridData.length,
-                  itemBuilder: (context, index) {
-                    final reel = reelsGridData[index];
-                    return Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.network(reel['imageUrl'], fit: BoxFit.cover),
-                        Positioned(
-                          bottom: 8,
-                          left: 8,
-                          child: Row(
-                            children: [
-                              const Icon(Icons.play_arrow, color: Colors.white, size: 16),
-                              const SizedBox(width: 4),
-                              Text(
-                                reel['views'].toString(),
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, shadows: [Shadow(blurRadius: 2)]),
-                              ),
-                            ],
-                          ),
-                        )
-                      ],
-                    );
-                  },
-                ),
+                // GridView.builder(
+                //   shrinkWrap: true,
+                //   physics: const NeverScrollableScrollPhysics(),
+                //   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                //     crossAxisCount: 3,
+                //     crossAxisSpacing: 4,
+                //     mainAxisSpacing: 4,
+                //     childAspectRatio: 9 / 16,
+                //   ),
+                //   itemCount: reelsGridData.length,
+                //   itemBuilder: (context, index) {
+                //     final reel = reelsGridData[index];
+                //     return Stack(
+                //       fit: StackFit.expand,
+                //       children: [
+                //         Image.network(reel['imageUrl'], fit: BoxFit.cover),
+                //         Positioned(
+                //           bottom: 8,
+                //           left: 8,
+                //           child: Row(
+                //             children: [
+                //               const Icon(Icons.play_arrow, color: Colors.white, size: 16),
+                //               const SizedBox(width: 4),
+                //               Text(
+                //                 reel['views'].toString(),
+                //                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, shadows: [Shadow(blurRadius: 2)]),
+                //               ),
+                //             ],
+                //           ),
+                //         )
+                //       ],
+                //     );
+                //   },
+                // ),
               ],
             ),
           ),

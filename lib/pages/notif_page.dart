@@ -70,6 +70,7 @@ class NotificationPage extends StatelessWidget {
     );
   }
 
+
   Widget _buildBody(BuildContext context, NotificationController controller) {
     if (controller.isLoading) {
       return const Center(child: CircularProgressIndicator(strokeWidth: 3));
@@ -132,7 +133,7 @@ class _NotificationGroupSection extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: Text(title,
               style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         ),
         ...notifications.map((notification) {
           final relatedPost = controller.postCache[notification.relatedPostId];
@@ -140,6 +141,7 @@ class _NotificationGroupSection extends StatelessWidget {
             notification: notification,
             relatedPost: relatedPost,
             onTap: () => controller.onNotificationTapped(context, notification),
+            controller: controller, // <-- Teruskan controller
           );
         }).toList(),
       ],
@@ -151,11 +153,17 @@ class _NotificationItem extends StatelessWidget {
   final NotificationModel notification;
   final Post? relatedPost;
   final VoidCallback onTap;
+  final NotificationController controller; // <-- Terima controller
 
-  const _NotificationItem(
-      {required this.notification, this.relatedPost, required this.onTap});
+  const _NotificationItem({
+    required this.notification,
+    this.relatedPost,
+    required this.onTap,
+    required this.controller, // <-- Terima controller
+  });
 
   String _getActionText(String type) {
+    // ... (fungsi ini tidak berubah) ...
     switch (type) {
       case 'like':
         return 'menyukai postingan Anda.';
@@ -172,6 +180,7 @@ class _NotificationItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ... (fungsi build ini tidak berubah) ...
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -214,7 +223,9 @@ class _NotificationItem extends StatelessWidget {
     );
   }
 
+  // --- GANTI SELURUH FUNGSI _buildTrailingWidget DENGAN INI ---
   Widget _buildTrailingWidget() {
+    // Untuk notifikasi like dan comment
     if (notification.type == 'like' || notification.type == 'comment') {
       if (relatedPost?.mediaUrl != null && relatedPost!.mediaUrl!.isNotEmpty) {
         return ClipRRect(
@@ -228,23 +239,37 @@ class _NotificationItem extends StatelessWidget {
         );
       }
     }
+
+    // Untuk notifikasi follow
     if (notification.type == 'follow') {
+      // Ambil status dari controller
+      final isFollowing =
+          controller.followStatus[notification.sender.username] ?? false;
+
       return SizedBox(
-        height: 30,
+        height: 32,
+        width: 100, // Beri lebar agar tampilan tidak "loncat" saat teks berubah
         child: ElevatedButton(
-          onPressed: () {},
+          // Panggil fungsi toggleFollow dari controller
+          onPressed: () => controller.toggleFollow(notification),
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue,
-            foregroundColor: Colors.white,
+            backgroundColor: isFollowing ? Colors.grey.shade200 : Colors.blue,
+            foregroundColor: isFollowing ? Colors.black87 : Colors.white,
             shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            elevation: 0,
+            side: isFollowing ? BorderSide(color: Colors.grey.shade300) : BorderSide.none,
           ),
-          child: const Text('Ikuti Balik',
-              style: TextStyle(fontWeight: FontWeight.bold)),
+          child: Text(
+            isFollowing ? 'Diikuti' : 'Ikuti Balik',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          ),
         ),
       );
     }
+
+    // Default widget jika tidak ada yang cocok
     return const SizedBox(width: 44, height: 44);
   }
 }

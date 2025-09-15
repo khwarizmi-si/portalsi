@@ -65,19 +65,19 @@ class FeedHeader extends StatelessWidget {
                 ],
               ),
               Spacer(),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: IconButton(
-                  icon: Icon(Icons.tune_rounded, color: Colors.grey[700]),
-                  onPressed: () {
-                    HapticFeedback.lightImpact();
-                    onFilterTap();
-                  },
-                ),
-              ),
+              // Container(
+              //   decoration: BoxDecoration(
+              //     color: Colors.grey[100],
+              //     borderRadius: BorderRadius.circular(16),
+              //   ),
+              //   child: IconButton(
+              //     icon: Icon(Icons.tune_rounded, color: Colors.grey[700]),
+              //     onPressed: () {
+              //       HapticFeedback.lightImpact();
+              //       onFilterTap();
+              //     },
+              //   ),
+              // ),
             ],
           ),
           SizedBox(height: 20),

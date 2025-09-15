@@ -678,7 +678,7 @@ class SuggestionCard extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16.0),
             child: Text(
-              'Mungkin Anda Kenal',
+              'Disarankan untuk Anda',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ),
