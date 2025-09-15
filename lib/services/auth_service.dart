@@ -8,79 +8,91 @@ import 'token_refresh_service.dart'; // <-- 1. Import service baru
 
 class AuthService {
   static const String baseUrl = 'https://api-new.portalsi.com/api';
-  // 2. Inisialisasi TokenRefreshService
   final TokenRefreshService _tokenRefreshService = TokenRefreshService();
 
+  // PERBAIKAN 1: Deklarasikan _webSocketService sebagai static member
+  static WebSocketService? _webSocketService;
+  static WebSocketService? get webSocketService => _webSocketService;
 
-  static Future<void> updateUserActivity() async {
-    // Fungsi ini hanya perlu memanggil metode updateActivity
-    // yang sudah ada di WebSocketService Anda.
-    await webSocketService.updateActivity();
-  }
+// File: lib/services/auth_service.dart
 
-  static Future<void> authenticateWebSocket() async {
-    try {
-      final token = await SecureStorage.getToken();
-      if (token == null) return;
+  Future<void> initSession() async {
+    final token = await SecureStorage.getToken();
+    if (token != null && _webSocketService == null) {
+      print("🚀 Sesi aktif terdeteksi. Menginisialisasi WebSocketService...");
+      _webSocketService = WebSocketService(token: token);
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/websocket/authenticate'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      // 👇 PERBAIKAN DI SINI: Ganti .init() menjadi .connect()
+      _webSocketService!.connect();
 
-      if (response.statusCode == 200) {
-        print("🔌 Autentikasi WebSocket berhasil (App Online).");
-      } else {
-        print("🔌 Gagal melakukan autentikasi WebSocket: ${response.body}");
-      }
-    } catch (e) {
-      print("🔌 Terjadi error saat autentikasi WebSocket: $e");
+      // Anda juga bisa memanggil notifikasi online di sini jika perlu
+      await AuthService.notifyBackendOnline();
+      _tokenRefreshService.start();
     }
   }
 
-  // [MODIFIKASI] Tambahkan 'static'
-  static Future<void> disconnectWebSocket() async {
+  // SARAN 1: Method ini dihapus dari AuthService, karena logikanya
+  // sudah sepenuhnya otomatis di dalam WebSocketService.
+  // static Future<void> updateUserActivity() async { ... }
+
+  // SARAN 2: Nama method diubah agar lebih jelas
+  static Future<void> notifyBackendOnline() async {
     try {
       final token = await SecureStorage.getToken();
       if (token == null) return;
 
-      final response = await http.post(
+      await http.post(
+        Uri.parse('$baseUrl/websocket/authenticate'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      print("🔌 Notifikasi ke backend: App Online.");
+    } catch (e) {
+      print("🔌 Gagal mengirim notifikasi online: $e");
+    }
+  }
+
+  // SARAN 2: Nama method diubah agar lebih jelas
+  static Future<void> notifyBackendOffline() async {
+    try {
+      final token = await SecureStorage.getToken();
+      if (token == null) return;
+
+      await http.post(
         Uri.parse('$baseUrl/websocket/disconnect'),
         headers: {'Authorization': 'Bearer $token'},
       );
-      if (response.statusCode == 200) {
-        print("🔌 Diskoneksi WebSocket berhasil (App Offline).");
-      } else {
-        print("🔌 Gagal melakukan diskoneksi WebSocket: ${response.body}");
-      }
+      print("🔌 Notifikasi ke backend: App Offline.");
     } catch (e) {
-      print("🔌 Terjadi error saat diskoneksi WebSocket: $e");
+      print("🔌 Gagal mengirim notifikasi offline: $e");
     }
   }
 
   Future<Map<String, dynamic>> login(String email, String password) async {
     try {
-      final response = await http
-          .post(
+      final response = await http.post(
         Uri.parse('$baseUrl/login'),
         body: {'login': email, 'password': password},
-      )
-          .timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
 
-        // Simpan token akses dan refresh token (jika ada)
+        // Simpan semua token
         await SecureStorage.saveToken(data['token']);
         await SecureStorage.saveUserId(data['user']['user_id'].toString());
-
-        // Asumsi API login mengembalikan 'refresh_token'
         if (data['refresh_token'] != null) {
           await SecureStorage.saveRefreshToken(data['refresh_token']);
         }
 
-        await AuthService.authenticateWebSocket();
-        // --- 👇 PERUBAHAN UTAMA: Mulai timer refresh token ---
+        // Inisialisasi WebSocketService setelah login
+        print("🚀 Menginisialisasi WebSocketService...");
+        // PERBAIKAN 2: Gunakan token yang benar dari variabel 'data'
+        _webSocketService = WebSocketService(token: data['token']);
+        _webSocketService!.connect();
+
+        // Panggil method dengan nama baru
+        await AuthService.notifyBackendOnline();
+
         _tokenRefreshService.start();
 
         return {
@@ -91,19 +103,7 @@ class AuthService {
         };
       } else {
         final data = json.decode(response.body);
-        String message = 'Login gagal';
-
-        if (data is Map<String, dynamic>) {
-          final errors = data.map(
-                (key, value) => MapEntry(
-              key,
-              (value is List && value.isNotEmpty) ? value.first : '',
-            ),
-          );
-          final allErrors = errors.values.where((e) => e != '').toList();
-          if (allErrors.isNotEmpty) message = allErrors.first;
-        }
-
+        String message = data['message'] ?? 'Login gagal';
         return {'success': false, 'message': message};
       }
     } catch (e) {
@@ -112,11 +112,11 @@ class AuthService {
   }
 
   Future<Map<String, dynamic>> register(
-      String username,
-      String fullName,
-      String email,
-      String password,
-      ) async {
+    String username,
+    String fullName,
+    String email,
+    String password,
+  ) async {
     final response = await http.post(
       Uri.parse('$baseUrl/register'),
       body: {
@@ -136,11 +136,15 @@ class AuthService {
   }
 
   Future<void> logout() async {
-    _tokenRefreshService.stop(); // Hentikan timer refresh token
+    _tokenRefreshService.stop();
 
     try {
-      // [MODIFIKASI] Panggil diskoneksi WebSocket sebelum menghapus token
-      await AuthService.disconnectWebSocket();
+      // Panggil method dengan nama baru
+      await AuthService.notifyBackendOffline();
+
+      // Panggil disconnect dari instance WebSocketService
+      _webSocketService?.disconnect();
+      _webSocketService = null; // Hapus instance
 
       final token = await SecureStorage.getToken();
       if (token != null) {
@@ -152,11 +156,10 @@ class AuthService {
     } catch (e) {
       print("Gagal logout dari server, token akan dihapus secara lokal: $e");
     } finally {
+      await SecureStorage.deleteAll();
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
-      print("🧹 Cache (postingan, profil, dll.) telah dibersihkan.");
-
-      await SecureStorage.deleteAll();
+      print("🧹 Cache dan data sesi telah dibersihkan.");
     }
   }
 

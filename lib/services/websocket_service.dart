@@ -2,181 +2,172 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:portal_si/utils/secure_storage.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+// Model sederhana untuk event yang masuk
+class AppEvent {
+  final String channel;
+  final String event;
+  final dynamic data;
+
+  AppEvent({required this.channel, required this.event, this.data});
+}
+
 class WebSocketService {
+  final String _wsBaseUrl =
+      "wss://api-new.portalsi.com:443/app/fiouy3umnruqcwdsoxni";
+  final String _authBaseUrl = "https://api-new.portalsi.com/api";
+  final String _token;
+
   WebSocketChannel? _channel;
   StreamSubscription? _subscription;
+  Timer? _heartbeatTimer;
+  String? _socketId;
 
+  // Stream Controllers
   final StreamController<String> _statusController =
       StreamController.broadcast();
-  final StreamController<Map<String, dynamic>> _notificationController =
-      StreamController.broadcast();
-  final StreamController<Map<String, dynamic>> _eventController =
-      StreamController.broadcast();
-  final StreamController<Map<String, dynamic>> _messageController =
+  final StreamController<AppEvent> _eventController =
       StreamController.broadcast();
 
+  // Getters untuk didengarkan oleh bagian lain dari aplikasi
   Stream<String> get statusStream => _statusController.stream;
-  Stream<Map<String, dynamic>> get notificationStream =>
-      _notificationController.stream;
-  Stream<Map<String, dynamic>> get eventStream => _eventController.stream;
-  Stream<Map<String, dynamic>> get messageStream => _messageController.stream;
+  Stream<AppEvent> get eventStream => _eventController.stream;
 
-  Timer? _heartbeatTimer;
-  Timer? _activityTimer;
-  String? _socketId;
-  Completer<void>? _connectionCompleter;
+  WebSocketService({required String token}) : _token = token;
 
-  // ========== CONNECT ==========
-  Future<void> connect(String wsUrl) async {
-    if (_channel != null && _channel!.closeCode == null) return;
+  // ========== KONEKSI & DISKONEKSI ==========
 
-    _connectionCompleter = Completer<void>();
-    _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
+  void connect() {
+    if (_channel != null && _channel?.closeCode == null) {
+      debugPrint("WebSocket sudah terkoneksi.");
+      return;
+    }
+
     _statusController.add("connecting");
+    _channel = WebSocketChannel.connect(Uri.parse(_wsBaseUrl));
 
     _subscription = _channel!.stream.listen(
-      (msg) => _handleMessage(msg),
+      _handleMessage,
       onDone: () {
         _statusController.add("disconnected");
-        _reconnect(wsUrl);
+        _cleanup();
+        _reconnect();
       },
-      onError: (err) {
-        debugPrint("❌ WebSocket error: $err");
+      onError: (error) {
+        debugPrint("❌ WebSocket Error: $error");
         _statusController.add("error");
-        _reconnect(wsUrl);
+        _cleanup();
+        _reconnect();
       },
     );
-
-    _statusController.add("connected");
-
-    // Heartbeat ping every 10 seconds
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      send({"event": "pusher:ping", "data": {}});
-    });
-
-    // Activity timer (update backend every 2 mins)
-    _activityTimer?.cancel();
-    _activityTimer =
-        Timer.periodic(const Duration(minutes: 2), (_) => updateActivity());
   }
 
-  Future<void> updateActivity() async {
-    try {
-      final token = await SecureStorage.getToken();
-      if (token == null) return;
-      await http.post(
-        Uri.parse("https://api-new.portalsi.com/api/websocket/update-activity"),
-        headers: {
-          "Authorization": "Bearer $token",
-          "Accept": "application/json"
-        },
-      );
-    } catch (e) {
-      debugPrint("⚠️ Error updating activity: $e");
+  void disconnect() {
+    debugPrint("🔌 Disconnecting WebSocket secara manual...");
+    _cleanup();
+    _channel?.sink.close();
+  }
+
+  void _reconnect() {
+    debugPrint("🔁 Mencoba menyambung ulang dalam 5 detik...");
+    Future.delayed(const Duration(seconds: 5), () => connect());
+  }
+
+  void _cleanup() {
+    _heartbeatTimer?.cancel();
+    _socketId = null;
+  }
+
+  // ========== PENGELOLAAN PESAN ==========
+
+  void _handleMessage(dynamic message) {
+    final decoded = jsonDecode(message as String);
+    final eventName = decoded["event"] as String;
+    debugPrint(
+        "===[ RAW WEBSOCKET MESSAGE RECEIVED ]===\n$message\n========================================");
+    // Tangani event internal Pusher
+    switch (eventName) {
+      case "pusher:connection_established":
+        _socketId = jsonDecode(decoded["data"])["socket_id"];
+        _statusController.add("connected");
+        debugPrint("✅ WebSocket Connected with socket_id: $_socketId");
+        _startHeartbeat();
+        break;
+
+      case "pusher:ping":
+        _send({"event": "pusher:pong", "data": {}});
+        break;
+
+      case "pusher_internal:subscription_succeeded":
+        debugPrint("✅ Berhasil subscribe ke channel: ${decoded['channel']}");
+        break;
+
+      default:
+        // Siarkan semua event lain ke aplikasi
+        if (decoded["channel"] != null) {
+          _eventController.add(AppEvent(
+            channel: decoded["channel"],
+            event: eventName,
+            data: jsonDecode(decoded["data"]),
+          ));
+        }
     }
   }
 
-  // ========== SUBSCRIBE ==========
-  Future<void> subscribeToChannel(
-      String channelBase, String authToken, String apiBaseUrl,
-      {bool isPresence = false}) async {
-    if (_channel == null || _socketId == null) return;
+  void _startHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 120), (timer) {
+      _send({"event": "pusher:ping", "data": {}});
+    });
+  }
 
-    final prefix = isPresence ? "presence-" : "private-";
-    final channelName = "$prefix$channelBase";
+  void _send(Map<String, dynamic> data) {
+    if (_channel?.sink != null) {
+      _channel!.sink.add(jsonEncode(data));
+    }
+  }
+
+  // ========== SUBSCRIBE & UNSUBSCRIBE (PUBLIC METHOD) ==========
+
+  Future<void> subscribeToChannel(String channelName) async {
+    // Tunggu sampai socketId tersedia
+    while (_socketId == null) {
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
 
     try {
       final response = await http.post(
-        Uri.parse("$apiBaseUrl/broadcasting/auth"),
+        Uri.parse("$_authBaseUrl/broadcasting/auth"),
         headers: {
-          "Authorization": "Bearer $authToken",
+          "Authorization": "Bearer $_token",
           "Content-Type": "application/json",
-          "Accept": "application/json"
+          "Accept": "application/json",
         },
         body: jsonEncode({"channel_name": channelName, "socket_id": _socketId}),
       );
 
       if (response.statusCode == 200) {
         final authData = jsonDecode(response.body);
-        send({
+        _send({
           "event": "pusher:subscribe",
           "data": {"channel": channelName, "auth": authData["auth"]}
         });
-        debugPrint("📡 Subscribing to $channelName...");
+        debugPrint("📡 Mengirim permintaan subscribe ke $channelName...");
       } else {
-        debugPrint("❌ Auth failed: ${response.statusCode} ${response.body}");
+        debugPrint(
+            "❌ Gagal otentikasi channel ${channelName}: ${response.body}");
       }
     } catch (e) {
-      debugPrint("⚠️ Error during subscription: $e");
+      debugPrint("⚠️ Error saat otentikasi channel: $e");
     }
   }
 
-  void send(Map<String, dynamic> data) {
-    if (_channel != null) _channel!.sink.add(jsonEncode(data));
-  }
-
-  // ========== MESSAGE HANDLER ==========
-  void _handleMessage(String message) {
-    try {
-      final decoded = jsonDecode(message);
-      final event = decoded["event"];
-      final channel = decoded["channel"];
-      dynamic data = decoded["data"];
-      if (data is String) data = jsonDecode(data);
-
-      switch (event) {
-        case "pusher:connection_established":
-          _socketId = data["socket_id"];
-          debugPrint("✅ Connected with socket_id: $_socketId");
-          _statusController.add("connected:$_socketId");
-          break;
-
-
-        case "dm.new":
-          _messageController.add({"channel": channel, "data": data});
-          debugPrint("💬 New DM: $data");
-          break;
-
-        case "pusher:ping":
-          send({"event": "pusher:pong", "data": {}});
-          break;
-
-        case "pusher_internal:subscription_succeeded":
-          debugPrint("✅ Subscribed to $channel");
-          break;
-
-        case "pusher_internal:member_added":
-        case "pusher_internal:member_removed":
-          _eventController
-              .add({"event": event, "channel": channel, "data": data});
-          break;
-
-        case "message.new":
-          _messageController.add({"channel": channel, "data": data});
-          break;
-
-
-        default:
-          _eventController
-              .add({"event": event, "channel": channel, "data": data});
-      }
-    } catch (e) {
-      debugPrint("⚠️ Error parsing WS message: $e");
-    }
-  }
-
-  void _reconnect(String wsUrl) =>
-      Future.delayed(const Duration(seconds: 5), () => connect(wsUrl));
-
-  void disconnect() {
-    _heartbeatTimer?.cancel();
-    _activityTimer?.cancel();
-    _subscription?.cancel();
-    _channel?.sink.close();
-    _statusController.add("disconnected");
+  void unsubscribeFromChannel(String channelName) {
+    _send({
+      "event": "pusher:unsubscribe",
+      "data": {"channel": channelName}
+    });
+    debugPrint("🛑 Mengirim permintaan unsubscribe dari $channelName...");
   }
 }

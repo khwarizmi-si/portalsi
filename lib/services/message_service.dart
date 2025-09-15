@@ -5,91 +5,18 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
-
 import '../models/chat.dart';
 import '../models/user_model.dart';
 import '../utils/secure_storage.dart';
 import 'api_service.dart';
-import 'websocket_service.dart';
-import '../config/api_endpoint.dart';
 import 'package:http/http.dart' as http;
 
 class ChatService extends ApiService {
-  ChatService._internal() {
-    // [MODIFIKASI UTAMA]
-    // Mulai mendengarkan stream event dari WebSocketService secara global
-    _webSocketListener = webSocketService.eventStream.listen((appEvent) {
-      final String eventType = appEvent['type'];
-      final dynamic eventData = appEvent['data'];
-
-      // Cek apakah event adalah pesan baru
-      if (eventType == 'message.new') {
-        try {
-          // Karena service tidak tahu currentUser & recipient,
-          // kita perlu memodifikasi ChatMessage.fromJson untuk menangani data mentah
-          // yang berisi info sender & recipient.
-          final chatMessage = ChatMessage.fromJson(eventData);
-          _messageController.add(chatMessage);
-
-          if (kDebugMode)
-            print('📥 Pesan realtime berhasil diproses oleh ChatService');
-        } catch (e) {
-          if (kDebugMode) print('⚠️ Gagal parsing pesan di ChatService: $e');
-        }
-      }
-    });
-  }
+  ChatService._internal(); // Tetap sebagai Singleton
   static final ChatService _instance = ChatService._internal();
   factory ChatService() => _instance;
 
   static const String _cacheKey = 'conversations_cache';
-
-  WebSocketChannel? _channel;
-  final StreamController<ChatMessage> _messageController =
-      StreamController.broadcast();
-
-  Stream<ChatMessage> get messages => _messageController.stream;
-
-  StreamSubscription?
-      _webSocketListener; // Listener untuk stream dari WebSocketService
-
-  // [MODIFIKASI UTAMA] Sesuaikan fungsi connect
-  void connect({required User currentUser, required User recipient}) {
-    final channelName = 'private-chat.${currentUser.id}.${recipient.id}';
-    _subscribeToChatChannel(channelName);
-  }
-
-  // [BARU] Fungsi helper untuk melakukan subscribe dengan otentikasi
-  Future<void> _subscribeToChatChannel(String channelName) async {
-    try {
-      final token = await SecureStorage.getToken();
-      if (token == null) {
-        if (kDebugMode) print("Gagal subscribe: Token tidak ditemukan.");
-        return;
-      }
-
-      await webSocketService.subscribeToChannel(
-        channelName,
-        token,
-        ApiEndpoints.baseUrl,
-      );
-    } catch (e) {
-      if (kDebugMode) print("Error saat subscribe ke channel chat: $e");
-    }
-  }
-
-  void disconnect() {
-    _channel?.sink.close();
-    _channel = null;
-    if (kDebugMode) print('🔌 Koneksi WebSocket diputus.');
-  }
-
-  void dispose() {
-    _messageController.close();
-    _webSocketListener?.cancel();
-    disconnect();
-  }
 
   Future<void> _saveConversationsToCache(String jsonString) async {
     try {

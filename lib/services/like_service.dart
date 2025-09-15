@@ -12,12 +12,14 @@ class LikeUpdate {
   final int likesCount;
   final bool isLiked;
 
-  LikeUpdate({required this.postId, required this.likesCount, required this.isLiked});
+  LikeUpdate(
+      {required this.postId, required this.likesCount, required this.isLiked});
 }
 
 class LikeService extends ApiService {
   WebSocketChannel? _channel;
-  final StreamController<LikeUpdate> _streamController = StreamController.broadcast();
+  final StreamController<LikeUpdate> _streamController =
+      StreamController.broadcast();
 
   Stream<LikeUpdate> get likeUpdates => _streamController.stream;
 
@@ -32,7 +34,8 @@ class LikeService extends ApiService {
 
   Future<bool> toggleLikeHttp(int postId) async {
     try {
-      final response = await post('posts/$postId/like'); // Memanggil metode post dari ApiService
+      final response = await post(
+          'posts/$postId/like'); // Memanggil metode post dari ApiService
 
       // --- 👇 PERUBAHAN DI SINI ---
       // Mencetak status dan isi respons ke console untuk debugging
@@ -68,15 +71,13 @@ class LikeService extends ApiService {
             isLiked: updateData['is_liked_by_user'],
           ));
         }
-      },
-          onError: (error) {
-            print("❌ WebSocket Error: $error");
-            disconnect();
-          },
-          onDone: () {
-            print("🔌 Koneksi WebSocket ditutup.");
-            disconnect();
-          });
+      }, onError: (error) {
+        // print("❌ WebSocket Error: $error");
+        disconnect();
+      }, onDone: () {
+        print("🔌 Koneksi WebSocket ditutup.");
+        disconnect();
+      });
     } catch (e) {
       print("❌ Gagal terhubung ke WebSocket: $e");
     }
