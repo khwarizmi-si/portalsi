@@ -1,7 +1,7 @@
 // lib/services/auth_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:portal_si/services/websocket_services.dart';
+import 'package:portal_si/services/websocket_service.dart';
 import 'package:portal_si/utils/secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'token_refresh_service.dart';
@@ -9,7 +9,6 @@ import 'token_refresh_service.dart';
 class AuthService {
   static const String baseUrl = 'https://api-new.portalsi.com/api';
   final TokenRefreshService _tokenRefreshService = TokenRefreshService();
-
 
   // PERBAIKAN 1: Deklarasikan _webSocketService sebagai static member
   static WebSocketService? _webSocketService;
@@ -43,7 +42,6 @@ class AuthService {
       final token = await SecureStorage.getToken();
       if (token == null) return;
 
-
       // Endpoint ini BUKAN untuk koneksi, tapi untuk update status 'is_online' di DB
 
       await http.post(
@@ -55,7 +53,6 @@ class AuthService {
       print("🔌 Gagal mengirim notifikasi online: $e");
     }
   }
-
 
   // <-- PERUBAHAN: Nama method diubah agar lebih jelas
 
@@ -85,7 +82,6 @@ class AuthService {
         final data = json.decode(response.body);
         final token = data['token'];
 
-
         // Simpan semua token
         await SecureStorage.saveToken(data['token']);
 
@@ -94,13 +90,11 @@ class AuthService {
           await SecureStorage.saveRefreshToken(data['refresh_token']);
         }
 
-
         // Inisialisasi WebSocketService setelah login
         print("🚀 Menginisialisasi WebSocketService...");
         // PERBAIKAN 2: Gunakan token yang benar dari variabel 'data'
         _webSocketService = WebSocketService(token: data['token']);
         _webSocketService!.connect();
-
 
         // Panggil method dengan nama baru
         await AuthService.notifyBackendOnline();
@@ -155,7 +149,6 @@ class AuthService {
     try {
       // Panggil method dengan nama baru
       await AuthService.notifyBackendOffline();
-
 
       // Panggil disconnect dari instance WebSocketService
 

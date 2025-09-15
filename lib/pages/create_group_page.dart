@@ -2,6 +2,8 @@
 
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:portal_si/models/group_model.dart';
+import 'package:portal_si/pages/group_chat_room_page.dart';
 import 'package:provider/provider.dart';
 import '../controllers/create_group_controller.dart';
 import '../models/user_model.dart';
@@ -24,24 +26,45 @@ class CreateGroupPage extends StatelessWidget {
                 icon: const Icon(Icons.close, color: Colors.black),
                 onPressed: () => Navigator.of(context).pop(),
               ),
-              title: const Text('Grup Baru', style: TextStyle(color: Colors.black)),
+              title: const Text('Grup Baru',
+                  style: TextStyle(color: Colors.black)),
               actions: [
                 TextButton(
-                  onPressed: controller.isCreatingGroup || controller.groupNameController.text.isEmpty
+                  onPressed: controller.isCreatingGroup ||
+                          controller.groupNameController.text.isEmpty
                       ? null
                       : () async {
-                    final newGroup = await controller.createGroup();
-                    if (newGroup != null && context.mounted) {
-                      Navigator.of(context).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Grup berhasil dibuat!'), backgroundColor: Colors.green),
-                      );
-                      // Anda bisa navigasi ke halaman chat grup baru di sini menggunakan ID dari `newGroup['id']`
-                    }
-                  },
+                          // Panggil method createGroup dari controller
+                          final newGroupData = await controller.createGroup();
+
+                          // Jika berhasil dan widget masih ada
+                          if (newGroupData != null && context.mounted) {
+                            // Buat objek Group dari data yang dikembalikan
+                            final newGroup = Group.fromJson(newGroupData);
+
+                            // Tampilkan notifikasi
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('Grup berhasil dibuat!'),
+                                  backgroundColor: Colors.green),
+                            );
+
+                            // Gantikan halaman saat ini dengan halaman chat grup yang baru
+                            Navigator.of(context)
+                                .pushReplacement(MaterialPageRoute(
+                              builder: (_) =>
+                                  GroupChatRoomPage(group: newGroup),
+                            ));
+                          }
+                        },
                   child: controller.isCreatingGroup
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Buat', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Buat',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 16)),
                 )
               ],
             ),
@@ -50,7 +73,8 @@ class CreateGroupPage extends StatelessWidget {
               children: [
                 _buildGroupHeader(context, controller),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: TextField(
                     onChanged: controller.filterFollowers,
                     decoration: InputDecoration(
@@ -66,11 +90,12 @@ class CreateGroupPage extends StatelessWidget {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8.0),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8.0),
                   child: Text(
                       "Pilih Anggota (${controller.selectedUsers.length})",
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)
-                  ),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, color: Colors.grey)),
                 ),
                 Expanded(
                   child: _buildUserList(controller),
@@ -84,7 +109,8 @@ class CreateGroupPage extends StatelessWidget {
   }
 
   // [PERUBAHAN TOTAL] Widget header baru untuk cover dan avatar
-  Widget _buildGroupHeader(BuildContext context, CreateGroupController controller) {
+  Widget _buildGroupHeader(
+      BuildContext context, CreateGroupController controller) {
     return Stack(
       alignment: Alignment.bottomLeft,
       children: [
@@ -98,13 +124,15 @@ class CreateGroupPage extends StatelessWidget {
             child: controller.coverFile != null
                 ? Image.file(controller.coverFile!, fit: BoxFit.cover)
                 : const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.add_photo_alternate_outlined, color: Colors.grey),
-                SizedBox(height: 4),
-                Text("Tambah foto cover group", style: TextStyle(color: Colors.grey)),
-              ],
-            ),
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add_photo_alternate_outlined,
+                          color: Colors.grey),
+                      SizedBox(height: 4),
+                      Text("Tambah foto cover group",
+                          style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
           ),
         ),
         // Area untuk Avatar, Nama Grup, dan Deskripsi
@@ -121,9 +149,12 @@ class CreateGroupPage extends StatelessWidget {
                   child: CircleAvatar(
                     radius: 38,
                     backgroundColor: Colors.grey.shade300,
-                    backgroundImage: controller.avatarFile != null ? FileImage(controller.avatarFile!) : null,
+                    backgroundImage: controller.avatarFile != null
+                        ? FileImage(controller.avatarFile!)
+                        : null,
                     child: controller.avatarFile == null
-                        ? const Icon(Icons.camera_alt, color: Colors.white, size: 30)
+                        ? const Icon(Icons.camera_alt,
+                            color: Colors.white, size: 30)
                         : null,
                   ),
                 ),
@@ -173,8 +204,12 @@ class CreateGroupPage extends StatelessWidget {
         final isSelected = controller.selectedUsers.contains(user);
         return ListTile(
           leading: CircleAvatar(
-            backgroundImage: user.profilePictureUrl != null ? NetworkImage(user.profilePictureUrl!) : null,
-            child: user.profilePictureUrl == null ? Text(user.username.substring(0, 1).toUpperCase()) : null,
+            backgroundImage: user.profilePictureUrl != null
+                ? NetworkImage(user.profilePictureUrl!)
+                : null,
+            child: user.profilePictureUrl == null
+                ? Text(user.username.substring(0, 1).toUpperCase())
+                : null,
           ),
           title: Text(user.fullName ?? user.username),
           subtitle: Text('@${user.username}'),
