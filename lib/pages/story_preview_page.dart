@@ -523,7 +523,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                     ),
                   ),
                   const SizedBox(height: 24),
-                  const Text('Share',
+                  const Text('Bagikan',
                       style: TextStyle(
                           color: Colors.white,
                           fontSize: 20,
@@ -533,9 +533,9 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                     contentPadding: EdgeInsets.zero,
                     leading: const CircleAvatar(
                         backgroundImage: NetworkImage(userProfileImageUrl)),
-                    title: const Text('Your story',
+                    title: const Text('Cerita Anda',
                         style: TextStyle(color: Colors.white)),
-                    subtitle: Text('And Facebook Story',
+                    subtitle: Text('akan diunggah sebagai cerita Anda',
                         style: TextStyle(color: Colors.grey[400])),
                     trailing: Radio<int>(
                         value: 1,
@@ -545,37 +545,37 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                         activeColor: Colors.blue),
                     onTap: () => setState(() => _groupValue = 1),
                   ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const CircleAvatar(
-                        backgroundColor: Colors.green,
-                        child: Icon(Icons.star, color: Colors.white, size: 22)),
-                    title: const Text('Close Friends',
-                        style: TextStyle(color: Colors.white)),
-                    subtitle: Text('Add people',
-                        style: TextStyle(color: Colors.grey[400])),
-                    trailing: Radio<int>(
-                        value: 2,
-                        groupValue: _groupValue,
-                        onChanged: (int? value) =>
-                            setState(() => _groupValue = value!),
-                        activeColor: Colors.blue),
-                    onTap: () => setState(() => _groupValue = 2),
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const CircleAvatar(
-                        backgroundColor: Color(0xFF383838),
-                        child: Icon(Icons.send,
-                            color: Colors.white,
-                            size: 20,
-                            textDirection: TextDirection.rtl)),
-                    title: const Text('Message',
-                        style: TextStyle(color: Colors.white)),
-                    trailing: const Icon(Icons.arrow_forward_ios,
-                        color: Colors.white, size: 16),
-                    onTap: () {},
-                  ),
+                  // ListTile(
+                  //   contentPadding: EdgeInsets.zero,
+                  //   leading: const CircleAvatar(
+                  //       backgroundColor: Colors.green,
+                  //       child: Icon(Icons.star, color: Colors.white, size: 22)),
+                  //   title: const Text('Close Friends',
+                  //       style: TextStyle(color: Colors.white)),
+                  //   subtitle: Text('Add people',
+                  //       style: TextStyle(color: Colors.grey[400])),
+                  //   trailing: Radio<int>(
+                  //       value: 2,
+                  //       groupValue: _groupValue,
+                  //       onChanged: (int? value) =>
+                  //           setState(() => _groupValue = value!),
+                  //       activeColor: Colors.blue),
+                  //   onTap: () => setState(() => _groupValue = 2),
+                  // ),
+                  // ListTile(
+                  //   contentPadding: EdgeInsets.zero,
+                  //   leading: const CircleAvatar(
+                  //       backgroundColor: Color(0xFF383838),
+                  //       child: Icon(Icons.send,
+                  //           color: Colors.white,
+                  //           size: 20,
+                  //           textDirection: TextDirection.rtl)),
+                  //   title: const Text('Message',
+                  //       style: TextStyle(color: Colors.white)),
+                  //   trailing: const Icon(Icons.arrow_forward_ios,
+                  //       color: Colors.white, size: 16),
+                  //   onTap: () {},
+                  // ),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
@@ -587,7 +587,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8)),
                       ),
-                      child: const Text('Share',
+                      child: const Text('Bagikan',
                           style: TextStyle(
                               fontSize: 16,
                               color: Colors.white,
@@ -1119,10 +1119,10 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                       }),
                   Row(
                     children: [
-                      _buildActionButton(Icons.crop_rotate),
-                      _buildActionButton(Icons.text_fields),
-                      _buildActionButton(Icons.emoji_emotions_outlined),
-                      _buildActionButton(Icons.auto_awesome_outlined),
+                      // _buildActionButton(Icons.crop_rotate),
+                      // _buildActionButton(Icons.text_fields),
+                      // _buildActionButton(Icons.emoji_emotions_outlined),
+                      // _buildActionButton(Icons.auto_awesome_outlined),
                       if (_currentSong != null)
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 4.0),
@@ -1140,7 +1140,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                       else
                         _buildActionButton(Icons.music_note_outlined,
                             onPressed: _showMusicPicker),
-                      _buildActionButton(Icons.more_horiz),
+                      // _buildActionButton(Icons.more_horiz),
                     ],
                   )
                 ],
@@ -1341,7 +1341,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                             borderRadius: BorderRadius.circular(12)),
                       ),
                       child: const Text(
-                        'Share',
+                        'Bagikan',
                         style: TextStyle(
                           fontSize: 16,
                           color: Colors.white,
@@ -1482,7 +1482,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                           Expanded(
                             child: Text(
                               _captionController.text.isEmpty
-                                  ? 'Add a caption...'
+                                  ? 'Tambahkan Caption...'
                                   : _captionController.text,
                               style: TextStyle(
                                 color: _captionController.text.isEmpty
@@ -1506,7 +1506,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                           children: [
                             Expanded(
                               child: _buildStoryButton(
-                                label: 'Your stories',
+                                label: 'Cerita Anda',
                                 // Aksi untuk klik sekali (langsung post)
                                 onTap: _handleShare,
                                 // Aksi untuk tekan lama (tampilkan bottom sheet)

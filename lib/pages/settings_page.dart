@@ -167,11 +167,11 @@ class _SettingsPageState extends State<SettingsPage> {
 
           // Menggunakan helper baru untuk setiap item menu
           _buildSectionHeader('Akun anda'),
-          _buildStyledMenuItem(
-            icon: Icons.account_circle_outlined,
-            title: 'Pusat Akun',
-            onTap: () => _showAccountsCenterSheet(context),
-          ),
+          // _buildStyledMenuItem(
+          //   icon: Icons.account_circle_outlined,
+          //   title: 'Pusat Akun',
+          //   onTap: () => _showAccountsCenterSheet(context),
+          // ),
           _buildStyledMenuItem(
             icon: Icons.lock_outline,
             title: 'Privasi Akun',
@@ -187,11 +187,11 @@ class _SettingsPageState extends State<SettingsPage> {
             },
           ),
 
-          _buildSectionHeader('Aktivitasmu di Portal SI'),
-          _buildStyledMenuItem(icon: Icons.bookmark_border, title: 'Disimpan', onTap: () {}),
-          _buildStyledMenuItem(icon: Icons.history, title: 'Arsip', onTap: () {}),
-          _buildStyledMenuItem(icon: Icons.bar_chart, title: 'Aktivitas Anda', onTap: () {}),
-          _buildStyledMenuItem(icon: Icons.notifications_none, title: 'Notifikasi', onTap: () {}),
+          // _buildSectionHeader('Aktivitasmu di Portal SI'),
+          // _buildStyledMenuItem(icon: Icons.bookmark_border, title: 'Disimpan', onTap: () {}),
+          // _buildStyledMenuItem(icon: Icons.history, title: 'Arsip', onTap: () {}),
+          // _buildStyledMenuItem(icon: Icons.bar_chart, title: 'Aktivitas Anda', onTap: () {}),
+          // _buildStyledMenuItem(icon: Icons.notifications_none, title: 'Notifikasi', onTap: () {}),
 
           _buildSectionHeader('Login'),
           _buildStyledMenuItem(
@@ -204,7 +204,7 @@ class _SettingsPageState extends State<SettingsPage> {
               }
             },
           ),
-          _buildStyledMenuItem(icon: Icons.logout, title: 'Keluar dari Semua Akun', onTap: () {}),
+          // _buildStyledMenuItem(icon: Icons.logout, title: 'Keluar dari Semua Akun', onTap: () {}),
         ],
       ),
     );

@@ -389,36 +389,36 @@ class _CreateStoryPageState extends State<CreateStoryPage> {
                   color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
             ),
             centerTitle: true,
-            actions: [
-              if (!_isMultiSelectMode)
-                IconButton(
-                  icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 28),
-                  onPressed: () {
-                    // Gunakan PageRouteBuilder untuk animasi slide dari bawah
-                    Navigator.of(context).push(
-                      PageRouteBuilder(
-                        pageBuilder: (context, animation, secondaryAnimation) => const CameraSettingsPage(),
-                        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                          // Tentukan posisi awal (di bawah layar) dan akhir (di layar)
-                          const begin = Offset(0.0, 1.0);
-                          const end = Offset.zero;
-                          const curve = Curves.easeOutCubic;
-
-                          // Buat transisi
-                          var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-                          var offsetAnimation = animation.drive(tween);
-
-                          return SlideTransition(
-                            position: offsetAnimation,
-                            child: child,
-                          );
-                        },
-                        transitionDuration: const Duration(milliseconds: 400),
-                      ),
-                    );
-                  },
-                ),
-            ],
+            // actions: [
+            //   if (!_isMultiSelectMode)
+            //     // IconButton(
+            //     //   icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 28),
+            //     //   onPressed: () {
+            //     //     // Gunakan PageRouteBuilder untuk animasi slide dari bawah
+            //     //     Navigator.of(context).push(
+            //     //       PageRouteBuilder(
+            //     //         pageBuilder: (context, animation, secondaryAnimation) => const CameraSettingsPage(),
+            //     //         transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            //     //           // Tentukan posisi awal (di bawah layar) dan akhir (di layar)
+            //     //           const begin = Offset(0.0, 1.0);
+            //     //           const end = Offset.zero;
+            //     //           const curve = Curves.easeOutCubic;
+            //     //
+            //     //           // Buat transisi
+            //     //           var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+            //     //           var offsetAnimation = animation.drive(tween);
+            //     //
+            //     //           return SlideTransition(
+            //     //             position: offsetAnimation,
+            //     //             child: child,
+            //     //           );
+            //     //         },
+            //     //         transitionDuration: const Duration(milliseconds: 400),
+            //     //       ),
+            //     //     );
+            //     //   },
+            //     // ),
+            // ],
           ),
           body: Stack(
             children: [

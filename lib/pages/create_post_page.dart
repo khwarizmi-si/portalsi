@@ -112,7 +112,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                     ),
                     const Expanded(
                       child: Text(
-                        'Create New Post',
+                        'Buat Postingan',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: darkText,
@@ -144,7 +144,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                           ),
                         ),
                         child: Text(
-                          _isLoading ? 'Sharing...' : 'Share',
+                          _isLoading ? 'Sebentar...' : 'Unggah',
                           style: const TextStyle(
                             color: pureWhite,
                             fontWeight: FontWeight.w600,
@@ -278,7 +278,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                             ),
                                             const SizedBox(height: 20),
                                             const Text(
-                                              'Tap to add photo or video',
+                                              'Klik untuk mengunggah foto atau video',
                                               style: TextStyle(
                                                 color: darkText,
                                                 fontSize: 16,
@@ -339,9 +339,10 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          _userId > 0
-                                              ? 'User $_userId'
-                                              : 'Loading...',
+                                          // _userId > 0
+                                          //     ? 'User $_userId'
+                                          //     : 'Loading...',
+                                          'Postingan Anda',
                                           style: const TextStyle(
                                             fontWeight: FontWeight.w700,
                                             fontSize: 16,
@@ -349,7 +350,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                           ),
                                         ),
                                         Text(
-                                          'Creating a new post',
+                                          'Tambahkan keterangan',
                                           style: TextStyle(
                                             color: darkText.withOpacity(0.6),
                                             fontSize: 12,
@@ -372,7 +373,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                     controller: _captionController,
                                     maxLines: 4,
                                     decoration: const InputDecoration(
-                                      hintText: 'Write a caption...',
+                                      hintText: 'Tulis Caption...',
                                       border: InputBorder.none,
                                       contentPadding: EdgeInsets.all(15),
                                       hintStyle: TextStyle(
@@ -408,7 +409,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                         Expanded(
                                           child: Text(
                                             _locationController.text.isEmpty
-                                                ? 'Add location'
+                                                ? 'Sertakan lokasi...'
                                                 : _locationController.text,
                                             style: TextStyle(
                                               color: _locationController
@@ -439,68 +440,68 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                 const SizedBox(height: 25),
 
                                 // Additional Options
-                                _buildOptionRow(
-                                  Icons.people_outline,
-                                  'Tag people',
-                                  onTap: () {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: const Text(
-                                          'Tag people feature coming soon',
-                                        ),
-                                        backgroundColor: accentBlue,
-                                        behavior: SnackBarBehavior.floating,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
+                                // _buildOptionRow(
+                                //   Icons.people_outline,
+                                //   'Tag people',
+                                //   onTap: () {
+                                //     ScaffoldMessenger.of(context).showSnackBar(
+                                //       SnackBar(
+                                //         content: const Text(
+                                //           'Tag people feature coming soon',
+                                //         ),
+                                //         backgroundColor: accentBlue,
+                                //         behavior: SnackBarBehavior.floating,
+                                //         shape: RoundedRectangleBorder(
+                                //           borderRadius: BorderRadius.circular(
+                                //             10,
+                                //           ),
+                                //         ),
+                                //       ),
+                                //     );
+                                //   },
+                                // ),
 
-                                _buildOptionRow(
-                                  Icons.facebook,
-                                  'Share to Facebook',
-                                  onTap: () {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: const Text(
-                                          'Facebook sharing feature coming soon',
-                                        ),
-                                        backgroundColor: accentBlue,
-                                        behavior: SnackBarBehavior.floating,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
+                                // _buildOptionRow(
+                                //   Icons.facebook,
+                                //   'Share to Facebook',
+                                //   onTap: () {
+                                //     ScaffoldMessenger.of(context).showSnackBar(
+                                //       SnackBar(
+                                //         content: const Text(
+                                //           'Facebook sharing feature coming soon',
+                                //         ),
+                                //         backgroundColor: accentBlue,
+                                //         behavior: SnackBarBehavior.floating,
+                                //         shape: RoundedRectangleBorder(
+                                //           borderRadius: BorderRadius.circular(
+                                //             10,
+                                //           ),
+                                //         ),
+                                //       ),
+                                //     );
+                                //   },
+                                // ),
 
-                                _buildOptionRow(
-                                  Icons.share,
-                                  'Share to other apps',
-                                  onTap: () {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: const Text(
-                                          'Other app sharing feature coming soon',
-                                        ),
-                                        backgroundColor: accentBlue,
-                                        behavior: SnackBarBehavior.floating,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
+                                // _buildOptionRow(
+                                //   Icons.share,
+                                //   'Share to other apps',
+                                //   onTap: () {
+                                //     ScaffoldMessenger.of(context).showSnackBar(
+                                //       SnackBar(
+                                //         content: const Text(
+                                //           'Other app sharing feature coming soon',
+                                //         ),
+                                //         backgroundColor: accentBlue,
+                                //         behavior: SnackBarBehavior.floating,
+                                //         shape: RoundedRectangleBorder(
+                                //           borderRadius: BorderRadius.circular(
+                                //             10,
+                                //           ),
+                                //         ),
+                                //       ),
+                                //     );
+                                //   },
+                                // ),
                               ],
                             ),
                           ),
@@ -845,7 +846,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
       if (response.statusCode == 200 || response.statusCode == 201) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Post shared successfully!'),
+            content: const Text('Postingan berhasil dibuat! Coba refresh ulang halaman ini untuk melihat'),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(

@@ -3,20 +3,25 @@ import '../models/notification_model.dart';
 import '../models/post_model.dart';
 import '../services/notification_service.dart';
 import '../services/post_service.dart';
-import '../utils/navigation_helper.dart'; // Impor helper navigasi
-import '../pages/post_detail_page.dart'; // Impor halaman detail
+import '../utils/navigation_helper.dart';
+import '../pages/post_detail_page.dart';
+
+// [TAMBAHKAN] Import FollowService
+import '../services/follow_service.dart';
 
 class NotificationController extends ChangeNotifier {
   final NotificationService _notificationService = NotificationService();
   final PostService _postService = PostService();
+  // [TAMBAHKAN] Buat instance FollowService
+  final FollowService _followService = FollowService();
 
-  // [MODIFIKASI 1] Tambahkan variabel cache statis.
-  // 'static' berarti variabel ini akan bertahan nilainya selama aplikasi berjalan,
-  // bahkan jika halaman notifikasi ditutup dan dibuka kembali.
   static List<NotificationModel>? _cachedNotifications;
 
   List<NotificationModel> _notifications = [];
   List<NotificationModel> get notifications => _notifications;
+
+  // [TAMBAHKAN] State untuk melacak status follow
+  Map<String, bool> followStatus = {};
 
   final Map<int, Post> _postCache = {};
   Map<int, Post> get postCache => _postCache;
@@ -49,63 +54,81 @@ class NotificationController extends ChangeNotifier {
     return 'Lebih Awal';
   }
 
-  // [MODIFIKASI 2] Ubah konstruktor untuk logika cache.
   NotificationController() {
-    // Cek apakah ada data di cache.
     if (_cachedNotifications != null) {
-      // Jika ada, langsung gunakan data cache untuk tampilan awal.
       _notifications = _cachedNotifications!;
-      _isLoading = false; // Data sudah siap, jadi tidak perlu loading screen.
-
-      // Kemudian, panggil API di latar belakang untuk mendapatkan data terbaru.
+      _isLoading = false;
+      // [TAMBAHKAN] Panggil inisialisasi status dari cache juga
+      _initializeFollowStatuses(_notifications);
       fetchLatestNotifications();
     } else {
-      // Jika tidak ada cache (pembukaan pertama kali), panggil API dengan state loading.
       loadInitialNotifications();
     }
   }
 
-  // [MODIFIKASI 3] Buat metode terpisah untuk pengambilan data awal (dengan loader).
   Future<void> loadInitialNotifications() async {
     _isLoading = true;
-    notifyListeners(); // Tampilkan CircularProgressIndicator di UI
+    notifyListeners();
     await fetchLatestNotifications();
   }
 
-  // [MODIFIKASI 4] Ganti nama metode 'loadNotifications' menjadi 'refreshNotifications'
-  // Metode ini digunakan untuk fitur pull-to-refresh dan tidak menampilkan loader layar penuh.
   Future<void> refreshNotifications() async {
     await fetchLatestNotifications();
   }
 
-  // [MODIFIKASI 5] Buat metode inti untuk mengambil data dari API.
-  // Metode ini akan dipanggil oleh semua skenario (awal, background, refresh).
   Future<void> fetchLatestNotifications() async {
     _errorMessage = null;
     try {
-      // 1. Ambil data baru dari service.
       final notificationData = await _notificationService.getNotifications();
       final newNotifications =
       notificationData.map((n) => NotificationModel.fromJson(n)).toList();
 
-      // 2. Perbarui state notifikasi utama yang akan ditampilkan di UI.
       _notifications = newNotifications;
-
-      // 3. Simpan data baru yang berhasil didapat ke dalam cache.
       _cachedNotifications = newNotifications;
 
       await _preloadPostData(_notifications);
+      // [TAMBAHKAN] Panggil inisialisasi status setelah data baru didapat
+      await _initializeFollowStatuses(newNotifications);
+
     } catch (e) {
-      // Hanya tampilkan pesan error jika tidak ada data sama sekali (bahkan dari cache).
       if (_notifications.isEmpty) {
         _errorMessage = e.toString();
       }
       debugPrint("Gagal mengambil notifikasi terbaru: $e");
     } finally {
-      // Hentikan state loading (jika sedang aktif) dan perbarui UI.
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  // [TAMBAHKAN] Fungsi untuk menginisialisasi status follow/unfollow
+  Future<void> _initializeFollowStatuses(List<NotificationModel> notifications) async {
+    // FollowService sudah memiliki cache, jadi ini efisien
+    for (var notification in notifications) {
+      if (notification.type == 'follow') {
+        final isUserFollowing = await _followService.isFollowing(notification.sender.username);
+        followStatus[notification.sender.username] = isUserFollowing;
+      }
+    }
+  }
+
+  // [TAMBAHKAN] Fungsi yang dipanggil UI saat tombol follow/unfollow diklik
+  Future<void> toggleFollow(NotificationModel notification) async {
+    final username = notification.sender.username;
+    final currentlyFollowing = followStatus[username] ?? false;
+
+    bool success;
+    if (currentlyFollowing) {
+      success = await _followService.unfollowUser(username);
+    } else {
+      success = await _followService.followUser(username);
+    }
+
+    if (success) {
+      followStatus[username] = !currentlyFollowing;
+      notifyListeners();
+    }
+    // Opsional: Tambahkan penanganan jika 'success' adalah false (misalnya, tampilkan snackbar error)
   }
 
   Future<void> _preloadPostData(List<NotificationModel> notifications) async {
@@ -125,10 +148,8 @@ class NotificationController extends ChangeNotifier {
         debugPrint('Gagal preload post $id: $e');
       }
     }));
-    // Tidak perlu notifyListeners() di sini karena sudah dipanggil di fetchLatestNotifications()
   }
 
-  /// Aksi saat notifikasi di-tap.
   void onNotificationTapped(
       BuildContext context, NotificationModel notification) {
     if (!notification.isRead) {
@@ -166,7 +187,6 @@ class NotificationController extends ChangeNotifier {
     }
   }
 
-  /// Aksi untuk menandai semua sebagai sudah dibaca
   Future<void> markAllAsRead() async {
     try {
       await _notificationService.markAllAsRead();
