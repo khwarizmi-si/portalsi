@@ -67,7 +67,7 @@ class User {
     List<SimplePost> recentPostsList = postsFromJson.map((i) => SimplePost.fromJson(i)).toList();
 
     return User(
-      id: json['user_id'],
+      id: json['id'] ?? json['user_id'],
       username: json['username'],
       email: json['email'],
       fullName: json['full_name'],
@@ -85,6 +85,7 @@ class User {
   Map<String, dynamic> toJson() {
     return {
       'user_id': id,
+      'id': id,
       'username': username,
       'email': email,
       'full_name': fullName,
