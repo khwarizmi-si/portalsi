@@ -9,6 +9,7 @@ import '../components/bottom_navigation.dart';
 import '../providers/navigation_provider.dart';
 import '../services/user_service.dart'; // Hanya import service yang benar
 import '../services/follow_service.dart'; // Hanya import service yang benar
+import '../utils/navigation_helper.dart';
 import 'followers_following_page.dart';
 
 class OtherProfilePage extends StatefulWidget {
@@ -119,10 +120,12 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
     }
   }
 
-  void _navigateToFollowersFollowing(int initialTab) {
+  void _navigateToFollowersFollowing(int initialTab) async { // <-- Tambahkan async
     if (_profileData == null || _profileData!.id == null) return;
 
-    Navigator.push(
+    // --- PERUBAHAN UTAMA DI SINI ---
+    // Kita akan menunggu (await) hasil dari halaman yang dibuka
+    final result = await Navigator.push<Map<dynamic, dynamic>>( // <-- Tambahkan await dan tipe data
       context,
       MaterialPageRoute(
         builder: (context) => FollowersFollowingPage(
@@ -131,6 +134,16 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
         ),
       ),
     );
+
+    // Jika ada data yang dikembalikan (artinya user mengklik profil)
+    // dan halaman ini masih aktif, maka jalankan navigasi.
+    if (result != null && mounted) {
+      NavigationHelper.navigateToProfile(
+        context,
+        Map<String, dynamic>.from(result), // Lakukan cast di sini
+      );
+    }
+    // --- Batas Perubahan ---
   }
 
   @override

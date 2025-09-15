@@ -223,6 +223,7 @@ class ChatRoomController extends ChangeNotifier {
           } catch (e, s) {
             debugPrint("Error parsing pesan dari event 'dm.new': $e");
             debugPrint("Stack trace: $s");
+
           }
         }
       },

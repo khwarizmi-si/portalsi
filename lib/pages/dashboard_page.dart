@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:shimmer/shimmer.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 // Halaman & Komponen UI
@@ -17,6 +18,7 @@ import 'package:portal_si/pages/announcement_list_page.dart';
 
 // State Management & Model
 import '../controllers/home_controller.dart';
+import '../services/follow_service.dart';
 import '../utils/user_provider.dart';
 import '../models/post_model.dart';
 import '../models/announcement_model.dart';
@@ -662,6 +664,11 @@ class SuggestionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Jika tidak ada user, sembunyikan seluruh bagian
+    if (users.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
       height: 230,
       margin: const EdgeInsets.symmetric(vertical: 16.0),
@@ -683,80 +690,160 @@ class SuggestionCard extends StatelessWidget {
               itemCount: users.length,
               itemBuilder: (context, index) {
                 final user = users[index];
-                // Pastikan user adalah Map sebelum diakses
-                if (user is! Map<String, dynamic>) return const SizedBox.shrink();
+                if (user is! Map<String, dynamic> || user['user_id'] == null) {
+                  return const SizedBox.shrink();
+                }
 
-                final profilePic = user['profile_picture_url'] ?? '';
-                final username = user['username'] ?? 'No Username';
-                final fullName = user['full_name'] ?? 'No Name';
-
-                // --- 👇 PERUBAHAN UTAMA DIMULAI DARI SINI ---
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                  child: InkWell(
-                    // 1. Tambahkan fungsi onTap untuk navigasi
-                    onTap: () {
-                      // Gunakan helper navigasi yang sama seperti di PostCard
-                      // Pastikan Anda sudah mengimpor NavigationHelper di file ini
-                      NavigationHelper.navigateToProfile(context, user);
-                    },
-                    // 2. Sesuaikan borderRadius agar efek ripple sesuai dengan bentuk kartu
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      width: 140,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircleAvatar(
-                            radius: 30,
-                            backgroundImage: profilePic.isNotEmpty
-                                ? CachedNetworkImageProvider(profilePic)
-                                : null,
-                            child: profilePic.isEmpty ? const Icon(Icons.person) : null,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            username,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            fullName,
-                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const Spacer(),
-                          // Tombol ini akan tetap berfungsi secara independen
-                          ElevatedButton(
-                            onPressed: () {
-                              // TODO: Implement follow logic
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                            ),
-                            child: const Text('Ikuti'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                // Setiap kartu sekarang mengelola statenya sendiri
+                return _SuggestionProfileCard(
+                  key: ValueKey(user['user_id']),
+                  user: user,
                 );
-                // --- PERUBAHAN BERAKHIR DI SINI ---
               },
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SuggestionProfileCard extends StatefulWidget {
+  final Map<String, dynamic> user;
+
+  const _SuggestionProfileCard({super.key, required this.user});
+
+  @override
+  State<_SuggestionProfileCard> createState() => _SuggestionProfileCardState();
+}
+
+class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
+  bool _isLoading = false;
+  bool _isFollowed = false;
+  bool _showShimmer = false;
+
+  final FollowService _followService = FollowService();
+
+  // --- ⬇️ PERUBAHAN UTAMA: FUNGSI INI SEKARANG MENGATUR FOLLOW & UNFOLLOW ⬇️ ---
+  Future<void> _toggleFollowStatus() async {
+    setState(() => _isLoading = true);
+
+    bool success;
+
+    // Jika sudah mengikuti, jalankan unfollow. Jika belum, jalankan follow.
+    if (_isFollowed) {
+      success = await _followService.unfollowUser(widget.user['user_id']);
+    } else {
+      success = await _followService.followUser(widget.user['user_id']);
+    }
+
+    if (!mounted) return;
+
+    if (success) {
+      // Perbarui state berdasarkan aksi yang berhasil
+      setState(() {
+        _isFollowed = !_isFollowed; // Balikkan status follow
+      });
+
+      // Hanya tampilkan shimmer saat follow, bukan saat unfollow
+      if (_isFollowed) {
+        setState(() => _showShimmer = true);
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          if (mounted) {
+            setState(() => _showShimmer = false);
+          }
+        });
+      }
+    } else {
+      // Tampilkan pesan error jika aksi gagal
+      final action = _isFollowed ? "berhenti mengikuti" : "mengikuti";
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal $action ${widget.user['username']}'),
+          backgroundColor: Colors.red.shade600,
+        ),
+      );
+    }
+
+    // Selesaikan loading setelah semua proses selesai
+    setState(() => _isLoading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profilePic = widget.user['profile_picture_url'] ?? '';
+    final username = widget.user['username'] ?? 'No Username';
+    final fullName = widget.user['full_name'] ?? 'No Name';
+    final bool isFollowBack = widget.user['is_follow_back'] ?? false;
+    final String buttonText = _isFollowed ? 'Mengikuti' : (isFollowBack ? 'Ikuti Balik' : 'Ikuti');
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+      child: Stack(
+        children: [
+          // LAPISAN 1: KONTEN KARTU
+          InkWell(
+            onTap: () => NavigationHelper.navigateToProfile(context, widget.user),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: 140,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundImage: profilePic.isNotEmpty ? CachedNetworkImageProvider(profilePic) : null,
+                    child: profilePic.isEmpty ? const Icon(Icons.person, size: 30) : null,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(username, style: const TextStyle(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 2),
+                  Text(fullName, style: TextStyle(fontSize: 12, color: Colors.grey.shade600), overflow: TextOverflow.ellipsis),
+                  const Spacer(),
+                  ElevatedButton(
+                    // Panggil fungsi toggle yang baru
+                    onPressed: _isLoading ? null : _toggleFollowStatus,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isFollowed ? Colors.grey.shade300 : Colors.blue,
+                      foregroundColor: _isFollowed ? Colors.black54 : Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      minimumSize: const Size(88, 36),
+                      elevation: _isFollowed ? 0 : 2,
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                        : Text(buttonText),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // LAPISAN 2: EFEK KILAU (SHIMMER)
+          if (_showShimmer)
+            Positioned.fill(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Shimmer.fromColors(
+                  baseColor: Colors.transparent,
+                  highlightColor: Colors.white.withOpacity(0.6),
+                  period: const Duration(milliseconds: 1000),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

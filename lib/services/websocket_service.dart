@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+
 // Model sederhana untuk event yang masuk
 class AppEvent {
   final String channel;
@@ -12,6 +13,7 @@ class AppEvent {
 
   AppEvent({required this.channel, required this.event, this.data});
 }
+
 
 class WebSocketService {
   final String _wsBaseUrl =
@@ -155,8 +157,10 @@ class WebSocketService {
         });
         debugPrint("📡 Mengirim permintaan subscribe ke $channelName...");
       } else {
+
         debugPrint(
             "❌ Gagal otentikasi channel ${channelName}: ${response.body}");
+
       }
     } catch (e) {
       debugPrint("⚠️ Error saat otentikasi channel: $e");

@@ -1,14 +1,15 @@
 // lib/services/auth_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:portal_si/services/websocket_service.dart';
+import 'package:portal_si/services/websocket_services.dart';
 import 'package:portal_si/utils/secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'token_refresh_service.dart'; // <-- 1. Import service baru
+import 'token_refresh_service.dart';
 
 class AuthService {
   static const String baseUrl = 'https://api-new.portalsi.com/api';
   final TokenRefreshService _tokenRefreshService = TokenRefreshService();
+
 
   // PERBAIKAN 1: Deklarasikan _webSocketService sebagai static member
   static WebSocketService? _webSocketService;
@@ -36,10 +37,14 @@ class AuthService {
   // static Future<void> updateUserActivity() async { ... }
 
   // SARAN 2: Nama method diubah agar lebih jelas
+
   static Future<void> notifyBackendOnline() async {
     try {
       final token = await SecureStorage.getToken();
       if (token == null) return;
+
+
+      // Endpoint ini BUKAN untuk koneksi, tapi untuk update status 'is_online' di DB
 
       await http.post(
         Uri.parse('$baseUrl/websocket/authenticate'),
@@ -51,7 +56,9 @@ class AuthService {
     }
   }
 
-  // SARAN 2: Nama method diubah agar lebih jelas
+
+  // <-- PERUBAHAN: Nama method diubah agar lebih jelas
+
   static Future<void> notifyBackendOffline() async {
     try {
       final token = await SecureStorage.getToken();
@@ -76,19 +83,24 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        final token = data['token'];
+
 
         // Simpan semua token
         await SecureStorage.saveToken(data['token']);
+
         await SecureStorage.saveUserId(data['user']['user_id'].toString());
         if (data['refresh_token'] != null) {
           await SecureStorage.saveRefreshToken(data['refresh_token']);
         }
+
 
         // Inisialisasi WebSocketService setelah login
         print("🚀 Menginisialisasi WebSocketService...");
         // PERBAIKAN 2: Gunakan token yang benar dari variabel 'data'
         _webSocketService = WebSocketService(token: data['token']);
         _webSocketService!.connect();
+
 
         // Panggil method dengan nama baru
         await AuthService.notifyBackendOnline();
@@ -98,12 +110,14 @@ class AuthService {
         return {
           'success': true,
           'message': 'Login berhasil',
-          'token': data['token'],
+          'token': token,
           'user': data['user'],
         };
       } else {
         final data = json.decode(response.body);
+
         String message = data['message'] ?? 'Login gagal';
+
         return {'success': false, 'message': message};
       }
     } catch (e) {
@@ -142,7 +156,9 @@ class AuthService {
       // Panggil method dengan nama baru
       await AuthService.notifyBackendOffline();
 
+
       // Panggil disconnect dari instance WebSocketService
+
       _webSocketService?.disconnect();
       _webSocketService = null; // Hapus instance
 

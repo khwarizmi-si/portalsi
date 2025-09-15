@@ -35,7 +35,9 @@ class _AppLifecycleObserverState extends State<AppLifecycleObserver>
     switch (state) {
       case AppLifecycleState.resumed:
         print("App is resumed (online)");
+
         // PERBAIKAN 1: Panggil method baru untuk notifikasi online
+
         AuthService.notifyBackendOnline();
         break;
 
@@ -44,7 +46,9 @@ class _AppLifecycleObserverState extends State<AppLifecycleObserver>
       case AppLifecycleState.detached:
       case AppLifecycleState.hidden:
         print("App is inactive/paused/detached (offline)");
+
         // PERBAIKAN 2: Panggil method baru untuk notifikasi offline
+
         AuthService.notifyBackendOffline();
         break;
     }

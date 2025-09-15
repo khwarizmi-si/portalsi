@@ -12,11 +12,14 @@ import 'api_service.dart';
 import 'package:http/http.dart' as http;
 
 class ChatService extends ApiService {
+
   ChatService._internal(); // Tetap sebagai Singleton
+
   static final ChatService _instance = ChatService._internal();
   factory ChatService() => _instance;
 
   static const String _cacheKey = 'conversations_cache';
+
 
   Future<void> _saveConversationsToCache(String jsonString) async {
     try {

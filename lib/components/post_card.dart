@@ -158,15 +158,15 @@ class _PostCardState extends State<PostCard> {
                     icon: Icons.chat_bubble_outline,
                     onTap: widget.onComment,
                   ),
-                  _buildActionButton(
-                    icon: Icons.send_outlined,
-                    onTap: widget.onShare,
-                  ),
+                  // _buildActionButton(
+                  //   icon: Icons.send_outlined,
+                  //   onTap: widget.onShare,
+                  // ),
                   const Spacer(),
-                  _buildActionButton(
-                    icon: widget.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                    onTap: widget.onBookmark,
-                  ),
+                  // _buildActionButton(
+                  //   icon: widget.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                  //   onTap: widget.onBookmark,
+                  // ),
                 ],
               ),
             ),
