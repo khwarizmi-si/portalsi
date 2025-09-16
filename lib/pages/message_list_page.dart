@@ -46,15 +46,15 @@ class MessageListPage extends StatelessWidget {
                 );
               },
             ),
-            IconButton(
-              icon: const Icon(Icons.group_add_outlined,
-                  color: Colors.black87, size: 28),
-              onPressed: () {
-                // Navigasi ke halaman buat grup
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const CreateGroupPage()));
-              },
-            ),
+            // IconButton(
+            //   icon: const Icon(Icons.group_add_outlined,
+            //       color: Colors.black87, size: 28),
+            //   onPressed: () {
+            //     // Navigasi ke halaman buat grup
+            //     Navigator.push(context,
+            //         MaterialPageRoute(builder: (_) => const CreateGroupPage()));
+            //   },
+            // ),
           ],
         ),
         body: Column(
@@ -167,6 +167,7 @@ class _ConversationTile extends StatelessWidget {
     // Gunakan getter abstrak. Flutter akan otomatis memanggil implementasi
     // yang benar (dari User- atau GroupConversation).
     final String name = conversation.displayName;
+    final String message = conversation.lastMessage;
     final String? imageUrl = conversation.displayImageUrl;
 
     return Container(
@@ -269,7 +270,7 @@ class _ConversationTile extends StatelessWidget {
                     // Di bawah sini Anda akan meletakkan widget Text untuk pesan terakhir
                     const SizedBox(height: 5),
                     Text(
-                      name,
+                      message,
                       style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w600,

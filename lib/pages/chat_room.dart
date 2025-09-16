@@ -556,12 +556,12 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                     ],
                   ),
                 ),
-                IconButton(
-                    icon: const Icon(Icons.call_outlined, color: Colors.black87),
-                    onPressed: () {}),
-                IconButton(
-                    icon: const Icon(Icons.more_vert, color: Colors.black87),
-                    onPressed: () {}),
+                // IconButton(
+                //     icon: const Icon(Icons.call_outlined, color: Colors.black87),
+                //     onPressed: () {}),
+                // IconButton(
+                //     icon: const Icon(Icons.more_vert, color: Colors.black87),
+                //     onPressed: () {}),
               ],
             ),
           ),
@@ -869,10 +869,10 @@ class _MessageInputBarState extends State<_MessageInputBar> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          IconButton(
-            icon: const Icon(Icons.sentiment_satisfied_alt_outlined, color: Colors.black54),
-            onPressed: () {},
-          ),
+          // IconButton(
+          //   icon: const Icon(Icons.sentiment_satisfied_alt_outlined, color: Colors.black54),
+          //   onPressed: () {},
+          // ),
           Expanded(
             child: TextField(
               controller: _textController,
@@ -911,25 +911,27 @@ class _MessageInputBarState extends State<_MessageInputBar> {
               );
             },
           ),
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: const Color(0xFFFFA726),
-            child: IconButton(
-              icon: Icon(
-                _textController.text.trim().isEmpty
-                    ? Icons.mic_none_outlined
-                    : Icons.send_rounded,
-                color: Colors.white,
+          if (_textController.text.trim().isNotEmpty)
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: const Color(0xFFFFA726),
+              child: IconButton(
+                icon: Icon(
+                  Icons.send_rounded,
+                  color: Colors.white,
+                ),
+                onPressed: () {
+                  if (_textController.text
+                      .trim()
+                      .isNotEmpty) {
+                    chatController.sendMessage(_textController.text);
+                    _textController.clear();
+                    setState(() {});
+                  }
+                },
               ),
-              onPressed: () {
-                if (_textController.text.trim().isNotEmpty) {
-                  chatController.sendMessage(_textController.text);
-                  _textController.clear();
-                  setState(() {});
-                }
-              },
             ),
-          ),
+
         ],
       ),
     );

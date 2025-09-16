@@ -12,14 +12,123 @@ class AnnouncementListPage extends StatefulWidget {
 }
 
 class _AnnouncementListPageState extends State<AnnouncementListPage> {
-  late Future<List<Announcement>> _announcementsFuture;
+  List<Announcement>? _announcements;
+  bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    // Setting locale untuk timeago agar menjadi format Indonesia
     timeago.setLocaleMessages('id', timeago.IdMessages());
-    _announcementsFuture = AnnouncementService().getAnnouncements();
+    // --- DIUBAH: Panggil fungsi untuk mengambil data ---
+    _fetchAnnouncements();
+  }
+
+  // --- BARU: Fungsi untuk mengambil dan mengatur state ---
+  Future<void> _fetchAnnouncements() async {
+    try {
+      final data = await AnnouncementService().getAnnouncements();
+      // Urutkan list agar pengumuman yang di-pin selalu di atas
+      data.sort((a, b) {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return b.createdAt.compareTo(a.createdAt); // Urutkan sisanya berdasarkan waktu
+      });
+      setState(() {
+        _announcements = data;
+        _isLoading = false;
+        _error = null;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'Gagal memuat pengumuman: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  // --- BARU: Fungsi untuk menampilkan dialog konfirmasi ---
+  Future<bool?> _showConfirmationDialog() {
+    return showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Konfirmasi Hapus'),
+          content: const Text('Apakah Anda yakin ingin menghapus pengumuman ini?'),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Batal'),
+              onPressed: () {
+                Navigator.of(context).pop(false); // Mengembalikan false
+              },
+            ),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Hapus'),
+              onPressed: () {
+                Navigator.of(context).pop(true); // Mengembalikan true
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // --- BARU: Fungsi untuk menangani proses penghapusan ---
+  void _handleDelete(int id, int index) {
+    // Simpan item yang akan dihapus untuk kemungkinan 'undo'
+    final announcementToRemove = _announcements![index];
+
+    // Hapus dari UI secara optimis
+    setState(() {
+      _announcements!.removeAt(index);
+    });
+
+    // Panggil API untuk menghapus
+    AnnouncementService().deleteAnnouncement(id).then((_) {
+      // Tampilkan notifikasi sukses
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${announcementToRemove.title} telah dihapus.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }).catchError((error) {
+      // Jika gagal, kembalikan item ke list dan tampilkan error
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal menghapus: $error'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      setState(() {
+        _announcements!.insert(index, announcementToRemove);
+      });
+    });
+  }
+
+  // --- BARU: Widget untuk background saat swipe ---
+  Widget _buildSwipeBackground() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: BoxDecoration(
+        color: Colors.red.shade700,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: [
+          Icon(Icons.delete, color: Colors.white),
+          SizedBox(width: 10),
+          Text(
+            'Hapus',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -31,36 +140,46 @@ class _AnnouncementListPageState extends State<AnnouncementListPage> {
         foregroundColor: Colors.black,
         elevation: 1,
       ),
-      backgroundColor: Colors.grey[100], // Background agar card terlihat
-      body: FutureBuilder<List<Announcement>>(
-        future: _announcementsFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('Tidak ada pengumuman.'));
-          }
+      backgroundColor: Colors.grey[100],
+      // --- DIUBAH: Ganti FutureBuilder dengan logika state manual ---
+      body: _buildBody(),
+    );
+  }
 
-          final announcements = snapshot.data!;
-          // Urutkan list agar pengumuman yang di-pin selalu di atas
-          announcements.sort((a, b) {
-            if (a.pinned && !b.pinned) return -1;
-            if (!a.pinned && b.pinned) return 1;
-            return b.createdAt.compareTo(a.createdAt); // Urutkan sisanya berdasarkan waktu
-          });
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-          return ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-            itemCount: announcements.length,
-            itemBuilder: (context, index) {
-              final announcement = announcements[index];
-              return AnnouncementCard(announcement: announcement);
-            },
-          );
-        },
-      ),
+    if (_error != null) {
+      return Center(child: Text(_error!));
+    }
+
+    if (_announcements == null || _announcements!.isEmpty) {
+      return const Center(child: Text('Tidak ada pengumuman.'));
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+      itemCount: _announcements!.length,
+      itemBuilder: (context, index) {
+        final announcement = _announcements![index];
+        // --- BARU: Bungkus Card dengan Dismissible ---
+        return Dismissible(
+          key: Key(announcement.id.toString()), // Key unik sangat penting!
+          direction: DismissDirection.startToEnd, // Geser dari kiri ke kanan
+          background: _buildSwipeBackground(),
+          confirmDismiss: (direction) async {
+            // Tampilkan dialog dan tunggu hasilnya (true/false)
+            return await _showConfirmationDialog();
+          },
+          onDismissed: (direction) {
+            // Fungsi ini hanya akan terpanggil jika confirmDismiss mengembalikan true
+            _handleDelete(announcement.id, index);
+          },
+          child: AnnouncementCard(announcement: announcement),
+        );
+      },
     );
   }
 }

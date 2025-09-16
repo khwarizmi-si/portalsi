@@ -94,4 +94,20 @@ class AnnouncementService extends ApiService {
       rethrow;
     }
   }
+
+  // --- ✨ FUNGSI BARU UNTUK MENGHAPUS PENGUMUMAN ---
+  /// Menghapus pengumuman berdasarkan ID.
+  Future<void> deleteAnnouncement(int announcementId) async {
+    final String endpoint = 'announcements/$announcementId';
+    try {
+      // Asumsi `ApiService` Anda memiliki method `delete` yang menangani DELETE request.
+      // Jika tidak, Anda perlu membuatnya.
+      await delete(endpoint);
+      print("📢 Pengumuman dengan ID $announcementId berhasil dihapus dari server.");
+    } catch (e) {
+      print("❌ Gagal menghapus pengumuman dengan ID $announcementId: $e");
+      // Melempar kembali error agar bisa ditangani di UI
+      rethrow;
+    }
+  }
 }

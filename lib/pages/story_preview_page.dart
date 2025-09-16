@@ -489,6 +489,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
   }
 
   void _showShareBottomSheet() {
+
+    HapticFeedback.lightImpact();
     setState(() {
       _isBottomSheetVisible = true;
     });
@@ -1287,7 +1289,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
 
                   // Judul
                   const Text(
-                    'Share this to',
+                    'Bagikan ini ke..',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 20,
@@ -1299,8 +1301,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                   // Pilihan 1: Your Story
                   _buildShareOptionTile(
                     avatarUrl: _currentUser?.profilePictureUrl,
-                    title: 'Your Story',
-                    subtitle: 'Always shared to Instagram',
+                    title: 'Cerita Anda',
+                    subtitle: 'Unggah sebagai cerita Anda di Portal SI',
                     isSelected: shareToStory,
                     onTap: () {
                       setModalState(() {
@@ -1311,18 +1313,18 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                   const SizedBox(height: 12),
 
                   // Pilihan 2: Your Facebook Story
-                  _buildShareOptionTile(
-                    avatarUrl: 'https://i.pravatar.cc/150?img=5', // Ganti dengan URL yang sesuai
-                    title: 'Your Facebook Story',
-                    subtitle: '${_currentUser?.fullName ?? 'Anda'} • Friends',
-                    isSelected: shareToFacebook,
-                    hasFacebookIcon: true,
-                    onTap: () {
-                      setModalState(() {
-                        shareToFacebook = !shareToFacebook;
-                      });
-                    },
-                  ),
+                  // _buildShareOptionTile(
+                  //   avatarUrl: 'https://i.pravatar.cc/150?img=5', // Ganti dengan URL yang sesuai
+                  //   title: 'Your Facebook Story',
+                  //   subtitle: '${_currentUser?.fullName ?? 'Anda'} • Friends',
+                  //   isSelected: shareToFacebook,
+                  //   hasFacebookIcon: true,
+                  //   onTap: () {
+                  //     setModalState(() {
+                  //       shareToFacebook = !shareToFacebook;
+                  //     });
+                  //   },
+                  // ),
                   const SizedBox(height: 32),
 
                   // Tombol Share
@@ -1523,8 +1525,25 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                             const SizedBox(width: 12),
                             Expanded(
                               child: _buildStoryButton(
-                                label: 'Close Friends',
-                                onTap: _showCloseFriendsPage, // Pastikan fungsi ini sudah ada
+                                label: 'Teman Dekat',
+                                // onTap: _showCloseFriendsPage, // Pastikan fungsi ini sudah ada
+                                onTap: () {
+                                  HapticFeedback.lightImpact();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: const Text(
+                                          'Fitur ini akan segara hadir...',
+                                        ),
+                                        backgroundColor: Colors.blueAccent,
+                                        behavior: SnackBarBehavior.floating,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
+                                      ),
+                                  );
+                                },
                                 iconWidget: const CircleAvatar(
                                     radius: 14,
                                     backgroundColor: Colors.green,

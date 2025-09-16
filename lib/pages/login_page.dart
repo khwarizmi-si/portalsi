@@ -385,29 +385,29 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                         ),
                       ),
                       const SizedBox(height: 30),
-                      Row(
-                        children: [
-                          const Expanded(child: Divider(color: Colors.grey)),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Text('Atau gunakan', style: TextStyle(color: Colors.grey.shade600)),
-                          ),
-                          const Expanded(child: Divider(color: Colors.grey)),
-                        ],
-                      ),
-                      const SizedBox(height: 30),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _buildSocialButton(iconPath: 'assets/logo_google.png', onPressed: () {}),
-                          const SizedBox(width: 20),
-                          _buildSocialButton(
-                            iconPath: 'assets/logo_la_rg.png',
-                            // Langsung berikan null jika loading, atau fungsi jika tidak
-                            onPressed: _isLoading ? null : _loginWithSDK,
-                          ),
-                        ],
-                      ),
+                      // Row(
+                      //   children: [
+                      //     const Expanded(child: Divider(color: Colors.grey)),
+                      //     Padding(
+                      //       padding: const EdgeInsets.symmetric(horizontal: 16),
+                      //       child: Text('Atau gunakan', style: TextStyle(color: Colors.grey.shade600)),
+                      //     ),
+                      //     const Expanded(child: Divider(color: Colors.grey)),
+                      //   ],
+                      // ),
+                      // const SizedBox(height: 30),
+                      // Row(
+                      //   mainAxisAlignment: MainAxisAlignment.center,
+                      //   children: [
+                      //     _buildSocialButton(iconPath: 'assets/logo_google.png', onPressed: () {}),
+                      //     const SizedBox(width: 20),
+                      //     _buildSocialButton(
+                      //       iconPath: 'assets/logo_la_rg.png',
+                      //       // Langsung berikan null jika loading, atau fungsi jika tidak
+                      //       onPressed: _isLoading ? null : _loginWithSDK,
+                      //     ),
+                      //   ],
+                      // ),
                       const SizedBox(height: 40),
                       Center(
                         child: RichText(
