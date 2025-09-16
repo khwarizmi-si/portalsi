@@ -485,7 +485,23 @@ class _CreateStoryPageState extends State<CreateStoryPage> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          _buildOptionButton(Icons.auto_awesome_mosaic_outlined, 'Template', onTap: () {  }),
+          _buildOptionButton(Icons.auto_awesome_mosaic_outlined, 'Template', onTap: () {
+            HapticFeedback.lightImpact();
+            ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text(
+                    'Fitur ini akan segera hadir..',
+                  ),
+                  backgroundColor: Colors.blueAccent,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(
+                      10,
+                    ),
+                  ),
+                ),
+            );
+          }),
           const SizedBox(width: 12),
           _buildOptionButton(Icons.music_note_outlined, 'Musik', onTap: _showMusicPicker),
         ],

@@ -58,15 +58,20 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     // UI sederhana untuk Splash Screen
-    return const Scaffold(
+    return Scaffold(
+      backgroundColor: Colors.white,
       body: Center(
         // Ganti dengan logo aplikasi Anda
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            FlutterLogo(size: 80), // Contoh logo
-            SizedBox(height: 20),
-            CircularProgressIndicator(),
+            Image.asset(
+              width: 80,
+                height: 80,
+                'assets/logopsinb.png'
+            ), // Logo aplikasi Anda
+            const SizedBox(height: 20),
+            const CircularProgressIndicator(),
           ],
         ),
       ),

@@ -178,7 +178,7 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
                   opacity: _fadeOutAnim3,
                   child: SlideTransition(
                     position: _slideOutAnim3,
-                    child: const Text('Lorem ipsum dolor commit push pull wkwkkwkwwk', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                    child: const Text('Terkoneksi dengan Iman, Terinspirasi untuk Kebaikan', style: TextStyle(fontSize: 16, color: Colors.grey)),
                   ),
                 ),
               ],
@@ -198,7 +198,12 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
-                      onPressed: _triggerTransition,
+                      // onPressed: _triggerTransition,
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          SlideTransitionRoute(page: const LoginPage()),
+                        );
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryOrange,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
