@@ -1,4 +1,4 @@
-// lib/pages/create_story_page.dart
+// lib/pages/create_story_page.dart (UI Web Baru)
 
 import 'dart:async';
 import 'dart:io';
@@ -7,13 +7,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import '../models/song_model.dart';
-import '../widgets/collage_layout_view.dart'; // Pastikan path ini benar
+import '../widgets/collage_layout_view.dart';
 import '../widgets/music_picker_sheet.dart';
 import 'story_preview_page.dart';
 import 'package:flutter/services.dart';
-import 'camera_settings_page.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:file_picker/file_picker.dart';
 
-// --- WIDGET BARU UNTUK SETIAP ITEM GALERI ---
+// --- WIDGET GalleryItemTile (Tidak ada perubahan) ---
 class GalleryItemTile extends StatefulWidget {
   final AssetEntity asset;
   final bool isSelected;
@@ -148,14 +149,158 @@ class _CreateStoryPageState extends State<CreateStoryPage> {
   @override
   void initState() {
     super.initState();
-    _loadAlbumsAndRecentMedia();
+    // Hanya muat galeri jika bukan di web
+    if (!kIsWeb) {
+      _loadAlbumsAndRecentMedia();
+    } else {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  // --- FUNGSI BARU UNTUK MENAMPILKAN POPUP DI WEB ---
+  Future<void> _showWebMediaPickerPopup() async {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2C2C2E),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Pilih Media', style: TextStyle(color: Colors.white)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library, color: Colors.white),
+                title: const Text('Pilih Foto', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.of(context).pop(); // Tutup dialog
+                  _pickMediaForWeb(FileType.image); // Jalankan fungsi pilih gambar
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.video_library, color: Colors.white),
+                title: const Text('Pilih Video', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.of(context).pop(); // Tutup dialog
+                  _pickMediaForWeb(FileType.video); // Jalankan fungsi pilih video
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // --- Fungsi _pickMediaForWeb yang sudah kita buat sebelumnya ---
+  Future<void> _pickMediaForWeb(FileType fileType) async {
+    // Hanya izinkan gambar untuk saat ini, karena video memerlukan penanganan berbeda di StoryPreviewPage
+    if (fileType == FileType.video) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Pemilihan video dari file di web belum didukung.")),
+      );
+      return;
+    }
+
+    FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.image);
+
+    if (result != null && result.files.single.bytes != null) {
+      // Kita tidak perlu try-catch lagi karena kita tidak memanggil fungsi yang bisa gagal
+      final fileBytes = result.files.single.bytes!;
+
+      // Langsung navigasi dan kirim data bytes-nya
+      if (mounted) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            // Gunakan parameter baru `imageBytes`
+            builder: (context) => StoryPreviewPage(imageBytes: fileBytes),
+          ),
+        );
+      }
+    }
+  }
+
+  // --- Fungsi-fungsi lain tidak banyak berubah ---
+  // ... (semua fungsi lain seperti _takePicture, _recordVideo, _showMusicPicker, dll. tetap sama)
+  // ...
+  Future<void> _takePicture() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.camera);
+    if (image == null) return;
+    if (mounted) setState(() => _isSaving = true);
+
+    try {
+      AssetEntity? newAsset;
+      if (kIsWeb) {
+        final bytes = await image.readAsBytes();
+        newAsset = await PhotoManager.editor.saveImage(bytes, filename: image.name);
+      } else {
+        newAsset = await PhotoManager.editor.saveImageWithPath(
+          image.path,
+          title: 'story_img_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        );
+      }
+
+      if (newAsset != null && mounted) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => StoryPreviewPage(assets: [newAsset!]),
+          ),
+        );
+        _loadAlbumsAndRecentMedia();
+      }
+    } catch (e) {
+      print("Error saat menyimpan gambar: $e");
+      if (mounted) setState(() => _isSaving = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Gagal menyimpan foto.")),
+        );
+      }
+    } finally {
+      if(mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _recordVideo() async {
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Merekam video tidak didukung di browser.")),
+      );
+      return;
+    }
+    final ImagePicker picker = ImagePicker();
+    final XFile? video = await picker.pickVideo(source: ImageSource.camera);
+    if (video == null) return;
+    if (mounted) setState(() => _isSaving = true);
+
+    try {
+      final AssetEntity? newAsset = await PhotoManager.editor.saveVideo(
+        File(video.path),
+        title: 'story_video_${DateTime.now().millisecondsSinceEpoch}.mp4',
+      );
+      if (newAsset != null && mounted) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => StoryPreviewPage(assets: [newAsset!]),
+          ),
+        );
+        _loadAlbumsAndRecentMedia();
+      }
+    } catch (e) {
+      print("Error saat menyimpan video: $e");
+      if (mounted) setState(() => _isSaving = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Gagal menyimpan video.")),
+        );
+      }
+    } finally {
+      if(mounted) setState(() => _isSaving = false);
+    }
   }
 
   void _showMusicPicker() async {
-    // Hentikan musik yang mungkin masih berjalan dari pratinjau sebelumnya
-    // (Jika Anda punya state management global untuk audio)
-
-    // Tunggu hasil dari bottom sheet
     final selectedSong = await showModalBottomSheet<Song>(
       context: context,
       isScrollControlled: true,
@@ -163,9 +308,7 @@ class _CreateStoryPageState extends State<CreateStoryPage> {
       builder: (context) => const MusicPickerSheet(),
     );
 
-    // Jika pengguna memilih lagu (hasilnya tidak null)
     if (selectedSong != null && mounted) {
-      // Navigasi ke StoryPreviewPage dengan data lagu
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (context) => StoryPreviewPage(song: selectedSong),
@@ -190,83 +333,20 @@ class _CreateStoryPageState extends State<CreateStoryPage> {
                   _takePicture();
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.videocam, color: Colors.white),
-                title: const Text('Rekam Video', style: TextStyle(color: Colors.white)),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _recordVideo();
-                },
-              ),
+              if (!kIsWeb)
+                ListTile(
+                  leading: const Icon(Icons.videocam, color: Colors.white),
+                  title: const Text('Rekam Video', style: TextStyle(color: Colors.white)),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _recordVideo();
+                  },
+                ),
             ],
           ),
         );
       },
     );
-  }
-
-  Future<void> _takePicture() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.camera);
-    if (image == null) return;
-    if (mounted) setState(() => _isSaving = true);
-
-    try {
-      final AssetEntity? newAsset = await PhotoManager.editor.saveImageWithPath(
-        image.path,
-        title: 'story_img_${DateTime.now().millisecondsSinceEpoch}.jpg',
-      );
-      if (mounted) setState(() => _isSaving = false);
-
-      if (newAsset != null && mounted) {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => StoryPreviewPage(assets: [newAsset]),
-          ),
-        );
-        _loadAlbumsAndRecentMedia();
-      }
-    } catch (e) {
-      print("Error saat menyimpan gambar: $e");
-      if (mounted) setState(() => _isSaving = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Gagal menyimpan foto.")),
-        );
-      }
-    }
-  }
-
-  Future<void> _recordVideo() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? video = await picker.pickVideo(source: ImageSource.camera);
-    if (video == null) return;
-    if (mounted) setState(() => _isSaving = true);
-
-    try {
-      final AssetEntity? newAsset = await PhotoManager.editor.saveVideo(
-        File(video.path),
-        title: 'story_video_${DateTime.now().millisecondsSinceEpoch}.mp4',
-      );
-      if (mounted) setState(() => _isSaving = false);
-
-      if (newAsset != null && mounted) {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => StoryPreviewPage(assets: [newAsset]),
-          ),
-        );
-        _loadAlbumsAndRecentMedia();
-      }
-    } catch (e) {
-      print("Error saat menyimpan video: $e");
-      if (mounted) setState(() => _isSaving = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Gagal menyimpan video.")),
-        );
-      }
-    }
   }
 
   Future<void> _loadAlbumsAndRecentMedia() async {
@@ -343,6 +423,7 @@ class _CreateStoryPageState extends State<CreateStoryPage> {
     });
   }
 
+
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
@@ -389,151 +470,132 @@ class _CreateStoryPageState extends State<CreateStoryPage> {
                   color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
             ),
             centerTitle: true,
-            // actions: [
-            //   if (!_isMultiSelectMode)
-            //     // IconButton(
-            //     //   icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 28),
-            //     //   onPressed: () {
-            //     //     // Gunakan PageRouteBuilder untuk animasi slide dari bawah
-            //     //     Navigator.of(context).push(
-            //     //       PageRouteBuilder(
-            //     //         pageBuilder: (context, animation, secondaryAnimation) => const CameraSettingsPage(),
-            //     //         transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            //     //           // Tentukan posisi awal (di bawah layar) dan akhir (di layar)
-            //     //           const begin = Offset(0.0, 1.0);
-            //     //           const end = Offset.zero;
-            //     //           const curve = Curves.easeOutCubic;
-            //     //
-            //     //           // Buat transisi
-            //     //           var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-            //     //           var offsetAnimation = animation.drive(tween);
-            //     //
-            //     //           return SlideTransition(
-            //     //             position: offsetAnimation,
-            //     //             child: child,
-            //     //           );
-            //     //         },
-            //     //         transitionDuration: const Duration(milliseconds: 400),
-            //     //       ),
-            //     //     );
-            //     //   },
-            //     // ),
-            // ],
           ),
-          body: Stack(
-            children: [
-              Column(
-                children: [
-                  if (!(_isMultiSelectMode && _multiSelectStep == MultiSelectStep.layoutChoice))
-                    _buildTopOptions(),
-                  if (!(_isMultiSelectMode && _multiSelectStep == MultiSelectStep.layoutChoice))
-                    _buildRecentsHeader(),
-                  Expanded(
-                    child: _isLoading
-                        ? const Center(child: CircularProgressIndicator(color: Colors.white))
-                        : _media.isEmpty
-                        ? const Center(child: Text('Tidak ada media di album ini.', style: TextStyle(color: Colors.white)))
-                        : _buildGalleryGrid(),
-                  ),
-                ],
-              ),
-              if (_isSaving)
-                Container(
-                  color: Colors.black.withOpacity(0.5),
-                  child: const Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircularProgressIndicator(color: Colors.white),
-                        SizedBox(height: 16),
-                        Text("Menyimpan...", style: TextStyle(color: Colors.white)),
-                      ],
-                    ),
-                  ),
-                ),
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  transitionBuilder: (child, animation) {
-                    return SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, 1),
-                        end: Offset.zero,
-                      ).animate(animation),
-                      child: child,
-                    );
-                  },
-                  child: _isMultiSelectMode
-                      ? (_multiSelectStep == MultiSelectStep.selecting
-                      ? _buildMultiSelectFooter()
-                      : _buildLayoutChoiceFooter())
-                      : const SizedBox.shrink(),
-                ),
-              ),
-            ],
-          ),
+          // --- MODIFIKASI UTAMA: TAMPILAN BODY BERBEDA UNTUK WEB DAN MOBILE ---
+          body: _isLoading
+              ? const Center(child: CircularProgressIndicator(color: Colors.white))
+              : kIsWeb
+              ? _buildWebView() // Tampilkan UI Web
+              : _buildMobileView(), // Tampilkan UI Mobile
         ),
       ),
     );
   }
 
-  Widget _buildTopOptions() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          _buildOptionButton(Icons.auto_awesome_mosaic_outlined, 'Template', onTap: () {
-            HapticFeedback.lightImpact();
-            ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text(
-                    'Fitur ini akan segera hadir..',
-                  ),
-                  backgroundColor: Colors.blueAccent,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(
-                      10,
-                    ),
-                  ),
-                ),
-            );
-          }),
-          const SizedBox(width: 12),
-          _buildOptionButton(Icons.music_note_outlined, 'Musik', onTap: _showMusicPicker),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOptionButton(IconData icon, String label, {required VoidCallback onTap}) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap, // Gunakan onTap dari parameter
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          decoration: BoxDecoration(
-            color: Colors.grey[850],
-            borderRadius: BorderRadius.circular(12),
-          ),
+  // --- WIDGET BARU UNTUK TAMPILAN KHUSUS WEB ---
+  Widget _buildWebView() {
+    return Stack(
+      children: [
+        Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: Colors.white, size: 28),
+              Icon(Icons.cloud_upload_outlined, color: Colors.grey[700], size: 80),
+              const SizedBox(height: 24),
+              const Text(
+                'Buat Cerita Baru',
+                style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 8),
-              Text(label, style: const TextStyle(color: Colors.white)),
+              Text(
+                'Pilih foto atau video dari komputermu.',
+                style: TextStyle(color: Colors.grey[400], fontSize: 16),
+              ),
+              const SizedBox(height: 32),
+              ElevatedButton(
+                onPressed: _showWebMediaPickerPopup,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                child: const Text('Pilih dari Komputer'),
+              ),
             ],
           ),
         ),
-      ),
+        if (_isSaving)
+          Container(
+            color: Colors.black.withOpacity(0.7),
+            child: const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(color: Colors.white),
+                  SizedBox(height: 16),
+                  Text("Memproses...", style: TextStyle(color: Colors.white)),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 
+  // --- WIDGET BARU UNTUK TAMPILAN MOBILE (KODE LAMA ANDA) ---
+  Widget _buildMobileView() {
+    return Stack(
+      children: [
+        Column(
+          children: [
+            if (!(_isMultiSelectMode && _multiSelectStep == MultiSelectStep.layoutChoice))
+              _buildTopOptions(),
+            if (!(_isMultiSelectMode && _multiSelectStep == MultiSelectStep.layoutChoice))
+              _buildRecentsHeader(),
+            Expanded(
+              child: _media.isEmpty
+                  ? const Center(child: Text('Tidak ada media di album ini.', style: TextStyle(color: Colors.white)))
+                  : _buildGalleryGrid(),
+            ),
+          ],
+        ),
+        if (_isSaving)
+          Container(
+            color: Colors.black.withOpacity(0.5),
+            child: const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(color: Colors.white),
+                  SizedBox(height: 16),
+                  Text("Menyimpan...", style: TextStyle(color: Colors.white)),
+                ],
+              ),
+            ),
+          ),
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            transitionBuilder: (child, animation) {
+              return SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 1),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              );
+            },
+            child: _isMultiSelectMode
+                ? (_multiSelectStep == MultiSelectStep.selecting
+                ? _buildMultiSelectFooter()
+                : _buildLayoutChoiceFooter())
+                : const SizedBox.shrink(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --- SISA WIDGET BUILDER LAINNYA (TIDAK BERUBAH) ---
+  // ...
   Widget _buildRecentsHeader() {
+    if (kIsWeb) return const SizedBox.shrink();
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 8, 16, 12),
       child: Row(
@@ -605,6 +667,8 @@ class _CreateStoryPageState extends State<CreateStoryPage> {
   }
 
   Widget _buildGalleryGrid() {
+    if (kIsWeb) return const SizedBox.shrink();
+
     return GridView.builder(
       padding: const EdgeInsets.all(8),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -636,6 +700,59 @@ class _CreateStoryPageState extends State<CreateStoryPage> {
           onLongPress: () => _onItemLongPress(asset),
         );
       },
+    );
+  }
+
+  Widget _buildTopOptions() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          _buildOptionButton(Icons.auto_awesome_mosaic_outlined, 'Template', onTap: () {
+            HapticFeedback.lightImpact();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text(
+                  'Fitur ini akan segera hadir..',
+                ),
+                backgroundColor: Colors.blueAccent,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(
+                    10,
+                  ),
+                ),
+              ),
+            );
+          }),
+          const SizedBox(width: 12),
+          _buildOptionButton(Icons.music_note_outlined, 'Musik', onTap: _showMusicPicker),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOptionButton(IconData icon, String label, {required VoidCallback onTap}) {
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            color: Colors.grey[850],
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: Colors.white, size: 28),
+              const SizedBox(height: 8),
+              Text(label, style: const TextStyle(color: Colors.white)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -704,16 +821,11 @@ class _CreateStoryPageState extends State<CreateStoryPage> {
     );
   }
 
-  // --- FUNGSI INI SEKARANG DIMODIFIKASI UNTUK VALIDASI ---
   Widget _buildLayoutChoiceFooter() {
-    // Cek apakah ada video di dalam item yang dipilih
     final bool containsVideo = _selectedAssets.any((asset) => asset.type == AssetType.video);
-    // Cek jumlah item yang dipilih
     final int selectedCount = _selectedAssets.length;
-    // Kondisi disabled: ada video ATAU jumlah item di luar rentang 2-6
     final bool isLayoutDisabled = containsVideo || selectedCount < 2 || selectedCount > 6;
 
-    // Tentukan pesan error jika disabled
     String? disabledMessage;
     if (containsVideo) {
       disabledMessage = "Layout tidak mendukung video";
@@ -741,7 +853,6 @@ class _CreateStoryPageState extends State<CreateStoryPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                // Kartu "Layout"
                 Expanded(
                   child: Column(
                     children: [
@@ -791,7 +902,6 @@ class _CreateStoryPageState extends State<CreateStoryPage> {
                           ),
                         ),
                       ),
-                      // Tampilkan pesan error jika disabled
                       if (isLayoutDisabled)
                         Padding(
                           padding: const EdgeInsets.only(top: 8.0),
@@ -804,7 +914,6 @@ class _CreateStoryPageState extends State<CreateStoryPage> {
                   ),
                 ),
                 const SizedBox(width: 16),
-                // Kartu "Separate"
                 Expanded(
                   child: AspectRatio(
                     aspectRatio: 9 / 16,

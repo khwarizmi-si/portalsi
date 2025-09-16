@@ -117,17 +117,29 @@ class WebSocketService {
       // Cek notifikasi HANYA untuk event 'dm.new'
       if (eventName == 'dm.new') {
         if (!AppLifecycleManager.isAppInForeground) {
-          final messageData = jsonDecode(decoded["data"])['message'];
-          final senderId = messageData['sender_id'];
-          final senderName = "Pesan Baru"; // Placeholder
-          final content = messageData['content'] ?? 'Mengirim media';
 
-          // Panggil notifikasi
-          NotificationSystemService.instance.showNewMessageNotification(
-            id: senderId,
-            title: senderName,
-            body: content,
-          );
+          // Asumsi payload data sudah diperkaya oleh backend
+          final data = jsonDecode(decoded["data"]);
+          final messageData = data['message'];
+          final senderData = data['sender']; // Data pengirim yang baru
+
+          if (messageData != null && senderData != null) {
+            final int senderId = senderData['id'];
+            final String senderName = senderData['full_name'] ?? 'Pesan Baru';
+            final String? profilePicUrl = senderData['profile_picture_url'];
+            final String content = messageData['content'] ?? 'Mengirim media';
+
+            // Ambil dan parse timestamp dari server
+            final DateTime timestamp = DateTime.parse(messageData['sent_at']);
+
+            NotificationSystemService.instance.showNewMessageNotification(
+              id: senderId,
+              title: senderName,
+              body: content,
+              profilePictureUrl: profilePicUrl,
+              timestamp: timestamp,
+            );
+          }
         }
       }
 

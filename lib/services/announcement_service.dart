@@ -4,6 +4,11 @@ import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:portal_si/models/announcement_model.dart';
 import 'package:portal_si/services/api_service.dart';
+import 'dart:typed_data'; // WAJIB: Untuk menangani data gambar sebagai 'bytes' (Uint8List) di web.
+import 'package:flutter/foundation.dart' show kIsWeb; // WAJIB: Untuk mendeteksi platform web (kIsWeb).
+import 'package:http/http.dart' as http; // WAJIB: Untuk melakukan request HTTP (MultipartRequest).
+import 'package:image_picker/image_picker.dart'; // WAJIB: Untuk bisa mengenali tipe data XFile.
+import '../utils/secure_storage.dart';
 
 class AnnouncementService extends ApiService {
   static final AnnouncementService _instance = AnnouncementService._internal();
@@ -73,23 +78,53 @@ class AnnouncementService extends ApiService {
   }
 
   /// Mengirim data pengumuman baru ke server.
-  Future<Map<String, dynamic>> createAnnouncement({
+  Future<void> createAnnouncement({
     required String title,
     required String content,
     required bool isPinned,
-    File? image,
-    List<String>? pollData,
+    XFile? image, // <-- PERBAIKAN: Ubah tipe parameter menjadi XFile?
   }) async {
-    const String endpoint = 'announcements';
-    final Map<String, String> body = {
-      'title': title,
-      'content': content,
-      'pinned': isPinned ? '1' : '0',
-    };
-    final Map<String, File>? files = image != null ? {'image': image} : null;
+    final token = await SecureStorage.getToken();
+    if (token == null) {
+      throw Exception('Authentication required');
+    }
+
+    var request = http.MultipartRequest(
+      'POST',
+      Uri.parse('https://api-new.portalsi.com/api/announcements'),
+    );
+
+    request.headers['Authorization'] = 'Bearer $token';
+    request.headers['Accept'] = 'application/json';
+
+    request.fields['title'] = title;
+    request.fields['content'] = content;
+    request.fields['is_pinned'] = isPinned ? '1' : '0';
+
+    if (image != null) {
+      if (kIsWeb) {
+        Uint8List imageBytes = await image.readAsBytes();
+        request.files.add(http.MultipartFile.fromBytes(
+          'image',
+          imageBytes,
+          filename: image.name,
+        ));
+      } else {
+        request.files.add(await http.MultipartFile.fromPath(
+          'image',
+          image.path,
+          filename: image.name,
+        ));
+      }
+    }
+
     try {
-      final response = await postMultipart(endpoint, body: body, files: files);
-      return response as Map<String, dynamic>;
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw Exception('Gagal membuat pengumuman. Status: ${response.statusCode}');
+      }
     } catch (e) {
       rethrow;
     }

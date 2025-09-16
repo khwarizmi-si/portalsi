@@ -1,4 +1,4 @@
-// lib/pages/chat_room.dart
+// lib/pages/chat_room.dart (SUDAH DIPERBAIKI UNTUK WEB)
 
 import 'dart:io';
 import 'dart:math';
@@ -6,7 +6,6 @@ import 'dart:typed_data';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http;
 import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
@@ -17,6 +16,11 @@ import 'package:portal_si/pages/image_preview_screen.dart';
 
 import 'camera_screen.dart';
 
+// --- TAMBAHKAN IMPORT BARU ---
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:file_picker/file_picker.dart';
+
+// --- Widget _AssetThumbnail (Tidak ada perubahan) ---
 class _AssetThumbnail extends StatelessWidget {
   final AssetEntity asset;
   final bool isSelected;
@@ -78,6 +82,7 @@ class _AssetThumbnail extends StatelessWidget {
   }
 }
 
+// --- Widget _GalleryPickerSheet (Tidak ada perubahan) ---
 class _GalleryPickerSheet extends StatefulWidget {
   const _GalleryPickerSheet();
 
@@ -252,6 +257,7 @@ class _GalleryPickerSheetState extends State<_GalleryPickerSheet> {
   }
 }
 
+// --- PERUBAHAN UTAMA ADA DI DALAM WIDGET INI ---
 class _AttachmentPopupMenu extends StatelessWidget {
   final Offset buttonPosition;
   final Size buttonSize;
@@ -260,6 +266,44 @@ class _AttachmentPopupMenu extends StatelessWidget {
     required this.buttonPosition,
     required this.buttonSize,
   });
+
+  // --- FUNGSI BARU: Untuk memilih dan mengirim gambar di web ---
+  Future<void> _pickAndSendImagesForWeb(BuildContext context) async {
+    final chatController = context.read<ChatRoomController>();
+
+    // 1. Buka dialog pilih file
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: true, // Izinkan memilih banyak gambar
+    );
+
+    if (result != null && result.files.isNotEmpty) {
+      List<AssetEntity> webAssets = [];
+      // Tampilkan loading atau status "memproses" jika perlu
+
+      // 2. Loop setiap file yang dipilih dan ubah menjadi AssetEntity
+      for (var file in result.files) {
+        if (file.bytes != null) {
+          try {
+            final AssetEntity? asset = await PhotoManager.editor.saveImage(
+              file.bytes!,
+              filename: file.name,
+            );
+            if (asset != null) {
+              webAssets.add(asset);
+            }
+          } catch (e) {
+            print("Gagal memproses file web: ${file.name}, error: $e");
+          }
+        }
+      }
+
+      // 3. Kirim semua AssetEntity yang berhasil dibuat
+      if (webAssets.isNotEmpty) {
+        chatController.sendMediaMessage(webAssets);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -303,7 +347,7 @@ class _AttachmentPopupMenu extends StatelessWidget {
                       final navigator = Navigator.of(context);
                       final chatController = context.read<ChatRoomController>();
 
-                      navigator.pop();
+                      navigator.pop(); // Tutup popup
 
                       navigator.push(
                         MaterialPageRoute(
@@ -323,22 +367,29 @@ class _AttachmentPopupMenu extends StatelessWidget {
                       final navigator = Navigator.of(context);
                       final chatController = context.read<ChatRoomController>();
 
-                      navigator.pop();
+                      navigator.pop(); // Tutup popup
 
-                      showModalBottomSheet(
-                        context: navigator.context,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.white,
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                        ),
-                        builder: (_) {
-                          return ChangeNotifierProvider.value(
-                            value: chatController,
-                            child: const _GalleryPickerSheet(),
-                          );
-                        },
-                      );
+                      // --- LOGIKA KONDISIONAL DI SINI ---
+                      if (kIsWeb) {
+                        // Jika di web, panggil fungsi baru
+                        _pickAndSendImagesForWeb(context);
+                      } else {
+                        // Jika di mobile, tampilkan galeri lama
+                        showModalBottomSheet(
+                          context: navigator.context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.white,
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                          ),
+                          builder: (_) {
+                            return ChangeNotifierProvider.value(
+                              value: chatController,
+                              child: const _GalleryPickerSheet(),
+                            );
+                          },
+                        );
+                      }
                     },
                   ),
                   _buildPopupMenuItem(
@@ -347,6 +398,7 @@ class _AttachmentPopupMenu extends StatelessWidget {
                     text: 'Pilih File',
                     onTap: () {
                       Navigator.pop(context);
+                      // Tambahkan logika pilih file dokumen di sini nanti
                     },
                   ),
                 ],
@@ -376,6 +428,11 @@ class _AttachmentPopupMenu extends StatelessWidget {
   }
 }
 
+
+// --- Sisa kode dari file chat_room.dart tidak perlu diubah ---
+// ...
+// (Salin-tempel sisa kode Anda di sini: _BouncyPopupRoute, ChatRoomPage,
+// _ChatAppBar, _MessageList, _MessageBubble, dll.)
 class _BouncyPopupRoute extends PageRouteBuilder {
   final Offset buttonPosition;
   final Size buttonSize;
@@ -448,39 +505,29 @@ class ChatRoomPage extends StatelessWidget {
               Expanded(
                 child: Consumer<ChatRoomController>(
                   builder: (context, controller, _) {
-                    // [MODIFIKASI UTAMA]
-                    // Cek jika ada error message
                     if (controller.errorMessage != null && !controller.isLoading) {
-                      // Tampilkan dialog setelah frame selesai di-build
                       WidgetsBinding.instance.addPostFrameCallback((_) {
-                        // Cek lagi untuk menghindari dialog ganda jika rebuild terjadi cepat
                         if (ModalRoute.of(context)?.isCurrent != true) return;
 
                         showDialog(
                           context: context,
-                          barrierDismissible: false, // TIDAK BISA DITUTUP DENGAN TAP DI LUAR
+                          barrierDismissible: false,
                           builder: (BuildContext dialogContext) {
                             return NetworkErrorDialog(
                               errorMessage: controller.errorMessage!,
                               onRetry: () {
-                                Navigator.of(dialogContext).pop(); // Tutup dialog dulu
-                                controller.fetchMessages(); // Panggil fetchMessages lagi
+                                Navigator.of(dialogContext).pop();
+                                controller.fetchMessages();
                               },
                             );
                           },
                         );
                       });
-
-                      // Tampilkan skeleton loader atau container kosong di belakang dialog
                       return const _ChatRoomSkeletonLoader();
                     }
-
-                    // Logika loading yang sudah ada
                     if (controller.isLoading) {
                       return const _ChatRoomSkeletonLoader();
                     }
-
-                    // Tampilkan daftar pesan jika tidak ada error dan tidak loading
                     return _MessageList();
                   },
                 ),
@@ -500,7 +547,6 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    // [MODIFIKASI] Gunakan Consumer untuk mendapatkan status online
     return Consumer<ChatRoomController>(
       builder: (context, controller, child) {
         return Container(
@@ -545,7 +591,6 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                             fontWeight: FontWeight.bold),
                         overflow: TextOverflow.ellipsis,
                       ),
-                      // [MODIFIKASI] Tampilkan status Online/Offline secara dinamis
                       Text(
                         controller.isRecipientOnline ? 'Online' : 'Offline',
                         style: TextStyle(
@@ -556,12 +601,6 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                     ],
                   ),
                 ),
-                // IconButton(
-                //     icon: const Icon(Icons.call_outlined, color: Colors.black87),
-                //     onPressed: () {}),
-                // IconButton(
-                //     icon: const Icon(Icons.more_vert, color: Colors.black87),
-                //     onPressed: () {}),
               ],
             ),
           ),
@@ -617,8 +656,6 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // [PERBAIKAN UTAMA DI SINI]
-    // Deklarasi variabel dipindahkan ke atas
     final alignment = isMe ? Alignment.centerRight : Alignment.centerLeft;
     final color = isMe ? const Color(0xFFFFA726) : Colors.white;
     final timestampColor = isMe ? Colors.white70 : Colors.black54;
@@ -637,90 +674,92 @@ class _MessageBubble extends StatelessWidget {
     }
 
     if (message.type == MessageType.image) {
-      final String? displayImagePath = message.localFile?.path ?? message.mediaUrl;
-      if (displayImagePath == null) {
-        messageContent = Container(
-          width: 150,
-          height: 150,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade300,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(Icons.broken_image, color: Colors.grey, size: 50),
+      // --- PERUBAHAN UTAMA UNTUK MENAMPILKAN GAMBAR ---
+      Widget imageWidget;
+
+      if (message.localBytes != null) {
+        // 1. Prioritas utama: tampilkan dari bytes untuk preview web
+        imageWidget = Image.memory(message.localBytes!, fit: BoxFit.cover);
+      } else if (message.localFile != null) {
+        // 2. Prioritas kedua: tampilkan dari file untuk preview mobile
+        imageWidget = Image.file(message.localFile!, fit: BoxFit.cover);
+      } else if (message.mediaUrl != null) {
+        // 3. Terakhir: tampilkan dari URL jika sudah ter-upload
+        imageWidget = Image.network(
+          message.mediaUrl!,
+          fit: BoxFit.cover,
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Center(
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                    : null,
+                color: Colors.grey,
+              ),
+            );
+          },
+          errorBuilder: (context, error, stackTrace) {
+            return const Icon(Icons.broken_image, color: Colors.grey, size: 50);
+          },
         );
       } else {
-        final String heroTag = 'image-${message.id}';
-        messageContent = GestureDetector(
-          onTap: () => _openImagePreview(displayImagePath, heroTag),
-          child: Hero(
-            tag: heroTag,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  if (message.localFile != null)
-                    Image.file(message.localFile!, fit: BoxFit.cover)
-                  else if (message.mediaUrl != null)
-                    Image.network(
-                      message.mediaUrl!,
-                      fit: BoxFit.cover,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Center(
-                          child: CircularProgressIndicator(
-                            value: loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                : null,
-                            color: Colors.grey,
-                          ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Icon(Icons.broken_image, color: Colors.grey, size: 50);
-                      },
-                    ),
+        // Fallback jika tidak ada data gambar sama sekali
+        imageWidget = const Icon(Icons.broken_image, color: Colors.grey, size: 50);
+      }
 
-                  if (message.status == MessageStatus.sending && message.uploadProgress != null)
-                    ValueListenableBuilder<double>(
-                      valueListenable: message.uploadProgress!,
-                      builder: (context, progress, child) {
-                        return Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Container(color: Colors.black.withOpacity(0.6)),
-                            SizedBox(
-                              width: 100,
-                              height: 100,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  _GradientCircularProgressIndicator(progress: progress),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    '${(progress * 100).toStringAsFixed(0)}%',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
+      final String? displayImagePath = message.localFile?.path ?? message.mediaUrl;
+      final String heroTag = 'image-${message.id}';
+
+      messageContent = GestureDetector(
+        onTap: displayImagePath != null ? () => _openImagePreview(displayImagePath, heroTag) : null,
+        child: Hero(
+          tag: heroTag,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                imageWidget, // Gunakan widget gambar yang sudah dipilih
+                if (message.status == MessageStatus.sending && message.uploadProgress != null)
+                  ValueListenableBuilder<double>(
+                    valueListenable: message.uploadProgress!,
+                    builder: (context, progress, child) {
+                      return Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Container(color: Colors.black.withOpacity(0.6)),
+                          SizedBox(
+                            width: 100,
+                            height: 100,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _GradientCircularProgressIndicator(progress: progress),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '${(progress * 100).toStringAsFixed(0)}%',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                          ],
-                        );
-                      },
-                    ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
 
-                  if (message.status == MessageStatus.failed)
-                    const Icon(Icons.error, color: Colors.red, size: 40),
-                ],
-              ),
+                if (message.status == MessageStatus.failed)
+                  const Icon(Icons.error, color: Colors.red, size: 40),
+              ],
             ),
           ),
-        );
-      }
+        ),
+      );
     } else {
       messageContent = Row(
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -869,10 +908,6 @@ class _MessageInputBarState extends State<_MessageInputBar> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // IconButton(
-          //   icon: const Icon(Icons.sentiment_satisfied_alt_outlined, color: Colors.black54),
-          //   onPressed: () {},
-          // ),
           Expanded(
             child: TextField(
               controller: _textController,
@@ -885,38 +920,39 @@ class _MessageInputBarState extends State<_MessageInputBar> {
               textCapitalization: TextCapitalization.sentences,
             ),
           ),
-          IconButton(
-            key: _attachIconKey,
-            icon: const Icon(Icons.attach_file_rounded, color: Colors.black54),
-            onPressed: () {
-              final RenderBox renderBox =
-              _attachIconKey.currentContext!.findRenderObject() as RenderBox;
-              final size = renderBox.size;
-              final position = renderBox.localToGlobal(Offset.zero);
+          if (!kIsWeb)
+            IconButton(
+              key: _attachIconKey,
+              icon: const Icon(Icons.attach_file_rounded, color: Colors.black54),
+              onPressed: () {
+                final RenderBox renderBox =
+                _attachIconKey.currentContext!.findRenderObject() as RenderBox;
+                final size = renderBox.size;
+                final position = renderBox.localToGlobal(Offset.zero);
 
-              final chatController = context.read<ChatRoomController>();
+                final chatController = context.read<ChatRoomController>();
 
-              Navigator.of(context).push(
-                _BouncyPopupRoute(
-                  buttonPosition: position,
-                  buttonSize: size,
-                  page: ChangeNotifierProvider.value(
-                    value: chatController,
-                    child: _AttachmentPopupMenu(
-                      buttonPosition: position,
-                      buttonSize: size,
+                Navigator.of(context).push(
+                  _BouncyPopupRoute(
+                    buttonPosition: position,
+                    buttonSize: size,
+                    page: ChangeNotifierProvider.value(
+                      value: chatController,
+                      child: _AttachmentPopupMenu(
+                        buttonPosition: position,
+                        buttonSize: size,
+                      ),
                     ),
                   ),
-                ),
-              );
-            },
-          ),
+                );
+              },
+            ),
           if (_textController.text.trim().isNotEmpty)
             CircleAvatar(
               radius: 22,
               backgroundColor: const Color(0xFFFFA726),
               child: IconButton(
-                icon: Icon(
+                icon: const Icon(
                   Icons.send_rounded,
                   color: Colors.white,
                 ),
@@ -938,7 +974,6 @@ class _MessageInputBarState extends State<_MessageInputBar> {
   }
 }
 
-// [BARU] WIDGET UNTUK SKELETON LOADING
 class _ChatRoomSkeletonLoader extends StatelessWidget {
   const _ChatRoomSkeletonLoader({super.key});
 
@@ -948,12 +983,11 @@ class _ChatRoomSkeletonLoader extends StatelessWidget {
       baseColor: Colors.grey.shade300,
       highlightColor: Colors.grey.shade100,
       child: ListView.builder(
-        itemCount: 10, // Tampilkan 10 bubble skeleton
+        itemCount: 10,
         padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 20),
         itemBuilder: (context, index) {
-          // Buat lebar acak agar terlihat lebih natural
           final randomWidth = 100.0 + Random().nextDouble() * 150.0;
-          final isMe = index.isEven; // Ganti-ganti posisi bubble
+          final isMe = index.isEven;
 
           return Align(
             alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -962,7 +996,7 @@ class _ChatRoomSkeletonLoader extends StatelessWidget {
               height: 40.0,
               width: randomWidth,
               decoration: BoxDecoration(
-                color: Colors.white, // Warna ini akan ditimpa oleh shimmer
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
               ),
             ),
@@ -1004,7 +1038,7 @@ class NetworkErrorDialog extends StatelessWidget {
           ],
         ),
         child: Column(
-          mainAxisSize: MainAxisSize.min, // Agar dialog tidak memenuhi layar
+          mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             const Text(
               '😩',

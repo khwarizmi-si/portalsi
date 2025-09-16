@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.portal_si"
+    namespace = "com.portal_si"
 
     compileSdk = 36
 

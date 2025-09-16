@@ -6,6 +6,7 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -32,14 +33,16 @@ class StoryPreviewPage extends StatefulWidget {
   final List<AssetEntity>? assets;
   final Song? song;
   final StoryPreviewMode mode;
+  final Uint8List? imageBytes; // <-- TAMBAHKAN BARIS INI
 
   const StoryPreviewPage({
     super.key,
     this.assets,
     this.song,
     this.mode = StoryPreviewMode.single,
-  }) : assert(assets != null || song != null,
-  'assets atau song harus disediakan');
+    this.imageBytes, // <-- TAMBAHKAN BARIS INI
+  }) : assert(assets != null || song != null || imageBytes != null, // <-- UBAH BARIS INI
+  'assets, song, atau imageBytes harus disediakan');
 
   @override
   State<StoryPreviewPage> createState() => _StoryPreviewPageState();
@@ -93,13 +96,22 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
   @override
   void initState() {
     super.initState();
-    if (widget.song != null) {
+
+    // --- LOGIKA BARU YANG SUDAH AMAN ---
+    if (widget.imageBytes != null) {
+      // KASUS 1: Datang dari WEB dengan gambar (imageBytes)
+      _mode = StoryPreviewMode.single;
+      // _currentAsset tidak di-set karena kita akan menggunakan bytes
+    } else if (widget.song != null) {
+      // KASUS 2: Datang dengan MUSIK
       _mode = StoryPreviewMode.music;
       _currentSong = widget.song;
-    } else {
+    } else if (widget.assets != null && widget.assets!.isNotEmpty) {
+      // KASUS 3: Datang dari MOBILE dengan galeri (assets)
       _mode = widget.assets!.length > 1 ? widget.mode : StoryPreviewMode.single;
       _currentAsset = widget.assets!.first;
     }
+    // --- AKHIR LOGIKA BARU ---
 
     _vinylController = AnimationController(
       vsync: this,
@@ -110,15 +122,12 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
     _loadUserData();
     _captionFocusNode.addListener(_onFocusChange);
 
-    // Listener untuk looping audio.
     _audioPositionSubscription = _audioPlayer.onPositionChanged.listen((position) {
       if (_currentSong != null && (position >= _clipStartPosition + _clipDuration)) {
         _audioPlayer.seek(_clipStartPosition);
       }
     });
 
-    // [ADDED] Listener untuk status player. Digunakan untuk menghilangkan loading
-    // saat audio sudah berhasil diputar (buffering selesai).
     _playerStateSubscription = _audioPlayer.onPlayerStateChanged.listen((state) {
       if (state == PlayerState.playing && _isAudioBuffering) {
         if (mounted) {
@@ -130,11 +139,21 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
     });
   }
 
+// GANTI SELURUH FUNGSI _loadInitialContent ANDA DENGAN INI:
   Future<void> _loadInitialContent() async {
-    // Jika masuk dengan mode musik saja (tanpa aset)
-    if (_mode == StoryPreviewMode.music && _currentAsset == null) {
+    // KASUS 1: Jika datang dengan imageBytes
+    if (widget.imageBytes != null) {
+      setState(() => _isLoading = true);
+      // Buat gradient dari bytes gambar
+      await _generateGradientFromImageProvider(MemoryImage(widget.imageBytes!));
+      setState(() => _isLoading = false);
+    }
+    // KASUS 2: Jika datang dengan musik saja
+    else if (_mode == StoryPreviewMode.music && _currentAsset == null) {
       await _updateSong(_currentSong!);
-    } else { // Jika masuk dengan aset (gambar/video)
+    }
+    // KASUS 3: Jika datang dengan aset dari galeri mobile
+    else {
       await _loadAssetAtIndex(_currentIndex);
     }
   }
@@ -292,17 +311,51 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
   Future<void> _initializeVideoPlayer() async {
     if (_currentAsset == null) return;
     setState(() => _isVideoLoading = true);
-    final File? videoFile = await _currentAsset!.file;
-    if (videoFile == null) return;
-    _videoController = VideoPlayerController.file(videoFile)
-      ..initialize().then((_) {
+
+    // --- LOGIKA KONDISIONAL UNTUK WEB DAN MOBILE ---
+    if (kIsWeb) {
+      // --- BLOK UNTUK WEB ---
+      try {
+        // 1. Dapatkan URL dari asset
+        final String? url = await _currentAsset!.getMediaUrl();
+        if (url == null) {
+          throw Exception("Gagal mendapatkan URL video untuk web.");
+        }
+
+        // 2. Gunakan VideoPlayerController.networkUrl untuk web
+        _videoController = VideoPlayerController.networkUrl(Uri.parse(url));
+
+        // 3. Inisialisasi dan putar video
+        await _videoController!.initialize();
         if (mounted) {
           _videoController!.setLooping(true);
           _videoController!.play();
           setState(() => _isVideoLoading = false);
         }
-      });
+      } catch (e) {
+        print("Error inisialisasi video di web: $e");
+        if (mounted) setState(() => _isVideoLoading = false);
+        _showErrorToast("Gagal memuat video.");
+      }
+
+    } else {
+      // --- BLOK UNTUK MOBILE (KODE LAMA ANDA YANG SUDAH BENAR UNTUK MOBILE) ---
+      final File? videoFile = await _currentAsset!.file;
+      if (videoFile == null) {
+        if (mounted) setState(() => _isVideoLoading = false);
+        return;
+      }
+      _videoController = VideoPlayerController.file(videoFile)
+        ..initialize().then((_) {
+          if (mounted) {
+            _videoController!.setLooping(true);
+            _videoController!.play();
+            setState(() => _isVideoLoading = false);
+          }
+        });
+    }
   }
+
 
   Future<void> _handleShare() async {
     if (_isUploading) return;
@@ -1666,17 +1719,26 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
   }
 
   Widget _buildMediaContent() {
+    // PRIORITAS 1: Jika ada imageBytes dari web, tampilkan itu.
+    if (widget.imageBytes != null) {
+      return Image.memory(widget.imageBytes!, fit: BoxFit.fitWidth);
+    }
+
+    // PRIORITAS 2: Jika tidak ada, gunakan logika AssetEntity yang sudah ada.
     if (_currentAsset == null) return const SizedBox.shrink();
+
     if (_currentAsset!.type == AssetType.video) {
       if (_isVideoLoading ||
           _videoController == null ||
           !_videoController!.value.isInitialized) {
+        // Tampilkan thumbnail saat video loading
         return AssetEntityImage(_currentAsset!, fit: BoxFit.fitWidth);
       }
       return AspectRatio(
           aspectRatio: _videoController!.value.aspectRatio,
           child: VideoPlayer(_videoController!));
     } else {
+      // Tampilkan gambar dari AssetEntity
       return AssetEntityImage(_currentAsset!,
           isOriginal: true, fit: BoxFit.fitWidth);
     }

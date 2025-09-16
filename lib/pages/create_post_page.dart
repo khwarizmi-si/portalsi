@@ -1,12 +1,15 @@
+// create_post_page.dart (Sudah Diperbaiki)
+
+// MODIFIKASI: Tambahkan import yang dibutuhkan
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'dart:io';
+import 'dart:io'; // Tetap di-import untuk penggunaan di mobile
 import 'package:path/path.dart' as path;
 import 'package:portal_si/pages/main_scaffold.dart';
-import '../utils/secure_storage.dart'; // Import file SecureStorage
-import 'dashboard_page.dart'; // Import HomePage
+import '../utils/secure_storage.dart';
 
 class CreatePostPage extends StatefulWidget {
   const CreatePostPage({Key? key}) : super(key: key);
@@ -20,7 +23,10 @@ class _CreatePostPageState extends State<CreatePostPage> {
   final TextEditingController _locationController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
 
-  File? _selectedMedia;
+  // MODIFIKASI: Ganti tipe state dari `File?` menjadi `XFile?`
+  // `XFile` adalah objek cross-platform dari image_picker.
+  XFile? _selectedMediaXFile;
+
   bool _isVideo = false;
   bool _isLoading = false;
   int _userId = 0;
@@ -51,7 +57,45 @@ class _CreatePostPageState extends State<CreatePostPage> {
       });
     } catch (e) {
       print('Error loading user data: $e');
-      // Handle error, maybe redirect to login
+    }
+  }
+
+  // MODIFIKASI: Widget untuk menampilkan gambar yang sudah dipilih
+  // Widget ini akan render gambar secara berbeda untuk web dan mobile.
+  Widget _buildSelectedMediaWidget() {
+    if (_selectedMediaXFile == null) return Container();
+
+    if (_isVideo) {
+      // Tampilan untuk video (bisa dikembangkan lebih lanjut dengan video_player)
+      return Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(colors: [darkText, Colors.black87]),
+        ),
+        child: const Center(
+          child: Icon(Icons.play_circle_outline, size: 80, color: pureWhite),
+        ),
+      );
+    } else {
+      // Tampilan untuk gambar
+      if (kIsWeb) {
+        // Di WEB, gunakan Image.network dengan path dari XFile (berupa blob URL)
+        return Image.network(
+          _selectedMediaXFile!.path,
+          width: double.infinity,
+          height: double.infinity,
+          fit: BoxFit.cover,
+        );
+      } else {
+        // Di MOBILE, gunakan Image.file seperti sebelumnya
+        return Image.file(
+          File(_selectedMediaXFile!.path),
+          width: double.infinity,
+          height: double.infinity,
+          fit: BoxFit.cover,
+        );
+      }
     }
   }
 
@@ -64,7 +108,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(builder: (context) => MainScaffold()),
-            (route) => false,
+                (route) => false,
           );
         }
       },
@@ -107,7 +151,11 @@ class _CreatePostPageState extends State<CreatePostPage> {
                       ),
                       child: IconButton(
                         icon: const Icon(Icons.close, color: darkText),
-                        onPressed: () => Navigator.pop(context),
+                        onPressed: () => Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(builder: (context) => MainScaffold()),
+                              (route) => false,
+                        ),
                       ),
                     ),
                     const Expanded(
@@ -179,116 +227,92 @@ class _CreatePostPageState extends State<CreatePostPage> {
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(20),
-                            child: Container(
+                            child: SizedBox(
                               height: 320,
                               width: double.infinity,
-                              child: _selectedMedia != null
+                              child: _selectedMediaXFile != null
                                   ? Stack(
-                                      children: [
-                                        _isVideo
-                                            ? Container(
-                                                width: double.infinity,
-                                                height: double.infinity,
-                                                decoration: const BoxDecoration(
-                                                  gradient: LinearGradient(
-                                                    colors: [
-                                                      darkText,
-                                                      Colors.black87,
-                                                    ],
-                                                  ),
-                                                ),
-                                                child: const Center(
-                                                  child: Icon(
-                                                    Icons.play_circle_outline,
-                                                    size: 80,
-                                                    color: pureWhite,
-                                                  ),
-                                                ),
-                                              )
-                                            : Image.file(
-                                                _selectedMedia!,
-                                                width: double.infinity,
-                                                height: double.infinity,
-                                                fit: BoxFit.cover,
-                                              ),
-                                        Positioned(
-                                          top: 15,
-                                          right: 15,
-                                          child: Container(
-                                            decoration: BoxDecoration(
-                                              color: Colors.black54,
-                                              borderRadius:
-                                                  BorderRadius.circular(20),
-                                            ),
-                                            child: IconButton(
-                                              icon: const Icon(
-                                                Icons.close,
-                                                color: pureWhite,
-                                                size: 20,
-                                              ),
-                                              onPressed: () {
-                                                setState(() {
-                                                  _selectedMedia = null;
-                                                  _isVideo = false;
-                                                });
-                                              },
-                                            ),
-                                          ),
+                                children: [
+                                  // MODIFIKASI: Panggil widget baru untuk menampilkan media
+                                  _buildSelectedMediaWidget(),
+                                  Positioned(
+                                    top: 15,
+                                    right: 15,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.black54,
+                                        borderRadius:
+                                        BorderRadius.circular(20),
+                                      ),
+                                      child: IconButton(
+                                        icon: const Icon(
+                                          Icons.close,
+                                          color: pureWhite,
+                                          size: 20,
                                         ),
-                                      ],
-                                    )
+                                        onPressed: () {
+                                          setState(() {
+                                            _selectedMediaXFile = null;
+                                            _isVideo = false;
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
                                   : GestureDetector(
-                                      onTap: _showMediaOptions,
-                                      child: Container(
+                                onTap: _showMediaOptions,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        peachSoft.withOpacity(0.3),
+                                        mintFresh.withOpacity(0.3),
+                                      ],
+                                    ),
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment:
+                                    MainAxisAlignment.center,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(20),
                                         decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                            colors: [
-                                              peachSoft.withOpacity(0.3),
-                                              mintFresh.withOpacity(0.3),
-                                            ],
-                                          ),
-                                        ),
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.all(20),
-                                              decoration: BoxDecoration(
-                                                color: pureWhite,
-                                                borderRadius:
-                                                    BorderRadius.circular(30),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: Colors.black
-                                                        .withOpacity(0.1),
-                                                    blurRadius: 10,
-                                                    offset: const Offset(0, 3),
-                                                  ),
-                                                ],
-                                              ),
-                                              child: const Icon(
-                                                Icons
-                                                    .add_photo_alternate_outlined,
-                                                size: 60,
-                                                color: accentBlue,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 20),
-                                            const Text(
-                                              'Klik untuk mengunggah foto atau video',
-                                              style: TextStyle(
-                                                color: darkText,
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w500,
-                                              ),
+                                          color: pureWhite,
+                                          borderRadius:
+                                          BorderRadius.circular(30),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black
+                                                  .withOpacity(0.1),
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 3),
                                             ),
                                           ],
                                         ),
+                                        child: const Icon(
+                                          Icons
+                                              .add_photo_alternate_outlined,
+                                          size: 60,
+                                          color: accentBlue,
+                                        ),
                                       ),
-                                    ),
+                                      const SizedBox(height: 20),
+                                      const Text(
+                                        'Klik untuk mengunggah foto atau video',
+                                        style: TextStyle(
+                                          color: darkText,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -297,6 +321,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
                         // Post Details Card
                         Container(
+                          // ... (Sisa kode UI tidak perlu diubah, biarkan sama)
                           decoration: BoxDecoration(
                             color: pureWhite,
                             borderRadius: BorderRadius.circular(20),
@@ -336,12 +361,9 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                     const SizedBox(width: 15),
                                     Column(
                                       crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                      CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          // _userId > 0
-                                          //     ? 'User $_userId'
-                                          //     : 'Loading...',
                                           'Postingan Anda',
                                           style: const TextStyle(
                                             fontWeight: FontWeight.w700,
@@ -413,7 +435,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                                 : _locationController.text,
                                             style: TextStyle(
                                               color: _locationController
-                                                      .text.isEmpty
+                                                  .text.isEmpty
                                                   ? Colors.grey
                                                   : darkText,
                                               fontSize: 16,
@@ -438,70 +460,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                 ),
 
                                 const SizedBox(height: 25),
-
-                                // Additional Options
-                                // _buildOptionRow(
-                                //   Icons.people_outline,
-                                //   'Tag people',
-                                //   onTap: () {
-                                //     ScaffoldMessenger.of(context).showSnackBar(
-                                //       SnackBar(
-                                //         content: const Text(
-                                //           'Tag people feature coming soon',
-                                //         ),
-                                //         backgroundColor: accentBlue,
-                                //         behavior: SnackBarBehavior.floating,
-                                //         shape: RoundedRectangleBorder(
-                                //           borderRadius: BorderRadius.circular(
-                                //             10,
-                                //           ),
-                                //         ),
-                                //       ),
-                                //     );
-                                //   },
-                                // ),
-
-                                // _buildOptionRow(
-                                //   Icons.facebook,
-                                //   'Share to Facebook',
-                                //   onTap: () {
-                                //     ScaffoldMessenger.of(context).showSnackBar(
-                                //       SnackBar(
-                                //         content: const Text(
-                                //           'Facebook sharing feature coming soon',
-                                //         ),
-                                //         backgroundColor: accentBlue,
-                                //         behavior: SnackBarBehavior.floating,
-                                //         shape: RoundedRectangleBorder(
-                                //           borderRadius: BorderRadius.circular(
-                                //             10,
-                                //           ),
-                                //         ),
-                                //       ),
-                                //     );
-                                //   },
-                                // ),
-
-                                // _buildOptionRow(
-                                //   Icons.share,
-                                //   'Share to other apps',
-                                //   onTap: () {
-                                //     ScaffoldMessenger.of(context).showSnackBar(
-                                //       SnackBar(
-                                //         content: const Text(
-                                //           'Other app sharing feature coming soon',
-                                //         ),
-                                //         backgroundColor: accentBlue,
-                                //         behavior: SnackBarBehavior.floating,
-                                //         shape: RoundedRectangleBorder(
-                                //           borderRadius: BorderRadius.circular(
-                                //             10,
-                                //           ),
-                                //         ),
-                                //       ),
-                                //     );
-                                //   },
-                                // ),
                               ],
                             ),
                           ),
@@ -520,6 +478,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
 
+  // ... (Kode _buildOptionRow, _showMediaOptions, _buildMediaOption tidak perlu diubah)
   Widget _buildOptionRow(IconData icon, String title, {VoidCallback? onTap}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -597,7 +556,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                   _buildMediaOption(
                     Icons.photo_library,
                     'Choose from Gallery',
-                    () {
+                        () {
                       Navigator.pop(context);
                       _pickMedia(ImageSource.gallery);
                     },
@@ -613,7 +572,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                   _buildMediaOption(
                     Icons.video_library,
                     'Choose Video from Gallery',
-                    () {
+                        () {
                       Navigator.pop(context);
                       _pickVideo(ImageSource.gallery);
                     },
@@ -670,20 +629,14 @@ class _CreatePostPageState extends State<CreatePostPage> {
       final XFile? image = await _picker.pickImage(source: source);
       if (image != null) {
         setState(() {
-          _selectedMedia = File(image.path);
+          // MODIFIKASI: Simpan sebagai XFile, bukan File
+          _selectedMediaXFile = image;
           _isVideo = false;
         });
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error picking image: $e'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
+        SnackBar(content: Text('Error picking image: $e')),
       );
     }
   }
@@ -693,24 +646,19 @@ class _CreatePostPageState extends State<CreatePostPage> {
       final XFile? video = await _picker.pickVideo(source: source);
       if (video != null) {
         setState(() {
-          _selectedMedia = File(video.path);
+          // MODIFIKASI: Simpan sebagai XFile, bukan File
+          _selectedMediaXFile = video;
           _isVideo = true;
         });
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error picking video: $e'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
+        SnackBar(content: Text('Error picking video: $e')),
       );
     }
   }
 
+  // ... (Kode _showLocationDialog tidak perlu diubah)
   void _showLocationDialog() {
     showDialog(
       context: context,
@@ -774,33 +722,18 @@ class _CreatePostPageState extends State<CreatePostPage> {
     );
   }
 
-  // Salin dan ganti seluruh fungsi _sharePost di file create_post_page.dart
-
+  // MODIFIKASI TOTAL: Ganti seluruh fungsi _sharePost dengan yang di bawah ini
   Future<void> _sharePost() async {
-    if (_selectedMedia == null) {
+    if (_selectedMediaXFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please select a photo or video'),
-          backgroundColor: Colors.orange,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
+        const SnackBar(content: Text('Please select a photo or video')),
       );
       return;
     }
 
     if (_userId == 0 || _token.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Authentication error. Please login again.'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
+        const SnackBar(content: Text('Authentication error. Please login again.')),
       );
       return;
     }
@@ -818,41 +751,42 @@ class _CreatePostPageState extends State<CreatePostPage> {
       request.headers['Authorization'] = 'Bearer $_token';
       request.headers['Accept'] = 'application/json';
 
-      // Tambahkan data field
       request.fields['user_id'] = _userId.toString();
       request.fields['caption'] = _captionController.text;
       request.fields['location'] = _locationController.text;
-      request.fields['is_archived'] = '0'; // Sesuai contoh pada Postman
-
-      // --- [PERUBAHAN UTAMA DI SINI] ---
-      // Tambahkan field 'is_video' jika media yang diupload adalah video
+      request.fields['is_archived'] = '0';
       if (_isVideo) {
         request.fields['is_video'] = '1';
       }
-      // --- [AKHIR DARI PERUBAHAN] ---
 
-      // Tambahkan file media
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'media',
-          _selectedMedia!.path,
-          filename: path.basename(_selectedMedia!.path),
-        ),
-      );
+      // --- [LOGIKA KONDISIONAL UTAMA DI SINI] ---
+      if (kIsWeb) {
+        // Untuk WEB: Baca file sebagai bytes
+        Uint8List fileBytes = await _selectedMediaXFile!.readAsBytes();
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'media',
+            fileBytes,
+            filename: _selectedMediaXFile!.name,
+          ),
+        );
+      } else {
+        // Untuk MOBILE: Gunakan path seperti biasa
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'media',
+            _selectedMediaXFile!.path,
+            filename: path.basename(_selectedMediaXFile!.path),
+          ),
+        );
+      }
+      // --- [AKHIR DARI LOGIKA KONDISIONAL] ---
 
-      // Kirim request
       var response = await request.send();
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Postingan berhasil dibuat! Coba refresh ulang halaman ini untuk melihat'),
-            backgroundColor: Colors.green,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
+          const SnackBar(content: Text('Postingan berhasil dibuat!')),
         );
         Navigator.pushAndRemoveUntil(
           context,
@@ -865,15 +799,13 @@ class _CreatePostPageState extends State<CreatePostPage> {
         throw Exception('Failed to create post: ${response.statusCode}');
       }
     } catch (e) {
+      // Perbaikan kecil: Menangkap error Unsupported operation secara spesifik
+      String errorMessage = 'Error sharing post: $e';
+      if (e.toString().contains('Unsupported operation')) {
+        errorMessage = 'Error sharing post: Unsupported operation. MultipartFile is only supported where dart:io is available.';
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error sharing post: $e'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
+        SnackBar(content: Text(errorMessage)),
       );
     } finally {
       setState(() {
