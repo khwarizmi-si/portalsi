@@ -1,7 +1,5 @@
-//val compileSdkVersion by extra(35)
-//val minSdkVersion by extra(23)
+// Project-level build.gradle.kts
 
-// Kode Anda yang sudah ada dimulai dari sini
 allprojects {
     repositories {
         google()
@@ -18,9 +16,7 @@ rootProject.layout.buildDirectory.value(newBuildDir)
 subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
-}
-subprojects {
-    project.evaluationDependsOn(":app")
+    evaluationDependsOn(":app")
 }
 
 tasks.register<Delete>("clean") {
