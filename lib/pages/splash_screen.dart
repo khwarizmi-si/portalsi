@@ -66,9 +66,9 @@ class _SplashScreenState extends State<SplashScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Image.asset(
-              width: 80,
+                width: 80,
                 height: 80,
-                'assets/logopsinb.png'
+                'assets/logopsifull.png'
             ), // Logo aplikasi Anda
             const SizedBox(height: 20),
             const CircularProgressIndicator(),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 // TAMBAHAN: Import paket yang diperlukan untuk HTTP dan URL Launcher
 import 'package:flutter_web_browser/flutter_web_browser.dart';
 import 'dart:convert';
@@ -343,7 +344,14 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
         }
         return true;
       },
-      child: Scaffold(
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          systemNavigationBarColor: Colors.white,
+          systemNavigationBarIconBrightness: Brightness.dark,
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.light,
+        ),
+        child: Scaffold(
         backgroundColor: Colors.white,
         body: Stack(
           children: [
@@ -360,6 +368,7 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
             ),
           ],
         ),
+      ),
       ),
     );
   }

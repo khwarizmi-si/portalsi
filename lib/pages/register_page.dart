@@ -245,6 +245,21 @@ class _RegisterPageState extends State<RegisterPage> {
                       //   ],
                       // ),
                       const SizedBox(height: 40),
+                      Center(
+                        child: RichText(
+                          textAlign: TextAlign.center,
+                          text: const TextSpan(
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                            children: [
+                              TextSpan(text: 'Dengan mendaftar, berarti Anda setuju dengan\n'),
+                              TextSpan(text: 'Ketentuan', style: TextStyle(color: primaryOrange, decoration: TextDecoration.underline)),
+                              TextSpan(text: ' dan '),
+                              TextSpan(text: 'Kebijakan Privasi', style: TextStyle(color: primaryOrange, decoration: TextDecoration.underline)),
+                              TextSpan(text: ' kami'),
+                            ],
+                          ),
+                        ),
+                      ),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [

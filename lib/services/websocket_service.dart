@@ -20,7 +20,7 @@ class AppEvent {
 
 class WebSocketService {
   final String _wsBaseUrl =
-      "wss://api-new.portalsi.com:443/app/fiouy3umnruqcwdsoxni";
+      "wss://ws.portalsi.com:443/app/fiouy3umnruqcwdsoxni";
   final String _authBaseUrl = "https://api-new.portalsi.com/api";
   final String _token;
 
@@ -28,6 +28,9 @@ class WebSocketService {
   StreamSubscription? _subscription;
   Timer? _heartbeatTimer;
   String? _socketId;
+  // [TAMBAHAN] Buat getter publik untuk _socketId
+  String? get socketId => _socketId;
+  Completer<void>? _connectionCompleter;
 
   // Stream Controllers
   final StreamController<String> _statusController =
@@ -43,11 +46,15 @@ class WebSocketService {
 
   // ========== KONEKSI & DISKONEKSI ==========
 
-  void connect() {
+  Future<void> connect() {
     if (_channel != null && _channel?.closeCode == null) {
       debugPrint("WebSocket sudah terkoneksi.");
-      return;
+      // Jika sudah terkoneksi, langsung selesaikan Future
+      return Future.value();
     }
+
+    // Buat completer baru setiap kali mencoba koneksi
+    _connectionCompleter = Completer<void>();
 
     _statusController.add("connecting");
     _channel = WebSocketChannel.connect(Uri.parse(_wsBaseUrl));
@@ -56,16 +63,27 @@ class WebSocketService {
       _handleMessage,
       onDone: () {
         _statusController.add("disconnected");
+        // [MODIFIKASI] Gagalkan completer jika koneksi terputus sebelum siap
+        if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
+          _connectionCompleter!.completeError("WebSocket disconnected before connection was established.");
+        }
         _cleanup();
         _reconnect();
       },
       onError: (error) {
         debugPrint("❌ WebSocket Error: $error");
         _statusController.add("error");
+        // [MODIFIKASI] Gagalkan completer jika ada error
+        if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
+          _connectionCompleter!.completeError(error);
+        }
         _cleanup();
         _reconnect();
       },
     );
+
+    // Kembalikan Future dari completer
+    return _connectionCompleter!.future;
   }
 
   void disconnect() {
@@ -124,7 +142,7 @@ class WebSocketService {
           final senderData = data['sender']; // Data pengirim yang baru
 
           if (messageData != null && senderData != null) {
-            final int senderId = senderData['id'];
+            final int senderId = senderData['user_id'];
             final String senderName = senderData['full_name'] ?? 'Pesan Baru';
             final String? profilePicUrl = senderData['profile_picture_url'];
             final String content = messageData['content'] ?? 'Mengirim media';
@@ -168,6 +186,11 @@ class WebSocketService {
   // ========== SUBSCRIBE & UNSUBSCRIBE (PUBLIC METHOD) ==========
 
   Future<void> subscribeToChannel(String channelName) async {
+    // [MODIFIKASI] Tambahkan log di sini untuk menandakan proses menunggu
+    if (_socketId == null) {
+      debugPrint("⏳ Sedang menunggu _socketId terisi sebelum meminta permintaan subscribe ke $channelName...");
+    }
+
     // Tunggu sampai socketId tersedia
     while (_socketId == null) {
       await Future.delayed(const Duration(milliseconds: 100));

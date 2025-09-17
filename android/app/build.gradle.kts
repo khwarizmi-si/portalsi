@@ -25,8 +25,8 @@ defaultConfig {
     applicationId = "com.example.portalsi"
     minSdk = flutter.minSdkVersion
     targetSdk = 36
-    versionCode = flutter.versionCode.toInt()
-    versionName = flutter.versionName
+    versionCode = 5
+    versionName = "1.0.3-earlyaccess"
 }
 
     buildTypes {
