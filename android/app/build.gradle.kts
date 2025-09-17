@@ -34,8 +34,8 @@ defaultConfig {
     applicationId = "com.portal.si"
     minSdk = flutter.minSdkVersion
     targetSdk = 35 // ⚡ pakai yang Play Store support
-    versionCode = 2   // naikkan setiap rilis (1, 2, 3, …)
-    versionName = "1.0.1" // bebas format
+    versionCode = 4   // naikkan setiap rilis (1, 2, 3, …)
+    versionName = "1.0.3" // bebas format
 }
 
 
@@ -52,8 +52,8 @@ defaultConfig {
 buildTypes {
     getByName("release") {
         signingConfig = signingConfigs.getByName("release")
-        isMinifyEnabled = true
-        isShrinkResources = true // ✅ pakai isShrinkResources
+        isMinifyEnabled = false
+        isShrinkResources = false // ✅ pakai isShrinkResources
         proguardFiles(
             getDefaultProguardFile("proguard-android-optimize.txt"),
             "proguard-rules.pro"
