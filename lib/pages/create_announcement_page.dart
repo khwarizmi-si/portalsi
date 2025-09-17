@@ -1,4 +1,7 @@
+// lib/pages/create_announcement_page.dart (SUDAH DIPERBAIKI)
+
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb; // <-- TAMBAHKAN IMPORT INI
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -17,7 +20,8 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
 
-  File? _imageFile;
+  // --- MODIFIKASI 1: Ganti tipe data dari File? menjadi XFile? ---
+  XFile? _imageXFile;
   bool _isPinned = false;
   bool _isLoading = false;
 
@@ -28,27 +32,30 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
     super.initState();
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1000), // Durasi sedikit diperpanjang
+      duration: const Duration(milliseconds: 1000),
     );
     _animationController.forward();
   }
 
+  // --- MODIFIKASI 2: Ubah fungsi _pickImage ---
   Future<void> _pickImage() async {
     final pickedFile =
     await ImagePicker().pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
       setState(() {
-        _imageFile = File(pickedFile.path);
+        // Simpan sebagai XFile, bukan File
+        _imageXFile = pickedFile;
       });
     }
   }
 
   void _removeImage() {
     setState(() {
-      _imageFile = null;
+      _imageXFile = null;
     });
   }
 
+  // --- MODIFIKASI 3: Ubah fungsi _submitAnnouncement ---
   Future<void> _submitAnnouncement() async {
     if (_formKey.currentState!.validate() == false) {
       return;
@@ -57,11 +64,12 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
       _isLoading = true;
     });
     try {
+      // Kirim XFile ke service, bukan File
       await AnnouncementService().createAnnouncement(
         title: _titleController.text,
         content: _contentController.text,
         isPinned: _isPinned,
-        image: _imageFile,
+        image: _imageXFile, // <-- Perubahan di sini
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -96,7 +104,7 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
     super.dispose();
   }
 
-  // Widget ini tetap ada untuk text field
+  // ... (Widget _buildAnimatedTextField dan _buildAnimatedContainer tidak berubah)
   Widget _buildAnimatedTextField({
     required TextEditingController controller,
     required String labelText,
@@ -106,7 +114,6 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
     int maxLines = 1,
     bool isOptional = false,
   }) {
-    // ... (Isi fungsi ini sama seperti sebelumnya, tidak perlu diubah)
     final animation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _animationController,
@@ -179,7 +186,6 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
     );
   }
 
-  // 1. WIDGET BARU untuk membungkus konten dengan animasi dan gaya container
   Widget _buildAnimatedContainer({
     required Widget child,
     required double delay,
@@ -199,7 +205,7 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
             .animate(animation),
         child: Container(
           decoration: BoxDecoration(
-              color: Colors.white, // Beri warna dasar putih
+              color: Colors.white,
               borderRadius: BorderRadius.circular(15),
               boxShadow: [
                 BoxShadow(
@@ -208,7 +214,6 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
                   offset: const Offset(0, 4),
                 ),
               ],
-              // Beri border agar seragam dengan textfield
               border: Border.all(color: Colors.grey.shade200, width: 1.5)
           ),
           child: child,
@@ -283,7 +288,6 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ... (bagian judul "Informasi Pengumuman" tetap sama)
                     const Text(
                       'Informasi Pengumuman',
                       style: TextStyle(
@@ -317,7 +321,6 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
                     ),
                     const SizedBox(height: 24),
 
-                    // 2. Menerapkan _buildAnimatedContainer pada "Opsi Tambahan"
                     _buildAnimatedContainer(
                       delay: 0.3,
                       shadowColor: Colors.purple,
@@ -344,21 +347,21 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
                     ),
                     const SizedBox(height: 24),
 
-                    // 3. Menerapkan _buildAnimatedContainer pada "Gambar"
                     const Text('Gambar (Opsional)',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 12),
                     _buildAnimatedContainer(
                       delay: 0.4,
                       shadowColor: Colors.green,
-                      child: _imageFile == null
+                      // --- MODIFIKASI 4: Ubah cara menampilkan gambar ---
+                      child: _imageXFile == null
                           ? GestureDetector(
                         onTap: _pickImage,
                         child: Container(
                           height: 150,
                           width: double.infinity,
                           decoration: BoxDecoration(
-                              color: Colors.transparent, // Warna dari container induk
+                              color: Colors.transparent,
                               borderRadius: BorderRadius.circular(14)
                           ),
                           child: Column(
@@ -371,14 +374,17 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
                           ),
                         ),
                       )
-                          : ClipRRect( // Menggunakan ClipRRect agar gambar mengikuti sudut container
+                          : ClipRRect(
                         borderRadius: BorderRadius.circular(14),
                         child: Stack(
                           children: [
-                            Container(
+                            SizedBox(
                               height: 200,
                               width: double.infinity,
-                              child: Image.file(_imageFile!, fit: BoxFit.cover),
+                              // Ganti Image.file menjadi widget kondisional
+                              child: kIsWeb
+                                  ? Image.network(_imageXFile!.path, fit: BoxFit.cover)
+                                  : Image.file(File(_imageXFile!.path), fit: BoxFit.cover),
                             ),
                             Positioned(
                               top: 8,

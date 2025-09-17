@@ -1,5 +1,6 @@
 // lib/services/notification_service.dart
 
+import 'package:http/http.dart' as http;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class NotificationSystemService {
@@ -49,18 +50,35 @@ class NotificationSystemService {
     required int id,
     required String title,
     required String body,
+    String? profilePictureUrl, // URL untuk foto profil
+    required DateTime timestamp,     // Waktu pesan dikirim
   }) async {
-    // Detail notifikasi untuk Android, menggunakan channelId yang sudah dibuat
+
+    // [BARU] Helper untuk mengunduh gambar dan mengubahnya menjadi format notifikasi
+    final ByteArrayAndroidBitmap? largeIcon = await _getBitmapFromUrl(profilePictureUrl);
+
+    // [BARU] Style untuk menampilkan teks yang panjang saat notifikasi diperluas
+    final BigTextStyleInformation bigTextStyleInformation = BigTextStyleInformation(
+      body,
+      htmlFormatBigText: true,
+      contentTitle: title,
+      htmlFormatContentTitle: true,
+    );
+
+    // [MODIFIKASI] Detail notifikasi Android sekarang lebih kaya
     final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'new_messages_channel',
       'Pesan Baru',
       channelDescription: 'Channel untuk notifikasi pesan baru.',
       importance: Importance.max,
       priority: Priority.high,
-      icon: '@mipmap/ic_launcher', // Ikon kecil di status bar
+      icon: '@mipmap/ic_launcher', // Logo aplikasi Anda (ikon kecil)
+      largeIcon: largeIcon,         // Foto profil (ikon besar)
+      showWhen: true,               // Tampilkan timestamp
+      when: timestamp.millisecondsSinceEpoch, // Gunakan waktu dari server
+      styleInformation: bigTextStyleInformation, // Terapkan style teks panjang
     );
 
-    // Detail notifikasi untuk iOS
     const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
@@ -73,6 +91,20 @@ class NotificationSystemService {
     );
 
     await _notificationsPlugin.show(id, title, body, notificationDetails);
-    print("📬 Notifikasi ditampilkan: '$title - $body'");
+    print("📬 Notifikasi kaya informasi ditampilkan.");
+  }
+
+  /// [BARU] Fungsi privat untuk mengunduh gambar dari URL.
+  Future<ByteArrayAndroidBitmap?> _getBitmapFromUrl(String? url) async {
+    if (url == null || url.isEmpty) return null;
+    try {
+      final http.Response response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        return ByteArrayAndroidBitmap(response.bodyBytes);
+      }
+    } catch (e) {
+      print("Gagal mengunduh gambar untuk notifikasi: $e");
+    }
+    return null;
   }
 }

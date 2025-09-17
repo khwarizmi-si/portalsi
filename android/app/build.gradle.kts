@@ -15,7 +15,7 @@ plugins {
 }
 
 android {
-    namespace = "com.portal.si"
+    namespace = "com.portal_si"
     compileSdk = 36
     ndkVersion = "27.0.12077973"
 

@@ -1,13 +1,18 @@
-// lib/pages/edit_profile_page.dart
+// lib/pages/edit_profile_page.dart (Sudah Diperbaiki)
 
+// MODIFIKASI: Tambahkan import yang dibutuhkan
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/user_model.dart';
 import '../services/user_service.dart';
+import '../utils/secure_storage.dart';
 
 class EditProfilePage extends StatefulWidget {
   final User initialProfile;
@@ -32,7 +37,8 @@ class _EditProfilePageState extends State<EditProfilePage>
 
   // State variables
   bool _isSaving = false;
-  File? _selectedImage;
+  // MODIFIKASI: Ganti tipe state dari `File?` menjadi `XFile?`
+  XFile? _selectedImageXFile;
   String _profilePictureUrl = '';
   late User _currentProfile;
 
@@ -90,15 +96,13 @@ class _EditProfilePageState extends State<EditProfilePage>
   Future<void> _fetchLatestProfile() async {
     setState(() => _isFetchingLatest = true);
     try {
-      // Panggil refreshProfile untuk memastikan data terbaru
       final latestProfile = await ProfileService().refreshProfile();
       if (mounted) {
-        _setProfileData(latestProfile); // Set data ke controller setelah fetch berhasil
+        _setProfileData(latestProfile);
       }
     } catch (e) {
       if (mounted) {
         _showErrorDialog("Gagal memuat data terbaru: $e");
-        // Jika gagal, fallback ke data awal
         _setProfileData(widget.initialProfile);
       }
     } finally {
@@ -112,6 +116,7 @@ class _EditProfilePageState extends State<EditProfilePage>
     HapticFeedback.lightImpact();
     showModalBottomSheet(
       context: context,
+      // ... (kode bottom sheet tidak berubah)
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
         decoration: const BoxDecoration(
@@ -172,6 +177,7 @@ class _EditProfilePageState extends State<EditProfilePage>
     required VoidCallback onTap,
     required Color color,
   }) {
+    // ... (kode ini tidak berubah)
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Material(
@@ -229,12 +235,15 @@ class _EditProfilePageState extends State<EditProfilePage>
     );
   }
 
+  // Salin dan ganti fungsi _selectImage
   Future<void> _selectImage(ImageSource source) async {
     Navigator.of(context).pop();
     try {
-      final File? image = await _profileService.pickImage(source: source);
+      // MODIFIKASI: Pastikan variabel 'image' bertipe XFile?
+      // Ini akan cocok dengan variabel state '_selectedImageXFile'.
+      final XFile? image = await _profileService.pickImage(source: source);
       if (image != null) {
-        setState(() => _selectedImage = image);
+        setState(() => _selectedImageXFile = image);
         HapticFeedback.mediumImpact();
       }
     } catch (e) {
@@ -242,7 +251,21 @@ class _EditProfilePageState extends State<EditProfilePage>
     }
   }
 
-  // --- FUNGSI INI TELAH DISESUAIKAN ---
+  Future<XFile?> pickImage({required ImageSource source}) async {
+    final ImagePicker picker = ImagePicker();
+    try {
+      // Fungsi pickImage dari package image_picker akan mengembalikan XFile
+      final XFile? pickedFile = await picker.pickImage(source: source);
+      // Langsung kembalikan hasil XFile ini tanpa diubah menjadi File
+      return pickedFile;
+    } catch (e) {
+      print('Error picking image in service: $e');
+      throw Exception('Gagal memilih gambar.');
+    }
+  }
+
+// Fungsi _saveProfile Anda sudah benar, tidak perlu diubah.
+// Error kedua pada gambar akan hilang setelah kita memperbaiki file user_service.dart
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -256,26 +279,22 @@ class _EditProfilePageState extends State<EditProfilePage>
     try {
       String? newProfilePictureUrl;
 
-      // Langkah 1: Unggah gambar jika ada yang baru
-      if (_selectedImage != null) {
+      if (_selectedImageXFile != null) {
+        // Baris ini sudah benar memanggil dengan _selectedImageXFile
         newProfilePictureUrl =
-        await _profileService.uploadProfilePicture(_selectedImage!);
+        await _profileService.uploadProfilePicture(_selectedImageXFile!);
       }
 
-      // Langkah 2: Siapkan objek User dengan data terbaru
       final updatedUserData = _currentProfile.copyWith(
         username: _usernameController.text.trim(),
         email: _emailController.text.trim(),
         fullName: _fullNameController.text.trim(),
         bio: _bioController.text.trim(),
-        // Gunakan URL baru jika ada, jika tidak, gunakan URL lama
         profilePictureUrl: newProfilePictureUrl ?? _currentProfile.profilePictureUrl,
       );
 
-      // Langkah 3: Kirim data teks yang sudah final ke server
       final success = await _profileService.updateProfile(updatedUserData);
 
-      // Langkah 4: Tangani hasilnya
       if (success) {
         HapticFeedback.mediumImpact();
         _showSuccessDialog('Profil berhasil diperbarui!');
@@ -291,6 +310,7 @@ class _EditProfilePageState extends State<EditProfilePage>
     }
   }
 
+  // ... (kode _showErrorDialog dan _showSuccessDialog tidak berubah)
   void _showErrorDialog(String message) {
     if (!mounted) return;
     showDialog(
@@ -374,6 +394,7 @@ class _EditProfilePageState extends State<EditProfilePage>
 
   @override
   Widget build(BuildContext context) {
+    // ... (kode build utama tidak berubah, tapi _buildProfileImage di dalamnya akan diubah)
     return Scaffold(
       backgroundColor: Colors.amber.shade50,
       body: Stack(
@@ -487,6 +508,7 @@ class _EditProfilePageState extends State<EditProfilePage>
     );
   }
 
+  // ... (kode _buildFormCard, _buildAnimatedTextField tidak berubah)
   Widget _buildFormCard() {
     return Container(
       decoration: BoxDecoration(
@@ -645,6 +667,7 @@ class _EditProfilePageState extends State<EditProfilePage>
     );
   }
 
+  // MODIFIKASI: Ubah cara widget ini menampilkan gambar baru
   Widget _buildProfileImage() {
     return Center(
       child: Stack(
@@ -678,18 +701,29 @@ class _EditProfilePageState extends State<EditProfilePage>
                         child: ScaleTransition(scale: animation, child: child),
                       );
                     },
-                    child: _selectedImage != null
-                        ? Image.file(
-                      _selectedImage!,
-                      key: ValueKey(_selectedImage!.path),
+                    child: _selectedImageXFile != null
+                    // --- Blok ini yang diubah ---
+                        ? (kIsWeb
+                        ? Image.network( // Tampilkan via network untuk Web
+                      _selectedImageXFile!.path,
+                      key: ValueKey(_selectedImageXFile!.path),
                       fit: BoxFit.cover,
                       width: 124,
                       height: 124,
                     )
+                        : Image.file( // Tampilkan via file untuk Mobile
+                      File(_selectedImageXFile!.path),
+                      key: ValueKey(_selectedImageXFile!.path),
+                      fit: BoxFit.cover,
+                      width: 124,
+                      height: 124,
+                    ))
+                    // --- Akhir dari blok yang diubah ---
                         : _profilePictureUrl.isNotEmpty
                         ? CachedNetworkImage(
                       key: ValueKey(_profilePictureUrl),
                       imageUrl: _profilePictureUrl,
+                      // ... sisa kode CachedNetworkImage sama
                       fit: BoxFit.cover,
                       width: 124,
                       height: 124,
@@ -725,6 +759,7 @@ class _EditProfilePageState extends State<EditProfilePage>
                       ),
                     )
                         : Container(
+                      // ... sisa kode placeholder sama
                       width: 124,
                       height: 124,
                       decoration: BoxDecoration(
@@ -751,6 +786,7 @@ class _EditProfilePageState extends State<EditProfilePage>
             right: 4,
             child: GestureDetector(
               onTap: _pickImage,
+              // ... sisa kode icon kamera sama
               child: Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
@@ -782,6 +818,7 @@ class _EditProfilePageState extends State<EditProfilePage>
   }
 }
 
+// ... (kode _CoolBackground dan _BackgroundPainter tidak berubah)
 class _CoolBackground extends StatelessWidget {
   const _CoolBackground({Key? key}) : super(key: key);
 

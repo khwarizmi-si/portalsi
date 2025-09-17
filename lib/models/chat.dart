@@ -1,6 +1,7 @@
 // lib/models/chat.dart
 
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/cupertino.dart';
 import 'package:portal_si/models/group_model.dart';
 import 'user_model.dart'; // Pastikan import model User sudah ada
@@ -27,6 +28,7 @@ class ChatMessage {
   final String? mediaType;
   final File? localFile;
   final ValueNotifier<double>? uploadProgress;
+  final Uint8List? localBytes; // <-- TAMBAHKAN PROPERTI BARU INI
 
   ChatMessage({
     required this.id,
@@ -41,8 +43,11 @@ class ChatMessage {
     this.localFile,
     this.uploadProgress,
     this.localMediaPath,
+    this.localBytes, // <-- TAMBAHKAN DI CONSTRUCTOR JUGA
   });
 
+  // Sisa dari class ChatMessage (toJson, fromJson) tidak perlu diubah.
+  // Cukup salin-tempel dari kode Anda yang sudah ada.
   Map<String, dynamic> toJson() {
     return {
       'message_id': id,
@@ -53,7 +58,6 @@ class ChatMessage {
       'receiver_id': recipient.id,
       'sent_at': timestamp.toIso8601String(),
       'is_read': status == MessageStatus.read,
-      // Kita juga simpan data sender dan recipient untuk rehidrasi
       'sender_data': sender.toJson(),
       'recipient_data': recipient.toJson(),
     };
@@ -62,13 +66,10 @@ class ChatMessage {
   factory ChatMessage.fromJson(Map<String, dynamic> json,
       [User? currentUser, User? recipientUser]) {
     User sender, recipient;
-
-    // Logika jika data berasal dari cache yang sudah menyimpan sender_data & recipient_data
     if (json.containsKey('sender_data') && json.containsKey('recipient_data')) {
       sender = User.fromJson(json['sender_data']);
       recipient = User.fromJson(json['recipient_data']);
     }
-    // Logika lama jika data dari API dan butuh currentUser/recipientUser
     else if (currentUser != null && recipientUser != null) {
       final bool isFromCurrentUser = json['sender_id'] == currentUser.id;
       sender = isFromCurrentUser ? currentUser : recipientUser;
@@ -89,9 +90,8 @@ class ChatMessage {
       mediaUrl: json['media_url'],
       localMediaPath: json['local_media_path'],
       timestamp: DateTime.parse(json['sent_at']),
-      // 'is_read' bisa null di beberapa response, default ke false
       status:
-          (json['is_read'] ?? false) ? MessageStatus.read : MessageStatus.sent,
+      (json['is_read'] ?? false) ? MessageStatus.read : MessageStatus.sent,
       type: type,
     );
   }
