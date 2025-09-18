@@ -65,6 +65,7 @@ defaultConfig {
                 "proguard-rules.pro"
             )
         }
+
     }
 }
 

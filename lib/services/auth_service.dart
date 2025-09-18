@@ -1,5 +1,6 @@
 // lib/services/auth_service.dart
 
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -22,6 +23,7 @@ class AuthService {
   /// **Metode statis yang dicari oleh SplashScreen untuk inisialisasi.**
   /// Metode ini akan dipanggil saat aplikasi pertama kali dibuka (jika sesi masih aktif).
   static Future<void> initializeWebSocket(String token) {
+
     if (webSocketService != null && webSocketService?.isConnected == true) {
       debugPrint("✅ WebSocketService sudah diinisialisasi dan terhubung.");
       return Future.value(); // Kembalikan Future yang sudah selesai
@@ -40,6 +42,7 @@ class AuthService {
     } else {
       return Future.error("Gagal membuat instance WebSocketService.");
     }
+
   }
 
   // =======================================================================
@@ -143,11 +146,11 @@ class AuthService {
   }
 
   Future<Map<String, dynamic>> register(
-      String username,
-      String fullName,
-      String email,
-      String password,
-      ) async {
+    String username,
+    String fullName,
+    String email,
+    String password,
+  ) async {
     final response = await http.post(
       Uri.parse('$baseUrl/register'),
       body: {
@@ -165,8 +168,6 @@ class AuthService {
       return {'success': false, 'errors': data};
     }
   }
-
-
 
   Future<Map<String, dynamic>?> getUser() async {
     try {
