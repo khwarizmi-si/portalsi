@@ -79,6 +79,7 @@ dependencies:
   app_links: ^6.4.1
 #  uni_links: ^0.5.1
   #  uni_links: ^0.5.0
+  flutter_launcher_icons: ^0.14.4
   # pusher_client: ^2.0.0
   # laravel_echo: ^1.0.0-beta.1
   # pusher_channels_flutter: ^2.2.1
@@ -100,10 +101,9 @@ dev_dependencies:
 # following page: https://dart.dev/tools/pub/pubspec
 
 # The following section is specific to Flutter packages.
-  flutter_launcher_icons: ^0.11.0
 
 flutter_icons:
-  android: "launcher_icon"
+  android: true
   ios: true
   image_path: "assets/logopsi.png"
 
