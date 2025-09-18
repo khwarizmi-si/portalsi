@@ -1,5 +1,6 @@
 // lib/services/auth_service.dart
 
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -21,22 +22,69 @@ class AuthService {
 
   /// **Metode statis yang dicari oleh SplashScreen untuk inisialisasi.**
   /// Metode ini akan dipanggil saat aplikasi pertama kali dibuka (jika sesi masih aktif).
-  static void initializeWebSocket(String token) {
+  static Future<void> initializeWebSocket(String token) async {
+    // Tambahkan async
     if (webSocketService != null && webSocketService?.isConnected == true) {
       debugPrint("✅ WebSocketService sudah diinisialisasi dan terhubung.");
       return;
     }
 
-    debugPrint("🚀 Menginisialisasi WebSocketService dari startup...");
-    // Buat instance baru dari WebSocketService dengan token yang valid.
+    debugPrint("🚀 Menginisialisasi WebSocketService...");
     webSocketService = WebSocketService(token: token);
-    // Mulai koneksi ke server WebSocket.
     webSocketService?.connect();
 
+    // Panggil listener global di sini
+    await startGlobalListeners();
+
     // Kirim notifikasi ke backend bahwa aplikasi online
-    notifyBackendOnline();
-    // Anda bisa memulai TokenRefreshService di sini juga jika diperlukan saat startup
-    // TokenRefreshService().start();
+    await notifyBackendOnline(); // Tambahkan await
+
+    // Anda bisa memindahkan start TokenRefreshService ke sini juga agar terpusat
+    TokenRefreshService().start();
+  }
+
+  // Di dalam class AuthService
+
+// Tambahkan StreamSubscription untuk mengelola listener global
+  static StreamSubscription? _globalEventSubscription;
+
+// 👇 TAMBAHKAN METHOD BARU INI
+  static Future<void> startGlobalListeners() async {
+    final wsService = AuthService.webSocketService;
+    final userId = await SecureStorage.getUserId(); // Ambil ID user yang login
+
+    if (wsService == null || userId == null) {
+      debugPrint(
+          "Gagal memulai listener global: service atau userId tidak ditemukan.");
+      return;
+    }
+
+    // 1. Tentukan channel notifikasi personal
+    final notificationChannel = 'private-user.$userId';
+
+    // 2. Subscribe ke channel tersebut
+    wsService.subscribeToChannel(notificationChannel);
+
+    // 3. Batalkan listener lama (jika ada) sebelum membuat yang baru
+    _globalEventSubscription?.cancel();
+
+    // 4. Dengarkan event stream dari WebSocketService
+    _globalEventSubscription =
+        wsService.eventStream.listen((AppEvent appEvent) {
+      // Filter hanya event Notifikasi Baru di channel yang benar
+      if (appEvent.channel == notificationChannel &&
+          appEvent.event == 'NotificationCreated') {
+        print("🔔 NOTIFIKASI GLOBAL DITERIMA: ${appEvent.data}");
+
+        // DI SINI ANDA AKAN:
+        // - Memicu state management (Provider/BLoC/Riverpod) untuk menambah
+        //   jumlah notifikasi yang belum dibaca (angka di ikon lonceng).
+        // - Mungkin memanggil service notifikasi lokal untuk menampilkan
+        //   push notification jika aplikasi sedang berjalan.
+      }
+    });
+
+    print("🎧 Listener global untuk channel $notificationChannel telah aktif.");
   }
 
   // =======================================================================
@@ -140,11 +188,11 @@ class AuthService {
   }
 
   Future<Map<String, dynamic>> register(
-      String username,
-      String fullName,
-      String email,
-      String password,
-      ) async {
+    String username,
+    String fullName,
+    String email,
+    String password,
+  ) async {
     final response = await http.post(
       Uri.parse('$baseUrl/register'),
       body: {
@@ -162,8 +210,6 @@ class AuthService {
       return {'success': false, 'errors': data};
     }
   }
-
-
 
   Future<Map<String, dynamic>?> getUser() async {
     try {
