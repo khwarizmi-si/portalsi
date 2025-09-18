@@ -1,5 +1,7 @@
 // lib/services/notification_service.dart
 
+import 'dart:convert';
+
 import 'package:http/http.dart' as http;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -47,17 +49,16 @@ class NotificationSystemService {
   }
 
   Future<void> showNewMessageNotification({
-    required int id,
+    required int messageId, // Terima messageId
     required String title,
     required String body,
-    String? profilePictureUrl, // URL untuk foto profil
-    required DateTime timestamp,     // Waktu pesan dikirim
+    required DateTime timestamp,
+    required Map<String, dynamic> payloadData, // Terima data untuk payload
   }) async {
 
-    // [BARU] Helper untuk mengunduh gambar dan mengubahnya menjadi format notifikasi
+    final String? profilePictureUrl = payloadData['profile_picture_url'];
     final ByteArrayAndroidBitmap? largeIcon = await _getBitmapFromUrl(profilePictureUrl);
 
-    // [BARU] Style untuk menampilkan teks yang panjang saat notifikasi diperluas
     final BigTextStyleInformation bigTextStyleInformation = BigTextStyleInformation(
       body,
       htmlFormatBigText: true,
@@ -65,18 +66,17 @@ class NotificationSystemService {
       htmlFormatContentTitle: true,
     );
 
-    // [MODIFIKASI] Detail notifikasi Android sekarang lebih kaya
     final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'new_messages_channel',
       'Pesan Baru',
       channelDescription: 'Channel untuk notifikasi pesan baru.',
       importance: Importance.max,
       priority: Priority.high,
-      icon: '@mipmap/ic_launcher', // Logo aplikasi Anda (ikon kecil)
-      largeIcon: largeIcon,         // Foto profil (ikon besar)
-      showWhen: true,               // Tampilkan timestamp
-      when: timestamp.millisecondsSinceEpoch, // Gunakan waktu dari server
-      styleInformation: bigTextStyleInformation, // Terapkan style teks panjang
+      icon: '@mipmap/ic_launcher',
+      largeIcon: largeIcon,
+      showWhen: true,
+      when: timestamp.millisecondsSinceEpoch,
+      styleInformation: bigTextStyleInformation,
     );
 
     const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
@@ -90,8 +90,18 @@ class NotificationSystemService {
       iOS: iosDetails,
     );
 
-    await _notificationsPlugin.show(id, title, body, notificationDetails);
-    print("📬 Notifikasi kaya informasi ditampilkan.");
+    // [PENTING] Ubah data Map menjadi String JSON untuk payload
+    final String payload = jsonEncode(payloadData);
+
+    // [PENTING] Gunakan messageId sebagai ID unik dan tambahkan payload
+    await _notificationsPlugin.show(
+      messageId, // ID unik per pesan
+      title,
+      body,
+      notificationDetails,
+      payload: payload, // Sematkan data sender di sini
+    );
+    print("📬 Notifikasi ditampilkan dengan ID: $messageId dan payload.");
   }
 
   /// [BARU] Fungsi privat untuk mengunduh gambar dari URL.

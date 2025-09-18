@@ -75,8 +75,12 @@ class PostDetailPage extends StatelessWidget {
                     onBookmark: () {},
                     onShare: () {},
                     onComment: () {/* Tampilkan comment sheet */},
-                    onProfileTap: () => NavigationHelper.navigateToProfile(
+                    onProfileTap: () =>
+                    {
+                      Navigator.pop(context),
+                      NavigationHelper.navigateToProfile(
                         context, mainPost.user.toJson()),
+                    },
                   ),
                 ),
                 const SliverToBoxAdapter(

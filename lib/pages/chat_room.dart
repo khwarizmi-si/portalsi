@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
@@ -14,6 +15,7 @@ import '../models/chat.dart';
 import '../models/user_model.dart';
 import 'package:portal_si/pages/image_preview_screen.dart';
 
+import '../widgets/permission_dialog.dart';
 import 'camera_screen.dart';
 
 // --- TAMBAHKAN IMPORT BARU ---
@@ -480,14 +482,53 @@ class _BouncyPopupRoute extends PageRouteBuilder {
   );
 }
 
-class ChatRoomPage extends StatelessWidget {
+class ChatRoomPage extends StatefulWidget { // <-- UBAH MENJADI StatefulWidget
   final User user;
   const ChatRoomPage({super.key, required this.user});
 
   @override
+  State<ChatRoomPage> createState() => _ChatRoomPageState();
+}
+
+class _ChatRoomPageState extends State<ChatRoomPage> {
+  // Pindahkan controller ke sini agar bisa diakses di initState
+  late final ChatRoomController _chatController;
+
+  @override
+  void initState() {
+    super.initState();
+    // Inisialisasi controller di sini
+    _chatController = ChatRoomController(recipient: widget.user);
+
+    // Panggil pengecekan izin setelah frame pertama selesai di-render
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndRequestNotificationPermission();
+    });
+  }
+
+  // INI ADALAH FUNGSI BARU UNTUK IZIN NOTIFIKASI
+  Future<void> _checkAndRequestNotificationPermission() async {
+    PermissionStatus status = await Permission.notification.status;
+
+    if (status.isDenied && mounted) {
+      await showDialog(
+        context: context,
+        builder: (BuildContext context) => NotificationPermissionDialog(
+          onLater: () => Navigator.of(context).pop(),
+          onAllow: () async {
+            Navigator.of(context).pop();
+            await Permission.notification.request();
+          },
+        ),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => ChatRoomController(recipient: user),
+    // Gunakan .value agar controller tidak dibuat ulang
+    return ChangeNotifierProvider.value(
+      value: _chatController,
       child: Scaffold(
         backgroundColor: Colors.grey.shade100,
         body: Container(
@@ -501,14 +542,13 @@ class ChatRoomPage extends StatelessWidget {
           ),
           child: Column(
             children: [
-              _ChatAppBar(user: user),
+              _ChatAppBar(user: widget.user), // <-- Akses user melalui 'widget.user'
               Expanded(
                 child: Consumer<ChatRoomController>(
                   builder: (context, controller, _) {
                     if (controller.errorMessage != null && !controller.isLoading) {
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         if (ModalRoute.of(context)?.isCurrent != true) return;
-
                         showDialog(
                           context: context,
                           barrierDismissible: false,
@@ -600,6 +640,23 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                       ),
                     ],
                   ),
+                ),
+                // [TAMBAHAN] Tombol dropdown menu diletakkan di sini
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.more_horiz, color: Colors.black.withOpacity(0.7)),
+                  onSelected: (String value) {
+                    if (value == 'reload') {
+                      // Panggil metode di controller untuk memuat ulang
+                      Provider.of<ChatRoomController>(context, listen: false)
+                          .reloadConversation();
+                    }
+                  },
+                  itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                    const PopupMenuItem<String>(
+                      value: 'reload',
+                      child: Text('Muat ulang percakapan'),
+                    ),
+                  ],
                 ),
               ],
             ),

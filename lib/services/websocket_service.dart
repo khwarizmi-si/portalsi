@@ -32,6 +32,8 @@ class WebSocketService {
   String? get socketId => _socketId;
   Completer<void>? _connectionCompleter;
 
+  final Set<String> _subscribedChannels = {};
+
   // Stream Controllers
   final StreamController<String> _statusController =
   StreamController.broadcast();
@@ -100,6 +102,8 @@ class WebSocketService {
   void _cleanup() {
     _heartbeatTimer?.cancel();
     _socketId = null;
+    // [TAMBAHAN] Bersihkan daftar channel saat koneksi dihentikan
+    _subscribedChannels.clear();
   }
 
   // ========== PENGELOLAAN PESAN ==========
@@ -125,8 +129,12 @@ class WebSocketService {
         return; // Keluar dari fungsi
 
       case "pusher_internal:subscription_succeeded":
-        debugPrint("✅ Berhasil subscribe ke channel: ${decoded['channel']}");
-        return; // Keluar dari fungsi
+        final String? channel = decoded['channel'];
+        if (channel != null) {
+          _subscribedChannels.add(channel);
+          debugPrint("✅ Berhasil subscribe dan TERCATAT ke channel: $channel. Total: ${_subscribedChannels.length}");
+        }
+        return;
     }
 
     // [LOGIKA BARU] Setelah event Pusher ditangani, proses event aplikasi
@@ -135,27 +143,26 @@ class WebSocketService {
       // Cek notifikasi HANYA untuk event 'dm.new'
       if (eventName == 'dm.new') {
         if (!AppLifecycleManager.isAppInForeground) {
-
-          // Asumsi payload data sudah diperkaya oleh backend
           final data = jsonDecode(decoded["data"]);
           final messageData = data['message'];
-          final senderData = data['sender']; // Data pengirim yang baru
+
+          // [MODIFIKASI] Ambil seluruh objek sender, bukan hanya beberapa field
+          final senderData = data['sender'];
 
           if (messageData != null && senderData != null) {
-            final int senderId = senderData['user_id'];
+            // [MODIFIKASI] Ambil message_id sebagai ID unik notifikasi
+            final int messageId = messageData['message_id'];
             final String senderName = senderData['full_name'] ?? 'Pesan Baru';
-            final String? profilePicUrl = senderData['profile_picture_url'];
             final String content = messageData['content'] ?? 'Mengirim media';
-
-            // Ambil dan parse timestamp dari server
             final DateTime timestamp = DateTime.parse(messageData['sent_at']);
 
+            // [MODIFIKASI] Kirim messageId dan seluruh senderData sebagai payload
             NotificationSystemService.instance.showNewMessageNotification(
-              id: senderId,
+              messageId: messageId, // Gunakan ID pesan yang unik
               title: senderName,
               body: content,
-              profilePictureUrl: profilePicUrl,
               timestamp: timestamp,
+              payloadData: senderData, // Kirim seluruh data sender
             );
           }
         }
@@ -186,7 +193,13 @@ class WebSocketService {
   // ========== SUBSCRIBE & UNSUBSCRIBE (PUBLIC METHOD) ==========
 
   Future<void> subscribeToChannel(String channelName) async {
-    // [MODIFIKASI] Tambahkan log di sini untuk menandakan proses menunggu
+    // [MODIFIKASI] Cek dulu apakah sudah subscribe ke channel ini
+    if (_subscribedChannels.contains(channelName)) {
+      debugPrint("✅ Sudah subscribe ke channel $channelName, tidak melakukan subscribe ulang.");
+      return; // Hentikan fungsi di sini
+    }
+
+    // [LOGIKA LAMA TETAP BERJALAN JIKA BELUM SUBSCRIBE]
     if (_socketId == null) {
       debugPrint("⏳ Sedang menunggu _socketId terisi sebelum meminta permintaan subscribe ke $channelName...");
     }
@@ -195,6 +208,7 @@ class WebSocketService {
     while (_socketId == null) {
       await Future.delayed(const Duration(milliseconds: 100));
     }
+
 
     try {
       final response = await http.post(

@@ -150,13 +150,23 @@ class ChatRoomController extends ChangeNotifier {
     if (_currentUser != null) {
       final ids = [_currentUser!.id, recipient.id]..sort();
       final roomId = ids.join('-');
-      final channelName = 'private-dm.$roomId';
-      AuthService.webSocketService?.unsubscribeFromChannel(channelName);
+      // final channelName = 'private-dm.$roomId';
+      // AuthService.webSocketService?.unsubscribeFromChannel(channelName);
     }
     _messageSubscription?.cancel();
     _statusTimer?.cancel();
     super.dispose();
   }
+
+
+  Future<void> reloadConversation() async {
+    debugPrint("🔄 Memuat ulang percakapan dari AppBar...");
+
+    // Cukup panggil kembali fungsi fetchMessages yang sudah ada.
+    // Fungsi ini sudah menangani state loading dan akan memperbarui UI.
+    await fetchMessages();
+  }
+
 
   void _startRealtimeListeners() {
     if (_currentUser == null) return;

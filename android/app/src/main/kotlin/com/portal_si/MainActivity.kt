@@ -1,4 +1,4 @@
-package com.portal_si
+package com.portal.si
 
 import io.flutter.embedding.android.FlutterActivity
 

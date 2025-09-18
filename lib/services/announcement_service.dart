@@ -81,8 +81,8 @@ class AnnouncementService extends ApiService {
   Future<void> createAnnouncement({
     required String title,
     required String content,
-    required bool isPinned,
-    XFile? image, // <-- PERBAIKAN: Ubah tipe parameter menjadi XFile?
+    required int isPinned, // isPinned is now an int (0 or 1)
+    XFile? image, 
   }) async {
     final token = await SecureStorage.getToken();
     if (token == null) {
@@ -99,7 +99,7 @@ class AnnouncementService extends ApiService {
 
     request.fields['title'] = title;
     request.fields['content'] = content;
-    request.fields['is_pinned'] = isPinned ? '1' : '0';
+    request.fields['pinned'] = isPinned.toString(); // MODIFIED: Changed key from 'is_pinned' to 'pinned'
 
     if (image != null) {
       if (kIsWeb) {
@@ -135,7 +135,7 @@ class AnnouncementService extends ApiService {
   Future<void> deleteAnnouncement(int announcementId) async {
     final String endpoint = 'announcements/$announcementId';
     try {
-      // Asumsi `ApiService` Anda memiliki method `delete` yang menangani DELETE request.
+      // Asumsi \`ApiService\` Anda memiliki method \`delete\` yang menangani DELETE request.
       // Jika tidak, Anda perlu membuatnya.
       await delete(endpoint);
       print("📢 Pengumuman dengan ID $announcementId berhasil dihapus dari server.");

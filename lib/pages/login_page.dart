@@ -63,11 +63,11 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     );
 
     // --- MODIFIKASI: TAMPILKAN BOTTOM SHEET SETELAH 2 DETIK ---
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        _showLoginWithSdkBottomSheet();
-      }
-    });
+    // Future.delayed(const Duration(milliseconds: 500), () {
+    //   if (mounted) {
+    //     _showLoginWithSdkBottomSheet();
+    //   }
+    // });
   }
 
   // --- SEMUA FUNGSI LOGIC TETAP SAMA ---
@@ -606,17 +606,17 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               const Expanded(child: Divider(color: Colors.grey)),
                             ],
                           ),
-                          const SizedBox(height: 30),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                          //     _buildSocialButton(iconPath: 'assets/logo_google.png', onPressed: () {}),
-                          //     const SizedBox(width: 20),
-                              _buildAkunRgLoginButton(
-                                onPressed: _isLoading ? null : _showLoginWithSdkBottomSheet,
-                              ),
-                            ],
-                          ),
+                          // const SizedBox(height: 30),
+                          // Row(
+                          //   mainAxisAlignment: MainAxisAlignment.center,
+                          //   children: [
+                          // //     _buildSocialButton(iconPath: 'assets/logo_google.png', onPressed: () {}),
+                          // //     const SizedBox(width: 20),
+                          //     _buildAkunRgLoginButton(
+                          //       onPressed: _isLoading ? null : _showLoginWithSdkBottomSheet,
+                          //     ),
+                          //   ],
+                          // ),
                           const SizedBox(height: 40),
                           Center(
                             child: RichText(
