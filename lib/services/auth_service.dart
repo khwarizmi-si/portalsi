@@ -22,15 +22,19 @@ class AuthService {
 
   /// **Metode statis yang dicari oleh SplashScreen untuk inisialisasi.**
   /// Metode ini akan dipanggil saat aplikasi pertama kali dibuka (jika sesi masih aktif).
-  static Future<void> initializeWebSocket(String token) {
-
+  static Future<void> initializeWebSocket(String token) async {
+    // Tambahkan async
     if (webSocketService != null && webSocketService?.isConnected == true) {
       debugPrint("✅ WebSocketService sudah diinisialisasi dan terhubung.");
-      return Future.value(); // Kembalikan Future yang sudah selesai
+      return;
     }
 
-    debugPrint("🚀 Menginisialisasi WebSocketService dari startup...");
+    debugPrint("🚀 Menginisialisasi WebSocketService...");
     webSocketService = WebSocketService(token: token);
+    webSocketService?.connect();
+
+    // Panggil listener global di sini
+    await startGlobalListeners();
 
     // Kirim notifikasi ke backend bahwa aplikasi online
     await notifyBackendOnline(); // Tambahkan await
