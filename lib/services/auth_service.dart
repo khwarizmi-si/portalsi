@@ -51,7 +51,7 @@ class AuthService {
 // 👇 TAMBAHKAN METHOD BARU INI
   static Future<void> startGlobalListeners() async {
     final wsService = AuthService.webSocketService;
-    final userId = await SecureStorage.getUserId(); // Ambil ID user yang login
+    final userId = await SecureStorage.getUserId();
 
     if (wsService == null || userId == null) {
       debugPrint(
@@ -59,28 +59,31 @@ class AuthService {
       return;
     }
 
-    // 1. Tentukan channel notifikasi personal
-    final notificationChannel = 'private-user.$userId';
+    // Langganan ke channel pengumuman publik
+    wsService.subscribeToChannel('announcements');
 
-    // 2. Subscribe ke channel tersebut
+    // Langganan ke channel notifikasi personal
+    final notificationChannel = 'private-user.$userId';
     wsService.subscribeToChannel(notificationChannel);
 
-    // 3. Batalkan listener lama (jika ada) sebelum membuat yang baru
+    // Batalkan listener lama jika ada
     _globalEventSubscription?.cancel();
 
-    // 4. Dengarkan event stream dari WebSocketService
+    // Dengarkan event stream dari WebSocketService
     _globalEventSubscription =
         wsService.eventStream.listen((AppEvent appEvent) {
+      if (appEvent.channel == 'announcements' &&
+          appEvent.event == 'announcement.created') {
+        debugPrint("📢 PENGUMUMAN BARU DITERIMA: ${appEvent.data}");
+        // Di sini Anda bisa memicu pembaruan UI atau notifikasi lokal
+        // Misalnya, panggil state management untuk menampilkan pengumuman
+        // NotifikasiSystemService.instance.showAnnouncementNotification(appEvent.data);
+      }
+
       // Filter hanya event Notifikasi Baru di channel yang benar
       if (appEvent.channel == notificationChannel &&
           appEvent.event == 'NotificationCreated') {
         print("🔔 NOTIFIKASI GLOBAL DITERIMA: ${appEvent.data}");
-
-        // DI SINI ANDA AKAN:
-        // - Memicu state management (Provider/BLoC/Riverpod) untuk menambah
-        //   jumlah notifikasi yang belum dibaca (angka di ikon lonceng).
-        // - Mungkin memanggil service notifikasi lokal untuk menampilkan
-        //   push notification jika aplikasi sedang berjalan.
       }
     });
 
