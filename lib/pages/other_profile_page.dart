@@ -431,7 +431,14 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
             elevation: 0,
             leading: IconButton(
               icon: const Icon(Icons.close, color: Colors.white),
-              onPressed: () => Navigator.pop(context),
+              onPressed: () { // Using a block body for clarity
+                Navigator.pop(context);
+                // FIX: Replace 'mainPost.user' with the correct variable '_profileData!'
+                if (_profileData != null) {
+                  NavigationHelper.navigateToProfile(
+                      context, _profileData!.toJson());
+                }
+              },
             ),
             title: Text(post.caption ?? '', style: const TextStyle(color: Colors.white)),
           ),
@@ -439,7 +446,6 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
             child: Hero(
               tag: 'post_${post.postId}_$index',
               child: InteractiveViewer(child: Image.network(post.mediaUrl, fit: BoxFit.contain)),
-
             ),
           ),
         ),

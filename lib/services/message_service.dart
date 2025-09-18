@@ -21,6 +21,32 @@ class ChatService extends ApiService {
   static const String _cacheKey = 'conversations_cache';
 
 
+  Future<List<String>> getActiveConversationChannels() async {
+    final token = await SecureStorage.getToken();
+    if (token == null) throw Exception("Token tidak ditemukan.");
+
+    // Ganti endpoint ini dengan endpoint API Anda yang sebenarnya
+    final url = Uri.parse('https://api-new.portalsi.com/api/messages/channels');
+
+    try {
+      final response = await http.get(url, headers: {
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      });
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        // Asumsi API mengembalikan list of strings ["channel_name_1", "channel_name_2"]
+        return List<String>.from(data);
+      } else {
+        throw Exception("Gagal mengambil channel: ${response.body}");
+      }
+    } catch (e) {
+      debugPrint("Error getActiveConversationChannels: $e");
+      return []; // Kembalikan list kosong jika gagal
+    }
+  }
+
   Future<void> _saveConversationsToCache(String jsonString) async {
     try {
       final prefs = await SharedPreferences.getInstance();

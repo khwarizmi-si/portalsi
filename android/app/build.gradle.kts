@@ -15,29 +15,11 @@ plugins {
 }
 
 android {
-    namespace = "com.portal_si"
+    namespace = "com.portal.si"
+
     compileSdk = 36
+
     ndkVersion = "27.0.12077973"
-
-    signingConfigs {
-        create("release") {
-            if (keystorePropertiesFile.exists()) {
-                storeFile = file(keystoreProperties["storeFile"] as String)
-                storePassword = keystoreProperties["storePassword"] as String
-                keyAlias = keystoreProperties["keyAlias"] as String
-                keyPassword = keystoreProperties["keyPassword"] as String
-            }
-        }
-    }
-
-defaultConfig {
-    applicationId = "com.portal.si"
-    minSdk = flutter.minSdkVersion
-    targetSdk = 35 // ⚡ pakai yang Play Store support
-    versionCode = 4   // naikkan setiap rilis (1, 2, 3, …)
-    versionName = "1.0.3" // bebas format
-}
-
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -48,19 +30,43 @@ defaultConfig {
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_11.toString()
     }
-
-buildTypes {
-    getByName("release") {
-        signingConfig = signingConfigs.getByName("release")
-        isMinifyEnabled = false
-        isShrinkResources = false // ✅ pakai isShrinkResources
-        proguardFiles(
-            getDefaultProguardFile("proguard-android-optimize.txt"),
-            "proguard-rules.pro"
-        )
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+            }
+        }
     }
+defaultConfig {
+    applicationId = "com.portal.si"
+    minSdk = flutter.minSdkVersion
+    targetSdk = 36
+    versionCode = 5
+    versionName = "1.0.3-earlyaccess"
 }
 
+//    buildTypes {
+//        release {
+//            // TODO: Add your own signing config for the release build.
+//            // Signing with the debug keys for now, so `flutter run --release` works.
+//            signingConfig = signingConfigs.getByName("debug")
+//        }
+//    }
+    buildTypes {
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = false
+            isShrinkResources = false // ✅ pakai isShrinkResources
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+
+    }
 }
 
 dependencies {

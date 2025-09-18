@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import '../managers/cache_manager.dart';
 import '../services/auth_service.dart'; // Gantilah dengan path AuthService Anda yang benar
+import '../services/message_service.dart';
 import '../utils/secure_storage.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -33,6 +34,38 @@ class _SplashScreenState extends State<SplashScreen> {
       try {
         // Inisialisasi WebSocket (INI YANG PALING PENTING)
         AuthService.initializeWebSocket(token);
+
+        if (AuthService.webSocketService == null) {
+          print('❌ DIAGNOSTIK: AuthService.webSocketService ternyata NULL.');
+        } else {
+          print('👍 DIAGNOSTIK: AuthService.webSocketService berhasil dibuat.');
+        }
+
+        // 2. Ambil semua channel
+        if (AuthService.webSocketService == null) {
+          print('❌ DIAGNOSTIK: AuthService.webSocketService ternyata NULL.');
+        } else {
+          print('👍 DIAGNOSTIK: AuthService.webSocketService berhasil dibuat.');
+        }
+
+        // 2. Ambil semua channel
+        print('📡 Mengambil daftar channel percakapan...');
+        final chatService = ChatService();
+        final channels = await chatService.getActiveConversationChannels();
+
+        // Cetak isi dari 'channels' untuk melihat apa yang dikembalikan API
+        print('ℹ️ DIAGNOSTIK: Isi dari `channels`: $channels');
+
+        // 3. Subscribe ke setiap channel
+        if (channels.isNotEmpty && AuthService.webSocketService != null) {
+          for (final channelName in channels) {
+            AuthService.webSocketService!.subscribeToChannel(channelName);
+          }
+          print('✅ Permintaan subscribe untuk semua channel telah dikirim.');
+        } else {
+          // [TAMBAHAN] Log jika kondisi 'if' tidak terpenuhi
+          print('⚠️ Kondisi untuk subscribe tidak terpenuhi. channels.isEmpty: ${channels.isEmpty}');
+        }
 
         // Inisialisasi CacheManager yang sebelumnya ada di main()
         CacheManager.initialize();
@@ -66,9 +99,9 @@ class _SplashScreenState extends State<SplashScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Image.asset(
-              width: 80,
+                width: 80,
                 height: 80,
-                'assets/logopsinb.png'
+                'assets/logopsifull.png'
             ), // Logo aplikasi Anda
             const SizedBox(height: 20),
             const CircularProgressIndicator(),

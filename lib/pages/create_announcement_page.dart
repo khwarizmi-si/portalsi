@@ -20,9 +20,8 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
 
-  // --- MODIFIKASI 1: Ganti tipe data dari File? menjadi XFile? ---
   XFile? _imageXFile;
-  bool _isPinned = false;
+  int _isPinned = 0; // MODIFIED: Changed to int, default to 0
   bool _isLoading = false;
 
   late AnimationController _animationController;
@@ -37,13 +36,11 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
     _animationController.forward();
   }
 
-  // --- MODIFIKASI 2: Ubah fungsi _pickImage ---
   Future<void> _pickImage() async {
     final pickedFile =
     await ImagePicker().pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
       setState(() {
-        // Simpan sebagai XFile, bukan File
         _imageXFile = pickedFile;
       });
     }
@@ -55,7 +52,6 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
     });
   }
 
-  // --- MODIFIKASI 3: Ubah fungsi _submitAnnouncement ---
   Future<void> _submitAnnouncement() async {
     if (_formKey.currentState!.validate() == false) {
       return;
@@ -64,12 +60,17 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
       _isLoading = true;
     });
     try {
-      // Kirim XFile ke service, bukan File
+      print(_titleController.text);
+      print(_contentController.text);
+      print(_isPinned); // This will now print 0 or 1
+
+      // Assuming AnnouncementService().createAnnouncement expects an int for isPinned
+      // If it expects a boolean, it should be: isPinned: _isPinned == 1,
       await AnnouncementService().createAnnouncement(
         title: _titleController.text,
         content: _contentController.text,
-        isPinned: _isPinned,
-        image: _imageXFile, // <-- Perubahan di sini
+        isPinned: _isPinned, // MODIFIED: Passing int directly
+        image: _imageXFile,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -104,7 +105,6 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
     super.dispose();
   }
 
-  // ... (Widget _buildAnimatedTextField dan _buildAnimatedContainer tidak berubah)
   Widget _buildAnimatedTextField({
     required TextEditingController controller,
     required String labelText,
@@ -325,13 +325,14 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
                       delay: 0.3,
                       shadowColor: Colors.purple,
                       child: SwitchListTile(
-                        title: const Text('Sematkan Pengumuman', style: TextStyle(fontWeight: FontWeight.w500)),
-                        subtitle: Text('Selalu tampil di paling atas.', style: TextStyle(color: Colors.grey[600])),
-                        value: _isPinned,
+                        title: const Text('Pin Pengumuman', style: TextStyle(fontWeight: FontWeight.w500)),
+                        subtitle: Text('Pengumuman yang Anda pin akan muncul di bagian atas halaman dashboard.', style: TextStyle(color: Colors.grey[600])),
+                        value: _isPinned == 1, // MODIFIED: Convert int to bool for SwitchListTile
                         onChanged: (bool value) {
                           setState(() {
-                            _isPinned = value;
+                            _isPinned = value ? 1 : 0; // MODIFIED: Convert bool to int
                           });
+                          print(_isPinned.toString());
                         },
                         activeColor: Colors.purple.shade600,
                         secondary: Container(
@@ -353,7 +354,6 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
                     _buildAnimatedContainer(
                       delay: 0.4,
                       shadowColor: Colors.green,
-                      // --- MODIFIKASI 4: Ubah cara menampilkan gambar ---
                       child: _imageXFile == null
                           ? GestureDetector(
                         onTap: _pickImage,
@@ -381,7 +381,6 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage>
                             SizedBox(
                               height: 200,
                               width: double.infinity,
-                              // Ganti Image.file menjadi widget kondisional
                               child: kIsWeb
                                   ? Image.network(_imageXFile!.path, fit: BoxFit.cover)
                                   : Image.file(File(_imageXFile!.path), fit: BoxFit.cover),

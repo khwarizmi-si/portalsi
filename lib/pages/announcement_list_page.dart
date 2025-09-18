@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 import '../models/announcement_model.dart';
 import '../services/announcement_service.dart';
+import '../utils/user_provider.dart';
 
 class AnnouncementListPage extends StatefulWidget {
   const AnnouncementListPage({super.key});
@@ -159,26 +161,39 @@ class _AnnouncementListPageState extends State<AnnouncementListPage> {
       return const Center(child: Text('Tidak ada pengumuman.'));
     }
 
+    // Akses UserProvider di sini jika diperlukan untuk seluruh list
+    // atau di dalam itemBuilder jika hanya untuk item tertentu.
+    // Untuk contoh ini, kita akan akses di itemBuilder.
+
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
       itemCount: _announcements!.length,
       itemBuilder: (context, index) {
         final announcement = _announcements![index];
-        // --- BARU: Bungkus Card dengan Dismissible ---
-        return Dismissible(
-          key: Key(announcement.id.toString()), // Key unik sangat penting!
-          direction: DismissDirection.startToEnd, // Geser dari kiri ke kanan
-          background: _buildSwipeBackground(),
-          confirmDismiss: (direction) async {
-            // Tampilkan dialog dan tunggu hasilnya (true/false)
-            return await _showConfirmationDialog();
-          },
-          onDismissed: (direction) {
-            // Fungsi ini hanya akan terpanggil jika confirmDismiss mengembalikan true
-            _handleDelete(announcement.id, index);
-          },
-          child: AnnouncementCard(announcement: announcement),
-        );
+
+        // --- DIPERBAIKI: Akses UserProvider dari context ---
+        // Gantilah UserProvider dengan nama kelas Provider Anda yang sebenarnya
+        final userProvider = Provider.of<UserProvider>(context, listen: false);
+        final bool isAdmin = userProvider.currentUser?.isVerified == true;
+
+        // Jika isAdmin, bungkus dengan Dismissible. Jika tidak, tampilkan Card biasa.
+        if (isAdmin) {
+          return Dismissible(
+            key: Key(announcement.id.toString()),
+            direction: DismissDirection.startToEnd,
+            background: _buildSwipeBackground(),
+            confirmDismiss: (direction) async {
+              return await _showConfirmationDialog();
+            },
+            onDismissed: (direction) {
+              _handleDelete(announcement.id, index);
+            },
+            child: AnnouncementCard(announcement: announcement),
+          );
+        } else {
+          // Jika bukan admin, tampilkan card tanpa fitur swipe-to-delete
+          return AnnouncementCard(announcement: announcement);
+        }
       },
     );
   }

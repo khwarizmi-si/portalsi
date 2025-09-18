@@ -157,7 +157,7 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
               elevation: 0,
               title: const Text('Portal SI', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 24)),
               actions: [
-                if (isAdmin)
+                // if (isAdmin)
                   IconButton(
                     key: _anncIconKey,
                     onPressed: () {

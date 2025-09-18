@@ -25,6 +25,8 @@ import '../services/user_service.dart';
 import '../utils/zoom_page_route.dart';
 
 
+import 'package:palette_generator/palette_generator.dart';
+
 class PostPopupContent extends StatefulWidget {
   final SimplePost post;
   final User user;
@@ -42,9 +44,78 @@ class PostPopupContent extends StatefulWidget {
 }
 
 class _PostPopupContentState extends State<PostPopupContent> {
+  Color _iconColor = Colors.white; // Default warna putih
+
+  @override
+  void initState() {
+    super.initState();
+    _updateIconColor();
+  }
+
+  // Fungsi baru yang lebih akurat untuk menganalisis HANYA bagian atas gambar
+  Future<void> _updateIconColor() async {
+    // Tambahkan print statement untuk diagnosis
+    print("Memulai analisis warna untuk gambar: ${widget.post.mediaUrl}");
+    try {
+      final PaletteGenerator paletteGenerator = await PaletteGenerator.fromImageProvider(
+        NetworkImage(widget.post.mediaUrl),
+        size: const Size(100, 100),
+        maximumColorCount: 20,
+      );
+
+      final Color dominantColor = paletteGenerator.dominantColor?.color ?? Colors.black;
+      print("Warna dominan terdeteksi: $dominantColor");
+
+      final double luminance = dominantColor.computeLuminance();
+      print("Luminance terhitung: $luminance");
+
+      if (mounted) {
+        setState(() {
+          _iconColor = luminance > 0.4 ? Colors.black87 : Colors.white;
+          print("Warna ikon diatur menjadi: $_iconColor");
+        });
+      }
+    } catch (e) {
+      // Jika ada error, kita akan melihatnya di console
+      print("Error saat menganalisis warna gambar: $e");
+    }
+  }
+
+  Future<void> _generatePalette(ImageProvider imageProvider, ImageInfo imageInfo) async {
+    try {
+      // Tentukan area yang akan dianalisis: Bagian atas gambar, setinggi 20%
+      final region = Rect.fromLTWH(
+        0,
+        0,
+        imageInfo.image.width.toDouble(),
+        imageInfo.image.height.toDouble() * 0.2, // Analisis 20% bagian atas
+      );
+
+      final PaletteGenerator paletteGenerator = await PaletteGenerator.fromImageProvider(
+        imageProvider,
+        region: region, // <--- KUNCI UTAMA ADA DI SINI
+        size: const Size(100, 20), // Sesuaikan ukuran dengan region
+      );
+
+      final Color dominantColor = paletteGenerator.dominantColor?.color ?? Colors.black;
+      final double luminance = dominantColor.computeLuminance();
+
+      if (mounted) {
+        setState(() {
+          // Kita gunakan ambang 0.5 untuk pemisahan terang/gelap yang lebih jelas
+          // dan warna yang lebih kontras (black87)
+          _iconColor = luminance > 0.5 ? Colors.black87 : Colors.white;
+        });
+      }
+    } catch (e) {
+      print("Error saat membuat palet dari region: $e");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    // (Build method Anda tetap sama seperti sebelumnya, tidak perlu diubah)
+    // Cukup pastikan ikon dan teks menggunakan _iconColor
     return Material(
       color: Colors.transparent,
       child: Column(
@@ -57,17 +128,15 @@ class _PostPopupContentState extends State<PostPopupContent> {
                 CircleAvatar(
                   radius: 16,
                   backgroundImage: NetworkImage(widget.user.profilePictureUrl ?? ''),
-
                 ),
                 const SizedBox(width: 8),
                 Text(
                   widget.user.username,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-
+                  style: TextStyle(color: _iconColor, fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 const Spacer(),
                 PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_horiz, color: Colors.white),
+                  icon: Icon(Icons.more_horiz, color: _iconColor),
                   onSelected: (String value) {
                     Navigator.of(context).pop();
                     if (value == 'delete') {
@@ -76,7 +145,6 @@ class _PostPopupContentState extends State<PostPopupContent> {
                   },
                   itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
                     const PopupMenuItem<String>(value: 'delete', child: Text('Hapus Postingan')),
-
                   ],
                 ),
               ],

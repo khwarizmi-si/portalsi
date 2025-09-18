@@ -308,9 +308,9 @@ class _StoryViewPageState extends State<StoryViewPage> with SingleTickerProvider
                                   ],
                                 ),
                                 const Spacer(),
-                                IconButton(
-                                    onPressed: () {},
-                                    icon: const Icon(Icons.more_horiz, color: Colors.white)),
+                                // IconButton(
+                                //     onPressed: () {},
+                                //     icon: const Icon(Icons.more_horiz, color: Colors.white)),
                                 IconButton(
                                   onPressed: () => Navigator.of(context).pop(),
                                   icon: const Icon(Icons.close, color: Colors.white),
@@ -332,32 +332,32 @@ class _StoryViewPageState extends State<StoryViewPage> with SingleTickerProvider
                                 padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 24.0),
                                 child: Row(
                                   children: [
-                                    Expanded(
-                                      child: TextField(
-                                        decoration: InputDecoration(
-                                          hintText: 'Send message',
-                                          hintStyle: TextStyle(color: Colors.white.withOpacity(0.8)),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                          filled: false,
-                                          enabledBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(30),
-                                            borderSide: BorderSide(color: Colors.white.withOpacity(0.8), width: 1.5),
-                                          ),
-                                          focusedBorder: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(30),
-                                            borderSide: const BorderSide(color: Colors.white, width: 2),
-                                          ),
-                                        ),
-                                        style: const TextStyle(color: Colors.white),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    IconButton(
-                                        onPressed: () {},
-                                        icon: const Icon(Icons.favorite_border, color: Colors.white, size: 28)),
-                                    IconButton(
-                                        onPressed: () {},
-                                        icon: const Icon(Icons.send_outlined, color: Colors.white, size: 28)),
+                                    // Expanded(
+                                    //   child: TextField(
+                                    //     decoration: InputDecoration(
+                                    //       hintText: 'Send message',
+                                    //       hintStyle: TextStyle(color: Colors.white.withOpacity(0.8)),
+                                    //       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                    //       filled: false,
+                                    //       enabledBorder: OutlineInputBorder(
+                                    //         borderRadius: BorderRadius.circular(30),
+                                    //         borderSide: BorderSide(color: Colors.white.withOpacity(0.8), width: 1.5),
+                                    //       ),
+                                    //       focusedBorder: OutlineInputBorder(
+                                    //         borderRadius: BorderRadius.circular(30),
+                                    //         borderSide: const BorderSide(color: Colors.white, width: 2),
+                                    //       ),
+                                    //     ),
+                                    //     style: const TextStyle(color: Colors.white),
+                                    //   ),
+                                    // ),
+                                    // const SizedBox(width: 8),
+                                    // IconButton(
+                                    //     onPressed: () {},
+                                    //     icon: const Icon(Icons.favorite_border, color: Colors.white, size: 28)),
+                                    // IconButton(
+                                    //     onPressed: () {},
+                                    //     icon: const Icon(Icons.send_outlined, color: Colors.white, size: 28)),
                                   ],
                                 ),
                               ),

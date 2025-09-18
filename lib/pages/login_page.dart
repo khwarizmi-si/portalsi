@@ -1,4 +1,7 @@
+import 'dart:async'; // <-- TAMBAHAN: Import untuk Timer/Future.delayed
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_web_browser/flutter_web_browser.dart';
 import 'package:page_transition/page_transition.dart';
 import 'package:portal_si/pages/register_page.dart';
@@ -18,6 +21,7 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
+  StreamSubscription? _sub;
   // --- SEMUA STATE DAN CONTROLLER LAMA TETAP DIPERTAHANKAN ---
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
@@ -25,6 +29,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   bool _obscurePassword = true;
   bool _isLoading = false;
   bool _rememberMe = false;
+
+  final _appLinks = AppLinks(); // Buat instance AppLinks
+  StreamSubscription<Uri>? _linkSubscription;
 
   late AnimationController _loadingAnimationController;
   late AnimationController _pulseAnimationController;
@@ -35,6 +42,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    _handleIncomingLinks();
     _checkToken();
     _loadingAnimationController = AnimationController(
       duration: const Duration(milliseconds: 300),
@@ -53,6 +61,13 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     _pulseAnimation = Tween<double>(begin: 0.8, end: 1.2).animate(
       CurvedAnimation(parent: _pulseAnimationController, curve: Curves.easeInOut),
     );
+
+    // --- MODIFIKASI: TAMPILKAN BOTTOM SHEET SETELAH 2 DETIK ---
+    // Future.delayed(const Duration(milliseconds: 500), () {
+    //   if (mounted) {
+    //     _showLoginWithSdkBottomSheet();
+    //   }
+    // });
   }
 
   // --- SEMUA FUNGSI LOGIC TETAP SAMA ---
@@ -69,6 +84,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     _passwordController.dispose();
     _loadingAnimationController.dispose();
     _pulseAnimationController.dispose();
+    _sub?.cancel();
     super.dispose();
   }
 
@@ -86,6 +102,73 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         setState(() => _isLoading = false);
       }
     });
+  }
+
+  /// Menangani link yang masuk saat aplikasi dibuka dari link
+  void _handleIncomingLinks() {
+    _linkSubscription = _appLinks.uriLinkStream.listen((uri) {
+      // Logika di dalam sini SAMA PERSIS seperti sebelumnya
+      if (!mounted) return;
+
+      print('Mendapat link dari app_links: $uri');
+      if (uri.scheme == 'portalsi' && uri.host == 'callback') {
+        String? authCode = uri.queryParameters['kode'];
+
+        if (authCode != null) {
+          print('Kode otentikasi berhasil didapat: $authCode');
+          // TODO: Kirim kode ini ke server Anda untuk ditukar dengan session token
+          // Contoh: _exchangeCodeForToken(authCode);
+          // Lalu navigasi ke halaman dashboard
+          // Navigator.pushReplacementNamed(context, '/dashboard');
+        }
+      }
+    }, onError: (err) {
+      print('Error saat mendengarkan link app_links: $err');
+    });
+  }
+
+  Future<void> _lupaPassword() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final baseUrl = 'https://portalsi.com/forgot-password';
+
+      final finalUri = Uri.parse(baseUrl);
+
+      await FlutterWebBrowser.openWebPage(
+        url: finalUri.toString(),
+        customTabsOptions: const CustomTabsOptions(
+          colorScheme: CustomTabsColorScheme.system,
+          showTitle: true,
+          urlBarHidingEnabled: true,
+        ),
+        safariVCOptions: const SafariViewControllerOptions(
+          barCollapsingEnabled: true,
+          preferredBarTintColor: Colors.white,
+          preferredControlTintColor: Colors.black,
+          dismissButtonStyle: SafariViewControllerDismissButtonStyle.close,
+        ),
+      );
+
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal memproses login: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        // MODIFIKASI: Kita tidak lagi set _isLoading ke false di sini
+        // karena kita menunggu redirect untuk menutup halaman.
+        // Jika pengguna menutup browser secara manual, kita perlu cara lain
+        // untuk menghandle-nya, tapi untuk alur sukses, ini lebih baik.
+      }
+    }
   }
 
   Future<void> _loginWithSDK() async {
@@ -120,7 +203,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         'client_secret': "8c0f8331-2364-4e69-86e6-bd91b013e3ca",
         'auth_v1': "0e3ef8f9-55fd-43cc-a52f-f7d13299dfc2",
         'auth_v2': "047c6d2e-e0c6-459f-85a1-54e35561d2ae",
-        'redirect': "https://portalsi.com/get/larg",
+        'redirect': "portalsi://callback",
         'target': "connect",
         'redirect_from': "https://portalsi.com",
         'via': 'tombolLoginApp',
@@ -201,6 +284,120 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     }
   }
 
+  // --- TAMBAHAN: FUNGSI UNTUK MENAMPILKAN BOTTOM SHEET ---
+  void _showLoginWithSdkBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(25),
+              topRight: Radius.circular(25),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // --- MODIFIKASI: MENGGUNAKAN GAMBAR ASSET ---
+              Padding(padding: EdgeInsets.symmetric(horizontal: 24), child: Row(
+                mainAxisAlignment: MainAxisAlignment.start, // Pastikan gambar rata kiri
+                children: [
+                  Image.asset(
+                    'assets/logoakunrg.png', // Path ke gambar Anda
+                    height: 20, // Sesuaikan tinggi gambar jika perlu
+                  ),
+                ],
+              ),),
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                height: 2,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              // --- AKHIR MODIFIKASI ---
+
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 24),
+                    // Judul
+                    const Text(
+                      'Login dengan Sekali Klik.',
+                      style: TextStyle(
+                        fontSize: 37,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.left,
+                    ),
+                    const SizedBox(height: 16),
+                    // Deskripsi
+                    const Text(
+                      'Login ke PortalSI kini menjadi lebih mudah dengan hanya satu kali klik menggunakan akun Anda yang terhubung secara aman dan tersinkron di berbagai platform.',
+                      textAlign: TextAlign.left,
+                      style: TextStyle(fontSize: 16, color: Colors.black),
+                    ),
+                    const SizedBox(height: 32),
+                    // Tombol Utama
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context); // Tutup bottom sheet
+                          _loginWithSDK();      // Jalankan fungsi login SDK
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFC92828), // Warna merah tua
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                        ),
+                        child: const Text(
+                          'Lanjutkan dengan Akun RG',
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Tombol Sekunder
+                    TextButton(
+                      onPressed: () => Navigator.pop(context), // Tutup bottom sheet
+                      child: const Text(
+                        'Lain Kali',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   // --- WIDGET LOADING OVERLAY TETAP SAMA ---
   Widget _buildLoadingOverlay() {
     // (Kode untuk _buildLoadingOverlay tidak berubah sama sekali, hanya teksnya disesuaikan)
@@ -275,192 +472,205 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     const Color primaryOrange = Color(0xFFF97C33);
     const Color lightGrey = Color(0xFFF7F7F7);
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          // Bagian gambar atas
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: MediaQuery.of(context).size.height * 0.4,
-            child: ClipRRect(
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(40),
-                bottomRight: Radius.circular(40),
-              ),
-              child: Image.asset(
-                'assets/images/login.webp', // <-- GANTI DENGAN GAMBAR ANDA
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-          // Konten utama
-          SafeArea(
-            child: ListView(
-              children: [
-                // Spacer untuk memberi ruang di atas
-                SizedBox(height: MediaQuery.of(context).size.height * 0.3),
-                // Container putih untuk form
-                Container(
-                  padding: const EdgeInsets.all(24.0),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(40),
-                      topRight: Radius.circular(40),
-                    ),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        systemNavigationBarColor: Colors.white,
+        systemNavigationBarIconBrightness: Brightness.dark,
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+      ),
+      child: Scaffold(
+          backgroundColor: Colors.white,
+          body: Stack(
+            children: [
+              // Bagian gambar atas
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: MediaQuery.of(context).size.height * 0.4,
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(40),
+                    bottomRight: Radius.circular(40),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Login Portal SI', style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, fontFamily: 'YourCustomFont')), // Ganti font jika ada
-                      const SizedBox(height: 30),
-                      Form(
-                        key: _formKey,
-                        child: Column(
-                          children: [
-                            _buildCustomTextField(
-                              controller: _emailController,
-                              hintText: 'Email atau Username', // Teks diubah
-                              icon: Icons.person_outline, // Ikon diubah menjadi lebih generik
-                              validator: (value) {
-                                // Validasi dilonggarkan, hanya cek kosong
-                                if (value == null || value.isEmpty) return 'Kolom ini tidak boleh kosong';
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 16),
-                            _buildCustomTextField(
-                              controller: _passwordController,
-                              hintText: 'Password',
-                              icon: Icons.lock_outline,
-                              obscureText: _obscurePassword,
-                              suffixIcon: IconButton(
-                                icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: Colors.grey),
-                                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                              ),
-                              validator: (value) {
-                                if (value == null || value.isEmpty) return 'Password tidak boleh kosong';
-                                if (value.length < 6) return 'Password minimal 6 karakter';
-                                return null;
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          // Row(
-                          //   children: [
-                          //     Checkbox(
-                          //       value: _rememberMe,
-                          //       onChanged: (value) => setState(() => _rememberMe = value!),
-                          //       activeColor: primaryOrange,
-                          //     ),
-                          //     const Text('Remember me'),
-                          //   ],
-                          // ),
-                          // TextButton(
-                          //   onPressed: () {},
-                          //   child: const Text('Forget password', style: TextStyle(color: primaryOrange, fontWeight: FontWeight.bold)),
-                          // ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : _handleLogin,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: primaryOrange,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                            elevation: 0,
-                          ),
-                          child: const Text('Lanjutkan', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                        ),
-                      ),
-                      const SizedBox(height: 30),
-                      // Row(
-                      //   children: [
-                      //     const Expanded(child: Divider(color: Colors.grey)),
-                      //     Padding(
-                      //       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      //       child: Text('Atau gunakan', style: TextStyle(color: Colors.grey.shade600)),
-                      //     ),
-                      //     const Expanded(child: Divider(color: Colors.grey)),
-                      //   ],
-                      // ),
-                      // const SizedBox(height: 30),
-                      // Row(
-                      //   mainAxisAlignment: MainAxisAlignment.center,
-                      //   children: [
-                      //     _buildSocialButton(iconPath: 'assets/logo_google.png', onPressed: () {}),
-                      //     const SizedBox(width: 20),
-                      //     _buildSocialButton(
-                      //       iconPath: 'assets/logo_la_rg.png',
-                      //       // Langsung berikan null jika loading, atau fungsi jika tidak
-                      //       onPressed: _isLoading ? null : _loginWithSDK,
-                      //     ),
-                      //   ],
-                      // ),
-                      const SizedBox(height: 40),
-                      Center(
-                        child: RichText(
-                          textAlign: TextAlign.center,
-                          text: const TextSpan(
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
-                            children: [
-                              TextSpan(text: 'Dengan mendaftar, berarti Anda setuju dengan\n'),
-                              TextSpan(text: 'Ketentuan', style: TextStyle(color: primaryOrange, decoration: TextDecoration.underline)),
-                              TextSpan(text: ' dan '),
-                              TextSpan(text: 'Kebijakan Privasi', style: TextStyle(color: primaryOrange, decoration: TextDecoration.underline)),
-                              TextSpan(text: ' kami'),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text(
-                            "Belum memiliki akun?",
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                          TextButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                PageTransition(
-                                  type: PageTransitionType.rightToLeft, // Tipe animasi dari kanan ke kiri
-                                  child: RegisterPage(),
-                                ),
-                              );
-                            },
-                            child: const Text(
-                              'Daftar Sekarang',
-                              style: TextStyle(
-                                color: primaryOrange,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                  child: Image.asset(
+                    'assets/images/login.webp', // <-- GANTI DENGAN GAMBAR ANDA
+                    fit: BoxFit.cover,
                   ),
                 ),
-              ],
-            ),
+              ),
+              // Konten utama
+              SafeArea(
+                child: ListView(
+                  children: [
+                    // Spacer untuk memberi ruang di atas
+                    SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+                    // Container putih untuk form
+                    Container(
+                      padding: const EdgeInsets.all(24.0),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(40),
+                          topRight: Radius.circular(40),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Login Portal SI', style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, fontFamily: 'YourCustomFont')), // Ganti font jika ada
+                          const SizedBox(height: 30),
+                          Form(
+                            key: _formKey,
+                            child: Column(
+                              children: [
+                                _buildCustomTextField(
+                                  controller: _emailController,
+                                  hintText: 'Email atau Username', // Teks diubah
+                                  icon: Icons.person_outline, // Ikon diubah menjadi lebih generik
+                                  validator: (value) {
+                                    // Validasi dilonggarkan, hanya cek kosong
+                                    if (value == null || value.isEmpty) return 'Kolom ini tidak boleh kosong';
+                                    return null;
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                _buildCustomTextField(
+                                  controller: _passwordController,
+                                  hintText: 'Password',
+                                  icon: Icons.lock_outline,
+                                  obscureText: _obscurePassword,
+                                  suffixIcon: IconButton(
+                                    icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: Colors.grey),
+                                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                  ),
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) return 'Password tidak boleh kosong';
+                                    if (value.length < 6) return 'Password minimal 6 karakter';
+                                    return null;
+                                  },
+                                ),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: TextButton(
+                                    onPressed: _lupaPassword,
+                                    child: const Text('Lupa password kamu?', style: TextStyle(color: primaryOrange, fontWeight: FontWeight.bold)),
+                                  ),
+                                )
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              // Row(
+                              //   children: [
+                              //     Checkbox(
+                              //       value: _rememberMe,
+                              //       onChanged: (value) => setState(() => _rememberMe = value!),
+                              //       activeColor: primaryOrange,
+                              //     ),
+                              //     const Text('Remember me'),
+                              //   ],
+                              // ),
+                              // TextButton(
+                              //   onPressed: () {},
+                              //   child: const Text('Forget password', style: TextStyle(color: primaryOrange, fontWeight: FontWeight.bold)),
+                              // ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton(
+                              onPressed: _isLoading ? null : _handleLogin,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryOrange,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                                elevation: 0,
+                              ),
+                              child: const Text('Lanjutkan', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                            ),
+                          ),
+                          const SizedBox(height: 30),
+                          Row(
+                            children: [
+                              const Expanded(child: Divider(color: Colors.grey)),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                child: Text('Atau gunakan', style: TextStyle(color: Colors.grey.shade600)),
+                              ),
+                              const Expanded(child: Divider(color: Colors.grey)),
+                            ],
+                          ),
+                          // const SizedBox(height: 30),
+                          // Row(
+                          //   mainAxisAlignment: MainAxisAlignment.center,
+                          //   children: [
+                          // //     _buildSocialButton(iconPath: 'assets/logo_google.png', onPressed: () {}),
+                          // //     const SizedBox(width: 20),
+                          //     _buildAkunRgLoginButton(
+                          //       onPressed: _isLoading ? null : _showLoginWithSdkBottomSheet,
+                          //     ),
+                          //   ],
+                          // ),
+                          const SizedBox(height: 40),
+                          Center(
+                            child: RichText(
+                              textAlign: TextAlign.center,
+                              text: const TextSpan(
+                                style: TextStyle(fontSize: 12, color: Colors.grey),
+                                children: [
+                                  TextSpan(text: 'Dengan melanjutkan, berarti Anda setuju dengan\n'),
+                                  TextSpan(text: 'Ketentuan', style: TextStyle(color: primaryOrange, decoration: TextDecoration.underline)),
+                                  TextSpan(text: ' dan '),
+                                  TextSpan(text: 'Kebijakan Privasi', style: TextStyle(color: primaryOrange, decoration: TextDecoration.underline)),
+                                  TextSpan(text: ' kami'),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text(
+                                "Belum memiliki akun?",
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    PageTransition(
+                                      type: PageTransitionType.rightToLeft, // Tipe animasi dari kanan ke kiri
+                                      child: RegisterPage(),
+                                    ),
+                                  );
+                                },
+                                child: const Text(
+                                  'Daftar Sekarang',
+                                  style: TextStyle(
+                                    color: primaryOrange,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _buildLoadingOverlay(),
+            ],
           ),
-          _buildLoadingOverlay(),
-        ],
-      ),
+        ),
     );
   }
 
@@ -492,16 +702,47 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildSocialButton({required String iconPath, required VoidCallback? onPressed}) {
-    return ElevatedButton(
-      onPressed: onPressed, // Langsung gunakan nilainya di sini
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFFF7F7F7),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-        elevation: 0,
+  // Widget _buildSocialButton({required String iconPath, required VoidCallback? onPressed}) {
+  //   return ElevatedButton(
+  //     onPressed: onPressed, // Langsung gunakan nilainya di sini
+  //     style: ElevatedButton.styleFrom(
+  //       backgroundColor: const Color(0xFFF7F7F7),
+  //       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+  //       padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+  //       elevation: 0,
+  //     ),
+  //     child: Image.asset(iconPath, height: 24, width: 24),
+  //   );
+  // }
+  Widget _buildAkunRgLoginButton({required VoidCallback? onPressed}) {
+    return Expanded(
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.white, // Warna latar tombol
+          foregroundColor: Colors.black, // Warna default untuk teks di dalamnya
+          elevation: 1, // Sedikit bayangan agar terangkat
+          shape: const StadiumBorder(), // Membuat bentuk tombol menjadi kapsul/pill
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14), // Padding di dalam tombol
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min, // Membuat Row hanya selebar kontennya
+          children: [
+            const Text(
+              'Login dengan',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(width: 8), // Jarak antara teks dan logo
+            Image.asset(
+              'assets/logoakunrg.png', // Pastikan path ke logo ini benar
+              height: 16, // Sesuaikan tinggi logo agar pas dengan teks
+            ),
+          ],
+        ),
       ),
-      child: Image.asset(iconPath, height: 24, width: 24),
     );
   }
 }
