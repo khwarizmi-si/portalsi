@@ -28,14 +28,6 @@ class _FeedPageState extends State<FeedPage>
   final int _selectedIndex = 1;
   bool _isSiBoardPressed = false;
 
-  // static const SystemUiOverlayStyle _systemUIOverlayStyle =
-  // SystemUiOverlayStyle(
-  //   statusBarColor: Colors.transparent,
-  //   statusBarIconBrightness: Brightness.dark,
-  //   systemNavigationBarColor: Colors.white,
-  //   systemNavigationBarIconBrightness: Brightness.dark,
-  // );
-
   @override
   bool get wantKeepAlive => true;
 
@@ -91,7 +83,12 @@ class _FeedPageState extends State<FeedPage>
   Widget build(BuildContext context) {
     super.build(context);
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.dark, // Sesuaikan jika perlu
+      value: const SystemUiOverlayStyle(
+        systemNavigationBarColor: Colors.white,
+        systemNavigationBarIconBrightness: Brightness.dark,
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+      ),
       child: Material(
         color: Colors.transparent, // Beri warna dasar
         child: _buildBody(),

@@ -162,6 +162,7 @@ class NotificationController extends ChangeNotifier {
     }
 
     if (notification.type == 'follow') {
+      Navigator.pop(context);
       NavigationHelper.navigateToProfile(context, notification.sender.toJson());
     } else if (notification.relatedPostId != null) {
       final post = _postCache[notification.relatedPostId];

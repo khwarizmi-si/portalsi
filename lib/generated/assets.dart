@@ -5,7 +5,9 @@ class Assets {
   static const String assetsLogoGoogle = 'assets/logo_google.png';
   static const String assetsLogoLaRg = 'assets/logo_la_rg.png';
   static const String assetsLogoSekolah = 'assets/logo_sekolah.png';
+  static const String assetsLogoakunrg = 'assets/logoakunrg.png';
   static const String assetsLogopsi = 'assets/logopsi.png';
+  static const String assetsLogopsifull = 'assets/logopsifull.png';
   static const String assetsLogopsinb = 'assets/logopsinb.png';
   static const String imagesBackground = 'assets/images/background.png';
   static const String imagesChatBg = 'assets/images/chat_bg.png';
