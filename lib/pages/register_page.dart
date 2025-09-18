@@ -290,7 +290,6 @@ class _RegisterPageState extends State<RegisterPage> {
     }
     return null; // Return null jika password kuat
   }
-
   // Widget bantuan untuk text field (ditambah parameter inputFormatters)
   Widget _buildCustomTextField({
     required TextEditingController controller,
