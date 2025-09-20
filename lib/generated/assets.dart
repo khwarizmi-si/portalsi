@@ -11,9 +11,11 @@ class Assets {
   static const String assetsLogopsinb = 'assets/logopsinb.png';
   static const String imagesBackground = 'assets/images/background.png';
   static const String imagesChatBg = 'assets/images/chat_bg.png';
+  static const String imagesDownloadAppIllustration = 'assets/images/download_app_illustration.png';
   static const String imagesLogin = 'assets/images/login.webp';
   static const String imagesMuslimMan = 'assets/images/muslim_man.png';
   static const String imagesRegister = 'assets/images/register.webp';
+  static const String imagesUpdateIllustration = 'assets/images/update_illustration.png';
   static const String imagesWelkam = 'assets/images/welkam.webp';
 
 }

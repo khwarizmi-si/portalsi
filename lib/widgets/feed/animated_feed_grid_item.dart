@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../components/video_thumbnail_widget.dart';
 import '../../models/post_model.dart';
 import 'feed_post_preview.dart';
 
@@ -59,16 +60,10 @@ class _AnimatedFeedGridItemState extends State<AnimatedFeedGridItem>
     );
   }
 
-  // --- FUNGSI BARU UNTUK onTap ---
   Future<void> _onTapWithAnimation() async {
-    // 1. Beri getaran ringan
     HapticFeedback.lightImpact();
-
-    // 2. Jalankan animasi "pop"
     await _animationController.forward();
     await _animationController.reverse();
-
-    // 3. Panggil fungsi navigasi asli setelah animasi selesai
     if (mounted) {
       widget.onTap();
     }
@@ -77,7 +72,6 @@ class _AnimatedFeedGridItemState extends State<AnimatedFeedGridItem>
   Future<void> _onLongPress() async {
     HapticFeedback.mediumImpact();
     await _animationController.forward();
-    // await _animationController.reverse();
     if (mounted) {
       _showPreviewDialog();
     }
@@ -85,14 +79,29 @@ class _AnimatedFeedGridItemState extends State<AnimatedFeedGridItem>
 
   @override
   Widget build(BuildContext context) {
+    Widget mediaDisplay;
+    if (widget.post.isVideo) {
+      mediaDisplay = VideoThumbnailWidget(videoUrl: widget.post.mediaUrl!);
+    } else {
+      mediaDisplay = Image.network(
+        widget.post.mediaUrl ?? '',
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) return child;
+          return Container(color: Colors.grey[200]);
+        },
+        errorBuilder: (context, error, stackTrace) => Container(
+          color: Colors.grey[200],
+          child: Icon(Icons.broken_image, color: Colors.grey[400]),
+        ),
+      );
+    }
+
     return ScaleTransition(
       scale: _scaleAnimation,
       child: GestureDetector(
-        // --- PERUBAHAN DI SINI ---
-        // Panggil fungsi baru yang sudah ada animasinya
         onTap: _onTapWithAnimation,
         onLongPress: _onLongPress,
-        // --------------------------
         child: Card(
           clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -100,20 +109,15 @@ class _AnimatedFeedGridItemState extends State<AnimatedFeedGridItem>
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Hero(
-                tag: 'feed-post-${widget.post.id}',
-                child: Image.network(
-                  widget.post.mediaUrl ?? '',
-                  fit: BoxFit.cover,
-                  loadingBuilder: (context, child, progress) {
-                    if (progress == null) return child;
-                    return Container(color: Colors.grey[200]);
-                  },
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    color: Colors.grey[200],
-                    child: Icon(Icons.broken_image, color: Colors.grey[400]),
-                  ),
-                ),
+              // Bungkus media dengan AspectRatio yang menggunakan data dari model
+              AspectRatio(
+                aspectRatio: widget.post.aspectRatio,
+                // PERBAIKAN: Hero widget dinonaktifkan untuk menghindari error rendering.
+                // Hero(
+                //   tag: 'feed-post-${widget.post.id}',
+                //   child: mediaDisplay,
+                // ),
+                child: mediaDisplay,
               ),
               Container(
                 decoration: BoxDecoration(

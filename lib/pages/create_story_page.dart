@@ -511,7 +511,7 @@ class _CreateStoryPageState extends State<CreateStoryPage> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                   textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-                child: const Text('Pilih dari Komputer'),
+                child: const Text('Pilih dari Perangkat'),
               ),
             ],
           ),

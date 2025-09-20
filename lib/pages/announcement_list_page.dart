@@ -22,19 +22,16 @@ class _AnnouncementListPageState extends State<AnnouncementListPage> {
   void initState() {
     super.initState();
     timeago.setLocaleMessages('id', timeago.IdMessages());
-    // --- DIUBAH: Panggil fungsi untuk mengambil data ---
     _fetchAnnouncements();
   }
 
-  // --- BARU: Fungsi untuk mengambil dan mengatur state ---
   Future<void> _fetchAnnouncements() async {
     try {
       final data = await AnnouncementService().getAnnouncements();
-      // Urutkan list agar pengumuman yang di-pin selalu di atas
       data.sort((a, b) {
         if (a.pinned && !b.pinned) return -1;
         if (!a.pinned && b.pinned) return 1;
-        return b.createdAt.compareTo(a.createdAt); // Urutkan sisanya berdasarkan waktu
+        return b.createdAt.compareTo(a.createdAt);
       });
       setState(() {
         _announcements = data;
@@ -49,7 +46,6 @@ class _AnnouncementListPageState extends State<AnnouncementListPage> {
     }
   }
 
-  // --- BARU: Fungsi untuk menampilkan dialog konfirmasi ---
   Future<bool?> _showConfirmationDialog() {
     return showDialog<bool>(
       context: context,
@@ -60,15 +56,32 @@ class _AnnouncementListPageState extends State<AnnouncementListPage> {
           actions: <Widget>[
             TextButton(
               child: const Text('Batal'),
-              onPressed: () {
-                Navigator.of(context).pop(false); // Mengembalikan false
-              },
+              onPressed: () => Navigator.of(context).pop(false),
             ),
             TextButton(
               style: TextButton.styleFrom(foregroundColor: Colors.red),
               child: const Text('Hapus'),
+              onPressed: () => Navigator.of(context).pop(true),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // --- 1. FUNGSI BARU UNTUK MENAMPILKAN POPUP PERINGATAN ---
+  Future<void> _showPermissionDeniedDialog() {
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Aksi Ditolak'),
+          content: const Text('Anda tidak bisa menghapus pengumuman yang dibuat oleh orang lain.'),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('OK'),
               onPressed: () {
-                Navigator.of(context).pop(true); // Mengembalikan true
+                Navigator.of(context).pop();
               },
             ),
           ],
@@ -77,19 +90,13 @@ class _AnnouncementListPageState extends State<AnnouncementListPage> {
     );
   }
 
-  // --- BARU: Fungsi untuk menangani proses penghapusan ---
   void _handleDelete(int id, int index) {
-    // Simpan item yang akan dihapus untuk kemungkinan 'undo'
     final announcementToRemove = _announcements![index];
-
-    // Hapus dari UI secara optimis
     setState(() {
       _announcements!.removeAt(index);
     });
 
-    // Panggil API untuk menghapus
     AnnouncementService().deleteAnnouncement(id).then((_) {
-      // Tampilkan notifikasi sukses
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${announcementToRemove.title} telah dihapus.'),
@@ -97,7 +104,6 @@ class _AnnouncementListPageState extends State<AnnouncementListPage> {
         ),
       );
     }).catchError((error) {
-      // Jika gagal, kembalikan item ke list dan tampilkan error
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Gagal menghapus: $error'),
@@ -110,7 +116,6 @@ class _AnnouncementListPageState extends State<AnnouncementListPage> {
     });
   }
 
-  // --- BARU: Widget untuk background saat swipe ---
   Widget _buildSwipeBackground() {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -143,7 +148,6 @@ class _AnnouncementListPageState extends State<AnnouncementListPage> {
         elevation: 1,
       ),
       backgroundColor: Colors.grey[100],
-      // --- DIUBAH: Ganti FutureBuilder dengan logika state manual ---
       body: _buildBody(),
     );
   }
@@ -161,37 +165,42 @@ class _AnnouncementListPageState extends State<AnnouncementListPage> {
       return const Center(child: Text('Tidak ada pengumuman.'));
     }
 
-    // Akses UserProvider di sini jika diperlukan untuk seluruh list
-    // atau di dalam itemBuilder jika hanya untuk item tertentu.
-    // Untuk contoh ini, kita akan akses di itemBuilder.
-
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
       itemCount: _announcements!.length,
       itemBuilder: (context, index) {
         final announcement = _announcements![index];
-
-        // --- DIPERBAIKI: Akses UserProvider dari context ---
-        // Gantilah UserProvider dengan nama kelas Provider Anda yang sebenarnya
         final userProvider = Provider.of<UserProvider>(context, listen: false);
         final bool isAdmin = userProvider.currentUser?.isVerified == true;
 
-        // Jika isAdmin, bungkus dengan Dismissible. Jika tidak, tampilkan Card biasa.
         if (isAdmin) {
           return Dismissible(
             key: Key(announcement.id.toString()),
             direction: DismissDirection.startToEnd,
             background: _buildSwipeBackground(),
+            // --- 2. MODIFIKASI LOGIKA confirmDismiss ---
             confirmDismiss: (direction) async {
-              return await _showConfirmationDialog();
+              // Dapatkan ID user yang sedang login
+              final currentUserId = userProvider.currentUser?.id;
+
+              // Cek apakah user ID ada dan sama dengan ID pembuat pengumuman
+              if (currentUserId != null && currentUserId == announcement.creator.userId) {
+                // Jika pemiliknya sama, tampilkan dialog konfirmasi hapus
+                return await _showConfirmationDialog();
+              } else {
+                // Jika pemiliknya berbeda, tampilkan dialog peringatan
+                _showPermissionDeniedDialog();
+                // Kembalikan false agar item tidak terhapus dari UI
+                return false;
+              }
             },
             onDismissed: (direction) {
+              // Fungsi ini hanya akan terpanggil jika confirmDismiss mengembalikan true
               _handleDelete(announcement.id, index);
             },
             child: AnnouncementCard(announcement: announcement),
           );
         } else {
-          // Jika bukan admin, tampilkan card tanpa fitur swipe-to-delete
           return AnnouncementCard(announcement: announcement);
         }
       },
@@ -199,7 +208,9 @@ class _AnnouncementListPageState extends State<AnnouncementListPage> {
   }
 }
 
+// Widget AnnouncementCard dan FullScreenImagePage tidak perlu diubah
 class AnnouncementCard extends StatefulWidget {
+  // ... (kode tetap sama)
   final Announcement announcement;
   final int? currentIndex;
   final int? totalCount;
@@ -218,6 +229,7 @@ class AnnouncementCard extends StatefulWidget {
 }
 
 class _AnnouncementCardState extends State<AnnouncementCard> {
+  // ... (kode tetap sama)
   bool _isExpanded = false;
 
   Widget _buildExpandableContent() {

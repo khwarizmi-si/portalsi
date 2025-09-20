@@ -33,6 +33,69 @@ class NotificationSystemService {
     await _createNotificationChannel();
   }
 
+  Future<void> showGroupedNotification({
+    required int id,                 // ID unik untuk setiap notifikasi anak
+    required String title,
+    required String body,
+    required String groupKey,         // Kunci untuk pengelompokan (cth: 'dm_user_7')
+    required String groupChannelId,   // ID Channel (cth: 'direct_messages')
+    required String groupChannelName, // Nama Channel (cth: 'Pesan Langsung')
+    String? largeIconUrl,         // URL untuk avatar/ikon besar
+    String? payload,              // Data untuk dibawa saat notifikasi diklik
+  }) async {
+    // Unduh avatar jika ada
+    final ByteArrayAndroidBitmap? largeIcon = await _getBitmapFromUrl(largeIconUrl);
+
+    // 1. BUAT NOTIFIKASI "ANAK" (Notifikasi Individual)
+    final AndroidNotificationDetails childNotificationDetails = AndroidNotificationDetails(
+      groupChannelId,
+      groupChannelName,
+      importance: Importance.max,
+      priority: Priority.high,
+      groupKey: groupKey, // Tentukan groupKey di sini
+      setAsGroupSummary: false, // Ini bukan ringkasan
+      largeIcon: largeIcon,
+      icon: '@mipmap/ic_launcher',
+    );
+
+    final NotificationDetails notificationDetails = NotificationDetails(
+      android: childNotificationDetails,
+      iOS: const DarwinNotificationDetails(presentAlert: true, presentBadge: true, presentSound: true),
+    );
+
+    // Tampilkan notifikasi "Anak"
+    await _notificationsPlugin.show(id, title, body, notificationDetails, payload: payload);
+
+
+    // 2. BUAT NOTIFIKASI "INDUK" (Ringkasan Grup)
+    // Kita akan menggunakan style Inbox untuk menampilkan ringkasan
+    final List<String> lines = [body]; // Nanti bisa diisi dengan riwayat notif
+
+    final AndroidNotificationDetails summaryNotificationDetails = AndroidNotificationDetails(
+      groupChannelId,
+      groupChannelName,
+      importance: Importance.max,
+      priority: Priority.high,
+      groupKey: groupKey,       // groupKey harus SAMA
+      setAsGroupSummary: true,  // INI PENTING: Tandai sebagai ringkasan
+      styleInformation: InboxStyleInformation(
+          lines,
+          contentTitle: title, // Judul ringkasan, misal: "2 Pesan Baru"
+          summaryText: groupChannelName // Teks di bawah, misal: "Pesan Langsung"
+      ),
+      icon: '@mipmap/ic_launcher',
+    );
+
+    final NotificationDetails summaryDetails = NotificationDetails(
+      android: summaryNotificationDetails,
+      iOS: null, // iOS menangani grouping secara otomatis
+    );
+
+    // Tampilkan notifikasi "Induk" dengan ID yang konsisten untuk grup ini
+    // Kita bisa menggunakan hashCode dari groupKey sebagai ID unik untuk ringkasan
+    await _notificationsPlugin.show(groupKey.hashCode, title, body, summaryDetails);
+  }
+
   Future<void> _createNotificationChannel() async {
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
       'new_messages_channel', // id
@@ -116,5 +179,118 @@ class NotificationSystemService {
       print("Gagal mengunduh gambar untuk notifikasi: $e");
     }
     return null;
+  }
+
+  Future<void> showSimpleNotification({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    // Detail notifikasi untuk Android
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'new_messages_channel', // Gunakan channel ID yang sama atau buat baru
+      'Pesan Baru',
+      channelDescription: 'Channel untuk notifikasi pesan baru.',
+      importance: Importance.max,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+    );
+
+    // Detail notifikasi untuk iOS
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    final NotificationDetails notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    // Tampilkan notifikasi
+    await _notificationsPlugin.show(id, title, body, notificationDetails);
+    print("📬 Notifikasi global ditampilkan.");
+  }
+
+  Future<void> showRichNotificationWithAvatar({
+    required int id,
+    required String title,
+    required String body,
+    String? avatarUrl,
+  }) async {
+    // Unduh gambar avatar untuk dijadikan ikon besar
+    final ByteArrayAndroidBitmap? largeIcon = await _getBitmapFromUrl(avatarUrl);
+
+    // Detail notifikasi untuk Android
+    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'new_messages_channel', // Anda bisa menggunakan channel ID yang sama
+      'Pesan Baru',
+      channelDescription: 'Channel untuk notifikasi pesan baru.',
+      importance: Importance.max,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher', // Logo aplikasi Anda (ikon kecil)
+      largeIcon: largeIcon,         // Foto profil (ikon besar)
+    );
+
+    final NotificationDetails notificationDetails = NotificationDetails(
+      android: androidDetails,
+      iOS: const DarwinNotificationDetails(presentAlert: true, presentBadge: true, presentSound: true),
+    );
+
+    // Tampilkan notifikasi
+    await _notificationsPlugin.show(id, title, body, notificationDetails);
+    print("📬 Notifikasi dengan avatar ditampilkan.");
+  }
+
+  Future<void> showCommentNotification({
+    required int id,
+    required String title,
+    required String body,
+    String? commenterAvatarUrl, // URL Avatar orang yang komentar
+    String? postImageUrl,     // URL Gambar dari postingan
+  }) async {
+    // 1. Unduh kedua gambar secara paralel
+    final Future<ByteArrayAndroidBitmap?> commenterAvatarFuture = _getBitmapFromUrl(commenterAvatarUrl);
+    final Future<ByteArrayAndroidBitmap?> postImageFuture = _getBitmapFromUrl(postImageUrl);
+
+    // Tunggu keduanya selesai diunduh
+    final ByteArrayAndroidBitmap? commenterAvatar = await commenterAvatarFuture; // Untuk ikon besar
+    final ByteArrayAndroidBitmap? postImage = await postImageFuture;           // Untuk gambar utama
+
+    // 2. Buat Style Notifikasi Gambar Besar (BigPicture)
+    // Style ini hanya akan muncul saat notifikasi diperluas (expanded)
+    final BigPictureStyleInformation? bigPictureStyleInformation = postImage != null
+        ? BigPictureStyleInformation(
+      postImage,
+      largeIcon: commenterAvatar, // Tampilkan avatar juga di mode expanded
+      contentTitle: title,
+      summaryText: body,
+      htmlFormatContentTitle: true,
+      htmlFormatSummaryText: true,
+    )
+        : null;
+
+    // 3. Siapkan detail notifikasi
+    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'new_messages_channel',
+      'Pesan Baru',
+      channelDescription: 'Channel untuk notifikasi pesan baru.',
+      importance: Importance.max,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher', // Logo aplikasi (ikon kecil)
+      largeIcon: commenterAvatar,     // Avatar komentator (ikon besar)
+      styleInformation: bigPictureStyleInformation, // Terapkan style BigPicture
+    );
+
+    final NotificationDetails notificationDetails = NotificationDetails(
+      android: androidDetails,
+      // iOS tidak mendukung style ini, akan tampil sebagai notifikasi biasa
+      iOS: const DarwinNotificationDetails(presentAlert: true, presentBadge: true, presentSound: true),
+    );
+
+    // 4. Tampilkan Notifikasi
+    await _notificationsPlugin.show(id, title, body, notificationDetails);
+    print("📬 Notifikasi komentar kaya informasi ditampilkan.");
   }
 }

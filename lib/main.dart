@@ -1,9 +1,18 @@
 // lib/main.dart
 
+import 'dart:async'; // <-- [TAMBAHAN]
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart'; // for kDebugMode
+import 'package:flutter/foundation.dart';
+// --- [TAMBAHAN] Import untuk Background Service & Service lainnya ---
+import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // <-- ADDED IMPORT
+import 'package:portal_si/services/auth_service.dart';
+import 'package:portal_si/services/message_service.dart';
+import 'package:portal_si/utils/secure_storage.dart';
+// --- Batas Import Tambahan ---
 import 'package:portal_si/pages/main_scaffold.dart';
-import 'package:portal_si/pages/splash_screen.dart'; // [DIUBAH] Import SplashScreen
+import 'package:portal_si/pages/splash_screen.dart';
+import 'package:portal_si/pages/update_screen.dart';
 import 'package:portal_si/pages/welcome_page.dart';
 import 'package:portal_si/providers/navigation_provider.dart';
 import 'package:portal_si/services/notification_system_service.dart';
@@ -13,6 +22,7 @@ import 'package:provider/provider.dart';
 import 'package:portal_si/controllers/home_controller.dart';
 import 'package:portal_si/pages/notif_page.dart';
 import 'package:portal_si/utils/user_provider.dart';
+import 'models/user_model.dart';
 import 'pages/login_page.dart';
 import 'pages/register_page.dart';
 import 'pages/profile_page.dart';
@@ -23,10 +33,107 @@ import 'pages/story_page.dart';
 import 'managers/cache_manager.dart';
 import 'services/follow_service.dart';
 
-// [DIUBAH] Fungsi main menjadi lebih sederhana
+
+// ===================================================================
+// --- [TAMBAHAN BARU] LOGIKA UNTUK BACKGROUND SERVICE ---
+// ===================================================================
+
+/// Fungsi ini harus berada di level atas (di luar class).
+/// Ini adalah pintu masuk untuk kode yang akan dijalankan di latar belakang.
+@pragma('vm:entry-point')
+void onStart(ServiceInstance service) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  debugPrint('✅ Background Service Dimulai.');
+
+  // --- [WAJIB] BUNGKUS SEMUA DENGAN TRY-CATCH ---
+  try {
+    final token = await SecureStorage.getToken();
+    if (token != null) {
+      await AuthService.initializeWebSocket(token);
+
+      final chatService = ChatService();
+      final channels = await chatService.getActiveConversationChannels();
+      if (channels.isNotEmpty && AuthService.webSocketService != null) {
+        for (final channelName in channels) {
+          AuthService.webSocketService!.subscribeToChannel(channelName);
+        }
+        debugPrint('✅ Background Service: Berhasil subscribe ke ${channels.length} channel.');
+      } else {
+        debugPrint('ℹ️ Background Service: Tidak ada channel percakapan aktif ditemukan.');
+      }
+    } else {
+      debugPrint('❌ Background Service: Token tidak ditemukan, tidak bisa memulai WebSocket.');
+    }
+  } catch (e, s) {
+    // Jika terjadi error, kita akan mencetaknya di log, BUKAN membuat aplikasi crash
+    debugPrint("🔥 FATAL ERROR di Background Service: $e");
+    debugPrint("Stack Trace: $s");
+  }
+  // --- BATAS TRY-CATCH ---
+
+
+  Timer.periodic(const Duration(minutes: 1), (timer) {
+    debugPrint("⚙️ Background service heartbeat... ${DateTime.now()}");
+  });
+}
+
+/// Fungsi helper untuk mengkonfigurasi dan mendaftarkan service.
+Future<void> initializeBackgroundService() async {
+  final service = FlutterBackgroundService();
+
+  // --- [TAMBAHAN] Buat Channel Notifikasi ---
+  const AndroidNotificationChannel channel = AndroidNotificationChannel(
+    'my_foreground_service_channel', // id
+    'Notifikasi Penting', // title
+    description: 'Dapatkan notifikasi penting dari Aplikasi.', // description
+    importance: Importance.low, // Sesuaikan importance
+  );
+
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+
+  await flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(channel);
+  // --- Batas Tambahan Channel Notifikasi ---
+
+  await service.configure(
+    androidConfiguration: AndroidConfiguration(
+      onStart: onStart,
+      isForegroundMode: true, // Wajib oleh Android untuk menampilkan notifikasi persisten
+      autoStart: true,
+      autoStartOnBoot: true, // Kunci utama agar bisa berjalan saat ponsel dinyalakan
+      notificationChannelId: 'my_foreground_service_channel', 
+      initialNotificationTitle: 'Portal SI Service',
+      initialNotificationContent: 'App is running in background to keep you updated.',
+      foregroundServiceNotificationId: 888, // --- [TAMBAHAN KRUSIAL DARI AI] (1 untuk FOREGROUND_SERVICE_TYPE_DATA_SYNC) ---
+      // Optional: Anda bisa menambahkan ikon notifikasi di sini jika ada
+      // notificationIcon: 'mipmap/ic_launcher', // Pastikan ikon ini ada di android/app/src/main/res/mipmap
+    ),
+    iosConfiguration: IosConfiguration(
+      autoStart: true,
+      onForeground: onStart,
+      // Catatan: autoStartOnBoot tidak didukung di iOS
+    ),
+  );
+  // Mulai service-nya
+  service.startService();
+}
+
+// ===================================================================
+// --- BATAS AKHIR LOGIKA BACKGROUND SERVICE ---
+// ===================================================================
+
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // --- [TAMBAHAN BARU] Panggil inisialisasi service di sini ---
+  await initializeBackgroundService();
+
   await NotificationSystemService.instance.initialize();
+
   runApp(
     MultiProvider(
       providers: [
@@ -34,7 +141,7 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => HomeController()),
         ChangeNotifierProvider(create: (_) => UserProvider()),
       ],
-      child: const MyApp(), // MyApp tidak lagi butuh parameter
+      child: const MyApp(),
     ),
   );
 }
@@ -116,10 +223,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           '/home': (context) => const MainScaffold(),
           '/feed': (context) => FeedPage(),
           '/profile': (context) => const ProfilePage(),
-          '/story': (context) => InstagramStoryPage(),
+          '/story': (context) {
+            // Ambil data 'user' yang dikirim melalui argumen navigasi
+            final user = ModalRoute.of(context)!.settings.arguments as User;
+
+            // Kirim data 'user' tersebut ke InstagramStoryPage
+            return InstagramStoryPage(user: user);
+          },
           '/notif': (context) => const NotificationPage(),
           '/message': (context) => MessageListPage(),
           '/welcome': (context) => WelcomePage(),
+          '/updater': (context) => UpdateScreenPage(onUpdateNow: () {  }, onUpdateLater: () {  },),
           '/other-profile': (context) {
             final args =
             ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
@@ -129,7 +243,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           },
           if (kDebugMode) '/debug_cache': (context) => const CacheDebugPage(),
         },
-        debugShowCheckedModeBanner: kDebugMode,
+        // home: DownloadAppPromptPage(playStoreUrl: 'https://ds.cs', onContinueToWeb: () {}),
+        debugShowCheckedModeBanner: false,
       ),
     );
   }

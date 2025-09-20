@@ -596,16 +596,16 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                             ),
                           ),
                           const SizedBox(height: 30),
-                          Row(
-                            children: [
-                              const Expanded(child: Divider(color: Colors.grey)),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
-                                child: Text('Atau gunakan', style: TextStyle(color: Colors.grey.shade600)),
-                              ),
-                              const Expanded(child: Divider(color: Colors.grey)),
-                            ],
-                          ),
+                          // Row(
+                          //   children: [
+                          //     const Expanded(child: Divider(color: Colors.grey)),
+                          //     Padding(
+                          //       padding: const EdgeInsets.symmetric(horizontal: 16),
+                          //       child: Text('Atau gunakan', style: TextStyle(color: Colors.grey.shade600)),
+                          //     ),
+                          //     const Expanded(child: Divider(color: Colors.grey)),
+                          //   ],
+                          // ),
                           // const SizedBox(height: 30),
                           // Row(
                           //   mainAxisAlignment: MainAxisAlignment.center,

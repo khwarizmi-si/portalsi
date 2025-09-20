@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:portal_si/services/websocket_service.dart';
 import 'package:portal_si/utils/secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'notification_system_service.dart';
 import 'token_refresh_service.dart';
 
 class AuthService {
@@ -59,35 +60,89 @@ class AuthService {
       return;
     }
 
-    // Langganan ke channel pengumuman publik
-    wsService.subscribeToChannel('announcements');
+    // 1. Tentukan semua channel yang akan didengarkan
+    final personalChannel = 'private-user.$userId';
+    const announcementsChannel =
+        'announcements'; // Channel baru untuk pengumuman
 
-    // Langganan ke channel notifikasi personal
-    final notificationChannel = 'private-user.$userId';
-    wsService.subscribeToChannel(notificationChannel);
+    // 2. Subscribe ke semua channel tersebut
+    wsService.subscribeToChannel(personalChannel);
+    wsService.subscribeToChannel(announcementsChannel);
 
-    // Batalkan listener lama jika ada
+    // 3. Batalkan listener lama (jika ada) sebelum membuat yang baru
     _globalEventSubscription?.cancel();
 
-    // Dengarkan event stream dari WebSocketService
+    // 4. Dengarkan event stream dari WebSocketService
     _globalEventSubscription =
         wsService.eventStream.listen((AppEvent appEvent) {
-      if (appEvent.channel == 'announcements' &&
-          appEvent.event == 'announcement.created') {
-        debugPrint("📢 PENGUMUMAN BARU DITERIMA: ${appEvent.data}");
-        // Di sini Anda bisa memicu pembaruan UI atau notifikasi lokal
-        // Misalnya, panggil state management untuk menampilkan pengumuman
-        // NotifikasiSystemService.instance.showAnnouncementNotification(appEvent.data);
-      }
+      try {
+        final notifData = appEvent.data as Map<String, dynamic>;
+        final id = DateTime.now().millisecondsSinceEpoch.remainder(100000);
 
-      // Filter hanya event Notifikasi Baru di channel yang benar
-      if (appEvent.channel == notificationChannel &&
-          appEvent.event == 'NotificationCreated') {
-        print("🔔 NOTIFIKASI GLOBAL DITERIMA: ${appEvent.data}");
+        switch (appEvent.event) {
+          case 'user.followed':
+            final followerName =
+                notifData['follower_name'] as String? ?? 'Seseorang';
+            final followerAvatar = notifData['follower_avatar'] as String?;
+            NotificationSystemService.instance.showGroupedNotification(
+              id: id,
+              title: 'Pengikut Baru',
+              body: '$followerName sekarang mengikuti Anda.',
+              groupKey: 'follows', // <-- Kunci Grup
+              groupChannelId: 'social_channel',
+              groupChannelName: 'Interaksi Sosial',
+              largeIconUrl: followerAvatar,
+            );
+            break;
+
+          case 'like.created':
+            final userName = notifData['user_name'] as String? ?? 'Seseorang';
+            NotificationSystemService.instance.showGroupedNotification(
+              id: id,
+              title: 'Likes Baru',
+              body: '$userName menyukai postingan Anda.',
+              groupKey: 'social', // <-- Kunci Grup
+              groupChannelId: 'social_channel',
+              groupChannelName: 'Interaksi Sosial',
+            );
+            break;
+
+          case 'comment.created':
+            final userName = notifData['user_name'] as String? ?? 'Seseorang';
+            final content = notifData['content'] as String? ?? '';
+            final commenterAvatarUrl = notifData['user_avatar'] as String?;
+            NotificationSystemService.instance.showGroupedNotification(
+              id: id,
+              title: '$userName berkomentar pada postingan Anda',
+              body: content,
+              groupKey: 'social', // <-- Kunci Grup (digabung dengan 'like')
+              groupChannelId: 'social_channel',
+              groupChannelName: 'Interaksi Sosial',
+              largeIconUrl: commenterAvatarUrl,
+            );
+            break;
+
+          case 'announcement.created':
+            final announcementTitle =
+                notifData['title'] as String? ?? 'Pengumuman';
+            NotificationSystemService.instance.showGroupedNotification(
+              id: id,
+              title: 'Pengumuman Baru',
+              body: announcementTitle,
+              groupKey: 'announcements', // <-- Kunci Grup
+              groupChannelId: 'announcements_channel',
+              groupChannelName: 'Pengumuman',
+            );
+            break;
+        }
+      } catch (e, s) {
+        debugPrint("❌ Gagal memproses event notifikasi: $e");
+        debugPrint("Stack trace: $s");
       }
     });
 
-    print("🎧 Listener global untuk channel $notificationChannel telah aktif.");
+    print(
+        "🎧 Listener global untuk channel '$personalChannel' dan '$announcementsChannel' telah aktif.");
   }
 
   // =======================================================================

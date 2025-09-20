@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:portal_si/components/bottom_navigation.dart';
 import 'package:provider/provider.dart';
+import '../components/video_thumbnail_widget.dart';
 import '../controllers/notification_controller.dart';
 import '../models/notification_model.dart';
 import '../models/post_model.dart';
@@ -11,24 +12,18 @@ import 'post_detail_page.dart';
 class NotificationPage extends StatelessWidget {
   const NotificationPage({super.key});
 
-  // 2. Tentukan indeks halaman saat ini.
-  // Home=0, Search=1, Add=2, Activity=3, Profile=4
   static const int _selectedIndex = 3;
 
-  // 3. Buat logika untuk menangani navigasi
   void _onItemTapped(int index, BuildContext context) {
-    if (index == _selectedIndex)
-      return; // Tidak melakukan apa-apa jika tab yang sama ditekan
+    if (index == _selectedIndex) return;
 
     switch (index) {
       case 0:
-        // Gunakan pushReplacementNamed agar tidak menumpuk halaman
         Navigator.pushReplacementNamed(context, '/home');
         break;
       case 1:
         Navigator.pushReplacementNamed(context, '/explore');
         break;
-      // Tambahkan case untuk halaman lain jika ada
       case 4:
         Navigator.pushReplacementNamed(context, '/profile');
         break;
@@ -58,18 +53,11 @@ class NotificationPage extends StatelessWidget {
               ],
             ),
             body: _buildBody(context, controller),
-
-            // 4. Tambahkan properti bottomNavigationBar ke Scaffold
-            // bottomNavigationBar: CustomBottomNavigation(
-            //   selectedIndex: _selectedIndex,
-            //   onTap: (index) => _onItemTapped(index, context),
-            // ),
           );
         },
       ),
     );
   }
-
 
   Widget _buildBody(BuildContext context, NotificationController controller) {
     if (controller.isLoading) {
@@ -141,7 +129,7 @@ class _NotificationGroupSection extends StatelessWidget {
             notification: notification,
             relatedPost: relatedPost,
             onTap: () => controller.onNotificationTapped(context, notification),
-            controller: controller, // <-- Teruskan controller
+            controller: controller,
           );
         }).toList(),
       ],
@@ -153,17 +141,16 @@ class _NotificationItem extends StatelessWidget {
   final NotificationModel notification;
   final Post? relatedPost;
   final VoidCallback onTap;
-  final NotificationController controller; // <-- Terima controller
+  final NotificationController controller;
 
   const _NotificationItem({
     required this.notification,
     this.relatedPost,
     required this.onTap,
-    required this.controller, // <-- Terima controller
+    required this.controller,
   });
 
   String _getActionText(String type) {
-    // ... (fungsi ini tidak berubah) ...
     switch (type) {
       case 'like':
         return 'menyukai postingan Anda.';
@@ -171,8 +158,10 @@ class _NotificationItem extends StatelessWidget {
         return 'mengomentari postingan Anda.';
       case 'follow':
         return 'mulai mengikuti Anda.';
+      case 'story_mention':
+        return 'menyebut Anda dalam Ceritanya.';
       case 'mention':
-        return 'menyebut Anda dalam postingannya.';
+        return 'menyebut Anda dalam suatu postingan.';
       default:
         return 'berinteraksi dengan Anda.';
     }
@@ -180,7 +169,6 @@ class _NotificationItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ... (fungsi build ini tidak berubah) ...
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -190,12 +178,22 @@ class _NotificationItem extends StatelessWidget {
             : Colors.blue.withOpacity(0.05),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 22,
-              backgroundImage: notification.sender.profilePictureUrl != null
-                  ? NetworkImage(notification.sender.profilePictureUrl!)
-                  : null,
+            // --- PERUBAHAN UTAMA DI SINI ---
+            // Bungkus CircleAvatar dengan GestureDetector
+            GestureDetector(
+              onTap: () {
+                // Panggil helper navigasi saat avatar diklik
+                Navigator.pop(context);
+                NavigationHelper.navigateToProfile(context, notification.sender.toJson());
+              },
+              child: CircleAvatar(
+                radius: 22,
+                backgroundImage: notification.sender.profilePictureUrl != null
+                    ? NetworkImage(notification.sender.profilePictureUrl!)
+                    : null,
+              ),
             ),
+            // --- Batas Perubahan ---
             const SizedBox(width: 12),
             Expanded(
               child: RichText(
@@ -223,34 +221,38 @@ class _NotificationItem extends StatelessWidget {
     );
   }
 
-  // --- GANTI SELURUH FUNGSI _buildTrailingWidget DENGAN INI ---
   Widget _buildTrailingWidget() {
-    // Untuk notifikasi like dan comment
-    if (notification.type == 'like' || notification.type == 'comment') {
-      if (relatedPost?.mediaUrl != null && relatedPost!.mediaUrl!.isNotEmpty) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(4.0),
-          child: Image.network(
-            relatedPost!.mediaUrl!,
-            width: 44,
-            height: 44,
-            fit: BoxFit.cover,
-          ),
+    if ((notification.type == 'like' || notification.type == 'comment') && relatedPost != null) {
+      Widget mediaDisplay;
+      if (relatedPost!.isVideo && relatedPost!.mediaUrl != null) {
+        mediaDisplay = VideoThumbnailWidget(videoUrl: relatedPost!.mediaUrl!);
+      } else if (relatedPost!.mediaUrl != null && relatedPost!.mediaUrl!.isNotEmpty) {
+        mediaDisplay = Image.network(
+          relatedPost!.mediaUrl!,
+          fit: BoxFit.cover,
         );
+      } else {
+        mediaDisplay = Container(color: Colors.grey.shade200);
       }
+
+      return SizedBox(
+        width: 44,
+        height: 44,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(4.0),
+          child: mediaDisplay,
+        ),
+      );
     }
 
-    // Untuk notifikasi follow
     if (notification.type == 'follow') {
-      // Ambil status dari controller
       final isFollowing =
           controller.followStatus[notification.sender.username] ?? false;
 
       return SizedBox(
         height: 32,
-        width: 100, // Beri lebar agar tampilan tidak "loncat" saat teks berubah
+        width: 100,
         child: ElevatedButton(
-          // Panggil fungsi toggleFollow dari controller
           onPressed: () => controller.toggleFollow(notification),
           style: ElevatedButton.styleFrom(
             backgroundColor: isFollowing ? Colors.grey.shade200 : Colors.blue,
@@ -269,7 +271,6 @@ class _NotificationItem extends StatelessWidget {
       );
     }
 
-    // Default widget jika tidak ada yang cocok
     return const SizedBox(width: 44, height: 44);
   }
 }

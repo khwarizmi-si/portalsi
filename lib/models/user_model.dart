@@ -5,12 +5,14 @@ class SimplePost {
   final String? caption;
   final String mediaUrl;
   final DateTime createdAt;
+  final bool isVideo; // <-- TAMBAHKAN PROPERTI INI
 
   SimplePost({
     required this.postId,
     this.caption,
     required this.mediaUrl,
     required this.createdAt,
+    this.isVideo = false, // <-- TAMBAHKAN DI KONSTRUKTOR
   });
 
   factory SimplePost.fromJson(Map<String, dynamic> json) {
@@ -19,6 +21,8 @@ class SimplePost {
       caption: json['caption'],
       mediaUrl: json['media_url'],
       createdAt: DateTime.parse(json['created_at']),
+      // Pastikan backend Anda mengirimkan 'is_video' (berupa bool atau int 0/1)
+      isVideo: json['is_video'] == true || json['is_video'] == 1, // <-- TAMBAHKAN LOGIKA PARSING
     );
   }
 
@@ -28,6 +32,7 @@ class SimplePost {
       'caption': caption,
       'media_url': mediaUrl,
       'created_at': createdAt.toIso8601String(),
+      'is_video': isVideo, // <-- TAMBAHKAN KE JSON
     };
   }
 }

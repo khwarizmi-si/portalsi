@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../models/user_model.dart';
+import '../utils/navigation_helper.dart';
+
 class InstagramStoryPage extends StatefulWidget {
+  final User user; // Tambahkan properti untuk menampung data user
+
+  const InstagramStoryPage({super.key, required this.user});
+
   @override
   _InstagramStoryPageState createState() => _InstagramStoryPageState();
 }
@@ -45,23 +52,37 @@ class _InstagramStoryPageState extends State<InstagramStoryPage>
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
+        // Dengan Stack, kita bisa menumpuk widget dengan presisi
         children: [
-          // Background with coding theme
+          // Lapisan 1: Background (paling bawah)
           _buildBackgroundLayer(),
 
-          // Main content
-          SafeArea(
-            child: Column(
-              children: [
-                // Top section with progress bar and user info
-                _buildTopSection(),
+          // Lapisan 2: Konten Cerita (di tengah)
+          // Kita gunakan Positioned.fill agar mengisi semua ruang
+          // di antara top dan bottom section
+          Positioned.fill(
+            top: 100, // Beri jarak dari atas
+            bottom: 100, // Beri jarak dari bawah
+            child: _buildStoryContent(),
+          ),
 
-                // Story content area
-                Expanded(child: _buildStoryContent()),
+          // Lapisan 3: Tombol interaksi bawah
+          // Diletakkan di bagian bawah layar
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: _buildBottomSection(),
+          ),
 
-                // Bottom interaction area
-                _buildBottomSection(),
-              ],
+          // Lapisan 4: Bagian Atas (DIJAMIN PALING ATAS & BISA DIKLIK)
+          // Diletakkan di bagian atas layar
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: SafeArea( // SafeArea dipindah ke sini
+              child: _buildTopSection(),
             ),
           ),
         ],
@@ -156,15 +177,38 @@ class _InstagramStoryPageState extends State<InstagramStoryPage>
                 ),
               ),
               SizedBox(width: 12),
-              Container(
-                width: 35,
-                height: 35,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                  image: DecorationImage(
-                    image: NetworkImage('https://i.pravatar.cc/150?img=1'),
-                    fit: BoxFit.cover,
+              Material(
+                color: Colors.transparent, // Wajib transparan
+                child: InkWell(
+                  splashColor: Colors.white.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(20), // Bentuk splash saat diklik
+                  onTap: () {
+                    // --- Logika Navigasi ---
+                    print("✅ Profile picture tapped! (FIXED)");
+                    print("Navigating to profile for user: ${widget.user.username}");
+
+                    HapticFeedback.lightImpact();
+                    Navigator.pop(context); // Tutup story
+
+                    Navigator.pushNamed(
+                      context,
+                      '/other-profile',
+                      arguments: {'username': widget.user.username},
+                    );
+                  },
+                  child: Container(
+                    width: 35,
+                    height: 35,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                      image: DecorationImage(
+                        image: NetworkImage(
+                            widget.user.profilePictureUrl ?? 'https://via.placeholder.com/150'
+                        ),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
                   ),
                 ),
               ),

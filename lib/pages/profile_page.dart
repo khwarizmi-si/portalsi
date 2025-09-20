@@ -5,9 +5,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-
 // Halaman & Komponen UI
 import '../components/bottom_navigation.dart';
+import '../components/video_thumbnail_widget.dart'; // <-- 1. IMPORT WIDGET THUMBNAIL
 import '../utils/navigation_helper.dart';
 import 'edit_profile_page.dart';
 import 'followers_following_page.dart';
@@ -204,6 +204,23 @@ class _PressableGridItemState extends State<PressableGridItem> {
 
   @override
   Widget build(BuildContext context) {
+    // -- 2. PERUBAHAN UTAMA DI SINI ---
+    // Tentukan widget apa yang akan ditampilkan berdasarkan tipe media
+    Widget mediaDisplay;
+    if (widget.post.isVideo) {
+      // Jika ini video, gunakan VideoThumbnailWidget
+      mediaDisplay = VideoThumbnailWidget(videoUrl: widget.post.mediaUrl);
+    } else {
+      // Jika bukan, gunakan CachedNetworkImage seperti sebelumnya
+      mediaDisplay = CachedNetworkImage(
+        imageUrl: widget.post.mediaUrl,
+        fit: BoxFit.cover,
+        placeholder: (context, url) => Container(color: Colors.grey[200]),
+        errorWidget: (context, url, error) => Container(color: Colors.grey[300]),
+      );
+    }
+    // --- Batas Perubahan ---
+
     return GestureDetector(
       onTapDown: _onTapDown,
       onTapUp: _onTapUp,
@@ -222,12 +239,8 @@ class _PressableGridItemState extends State<PressableGridItem> {
             borderRadius: BorderRadius.circular(12),
             child: Hero(
               tag: 'post-hero-${widget.post.postId}',
-              child: CachedNetworkImage(
-                imageUrl: widget.post.mediaUrl,
-                fit: BoxFit.cover,
-                placeholder: (context, url) => Container(color: Colors.grey[200]),
-                errorWidget: (context, url, error) => Container(color: Colors.grey[300]),
-              ),
+              // Gunakan widget mediaDisplay yang sudah kita tentukan
+              child: mediaDisplay,
             ),
           ),
         ),
