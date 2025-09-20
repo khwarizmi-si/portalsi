@@ -1,12 +1,15 @@
 // lib/services/like_service.dart
-import 'dart:async';
-import 'dart:convert';
-import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:portal_si/utils/secure_storage.dart';
-import 'api_service.dart';
-import '../models/like_model.dart'; // Pastikan model ini ada
 
-// Model untuk data update dari WebSocket
+import 'dart:async';
+import 'package:http/http.dart' as http;
+import 'package:portal_si/services/api_service.dart';
+import 'package:portal_si/services/auth_service.dart';
+import 'package:rxdart/rxdart.dart';
+import 'package:flutter/foundation.dart'; // Tambahkan untuk debugPrint
+
+import '../models/like_model.dart';
+
+/// Model untuk data update dari WebSocket
 class LikeUpdate {
   final int postId;
   final int likesCount;
@@ -17,11 +20,37 @@ class LikeUpdate {
 }
 
 class LikeService extends ApiService {
-  WebSocketChannel? _channel;
-  final StreamController<LikeUpdate> _streamController =
-      StreamController.broadcast();
+  // ✅ 1. Gunakan Singleton Pattern
+  static final LikeService _instance = LikeService._internal();
+  factory LikeService() => _instance;
 
+  // ✅ 2. Gunakan BehaviorSubject untuk stream yang lebih fleksibel
+  final BehaviorSubject<LikeUpdate> _streamController =
+      BehaviorSubject<LikeUpdate>();
   Stream<LikeUpdate> get likeUpdates => _streamController.stream;
+
+  // ✅ 3. Constructor private untuk inisialisasi listener
+  LikeService._internal() {
+    // ⚡️ Mendengarkan stream dari WebSocket yang diinisialisasi oleh AuthService
+    AuthService.webSocketService?.eventStream.listen((appEvent) {
+      try {
+        if (appEvent.event == 'like.created' ||
+            appEvent.event == 'like.deleted') {
+          final updateData = appEvent.data as Map<String, dynamic>;
+          debugPrint(
+              "👍 Real-time like update received for post ${updateData['post_id']}");
+          _streamController.add(LikeUpdate(
+            postId: updateData['post_id'] as int,
+            likesCount: updateData['likes_count'] as int,
+            isLiked: updateData['is_liked_by_user'] as bool,
+          ));
+        }
+      } catch (e, s) {
+        debugPrint("❌ Gagal memproses like event: $e");
+        debugPrint("Stack trace: $s");
+      }
+    });
+  }
 
   // --- FUNGSI LAMA (HTTP) UNTUK KOMPATIBILITAS ---
   Future<List<Like>> getLikes(int postId) async {
@@ -32,65 +61,19 @@ class LikeService extends ApiService {
     return [];
   }
 
-  Future<bool> toggleLikeHttp(int postId) async {
+  // ✅ 4. Gunakan API HTTP untuk aksi
+  Future<bool> toggleLike(int postId) async {
     try {
-      final response = await post(
-          'posts/$postId/like'); // Memanggil metode post dari ApiService
-
-      // --- 👇 PERUBAHAN DI SINI ---
-      // Mencetak status dan isi respons ke console untuk debugging
-      print("✅ Like Toggled for Post #$postId: Status OK");
-      print("   Response Body: $response");
-      // -----------------------------
-
-      return response != null; // Mengembalikan true jika request berhasil
+      final response = await post('posts/$postId/like');
+      debugPrint("✅ Like Toggled for Post #$postId");
+      return response != null;
     } catch (e) {
-      // Menangkap dan mencetak error jika request gagal
-      print("❌ Gagal Toggle Like untuk Post #$postId: $e");
-      rethrow; // Melemparkan kembali error agar bisa ditangani oleh controller
+      debugPrint("❌ Gagal Toggle Like untuk Post #$postId: $e");
+      rethrow;
     }
   }
 
-  // --- FUNGSI BARU (WEBSOCKET) UNTUK REAL-TIME ---
-  Future<void> connect() async {
-    if (_channel != null) return;
-    final token = await getToken();
-    final wsUrl = Uri.parse('wss://api-new.portalsi.com/ws/likes?token=$token');
-
-    try {
-      _channel = WebSocketChannel.connect(wsUrl);
-      print("✅ Terhubung ke WebSocket Likes Server.");
-
-      _channel!.stream.listen((message) {
-        final data = jsonDecode(message);
-        if (data['event'] == 'like_update') {
-          final updateData = data['data'];
-          _streamController.add(LikeUpdate(
-            postId: updateData['post_id'],
-            likesCount: updateData['likes_count'],
-            isLiked: updateData['is_liked_by_user'],
-          ));
-        }
-      }, onError: (error) {
-        // print("❌ WebSocket Error: $error");
-        disconnect();
-      }, onDone: () {
-        print("🔌 Koneksi WebSocket ditutup.");
-        disconnect();
-      });
-    } catch (e) {
-      print("❌ Gagal terhubung ke WebSocket: $e");
-    }
-  }
-
-  void toggleLikeSocket(int postId) {
-    if (_channel == null) return;
-    final message = jsonEncode({"action": "toggle_like", "post_id": postId});
-    _channel!.sink.add(message);
-  }
-
-  void disconnect() {
-    _channel?.sink.close();
-    _channel = null;
-  }
+  // ❌ Hapus semua fungsi koneksi WebSocket yang duplikat
+  // (misalnya connect(), disconnect(), toggleLikeSocket())
+  // karena sudah ditangani secara global oleh AuthService
 }
