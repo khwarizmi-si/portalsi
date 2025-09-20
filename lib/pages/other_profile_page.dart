@@ -3,13 +3,16 @@ import 'package:flutter/services.dart';
 import 'package:page_transition/page_transition.dart';
 import 'package:portal_si/models/user_model.dart';
 import 'package:portal_si/pages/portfolio_pages.dart';
+import 'package:portal_si/pages/post_detail.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import '../components/bottom_navigation.dart';
+import '../components/video_thumbnail_widget.dart';
 import '../providers/navigation_provider.dart';
 import '../services/user_service.dart'; // Hanya import service yang benar
 import '../services/follow_service.dart'; // Hanya import service yang benar
 import '../utils/navigation_helper.dart';
+import 'chat_room.dart';
 import 'followers_following_page.dart';
 
 class OtherProfilePage extends StatefulWidget {
@@ -144,6 +147,18 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
       );
     }
     // --- Batas Perubahan ---
+  }
+
+  void _navigateToChatRoom() {
+    // Pastikan data profil tidak null sebelum navigasi
+    if (_profileData != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ChatRoomPage(user: _profileData!),
+        ),
+      );
+    }
   }
 
   @override
@@ -299,36 +314,71 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
             Expanded(
               flex: 2,
               child: ElevatedButton(
-                onPressed: _isFollowActionLoading ? null : _handleFollowAction,
+                onPressed: _isFollowActionLoading ? null : () { /* Panggil _handleFollowAction */ },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _isFollowing ? Colors.grey[200] : Colors.blueAccent,
+                  // 1. Atur warna utama dan bayangan menjadi transparan jika BUKAN sedang mengikuti
+                  //    agar gradien dari Container di child bisa terlihat.
+                  backgroundColor: _isFollowing ? Colors.grey[200] : Colors.transparent,
+                  shadowColor: _isFollowing ? Colors.black.withOpacity(0.2) : Colors.transparent,
 
+                  // Properti lain tetap sama
                   foregroundColor: _isFollowing ? Colors.black : Colors.white,
                   elevation: _isFollowing ? 0 : 2,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                     side: _isFollowing ? BorderSide(color: Colors.grey[300]!) : BorderSide.none,
-
                   ),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  padding: EdgeInsets.zero, // 2. Atur padding tombol ke nol, karena kita akan atur di Container
                 ),
-                child: _isFollowActionLoading
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : Text(_isFollowing ? 'Mengikuti' : 'Ikuti', style: const TextStyle(fontWeight: FontWeight.w600)),
-
-              ),
+                child: Ink(
+                  // 3. Gunakan Ink atau Container untuk dekorasi gradien
+                  decoration: BoxDecoration(
+                    gradient: _isFollowing
+                        ? null // Tidak ada gradien saat sudah 'mengikuti'
+                        : LinearGradient(
+                      colors: [
+                        Colors.amber.shade600,
+                        Colors.orange.shade800,
+                      ],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  // 4. Atur padding di sini, di dalam Container
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    alignment: Alignment.center,
+                    child: _isFollowActionLoading
+                        ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        // Pastikan warna loading indicator sesuai dengan background-nya
+                        color: Colors.white,
+                      ),
+                    )
+                        : Text(
+                      _isFollowing ? 'Mengikuti' : 'Ikuti',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              )
             ),
             const SizedBox(width: 12),
             Expanded(
               child: OutlinedButton(
-                onPressed: () {},
+                // --- PERUBAHAN UTAMA DI SINI ---
+                onPressed: _navigateToChatRoom, // Panggil fungsi navigasi
+                // --- Batas Perubahan ---
                 style: OutlinedButton.styleFrom(
                   side: BorderSide(color: Colors.grey[300]!),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
                 child: const Text('Pesan', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600)),
-
               ),
             ),
           ],
@@ -399,13 +449,31 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
         delegate: SliverChildBuilderDelegate(
               (context, index) {
             final post = _profileData!.recentPosts[index];
+
+            // Widget untuk menampilkan media (gambar atau thumbnail video)
+            Widget mediaDisplay;
+            if (post.isVideo) {
+              // Jika video, gunakan VideoThumbnailWidget
+              mediaDisplay = VideoThumbnailWidget(videoUrl: post.mediaUrl);
+            } else {
+              // Jika gambar, gunakan Image.network seperti biasa
+              mediaDisplay = Image.network(post.mediaUrl, fit: BoxFit.cover);
+            }
+
             return GestureDetector(
-              onTap: () => _showImageDetail(post, index),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => PostDetail(postId: post.postId),
+                  ),
+                );
+              },
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Hero(
-                  tag: 'post_${post.postId}_$index',
-                  child: Image.network(post.mediaUrl, fit: BoxFit.cover),
+                  tag: 'post_hero_${post.postId}',
+                  child: mediaDisplay, // <-- GUNAKAN WIDGET mediaDisplay DI SINI
                 ),
               ),
             );

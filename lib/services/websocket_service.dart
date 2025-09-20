@@ -145,24 +145,27 @@ class WebSocketService {
         if (!AppLifecycleManager.isAppInForeground) {
           final data = jsonDecode(decoded["data"]);
           final messageData = data['message'];
-
-          // [MODIFIKASI] Ambil seluruh objek sender, bukan hanya beberapa field
           final senderData = data['sender'];
 
           if (messageData != null && senderData != null) {
-            // [MODIFIKASI] Ambil message_id sebagai ID unik notifikasi
             final int messageId = messageData['message_id'];
+            final int senderId = senderData['user_id']; // atau 'id' tergantung data Anda
             final String senderName = senderData['full_name'] ?? 'Pesan Baru';
+            final String? profilePicUrl = senderData['profile_picture_url'];
             final String content = messageData['content'] ?? 'Mengirim media';
-            final DateTime timestamp = DateTime.parse(messageData['sent_at']);
 
-            // [MODIFIKASI] Kirim messageId dan seluruh senderData sebagai payload
-            NotificationSystemService.instance.showNewMessageNotification(
-              messageId: messageId, // Gunakan ID pesan yang unik
+            // Buat payload untuk membuka chat room saat diklik
+            final String payload = jsonEncode(senderData);
+
+            NotificationSystemService.instance.showGroupedNotification(
+              id: messageId,
               title: senderName,
               body: content,
-              timestamp: timestamp,
-              payloadData: senderData, // Kirim seluruh data sender
+              groupKey: 'dm_$senderId', // <-- Kunci Grup dinamis per user
+              groupChannelId: 'dm_channel',
+              groupChannelName: 'Pesan Langsung',
+              largeIconUrl: profilePicUrl,
+              payload: payload,
             );
           }
         }

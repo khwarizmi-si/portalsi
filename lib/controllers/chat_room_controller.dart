@@ -164,7 +164,7 @@ class ChatRoomController extends ChangeNotifier {
 
     // Cukup panggil kembali fungsi fetchMessages yang sudah ada.
     // Fungsi ini sudah menangani state loading dan akan memperbarui UI.
-    await fetchMessages();
+    await loadMessagesAgain();
   }
 
 
@@ -270,6 +270,25 @@ class ChatRoomController extends ChangeNotifier {
         _messages = _messages.reversed.toList();
         await _saveMessagesToCache(_messages);
       }
+    } catch (e) {
+      _errorMessage = e.toString().replaceAll("Exception: ", "");
+      debugPrint("Error terdeteksi: $_errorMessage");
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadMessagesAgain() async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      debugPrint("Mengambil Ulang dari API.");
+      _messages =
+      await _chatService.getConversation(_currentUser!, recipient);
+      _messages = _messages.reversed.toList();
+      await _saveMessagesToCache(_messages);
     } catch (e) {
       _errorMessage = e.toString().replaceAll("Exception: ", "");
       debugPrint("Error terdeteksi: $_errorMessage");

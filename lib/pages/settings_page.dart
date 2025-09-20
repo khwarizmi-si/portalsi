@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:page_transition/page_transition.dart';
 import '../widgets/accounts_center_sheet_content.dart'; // Sesuaikan dengan path Anda
 import '../services/auth_service.dart';
-import 'account_privacy_page.dart'; // Sesuaikan dengan path Anda
+import 'account_privacy_page.dart';
+import 'bookmarks_page.dart'; // Sesuaikan dengan path Anda
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({Key? key}) : super(key: key);
@@ -187,9 +189,15 @@ class _SettingsPageState extends State<SettingsPage> {
             },
           ),
 
-          // _buildSectionHeader('Aktivitasmu di Portal SI'),
-          // _buildStyledMenuItem(icon: Icons.bookmark_border, title: 'Disimpan', onTap: () {}),
-          // _buildStyledMenuItem(icon: Icons.history, title: 'Arsip', onTap: () {}),
+          _buildSectionHeader('Aktivitasmu di Portal SI'),
+          _buildStyledMenuItem(icon: Icons.bookmark_border, title: 'Postingan Tersimpan', onTap: () {
+            HapticFeedback.mediumImpact();
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => BookmarksPage()),
+            );
+          }),
+          _buildStyledMenuItem(icon: Icons.history, title: 'Arsip Cerita Anda', onTap: () {}),
           // _buildStyledMenuItem(icon: Icons.bar_chart, title: 'Aktivitas Anda', onTap: () {}),
           // _buildStyledMenuItem(icon: Icons.notifications_none, title: 'Notifikasi', onTap: () {}),
 

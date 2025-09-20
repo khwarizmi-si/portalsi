@@ -1,10 +1,17 @@
 // lib/pages/splash_screen.dart
 
+import 'package:flutter/foundation.dart' show kIsWeb; // <-- Import untuk cek platform
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:portal_si/pages/download_app_prompt_page.dart';
+import 'package:portal_si/pages/permissions_page.dart';
+import 'package:portal_si/pages/update_screen.dart';
+import 'package:upgrader/upgrader.dart';
 import '../managers/cache_manager.dart';
-import '../services/auth_service.dart'; // Gantilah dengan path AuthService Anda yang benar
-import '../services/message_service.dart';
+import '../services/auth_service.dart';
 import '../utils/secure_storage.dart';
+import '../services/message_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -14,6 +21,9 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  // Definisikan URL Play Store di satu tempat
+  final String playStoreUrl = 'https://play.google.com/store/apps/details?id=com.portal.si';
+
   @override
   void initState() {
     super.initState();
@@ -21,93 +31,145 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _initializeApp() async {
-    // 1. Cek apakah ada token (sesi login aktif)
-    final String? token = await SecureStorage.getToken();
-
-    // Jeda singkat untuk branding (opsional)
     await Future.delayed(const Duration(milliseconds: 1500));
     if (!mounted) return;
 
-    if (token != null) {
-      // 2. JIKA ADA TOKEN: Lakukan semua proses inisialisasi di sini
-      print('🚀 Sesi aktif ditemukan. Menginisialisasi semua service...');
-      try {
-        // Inisialisasi WebSocket (INI YANG PALING PENTING)
-        AuthService.initializeWebSocket(token);
+    if (kIsWeb) {
+      _showDownloadPrompt();
+    } else {
+      // --- PERUBAHAN UTAMA: PANGGIL PENGECEKAN IZIN ---
+      _handlePermissions();
+    }
+  }
 
-        if (AuthService.webSocketService == null) {
-          print('❌ DIAGNOSTIK: AuthService.webSocketService ternyata NULL.');
-        } else {
-          print('👍 DIAGNOSTIK: AuthService.webSocketService berhasil dibuat.');
-        }
+  // [FUNGSI BARU] Untuk menangani alur permintaan izin
+  Future<void> _handlePermissions() async {
+    // Cek status izin notifikasi, foto, dan video
+    final statusNotification = await Permission.notification.status;
+    final statusPhotos = await Permission.photos.status;
+    final statusVideos = await Permission.videos.status;
 
-        // 2. Ambil semua channel
-        if (AuthService.webSocketService == null) {
-          print('❌ DIAGNOSTIK: AuthService.webSocketService ternyata NULL.');
-        } else {
-          print('👍 DIAGNOSTIK: AuthService.webSocketService berhasil dibuat.');
-        }
-
-        // 2. Ambil semua channel
-        print('📡 Mengambil daftar channel percakapan...');
-        final chatService = ChatService();
-        final channels = await chatService.getActiveConversationChannels();
-
-        // Cetak isi dari 'channels' untuk melihat apa yang dikembalikan API
-        print('ℹ️ DIAGNOSTIK: Isi dari `channels`: $channels');
-
-        // 3. Subscribe ke setiap channel
-        if (channels.isNotEmpty && AuthService.webSocketService != null) {
-          for (final channelName in channels) {
-            AuthService.webSocketService!.subscribeToChannel(channelName);
-          }
-          print('✅ Permintaan subscribe untuk semua channel telah dikirim.');
-        } else {
-          // [TAMBAHAN] Log jika kondisi 'if' tidak terpenuhi
-          print('⚠️ Kondisi untuk subscribe tidak terpenuhi. channels.isEmpty: ${channels.isEmpty}');
-        }
-
-        // Inisialisasi CacheManager yang sebelumnya ada di main()
-        CacheManager.initialize();
-
-        // Preload data penting yang sebelumnya ada di _initializeAppData()
-        await CacheManager.preloadCriticalData();
-
-        print('✅ Inisialisasi selesai. Masuk ke aplikasi.');
-        // Navigasi ke halaman utama
-        Navigator.of(context).pushReplacementNamed('/home');
-      } catch (e) {
-        print('❌ Gagal inisialisasi: $e. Arahkan ke halaman login.');
-        // Jika ada error saat inisialisasi, lempar ke login
-        Navigator.of(context).pushReplacementNamed('/welcome');
+    // Jika salah satu saja belum diizinkan, buka halaman permintaan izin
+    if (statusNotification.isDenied || statusPhotos.isDenied || statusVideos.isDenied) {
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PermissionsPage(
+              onPermissionsGranted: () {
+                // Setelah izin diberikan, lanjutkan ke pengecekan update
+                _checkAppUpdate();
+              },
+            ),
+          ),
+        );
       }
     } else {
-      // 3. JIKA TIDAK ADA TOKEN: Langsung ke halaman welcome/login
-      print('Sesi tidak ditemukan. Arahkan ke halaman welcome.');
-      Navigator.of(context).pushReplacementNamed('/welcome');
+      // Jika semua izin sudah ada, langsung lanjutkan ke pengecekan update
+      _checkAppUpdate();
+    }
+  }
+
+  // [NAMA FUNGSI DIUBAH] untuk kejelasan
+  void _showDownloadPrompt() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DownloadAppPromptPage(
+          playStoreUrl: playStoreUrl,
+          onContinueToWeb: () {
+            _continueToApp();
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _checkAppUpdate() async {
+    final upgrader = Upgrader(
+      appcastConfig: AppcastConfiguration(
+        url: playStoreUrl, // Gunakan URL yang sudah didefinisikan
+        supportedOS: ['android'],
+      ),
+      debugLogging: true,
+    );
+
+    await upgrader.initialize();
+    if (!mounted) return;
+
+    if (upgrader.isUpdateAvailable()) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => UpdateScreenPage(
+            onUpdateNow: () => upgrader.sendUserToAppStore(),
+            onUpdateLater: () => _continueToApp(),
+          ),
+        ),
+      );
+    } else {
+      _continueToApp();
+    }
+  }
+
+  // Fungsi ini berisi logika inisialisasi aplikasi Anda
+  Future<void> _continueToApp() async {
+    final String? token = await SecureStorage.getToken();
+    if (token == null) {
+      if (mounted) Navigator.of(context).pushReplacementNamed('/welcome');
+      return;
+    }
+
+    try {
+      print('🚀 Sesi aktif ditemukan. Menginisialisasi semua service...');
+      await AuthService.initializeWebSocket(token);
+
+      final chatService = ChatService();
+      final channels = await chatService.getActiveConversationChannels();
+
+      if (channels.isNotEmpty && AuthService.webSocketService != null) {
+        for (final channelName in channels) {
+          AuthService.webSocketService!.subscribeToChannel(channelName);
+        }
+      }
+
+      CacheManager.initialize();
+      await CacheManager.preloadCriticalData();
+
+      print('✅ Inisialisasi selesai. Masuk ke aplikasi.');
+      if (mounted) Navigator.of(context).pushReplacementNamed('/home');
+    } catch (e) {
+      print('❌ Gagal inisialisasi: $e. Arahkan ke halaman login.');
+      if (mounted) Navigator.of(context).pushReplacementNamed('/welcome');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // UI sederhana untuk Splash Screen
-    return Scaffold(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.dark,
+          systemNavigationBarColor: Colors.white,
+          systemNavigationBarIconBrightness: Brightness.dark,
+        ),
+        child:Scaffold(
       backgroundColor: Colors.white,
       body: Center(
-        // Ganti dengan logo aplikasi Anda
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Image.asset(
-                width: 80,
-                height: 80,
-                'assets/logopsifull.png'
-            ), // Logo aplikasi Anda
+              width: 80,
+              height: 80,
+              'assets/logopsifull.png',
+            ),
             const SizedBox(height: 20),
             const CircularProgressIndicator(),
           ],
         ),
       ),
+    ),
     );
   }
 }

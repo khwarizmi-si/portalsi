@@ -7,6 +7,7 @@ import '../models/announcement_model.dart';
 import '../models/post_model.dart';
 import '../models/story_model.dart';
 import '../services/announcement_service.dart';
+import '../services/bookmark_service.dart';
 import '../services/like_service.dart';
 import '../services/post_service.dart';
 import '../services/story_service.dart';
@@ -17,6 +18,7 @@ class HomeController with ChangeNotifier {
   final StoryService _storyService = StoryService();
 
   List<dynamic> _feedItems = []; // Sebelumnya: _posts
+  final BookmarkService _bookmarkService = BookmarkService();
 
   List<UserWithStories> _stories = [];
   List<Announcement> _pinnedAnnouncements = [];
@@ -200,6 +202,40 @@ class HomeController with ChangeNotifier {
 
     _likeService.toggleLikeSocket(postId);
     LikeService().toggleLikeHttp(postId);
+  }
+
+  Future<void> toggleBookmark(int postId) async {
+    // Cari item post di dalam feedItems
+    final itemIndex = feedItems.indexWhere((item) => item is Map && item['type'] == 'post' && item['post_id'] == postId);
+
+    if (itemIndex == -1) return; // Post tidak ditemukan
+
+    // Buat salinan post dari Map
+    final postMap = Map<String, dynamic>.from(feedItems[itemIndex] as Map);
+    final currentStatus = postMap['is_bookmarked'] ?? false;
+
+    // 1. Optimistic Update: Langsung perbarui UI
+    postMap['is_bookmarked'] = !currentStatus;
+    feedItems[itemIndex] = postMap;
+    notifyListeners();
+
+    try {
+      // 2. Panggil API di latar belakang
+      if (postMap['is_bookmarked'] == true) {
+        await _bookmarkService.addBookmark(postId);
+      } else {
+        await _bookmarkService.removeBookmark(postId);
+      }
+    } catch (e) {
+      // 3. Jika Gagal: Kembalikan state UI ke semula dan tampilkan error
+      postMap['is_bookmarked'] = currentStatus;
+      feedItems[itemIndex] = postMap;
+      notifyListeners();
+
+      // Tampilkan pesan error (opsional, butuh BuildContext)
+      // ScaffoldMessenger.of(context).showSnackBar(...)
+      print("Gagal mengubah bookmark: $e");
+    }
   }
 
   @override

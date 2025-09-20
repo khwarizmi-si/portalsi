@@ -103,13 +103,13 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
           icon: const Icon(Icons.close, color: Colors.black, size: 30),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: ActionChip(
-          label: const Text('COLOR', style: TextStyle(color: Colors.black)),
-          backgroundColor: Colors.white.withOpacity(0.25),
-          onPressed: () {
-            // Logika untuk ganti warna
-          },
-        ),
+        // title: ActionChip(
+        //   label: const Text('COLOR', style: TextStyle(color: Colors.black)),
+        //   backgroundColor: Colors.white.withOpacity(0.25),
+        //   onPressed: () {
+        //     // Logika untuk ganti warna
+        //   },
+        // ),
         centerTitle: true,
         actions: [
           IconButton(

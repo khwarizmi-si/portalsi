@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
-import '../components/post_header.dart'; // Pastikan path ini benar
+import 'package:cached_network_image/cached_network_image.dart';
+import '../components/post_header.dart';
+import '../components/zoomable_image_overlay.dart';
 
 class PostCard extends StatefulWidget {
   final String username;
@@ -51,51 +53,54 @@ class PostCard extends StatefulWidget {
   State<PostCard> createState() => _PostCardState();
 }
 
-class _PostCardState extends State<PostCard> {
+// 1. Tambahkan "with TickerProviderStateMixin" untuk animasi
+class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
   VideoPlayerController? _videoController;
   Future<void>? _initializeVideoPlayerFuture;
   bool _isMuted = true;
   bool _wasPlayingBeforeHold = false;
+  bool _videoEnded = false;
+
+  // 2. Deklarasikan AnimationController untuk bookmark
+  late AnimationController _bookmarkAnimationController;
+  late Animation<double> _bookmarkScaleAnimation;
 
   @override
   void initState() {
     super.initState();
     _initVideoPlayer();
-  }
 
-  @override
-  void didUpdateWidget(PostCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.isVideo && widget.mediaUrl != oldWidget.mediaUrl) {
-      _videoController?.dispose();
-      _initVideoPlayer();
-    }
-  }
+    // Inisialisasi controller animasi
+    _bookmarkAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
 
-  void _initVideoPlayer() {
-    if (widget.isVideo && widget.mediaUrl.isNotEmpty) {
-      _videoController = VideoPlayerController.networkUrl(Uri.parse(widget.mediaUrl));
-      _initializeVideoPlayerFuture = _videoController!.initialize().then((_) {
-        if (mounted) {
-          setState(() {});
-        }
-      });
-      _videoController!.setLooping(true);
-      _videoController!.setVolume(_isMuted ? 0.0 : 1.0);
-    }
+    // Definisikan animasi scale dengan efek "bounce" (elastis)
+    _bookmarkScaleAnimation = Tween<double>(begin: 1.0, end: 1.4).animate(
+      CurvedAnimation(
+        parent: _bookmarkAnimationController,
+        curve: Curves.elasticOut,
+      ),
+    );
   }
 
   @override
   void dispose() {
+    _videoController?.removeListener(_videoListener);
     _videoController?.dispose();
+    _bookmarkAnimationController.dispose(); // 3. Jangan lupa dispose controller
     super.dispose();
   }
 
-  void _toggleMute() {
-    if (_videoController == null) return;
-    setState(() {
-      _isMuted = !_isMuted;
-      _videoController!.setVolume(_isMuted ? 0.0 : 1.0);
+  // 4. Buat fungsi baru untuk menangani tap pada bookmark
+  void _onBookmarkTap() {
+    // Panggil callback logika yang diberikan dari parent widget
+    widget.onBookmark();
+
+    // Mainkan animasi: maju lalu mundur
+    _bookmarkAnimationController.forward().then((_) {
+      _bookmarkAnimationController.reverse();
     });
   }
 
@@ -104,7 +109,7 @@ class _PostCardState extends State<PostCard> {
     return VisibilityDetector(
       key: Key('post-card-${widget.postId}'),
       onVisibilityChanged: (visibilityInfo) {
-        if (_videoController == null || !_videoController!.value.isInitialized) return;
+        if (_videoController == null || !_videoController!.value.isInitialized || _videoEnded) return;
 
         if (visibilityInfo.visibleFraction > 0.6) {
           if (!_videoController!.value.isPlaying) {
@@ -158,15 +163,16 @@ class _PostCardState extends State<PostCard> {
                     icon: Icons.chat_bubble_outline,
                     onTap: widget.onComment,
                   ),
-                  // _buildActionButton(
-                  //   icon: Icons.send_outlined,
-                  //   onTap: widget.onShare,
-                  // ),
                   const Spacer(),
-                  // _buildActionButton(
-                  //   icon: widget.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                  //   onTap: widget.onBookmark,
-                  // ),
+                  // 5. Ganti ikon bookmark dengan widget animasi
+                  ScaleTransition(
+                    scale: _bookmarkScaleAnimation,
+                    child: _buildActionButton(
+                      icon: widget.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                      color: widget.isBookmarked ? Colors.blue.shade700 : Colors.black87,
+                      onTap: _onBookmarkTap, // Gunakan fungsi tap yang baru
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -197,6 +203,52 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
+  // Sisa kode di bawah ini tidak ada perubahan
+  void _initVideoPlayer() {
+    if (widget.isVideo && widget.mediaUrl.isNotEmpty) {
+      _videoEnded = false;
+      _videoController = VideoPlayerController.networkUrl(Uri.parse(widget.mediaUrl));
+      _initializeVideoPlayerFuture = _videoController!.initialize().then((_) {
+        if (mounted) {
+          setState(() {});
+        }
+      });
+      _videoController!.setLooping(false);
+      _videoController!.addListener(_videoListener);
+      _videoController!.setVolume(_isMuted ? 0.0 : 1.0);
+    }
+  }
+
+  void _videoListener() {
+    if (_videoController != null &&
+        !_videoController!.value.isPlaying &&
+        _videoController!.value.position >= _videoController!.value.duration &&
+        !_videoEnded) {
+      if (mounted) {
+        setState(() {
+          _videoEnded = true;
+        });
+      }
+    }
+  }
+
+  void _toggleMute() {
+    if (_videoController == null) return;
+    setState(() {
+      _isMuted = !_isMuted;
+      _videoController!.setVolume(_isMuted ? 0.0 : 1.0);
+    });
+  }
+
+  void _replayVideo() {
+    if (_videoController == null) return;
+    setState(() {
+      _videoEnded = false;
+    });
+    _videoController!.seekTo(Duration.zero);
+    _videoController!.play();
+  }
+
   Widget _buildActionButton({required IconData icon, Color? color, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
@@ -215,26 +267,30 @@ class _PostCardState extends State<PostCard> {
           if (snapshot.connectionState == ConnectionState.done && _videoController != null && _videoController!.value.isInitialized) {
             return AspectRatio(
               aspectRatio: _videoController!.value.aspectRatio,
-              child: GestureDetector(
-                onTap: _toggleMute,
-                onLongPress: () {
-                  if (_videoController != null && _videoController!.value.isPlaying) {
-                    _wasPlayingBeforeHold = true;
-                    _videoController!.pause();
-                  }
-                },
-                onLongPressEnd: (_) {
-                  if (_videoController != null && _wasPlayingBeforeHold) {
-                    _videoController!.play();
-                    _wasPlayingBeforeHold = false;
-                  }
-                },
-                child: Stack(
-                  alignment: Alignment.bottomRight,
-                  children: [
-                    VideoPlayer(_videoController!),
-                    Padding(
-                      padding: const EdgeInsets.all(8.0),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  GestureDetector(
+                    onTap: _toggleMute,
+                    onLongPress: () {
+                      if (_videoController != null && _videoController!.value.isPlaying) {
+                        _wasPlayingBeforeHold = true;
+                        _videoController!.pause();
+                      }
+                    },
+                    onLongPressEnd: (_) {
+                      if (_videoController != null && _wasPlayingBeforeHold) {
+                        _videoController!.play();
+                        _wasPlayingBeforeHold = false;
+                      }
+                    },
+                    child: VideoPlayer(_videoController!),
+                  ),
+                  Positioned(
+                    bottom: 8,
+                    right: 8,
+                    child: GestureDetector(
+                      onTap: _toggleMute,
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
@@ -248,8 +304,10 @@ class _PostCardState extends State<PostCard> {
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  if (_videoEnded)
+                    _buildReplayOverlay(),
+                ],
               ),
             );
           }
@@ -260,13 +318,70 @@ class _PostCardState extends State<PostCard> {
         },
       );
     } else {
-      return Hero(
-        tag: 'feed-post-${widget.postId}',
-        child: AspectRatio(
-          aspectRatio: 1.0,
-          child: Image.network(widget.mediaUrl, fit: BoxFit.cover),
+      final heroTag = 'feed-post-${widget.postId}';
+      return GestureDetector(
+        onTap: () {
+          Navigator.of(context).push(
+            PageRouteBuilder(
+              opaque: false,
+              pageBuilder: (context, animation, secondaryAnimation) =>
+                  ZoomableImageOverlay(
+                    imageUrl: widget.mediaUrl,
+                    heroTag: heroTag,
+                  ),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                return FadeTransition(opacity: animation, child: child);
+              },
+            ),
+          );
+        },
+        child: Hero(
+          tag: heroTag,
+          child: CachedNetworkImage(
+            imageUrl: widget.mediaUrl,
+            placeholder: (context, url) => AspectRatio(
+              aspectRatio: 1.0,
+              child: Container(color: Colors.grey.shade200),
+            ),
+            errorWidget: (context, url, error) => AspectRatio(
+              aspectRatio: 1.0,
+              child: Container(
+                color: Colors.grey.shade200,
+                child: Icon(Icons.broken_image, color: Colors.grey.shade400),
+              ),
+            ),
+          ),
         ),
       );
     }
+  }
+
+  Widget _buildReplayOverlay() {
+    return Container(
+      color: Colors.black.withOpacity(0.6),
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const Text(
+              'Pemutaran video telah berakhir.',
+              style: TextStyle(color: Colors.white),
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              icon: const Icon(Icons.replay, color: Colors.white),
+              label: const Text('Putar Lagi', style: TextStyle(color: Colors.white)),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.white.withOpacity(0.2),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              ),
+              onPressed: _replayVideo,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

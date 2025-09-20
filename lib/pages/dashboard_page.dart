@@ -257,19 +257,19 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                       final Post post = Post.fromJson(item as Map<String, dynamic>);
                       return PostCard(
                         username: post.user.username,
+                        isBookmarked: post.isBookmarked, // <-- Berikan status bookmark
+                        onBookmark: () => controller.toggleBookmark(post.id),
                         timeAgo: timeAgoFromDate(post.createdAt.toIso8601String()),
                         mediaUrl: post.mediaUrl ?? '',
                         isVideo: post.isVideo,
                         comments: post.commentsCount,
                         content: post.caption ?? '',
                         isVerified: post.user.isVerified,
-                        isBookmarked: false,
                         profileImageUrl: post.user.profilePictureUrl ?? '',
                         user: post.user.toJson(),
                         likes: post.likesCount,
                         isLiked: post.isLikedByUser,
                         onLike: () => controller.toggleLike(post.id),
-                        onBookmark: () {},
                         onShare: () {},
                         onComment: () => _showCommentSheet(context, post.id),
                         postId: post.id,

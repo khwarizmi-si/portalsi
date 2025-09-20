@@ -438,7 +438,9 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
               const SizedBox(width: 16),
               Expanded(
                 child: GestureDetector(
-                  onTap: isCurrentUser ? null : () => _navigateToOtherProfile(userId, username),
+                  onTap: isCurrentUser
+                      ? null
+                      : () => Navigator.of(context).pop(user),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

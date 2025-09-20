@@ -1,8 +1,7 @@
 // lib/widgets/feed/feed_grid.dart
-
 import 'package:flutter/material.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import '../../models/post_model.dart';
-// <-- 1. PASTIKAN MODEL USER SUDAH DI-IMPORT (kemungkinan melalui post_model)
 import '../../models/user_model.dart';
 import 'animated_feed_grid_item.dart';
 
@@ -13,7 +12,6 @@ class FeedGrid extends StatelessWidget {
   final Future<void> Function() onRefresh;
   final Function(Post) onLikePost;
   final Function(Post) onPostTap;
-  // <-- 2. UBAH TIPE DATA DARI MAP MENJADI USER
   final Function(User) onUserTap;
 
   const FeedGrid({
@@ -48,22 +46,25 @@ class FeedGrid extends StatelessWidget {
           crossAxisCount: 2,
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
-          childAspectRatio: 0.75,
+          childAspectRatio: 0.75, // Menggunakan rasio aspek tetap untuk diagnosis
         ),
         delegate: SliverChildBuilderDelegate(
               (context, index) {
+            // Ambil data post untuk item saat ini
             final Post post = posts[index];
+            // Cek status "like" dari post
             final bool isLiked = post.isLikedByUser;
 
+            // Kembalikan widget untuk setiap item di grid
             return AnimatedFeedGridItem(
               post: post,
               isLiked: isLiked,
               onTap: () => onPostTap(post),
               onLikeTap: () => onLikePost(post),
-              // <-- 3. KIRIM OBJEK 'post.user' SECARA LANGSUNG, HAPUS .toJson()
               onUserTap: () => onUserTap(post.user),
             );
           },
+          // Tentukan jumlah total item dalam grid
           childCount: posts.length,
         ),
       ),
