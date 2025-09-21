@@ -62,7 +62,7 @@ class LikeService extends ApiService {
   }
 
   // ✅ 4. Gunakan API HTTP untuk aksi
-  Future<bool> toggleLike(int postId) async {
+  Future<bool> toggleLikeHttp(int postId) async {
     try {
       final response = await post('posts/$postId/like');
       debugPrint("✅ Like Toggled for Post #$postId");
