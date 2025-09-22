@@ -145,29 +145,57 @@ class UserConversation extends Conversation {
   @override
   String? get displayImageUrl => partner.profilePictureUrl;
 
+  // Di dalam file: lib/models/chat.dart
+
   factory UserConversation.fromJson(Map<String, dynamic> json) {
+    final conversationData = json['conversation'] as Map<String, dynamic>;
+    final lastChatData = json['last_chat'] as Map<String, dynamic>?;
+
     final partnerUser = User(
-      id: json['id'], // Disesuaikan dengan JSON: 'id' bukan 'user_id'
-      username: json['username'] ?? 'unknown',
-      fullName:
-          json['name'], // Disesuaikan dengan JSON: 'name' bukan 'full_name'
-      profilePictureUrl: json['profile_picture_url'],
+      id: conversationData['id'],
+      username: conversationData['username'] ?? 'unknown',
+      fullName: conversationData['name'],
+      profilePictureUrl: conversationData['profile_picture_url'],
     );
 
-    String displayMessage = json['last_message'] ?? '';
-    if (displayMessage.isEmpty && json['last_media'] != null) {
-      displayMessage = '📎 Media';
+    String displayMessage = 'Mulai percakapan';
+    DateTime timestamp = DateTime.now();
+    bool isRead = true; // Default value
+    String? lastMedia;
+
+    if (lastChatData != null) {
+      displayMessage = lastChatData['content'] ?? '';
+      lastMedia = lastChatData['media'] as String?;
+
+      if (displayMessage.isEmpty && lastMedia != null) {
+        displayMessage = '📎 Media';
+      }
+
+      final sentAtString = lastChatData['sent_at'] as String?;
+      if (sentAtString != null) {
+        timestamp = DateTime.parse(sentAtString.replaceFirst(' ', 'T'));
+      }
+
+      // --- PERBAIKAN UTAMA DI SINI ---
+      final isReadValue = lastChatData['is_read'];
+      if (isReadValue is bool) {
+        // Jika datanya boolean (true/false)
+        isRead = isReadValue;
+      } else if (isReadValue is int) {
+        // Jika datanya integer (1/0)
+        isRead = isReadValue == 1;
+      }
+      // Jika null atau tipe lain, akan menggunakan nilai default `true`
+      // --- BATAS PERBAIKAN ---
     }
 
     return UserConversation(
-      id: json['id'],
+      id: partnerUser.id ?? 0,
       partner: partnerUser,
       lastMessage: displayMessage,
-      timestamp: DateTime.parse(json['sent_at']),
-      unreadCount: (json['is_read'] == 0)
-          ? 1
-          : 0, // Asumsi 1 pesan belum dibaca jika is_read = 0
-      lastMediaUrl: json['last_media'],
+      timestamp: timestamp,
+      unreadCount: isRead ? 0 : 1, // Logika ini sekarang aman
+      lastMediaUrl: lastMedia,
     );
   }
 }

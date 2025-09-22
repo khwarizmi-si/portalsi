@@ -314,54 +314,60 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
             Expanded(
               flex: 2,
               child: ElevatedButton(
-                onPressed: _isFollowActionLoading ? null : () { /* Panggil _handleFollowAction */ },
+                onPressed: _isFollowActionLoading ? null : _handleFollowAction,
                 style: ElevatedButton.styleFrom(
-                  // 1. Atur warna utama dan bayangan menjadi transparan jika BUKAN sedang mengikuti
-                  //    agar gradien dari Container di child bisa terlihat.
+                  // 1. Background dibuat transparan saat gradien aktif
                   backgroundColor: _isFollowing ? Colors.grey[200] : Colors.transparent,
-                  shadowColor: _isFollowing ? Colors.black.withOpacity(0.2) : Colors.transparent,
+                  shadowColor: Colors.transparent, // Hilangkan bayangan saat transparan
 
-                  // Properti lain tetap sama
-                  foregroundColor: _isFollowing ? Colors.black : Colors.white,
+                  // 2. Padding di-nol-kan di sini, karena akan dipindahkan ke dalam
+                  padding: EdgeInsets.zero,
+
+                  // Properti lain (bentuk, elevasi, sisi) tetap dipertahankan
                   elevation: _isFollowing ? 0 : 2,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                     side: _isFollowing ? BorderSide(color: Colors.grey[300]!) : BorderSide.none,
                   ),
-                  padding: EdgeInsets.zero, // 2. Atur padding tombol ke nol, karena kita akan atur di Container
                 ),
                 child: Ink(
-                  // 3. Gunakan Ink atau Container untuk dekorasi gradien
+                  // 3. Ink untuk menampung gradien dan menjaga efek klik
                   decoration: BoxDecoration(
                     gradient: _isFollowing
                         ? null // Tidak ada gradien saat sudah 'mengikuti'
-                        : LinearGradient(
+                        : LinearGradient( // Gradien biru menggantikan Colors.blueAccent
                       colors: [
                         Colors.amber.shade600,
                         Colors.orange.shade800,
                       ],
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  // 4. Atur padding di sini, di dalam Container
                   child: Container(
+                    // 4. Padding yang sebenarnya diterapkan di sini
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     alignment: Alignment.center,
+                    // Lebar minimum untuk memastikan padding terlihat benar
+                    constraints: const BoxConstraints(minWidth: 88),
                     child: _isFollowActionLoading
-                        ? const SizedBox(
+                        ? SizedBox(
                       height: 20,
                       width: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        // Pastikan warna loading indicator sesuai dengan background-nya
-                        color: Colors.white,
+                        // 5. Warna loading indicator dibuat dinamis
+                        color: _isFollowing ? Colors.black54 : Colors.white,
                       ),
                     )
                         : Text(
                       _isFollowing ? 'Mengikuti' : 'Ikuti',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                      // 6. Warna teks (foregroundColor) dipindahkan ke TextStyle
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: _isFollowing ? Colors.black : Colors.white,
+                      ),
                     ),
                   ),
                 ),

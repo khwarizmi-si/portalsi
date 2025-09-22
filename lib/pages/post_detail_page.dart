@@ -70,6 +70,7 @@ class PostDetailPage extends StatelessWidget {
             }
 
             final Post mainPost = controller.mainPost!;
+            final heroTag = 'post_hero_${mainPost.id}';
 
             return CustomScrollView(
               slivers: [

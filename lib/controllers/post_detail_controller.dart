@@ -34,22 +34,35 @@ class PostDetailController extends ChangeNotifier {
     _mainPost = post;
     _isLoadingMainPost = false;
     notifyListeners();
+    // Panggil loadData setelah post awal di-set
     loadData();
   }
 
   Future<void> loadData() async {
-    try {
-      final postFuture = _postService.getPostDetail(mainPostId);
-      final relatedFuture = _postService.fetchExplorePosts();
+    // Jika post utama belum ada, set isLoadingMainPost jadi true
+    if (_mainPost == null) {
+      _isLoadingMainPost = true;
+      notifyListeners();
+    }
+    _isLoadingRelated = true;
 
-      // --- PERBAIKAN DI SINI ---
+    try {
+      // Panggilan API ini sekarang sudah benar karena service telah diperbaiki
+      final postFuture = _postService.getPostDetail(mainPostId);
+      final relatedFuture = _postService.fetchExplorePosts(); // Akan mengembalikan List<Post>
+
       final results = await Future.wait([postFuture, relatedFuture]);
 
       _mainPost = results[0] as Post;
       final allRelated = results[1] as List<Post>;
+
+      // Filter untuk menampilkan postingan yang tidak sama dengan post utama
       _relatedPosts = allRelated.where((p) => p.id != mainPostId).toList();
 
-      await _fetchDetailsForPosts();
+      // Anda bisa menghapus _fetchDetailsForPosts jika API sudah memberikan data lengkap
+      // Jika belum, biarkan saja.
+      // await _fetchDetailsForPosts();
+
     } catch (e) {
       debugPrint("Error loading post detail page data: $e");
     } finally {

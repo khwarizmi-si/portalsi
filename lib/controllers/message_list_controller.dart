@@ -1,8 +1,12 @@
 // lib/controllers/message_list_controller.dart
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../models/chat.dart';
+import '../services/auth_service.dart';
 import '../services/message_service.dart';
+import '../services/websocket_service.dart';
 
 class MessageListController extends ChangeNotifier {
   final ChatService _chatService = ChatService();
@@ -14,10 +18,21 @@ class MessageListController extends ChangeNotifier {
   bool _isLoading = false; // Awalnya false untuk menghindari loading yang tidak perlu
   bool get isLoading => _isLoading;
   String? _errorMessage;
+
   String? get errorMessage => _errorMessage;
+
+  StreamSubscription? _eventSubscription;
 
   MessageListController() {
     fetchConversations();
+    _initializeWebSocketListener();
+  }
+
+  // [TAMBAHAN] Jangan lupa untuk membatalkan subscription saat controller hancur
+  @override
+  void dispose() {
+    _eventSubscription?.cancel();
+    super.dispose();
   }
 
   /// Menerapkan strategi cache-then-network.
@@ -65,6 +80,55 @@ class MessageListController extends ChangeNotifier {
         _isLoading = false;
       }
       notifyListeners();
+    }
+  }
+
+  void _initializeWebSocketListener() {
+    // Ambil instance WebSocketService yang sudah ada
+    final wsService = AuthService.webSocketService;
+    if (wsService == null) return; // Hentikan jika service tidak aktif
+
+    // Batalkan listener lama sebelum membuat yang baru
+    _eventSubscription?.cancel();
+
+    _eventSubscription = wsService.eventStream.listen((AppEvent appEvent) {
+      // Kita hanya peduli dengan event yang mengupdate daftar percakapan
+      if (appEvent.event == 'conversation.updated') {
+        debugPrint("🔄 Menerima update percakapan via WebSocket!");
+        // Panggil handler untuk memproses data
+        _handleConversationUpdate(appEvent.data);
+      }
+    });
+  }
+
+  /// Memproses data dari WebSocket dan memperbarui state.
+  void _handleConversationUpdate(Map<String, dynamic> data) {
+    try {
+      Conversation newOrUpdatedConversation;
+
+      // Tentukan jenis percakapan dan parse JSON-nya
+      if (data['type'] == 'user') {
+        newOrUpdatedConversation = UserConversation.fromJson(data['conversation']);
+      } else if (data['type'] == 'group') {
+        newOrUpdatedConversation = GroupConversation.fromJson(data['conversation']);
+      } else {
+        return; // Jenis tidak dikenal, abaikan.
+      }
+
+      // Hapus percakapan lama jika sudah ada di daftar
+      _allConversations.removeWhere((c) => c.id == newOrUpdatedConversation.id);
+
+      // Tambahkan percakapan yang baru/diperbarui ke daftar
+      _allConversations.add(newOrUpdatedConversation);
+
+      // Urutkan ulang daftar dan terapkan filter
+      _sortAndFilterConversations();
+
+      // Beri tahu UI untuk refresh!
+      notifyListeners();
+
+    } catch (e) {
+      debugPrint("❌ Gagal memproses update percakapan dari WebSocket: $e");
     }
   }
 

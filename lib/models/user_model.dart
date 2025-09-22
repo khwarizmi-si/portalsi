@@ -50,6 +50,8 @@ class User {
   final int followingCount;
   final int postsCount;
   final List<SimplePost> recentPosts;
+  final bool isOnline;
+  final DateTime? lastSeen;
 
   User({
     this.id,
@@ -65,6 +67,8 @@ class User {
     this.followingCount = 0,
     this.postsCount = 0,
     this.recentPosts = const [],
+    this.isOnline = false,
+    this.lastSeen,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -75,7 +79,7 @@ class User {
       id: json['id'] ?? json['user_id'],
       username: json['username'],
       email: json['email'],
-      fullName: json['full_name'],
+      fullName: json['full_name'] ?? json['name'],
       bio: json['bio'],
       profilePictureUrl: json['profile_picture_url'],
       isVerified: json['is_verified'] ?? false,
@@ -84,6 +88,8 @@ class User {
       followingCount: json['following_count'] ?? 0,
       postsCount: json['posts_count'] ?? 0,
       recentPosts: recentPostsList,
+      isOnline: json['is_online'] ?? false,
+      lastSeen: json['last_seen'] != null ? DateTime.parse(json['last_seen']) : null,
     );
   }
 
