@@ -314,7 +314,7 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
             Expanded(
               flex: 2,
               child: ElevatedButton(
-                onPressed: _isFollowActionLoading ? null : _handleFollowAction,
+                onPressed: _isFollowActionLoading ? null : () { /* Panggil _handleFollowAction */ },
                 style: ElevatedButton.styleFrom(
                   // 1. Background dibuat transparan saat gradien aktif
                   backgroundColor: _isFollowing ? Colors.grey[200] : Colors.transparent,
@@ -324,6 +324,7 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
                   padding: EdgeInsets.zero,
 
                   // Properti lain (bentuk, elevasi, sisi) tetap dipertahankan
+
                   elevation: _isFollowing ? 0 : 2,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
@@ -336,6 +337,7 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
                     gradient: _isFollowing
                         ? null // Tidak ada gradien saat sudah 'mengikuti'
                         : LinearGradient( // Gradien biru menggantikan Colors.blueAccent
+
                       colors: [
                         Colors.amber.shade600,
                         Colors.orange.shade800,
@@ -353,12 +355,14 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
                     constraints: const BoxConstraints(minWidth: 88),
                     child: _isFollowActionLoading
                         ? SizedBox(
+
                       height: 20,
                       width: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
                         // 5. Warna loading indicator dibuat dinamis
                         color: _isFollowing ? Colors.black54 : Colors.white,
+
                       ),
                     )
                         : Text(
@@ -368,6 +372,7 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
                         fontWeight: FontWeight.w600,
                         color: _isFollowing ? Colors.black : Colors.white,
                       ),
+
                     ),
                   ),
                 ),

@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:portal_si/services/websocket_service.dart';
 import 'package:portal_si/utils/secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'group_service.dart';
+
 import 'notification_system_service.dart';
 import 'token_refresh_service.dart';
 
@@ -60,12 +60,14 @@ class AuthService {
 
     if (wsService == null || userId == null) {
       debugPrint("Gagal memulai listener global: service atau userId tidak ditemukan.");
+
       return;
     }
 
     // 1. Tentukan semua channel yang akan didengarkan
     final personalChannel = 'private-user.$userId';
     const announcementsChannel = 'announcements'; // Channel baru untuk pengumuman
+
 
     // 2. Subscribe ke semua channel tersebut
     wsService.subscribeToChannel(personalChannel);
@@ -76,6 +78,7 @@ class AuthService {
 
     // 4. Dengarkan event stream dari WebSocketService
     _globalEventSubscription = wsService.eventStream.listen((AppEvent appEvent) async {
+
       try {
         final notifData = appEvent.data as Map<String, dynamic>;
         final id = DateTime.now().millisecondsSinceEpoch.remainder(100000);
@@ -83,6 +86,7 @@ class AuthService {
         switch (appEvent.event) {
           case 'user.followed':
             final followerName = notifData['follower_name'] as String? ?? 'Seseorang';
+
             final followerAvatar = notifData['follower_avatar'] as String?;
             NotificationSystemService.instance.showGroupedNotification(
               id: id,
@@ -138,6 +142,7 @@ class AuthService {
               }
             }
             break;
+
           case 'comment.created':
             final userName = notifData['user_name'] as String? ?? 'Seseorang';
             final content = notifData['content'] as String? ?? '';
@@ -155,6 +160,7 @@ class AuthService {
 
           case 'announcement.created':
             final announcementTitle = notifData['title'] as String? ?? 'Pengumuman';
+
             NotificationSystemService.instance.showGroupedNotification(
               id: id,
               title: 'Pengumuman Baru',
@@ -172,6 +178,7 @@ class AuthService {
     });
 
     print("🎧 Listener global untuk channel '$personalChannel' dan '$announcementsChannel' telah aktif.");
+
   }
 
   // =======================================================================

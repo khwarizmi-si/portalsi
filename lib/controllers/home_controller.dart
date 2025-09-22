@@ -45,12 +45,12 @@ class HomeController with ChangeNotifier {
   }
 
   void _initializeServices() {
-    _likeService.connect();
+    // _likeService.connect();
 
     _likeUpdatesSubscription = _likeService.likeUpdates.listen((update) {
       // --- 👇 PERBAIKAN 1: Gunakan _feedItems, bukan _posts ---
       final index = _feedItems.indexWhere((item) =>
-      item is Map<String, dynamic> &&
+          item is Map<String, dynamic> &&
           item['type'] == 'post' &&
           item['post_id'] == update.postId);
 
@@ -71,21 +71,26 @@ class HomeController with ChangeNotifier {
   Future<void> _saveToCache(String key, List<dynamic> data) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(key, jsonEncode(data));
-    await prefs.setInt('${key}_timestamp', DateTime.now().millisecondsSinceEpoch);
+    await prefs.setInt(
+        '${key}_timestamp', DateTime.now().millisecondsSinceEpoch);
     print("📦 Data untuk '$key' disimpan ke cache.");
   }
 
-  Future<List<T>> _loadFromCache<T>(String key, T Function(Map<String, dynamic>) fromJson) async {
+  Future<List<T>> _loadFromCache<T>(
+      String key, T Function(Map<String, dynamic>) fromJson) async {
     final prefs = await SharedPreferences.getInstance();
     final cachedData = prefs.getString(key);
     final cachedTimestamp = prefs.getInt('${key}_timestamp');
 
     if (cachedData != null && cachedTimestamp != null) {
       final cacheTime = DateTime.fromMillisecondsSinceEpoch(cachedTimestamp);
-      if (DateTime.now().difference(cacheTime).inMinutes < _cacheDurationMinutes) {
+      if (DateTime.now().difference(cacheTime).inMinutes <
+          _cacheDurationMinutes) {
         print("✅ Memuat '$key' dari CACHE.");
         final List<dynamic> jsonData = jsonDecode(cachedData);
-        return jsonData.map((item) => fromJson(item as Map<String, dynamic>)).toList();
+        return jsonData
+            .map((item) => fromJson(item as Map<String, dynamic>))
+            .toList();
       }
     }
     print("⚠️ Cache '$key' KOSONG/KADALUARSA.");
@@ -100,7 +105,8 @@ class HomeController with ChangeNotifier {
 
     if (cachedData != null && cachedTimestamp != null) {
       final cacheTime = DateTime.fromMillisecondsSinceEpoch(cachedTimestamp);
-      if (DateTime.now().difference(cacheTime).inMinutes < _cacheDurationMinutes) {
+      if (DateTime.now().difference(cacheTime).inMinutes <
+          _cacheDurationMinutes) {
         print("✅ Memuat '$key' dari CACHE.");
         return jsonDecode(cachedData) as List<dynamic>;
       }
@@ -117,10 +123,14 @@ class HomeController with ChangeNotifier {
     try {
       // Panggil fungsi cache yang sesuai untuk setiap tipe data
       final cachedFeed = await _loadRawListFromCache('posts');
-      final cachedStories = await _loadFromCache('stories', UserWithStories.fromJson);
-      final cachedAnnouncements = await _loadFromCache('announcements', Announcement.fromJson);
+      final cachedStories =
+          await _loadFromCache('stories', UserWithStories.fromJson);
+      final cachedAnnouncements =
+          await _loadFromCache('announcements', Announcement.fromJson);
 
-      if (cachedFeed.isNotEmpty || cachedStories.isNotEmpty || cachedAnnouncements.isNotEmpty) {
+      if (cachedFeed.isNotEmpty ||
+          cachedStories.isNotEmpty ||
+          cachedAnnouncements.isNotEmpty) {
         _feedItems = cachedFeed;
 
         _stories = cachedStories;
@@ -128,11 +138,11 @@ class HomeController with ChangeNotifier {
         notifyListeners();
       }
 
-      if (cachedFeed.isEmpty || cachedStories.isEmpty || cachedAnnouncements.isEmpty) {
-
+      if (cachedFeed.isEmpty ||
+          cachedStories.isEmpty ||
+          cachedAnnouncements.isEmpty) {
         await refreshDashboardData(isInitialLoad: true);
       }
-
     } catch (e) {
       _errorMessage = e.toString();
     } finally {
@@ -157,7 +167,9 @@ class HomeController with ChangeNotifier {
 
       _feedItems = results[0] as List<dynamic>;
 
-      _stories = (results[1] as List<dynamic>).map((e) => UserWithStories.fromJson(e)).toList();
+      _stories = (results[1] as List<dynamic>)
+          .map((e) => UserWithStories.fromJson(e))
+          .toList();
       _pinnedAnnouncements = results[2] as List<Announcement>;
       _pinnedPost = results[3] as Post?;
 
@@ -171,20 +183,21 @@ class HomeController with ChangeNotifier {
       await _saveToCache('posts', _feedItems);
 
       await _saveToCache('stories', _stories.map((s) => s.toJson()).toList());
-      await _saveToCache('announcements', _pinnedAnnouncements.map((a) => a.toJson()).toList());
+      await _saveToCache('announcements',
+          _pinnedAnnouncements.map((a) => a.toJson()).toList());
 
       _errorMessage = null;
     } catch (e) {
       _errorMessage = e.toString();
     } finally {
-      if(isInitialLoad) _isLoading = false;
+      if (isInitialLoad) _isLoading = false;
       notifyListeners();
     }
   }
 
   Future<void> toggleLike(int postId) async {
     final index = _feedItems.indexWhere((item) =>
-    item is Map<String, dynamic> &&
+        item is Map<String, dynamic> &&
         item['type'] == 'post' &&
         item['post_id'] == postId);
 
@@ -200,13 +213,14 @@ class HomeController with ChangeNotifier {
       notifyListeners();
     }
 
-    _likeService.toggleLikeSocket(postId);
+    // _likeService.toggleLikeSocket(postId);
     LikeService().toggleLikeHttp(postId);
   }
 
   Future<void> toggleBookmark(int postId) async {
     // Cari item post di dalam feedItems
     final itemIndex = feedItems.indexWhere((item) => item is Map && item['type'] == 'post' && item['post_id'] == postId);
+
 
     if (itemIndex == -1) return; // Post tidak ditemukan
 
@@ -240,9 +254,8 @@ class HomeController with ChangeNotifier {
 
   @override
   void dispose() {
-
     _likeUpdatesSubscription?.cancel();
-    _likeService.disconnect();
+    // _likeService.disconnect();
     super.dispose();
   }
 }

@@ -7,6 +7,7 @@ import 'dart:developer' as developer;
 
 import '../utils/slide_transition_route.dart'; // Tambahkan ini jika ingin menggunakan log yang lebih terstruktur
 
+
 class PermissionsPage extends StatefulWidget {
   final VoidCallback onPermissionsGranted;
 
@@ -26,7 +27,7 @@ class _PermissionsPageState extends State<PermissionsPage> {
     Permission.camera,
     // Permission.storage, // Untuk Android versi lama
     Permission.photos,  // Untuk Android 13+
-    // Permission.videos,  // Untuk Android 13+
+
   ];
 
   bool _isLoading = false;
@@ -59,6 +60,7 @@ class _PermissionsPageState extends State<PermissionsPage> {
       Navigator.of(context).push(
         SlideTransitionRoute(page: const WelcomePage()),
       );
+
     } else {
       // Jika ada yang ditolak, beri tahu pengguna
       print("Satu atau lebih izin tidak diberikan.");

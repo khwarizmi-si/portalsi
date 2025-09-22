@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:move_to_background/move_to_background.dart';
+
 import 'package:portal_si/components/bottom_navigation.dart';
 import 'package:portal_si/pages/dashboard_page.dart';
 import 'package:portal_si/pages/feed_page.dart';
@@ -26,6 +27,7 @@ class _MainScaffoldState extends State<MainScaffold> {
   bool _isPortfolioButtonPressed = false;
   bool _isButtonVisible = true;
   Timer? _hideButtonTimer;
+
 
   final List<Widget> _swipeablePages = [
     const DashboardPage(),
@@ -93,6 +95,7 @@ class _MainScaffoldState extends State<MainScaffold> {
   void _onItemTapped(int navIndex) {
     if (navIndex == 2) return;
     final navProvider = Provider.of<NavigationProvider>(context, listen: false);
+
     if (navProvider.overlayPage != null) {
       navProvider.hideOverlay();
     }
@@ -242,6 +245,7 @@ class _MainScaffoldState extends State<MainScaffold> {
     return WillPopScope(
       onWillPop: () async {
         MoveToBackground.moveTaskToBack();
+
         return false;
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
@@ -284,6 +288,7 @@ class _MainScaffoldState extends State<MainScaffold> {
                     ),
                   ),
                 ],
+
               );
             },
           ),

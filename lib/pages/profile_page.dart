@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 // Halaman & Komponen UI
 import '../components/video_thumbnail_widget.dart';
 import '../providers/scroll_provider.dart';
+
 import '../utils/navigation_helper.dart';
 import 'edit_profile_page.dart';
 import 'followers_following_page.dart';
@@ -166,6 +167,7 @@ class _PressableGridItemState extends State<PressableGridItem> {
     if (widget.post.isVideo) {
       mediaDisplay = VideoThumbnailWidget(videoUrl: widget.post.mediaUrl);
     } else {
+
       mediaDisplay = CachedNetworkImage(
         imageUrl: widget.post.mediaUrl,
         fit: BoxFit.cover,
@@ -173,6 +175,7 @@ class _PressableGridItemState extends State<PressableGridItem> {
         errorWidget: (context, url, error) => Container(color: Colors.grey[300]),
       );
     }
+
 
     return GestureDetector(
       onTapDown: _onTapDown,
@@ -197,6 +200,7 @@ class _PressableGridItemState extends State<PressableGridItem> {
                 Colors.black.withOpacity(0.4),
               ],
               stops: const [0.7, 1.0],
+
             ),
           ),
           child: Hero(

@@ -249,6 +249,7 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                       return PostCard(
                         username: post.user.username,
                         isBookmarked: post.isBookmarked,
+
                         onBookmark: () => controller.toggleBookmark(post.id),
                         timeAgo: timeAgoFromDate(post.createdAt.toIso8601String()),
                         mediaUrl: post.mediaUrl ?? '',

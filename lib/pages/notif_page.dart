@@ -97,6 +97,7 @@ class _NotificationPageState extends State<NotificationPage> {
   }
 
   Widget _buildBody(BuildContext context, NotificationController controller, ScrollController scrollController) {
+
     if (controller.isLoading) {
       return const Center(child: CircularProgressIndicator(strokeWidth: 3));
     }
@@ -229,6 +230,7 @@ class _NotificationItem extends StatelessWidget {
           children: [
             GestureDetector(
               onTap: () {
+
                 NavigationHelper.navigateToProfile(context, notification.sender.toJson());
               },
               child: CircleAvatar(
@@ -237,8 +239,10 @@ class _NotificationItem extends StatelessWidget {
                 child: ClipOval(
                   child: _buildAvatarContent(notification.sender.profilePictureUrl),
                 ),
+
               ),
             ),
+            // --- Batas Perubahan ---
             const SizedBox(width: 12),
             Expanded(
               child: RichText(
@@ -284,6 +288,7 @@ class _NotificationItem extends StatelessWidget {
       },
     );
   }
+
   Widget _buildTrailingWidget() {
     if ((notification.type == 'like' || notification.type == 'comment') && relatedPost != null) {
       Widget mediaDisplay;
@@ -297,6 +302,7 @@ class _NotificationItem extends StatelessWidget {
       } else {
         mediaDisplay = Container(color: Colors.grey.shade200);
       }
+
       return SizedBox(
         width: 44,
         height: 44,
@@ -308,6 +314,7 @@ class _NotificationItem extends StatelessWidget {
     }
     if (notification.type == 'follow') {
       final isFollowing = controller.followStatus[notification.sender.username] ?? false;
+
       return SizedBox(
         height: 32,
         width: 100,
@@ -360,6 +367,7 @@ class _NotificationItem extends StatelessWidget {
         )
       );
     }
+
     return const SizedBox(width: 44, height: 44);
   }
 }
