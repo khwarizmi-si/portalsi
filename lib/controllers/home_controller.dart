@@ -219,8 +219,8 @@ class HomeController with ChangeNotifier {
 
   Future<void> toggleBookmark(int postId) async {
     // Cari item post di dalam feedItems
-    final itemIndex = feedItems.indexWhere((item) =>
-        item is Map && item['type'] == 'post' && item['post_id'] == postId);
+    final itemIndex = feedItems.indexWhere((item) => item is Map && item['type'] == 'post' && item['post_id'] == postId);
+
 
     if (itemIndex == -1) return; // Post tidak ditemukan
 

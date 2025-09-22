@@ -1,5 +1,6 @@
 // lib/widgets/feed/feed_grid.dart
 import 'package:flutter/material.dart';
+
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import '../../models/post_model.dart';
 import '../../models/user_model.dart';
@@ -8,7 +9,6 @@ import 'animated_feed_grid_item.dart';
 class FeedGrid extends StatelessWidget {
   final bool isLoading;
   final List<Post> posts;
-  final Animation<double> fadeAnimation;
   final Future<void> Function() onRefresh;
   final Function(Post) onLikePost;
   final Function(Post) onPostTap;
@@ -18,7 +18,6 @@ class FeedGrid extends StatelessWidget {
     super.key,
     required this.isLoading,
     required this.posts,
-    required this.fadeAnimation,
     required this.onRefresh,
     required this.onLikePost,
     required this.onPostTap,
@@ -39,34 +38,27 @@ class FeedGrid extends StatelessWidget {
       );
     }
 
+    // --- [PERUBAHAN UTAMA] Ganti SliverGrid dengan SliverMasonryGrid.count ---
     return SliverPadding(
       padding: const EdgeInsets.all(16.0),
-      sliver: SliverGrid(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 0.75, // Menggunakan rasio aspek tetap untuk diagnosis
-        ),
-        delegate: SliverChildBuilderDelegate(
-              (context, index) {
-            // Ambil data post untuk item saat ini
-            final Post post = posts[index];
-            // Cek status "like" dari post
-            final bool isLiked = post.isLikedByUser;
+      sliver: SliverMasonryGrid.count(
+        crossAxisCount: 2, // Tetap 2 kolom
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childCount: posts.length, // Tentukan jumlah item
+        itemBuilder: (context, index) {
+          final Post post = posts[index];
+          final bool isLiked = post.isLikedByUser;
 
-            // Kembalikan widget untuk setiap item di grid
-            return AnimatedFeedGridItem(
-              post: post,
-              isLiked: isLiked,
-              onTap: () => onPostTap(post),
-              onLikeTap: () => onLikePost(post),
-              onUserTap: () => onUserTap(post.user),
-            );
-          },
-          // Tentukan jumlah total item dalam grid
-          childCount: posts.length,
-        ),
+          return AnimatedFeedGridItem(
+            post: post,
+            isLiked: isLiked,
+            onTap: () => onPostTap(post),
+            onLikeTap: () => onLikePost(post),
+            onUserTap: () => onUserTap(post.user),
+          );
+        },
+
       ),
     );
   }

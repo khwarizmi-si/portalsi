@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
@@ -23,6 +24,7 @@ import '../utils/user_provider.dart';
 import '../models/post_model.dart';
 import '../models/announcement_model.dart';
 import '../models/story_model.dart';
+import '../providers/scroll_provider.dart'; // <-- 1. IMPORT SCROLL PROVIDER
 
 // Servis & Helper
 import '../services/notification_service.dart';
@@ -39,7 +41,7 @@ class DashboardPage extends StatefulWidget {
 
 class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientMixin{
   final ScrollController _scrollController = ScrollController();
-  bool _isScrolled = false;
+  // Variabel _isScrolled tidak lagi diperlukan di sini
   int _unreadNotificationCount = 0;
   final GlobalKey _notificationIconKey = GlobalKey();
   final GlobalKey _anncIconKey = GlobalKey();
@@ -49,12 +51,19 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
   @override
   void initState() {
     super.initState();
+    // --- 2. MODIFIKASI LISTENER ---
+    // Hubungkan listener dengan ScrollProvider
     _scrollController.addListener(() {
-      final isScrolled = _scrollController.offset > 10;
-      if (isScrolled != _isScrolled) {
-        setState(() {
-          _isScrolled = isScrolled;
-        });
+      final scrollProvider = Provider.of<ScrollProvider>(context, listen: false);
+      final direction = _scrollController.position.userScrollDirection;
+
+      // Jika user scroll ke ATAS (reverse), maka tampilkan teks.
+      if (direction == ScrollDirection.reverse) {
+        scrollProvider.setScrolled(true);
+      }
+      // Jika user scroll ke BAWAH (forward), maka sembunyikan teks.
+      else if (direction == ScrollDirection.forward) {
+        scrollProvider.setScrolled(false);
       }
     });
 
@@ -107,21 +116,16 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // Penting untuk AutomaticKeepAliveClientMixin
+    super.build(context);
 
-    // 1. Hapus Scaffold, bungkus dengan Material
     return Material(
-      color: Colors.transparent, // Agar background terlihat
+      color: Colors.transparent,
       child: Stack(
         children: [
-          // Konten utama
           SafeArea(
             child: Column(
               children: [
-                // 2. AppBar sekarang menjadi widget biasa
                 _buildAppBar(context),
-
-                // 3. Pastikan body di-wrap dengan Expanded
                 Expanded(
                   child: _buildBody(context),
                 ),
@@ -138,37 +142,27 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
       preferredSize: const Size.fromHeight(kToolbarHeight),
       child: Consumer<UserProvider>(
         builder: (context, userProvider, child) {
-          final bool isAdmin = userProvider.currentUser?.isVerified == true;
-
           return AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: Colors.white,
-              // boxShadow: _isScrolled ? [
-              //   BoxShadow(
-              //     color: Colors.black.withOpacity(0.05),
-              //     blurRadius: 10,
-              //     offset: const Offset(0, 2),
-              //   ),
-              // ] : [],
             ),
             child: AppBar(
               backgroundColor: Colors.white,
               elevation: 0,
               title: const Text('Portal SI', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 24)),
               actions: [
-                // if (isAdmin)
-                  IconButton(
-                    key: _anncIconKey,
-                    onPressed: () {
-                      HapticFeedback.lightImpact();
-                      final RenderBox renderBox = _anncIconKey.currentContext!.findRenderObject() as RenderBox;
-                      final originOffset = renderBox.localToGlobal(Offset.zero) + Offset(renderBox.size.width / 2, renderBox.size.height / 2);
-                      Navigator.push(context, ScaleFromPositionRoute(widget: const AnnouncementListPage(), originOffset: originOffset)).then((_) => _loadNotificationCount());
-                    },
-                    icon: const Icon(Icons.campaign_outlined, color: Colors.black),
-                    tooltip: 'List Pengumuman',
-                  ),
+                IconButton(
+                  key: _anncIconKey,
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    final RenderBox renderBox = _anncIconKey.currentContext!.findRenderObject() as RenderBox;
+                    final originOffset = renderBox.localToGlobal(Offset.zero) + Offset(renderBox.size.width / 2, renderBox.size.height / 2);
+                    Navigator.push(context, ScaleFromPositionRoute(widget: const AnnouncementListPage(), originOffset: originOffset)).then((_) => _loadNotificationCount());
+                  },
+                  icon: const Icon(Icons.campaign_outlined, color: Colors.black),
+                  tooltip: 'List Pengumuman',
+                ),
                 Stack(
                   children: [
                     IconButton(
@@ -218,16 +212,13 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
   Widget _buildBody(BuildContext context) {
     return Consumer<HomeController>(
       builder: (context, controller, child) {
-        // --- 👇 PERUBAHAN DI SINI: Cek controller.feedItems ---
         if (controller.isLoading && controller.feedItems.isEmpty) {
-
           return const Center(child: CircularProgressIndicator());
         }
         if (controller.errorMessage != null) {
           return Center(child: Text('Error: ${controller.errorMessage}'));
         }
         if (controller.feedItems.isEmpty && controller.pinnedPost == null && controller.pinnedAnnouncements.isEmpty) {
-
           return RefreshIndicator(
             onRefresh: () => controller.refreshDashboardData(),
             child: const CustomScrollView(
@@ -240,6 +231,7 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
 
         return RefreshIndicator(
           onRefresh: () => controller.refreshDashboardData(),
+          // 3. Pastikan controller sudah terpasang di sini (sudah benar)
           child: CustomScrollView(
             controller: _scrollController,
             slivers: [
@@ -247,7 +239,6 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
               SliverToBoxAdapter(child: PinnedAnnouncementsSection(announcements: controller.pinnedAnnouncements)),
               _buildPinnedPost(context, controller),
               SliverList(
-                // --- 👇 PERUBAHAN UTAMA DI SINI ---
                 delegate: SliverChildBuilderDelegate(
                       (context, index) {
                     final dynamic item = controller.feedItems[index];
@@ -257,7 +248,8 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                       final Post post = Post.fromJson(item as Map<String, dynamic>);
                       return PostCard(
                         username: post.user.username,
-                        isBookmarked: post.isBookmarked, // <-- Berikan status bookmark
+                        isBookmarked: post.isBookmarked,
+
                         onBookmark: () => controller.toggleBookmark(post.id),
                         timeAgo: timeAgoFromDate(post.createdAt.toIso8601String()),
                         mediaUrl: post.mediaUrl ?? '',
@@ -279,11 +271,9 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                       final List<dynamic> users = item['users'] ?? [];
                       return SuggestionCard(users: users);
                     } else {
-                      // Return widget kosong jika tipe tidak dikenali
                       return const SizedBox.shrink();
                     }
                   },
-                  // Gunakan panjang dari feedItems
                   childCount: controller.feedItems.length,
                 ),
               ),
@@ -294,6 +284,7 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
     );
   }
 
+  // Sisa kode di bawah ini tidak perlu diubah
   Widget _buildPinnedPost(BuildContext context, HomeController controller) {
     final pinnedPost = controller.pinnedPost;
     if (pinnedPost == null) {
@@ -807,20 +798,61 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
                   Text(fullName, style: TextStyle(fontSize: 12, color: Colors.grey.shade600), overflow: TextOverflow.ellipsis),
                   const Spacer(),
                   ElevatedButton(
-                    // Panggil fungsi toggle yang baru
                     onPressed: _isLoading ? null : _toggleFollowStatus,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _isFollowed ? Colors.grey.shade300 : Colors.blue,
-                      foregroundColor: _isFollowed ? Colors.black54 : Colors.white,
+                      // 1. Ubah backgroundColor: jadi transparan jika belum difollow (untuk gradien)
+                      backgroundColor: _isFollowed ? Colors.grey.shade300 : Colors.transparent,
+                      shadowColor: _isFollowed ? Colors.black.withOpacity(0.2) : Colors.transparent, // Agar bayangan juga hilang
+
+                      // 2. Nolkan padding di sini, karena akan kita atur di dalam Container
+                      padding: EdgeInsets.zero,
+
+                      // Properti lain yang relevan tetap di sini
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      minimumSize: const Size(88, 36),
                       elevation: _isFollowed ? 0 : 2,
                     ),
-                    child: _isLoading
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-                        : Text(buttonText),
-                  ),
+                    child: Ink(
+                      // 3. Bungkus dengan Ink agar efek klik tetap ada di atas gradien
+                      decoration: BoxDecoration(
+                        // 4. Terapkan logika gradien di sini
+                        gradient: _isFollowed
+                            ? null // Tidak ada gradien saat sudah diikuti
+                            : LinearGradient(
+                          colors: [
+                            Colors.amber.shade600, // Ganti Colors.blue dengan gradien
+                            Colors.orange.shade800,
+                          ],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Container(
+                        // 5. Gunakan constraints sebagai pengganti minimumSize
+                        constraints: const BoxConstraints(minWidth: 88, minHeight: 36),
+                        // Atur padding yang sebenarnya di sini
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        alignment: Alignment.center,
+                        child: _isLoading
+                            ? SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            // Pastikan warna loading sesuai dengan warna teks
+                            color: _isFollowed ? Colors.black54 : Colors.white,
+                          ),
+                        )
+                            : Text(
+                          buttonText,
+                          // 6. Atur warna teks di sini agar konsisten
+                          style: TextStyle(
+                            color: _isFollowed ? Colors.black54 : Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
                 ],
               ),
             ),

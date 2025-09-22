@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 // --- [TAMBAHAN] Import untuk Background Service & Service lainnya ---
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // <-- ADDED IMPORT
+import 'package:portal_si/providers/scroll_provider.dart';
+
 import 'package:portal_si/services/auth_service.dart';
 import 'package:portal_si/services/message_service.dart';
 import 'package:portal_si/utils/secure_storage.dart';
@@ -140,6 +142,7 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => NavigationProvider()),
         ChangeNotifierProvider(create: (_) => HomeController()),
         ChangeNotifierProvider(create: (_) => UserProvider()),
+        ChangeNotifierProvider(create: (_) => ScrollProvider()),
       ],
       child: const MyApp(),
     ),
@@ -222,7 +225,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           '/register': (context) => RegisterPage(),
           '/home': (context) => const MainScaffold(),
           '/feed': (context) => FeedPage(),
-          '/profile': (context) => const ProfilePage(),
+
           '/story': (context) {
             // Ambil data 'user' yang dikirim melalui argumen navigasi
             final user = ModalRoute.of(context)!.settings.arguments as User;

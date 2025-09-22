@@ -2,7 +2,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'dart:developer' as developer; // Tambahkan ini jika ingin menggunakan log yang lebih terstruktur
+import 'package:portal_si/pages/welcome_page.dart';
+import 'dart:developer' as developer;
+
+import '../utils/slide_transition_route.dart'; // Tambahkan ini jika ingin menggunakan log yang lebih terstruktur
+
 
 class PermissionsPage extends StatefulWidget {
   final VoidCallback onPermissionsGranted;
@@ -20,9 +24,10 @@ class _PermissionsPageState extends State<PermissionsPage> {
   // Daftar izin yang akan diminta
   final List<Permission> _requiredPermissions = [
     Permission.notification,
-    Permission.storage, // Untuk Android versi lama
+    Permission.camera,
+    // Permission.storage, // Untuk Android versi lama
     Permission.photos,  // Untuk Android 13+
-    Permission.videos,  // Untuk Android 13+
+
   ];
 
   bool _isLoading = false;
@@ -52,6 +57,10 @@ class _PermissionsPageState extends State<PermissionsPage> {
       print("Semua izin diberikan.");
       // developer.log('Semua izin diberikan.', name: 'PermissionsPage');
       widget.onPermissionsGranted();
+      Navigator.of(context).push(
+        SlideTransitionRoute(page: const WelcomePage()),
+      );
+
     } else {
       // Jika ada yang ditolak, beri tahu pengguna
       print("Satu atau lebih izin tidak diberikan.");

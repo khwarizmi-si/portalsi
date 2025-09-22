@@ -49,6 +49,7 @@ class _AnimatedFeedGridItemState extends State<AnimatedFeedGridItem>
     super.dispose();
   }
 
+  // --- FUNGSI-FUNGSI LAINNYA TETAP SAMA ---
   void _showPreviewDialog() {
     Navigator.of(context, rootNavigator: true).push(
       PageRouteBuilder(
@@ -77,23 +78,40 @@ class _AnimatedFeedGridItemState extends State<AnimatedFeedGridItem>
     }
   }
 
+
+  // --- [PERUBAHAN UTAMA ADA DI FUNGSI build()] ---
   @override
   Widget build(BuildContext context) {
     Widget mediaDisplay;
-    if (widget.post.isVideo) {
-      mediaDisplay = VideoThumbnailWidget(videoUrl: widget.post.mediaUrl!);
+
+    // Cek apakah URL media valid
+    final bool hasMediaUrl = widget.post.mediaUrl != null && widget.post.mediaUrl!.isNotEmpty;
+
+    if (hasMediaUrl) {
+      if (widget.post.isVideo) {
+        mediaDisplay = VideoThumbnailWidget(videoUrl: widget.post.mediaUrl!);
+      } else {
+        mediaDisplay = Image.network(
+          widget.post.mediaUrl!,
+          fit: BoxFit.cover,
+          // Selama loading, tampilkan placeholder abu-abu
+          loadingBuilder: (context, child, progress) {
+            if (progress == null) return child;
+            return Container(color: Colors.grey[200]);
+          },
+          // Jika gambar gagal di-load, tampilkan ikon broken image
+          errorBuilder: (context, error, stackTrace) => Container(
+            color: Colors.grey[200],
+            child: Icon(Icons.broken_image, color: Colors.grey[400]),
+          ),
+        );
+      }
     } else {
-      mediaDisplay = Image.network(
-        widget.post.mediaUrl ?? '',
-        fit: BoxFit.cover,
-        loadingBuilder: (context, child, progress) {
-          if (progress == null) return child;
-          return Container(color: Colors.grey[200]);
-        },
-        errorBuilder: (context, error, stackTrace) => Container(
-          color: Colors.grey[200],
-          child: Icon(Icons.broken_image, color: Colors.grey[400]),
-        ),
+      // Jika tidak ada URL sama sekali, tampilkan placeholder
+      mediaDisplay = Container(
+        color: Colors.grey[200],
+        child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
+
       );
     }
 
@@ -109,16 +127,15 @@ class _AnimatedFeedGridItemState extends State<AnimatedFeedGridItem>
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Bungkus media dengan AspectRatio yang menggunakan data dari model
+              // [SOLUSI] Bungkus SEMUANYA dengan AspectRatio
+              // Ini memastikan widget selalu punya ukuran yang pasti
               AspectRatio(
-                aspectRatio: widget.post.aspectRatio,
-                // PERBAIKAN: Hero widget dinonaktifkan untuk menghindari error rendering.
-                // Hero(
-                //   tag: 'feed-post-${widget.post.id}',
-                //   child: mediaDisplay,
-                // ),
+                // Jika aspectRatio null, gunakan 1.0 (persegi) sebagai fallback.
+                aspectRatio: widget.post.aspectRatio ?? 1.0,
+
                 child: mediaDisplay,
               ),
+              // ... Sisa kode untuk Gradient dan User Info tetap sama ...
               Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(

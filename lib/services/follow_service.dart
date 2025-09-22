@@ -3,6 +3,7 @@
 import 'dart:convert';
 import 'dart:core';
 import 'package:http/http.dart' as http;
+import '../models/user_model.dart';
 import '../utils/secure_storage.dart';
 
 class FollowService {
@@ -23,6 +24,37 @@ class FollowService {
 
   Future<String?> _getToken() async {
     return await SecureStorage.getToken();
+  }
+
+  Future<List<User>> getFollowingList(int userId) async {
+    final token = await SecureStorage.getToken();
+    if (token == null) throw Exception('Token tidak ditemukan');
+
+    // Gunakan endpoint yang sesuai dengan gambar Anda
+    final url = Uri.parse('$_baseUrl/users/$userId/following');
+    try {
+      final response = await http.get(url, headers: {
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      });
+
+      if (response.statusCode == 200) {
+        final decodedBody = jsonDecode(response.body);
+
+        // --- PERBAIKAN UTAMA: Ambil list dari key "following" ---
+        if (decodedBody is Map<String, dynamic> && decodedBody.containsKey('following')) {
+          final List<dynamic> followingList = decodedBody['following'];
+          return followingList.map((json) => User.fromJson(json)).toList();
+        } else {
+          // Jika tidak ada key "following", kembalikan list kosong
+          return [];
+        }
+      } else {
+        throw Exception('Gagal memuat daftar following: ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Error saat memuat daftar following: $e');
+    }
   }
 
   Future<Map<String, String>> _getHeaders() async {

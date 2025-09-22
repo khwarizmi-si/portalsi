@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
+import '../utils/secure_storage.dart';
 import 'api_service.dart';
 
 import '../models/post_model.dart';
@@ -73,21 +74,25 @@ class PostService extends ApiService {
     }
   }
 
-  Future<List<Post>> fetchExplorePosts(
-      {String? tag, String sort = 'random'}) async {
-    final queryParams = <String, String>{'sort': sort};
-    if (tag != null && tag.isNotEmpty) {
-      queryParams['tag'] = tag;
+  Future<List<Post>> fetchExplorePosts({int page = 1}) async {
+    final token = await SecureStorage.getToken();
+    final url = Uri.parse('$baseUrl/explore?page=$page');
+
+    final response = await http.get(url, headers: {
+      'Accept': 'application/json',
+      'Authorization': 'Bearer $token',
+    });
+
+    if (response.statusCode == 200) {
+      // 1. Decode respons sebagai Map
+      final Map<String, dynamic> body = json.decode(response.body);
+      // 2. Ambil list dari key 'data'
+      final List<dynamic> postsJson = body['data'];
+      // 3. Ubah setiap item JSON menjadi objek Post
+      return postsJson.map((json) => Post.fromJson(json)).toList();
+    } else {
+      throw Exception('Gagal memuat postingan explore dari API');
     }
-    final dynamic data = await get('explore', queryParams: queryParams);
-    if (data is List) {
-      return data.map((item) => Post.fromJson(item)).toList();
-    }
-    if (data is Map<String, dynamic> && data['posts'] is List) {
-      return (data['posts'] as List).map((item) => Post.fromJson(item)).toList();
-    }
-    print("⚠️ Unexpected /explore response format: $data");
-    return [];
   }
 
   Future<Post> getPostDetail(int id) async {

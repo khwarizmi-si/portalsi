@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:portal_si/services/websocket_service.dart';
 import 'package:portal_si/utils/secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'notification_system_service.dart';
 import 'token_refresh_service.dart';
 
@@ -54,16 +55,19 @@ class AuthService {
     final wsService = AuthService.webSocketService;
     final userId = await SecureStorage.getUserId();
 
+
+    final groupService = GroupService();
+
     if (wsService == null || userId == null) {
-      debugPrint(
-          "Gagal memulai listener global: service atau userId tidak ditemukan.");
+      debugPrint("Gagal memulai listener global: service atau userId tidak ditemukan.");
+
       return;
     }
 
     // 1. Tentukan semua channel yang akan didengarkan
     final personalChannel = 'private-user.$userId';
-    const announcementsChannel =
-        'announcements'; // Channel baru untuk pengumuman
+    const announcementsChannel = 'announcements'; // Channel baru untuk pengumuman
+
 
     // 2. Subscribe ke semua channel tersebut
     wsService.subscribeToChannel(personalChannel);
@@ -73,16 +77,16 @@ class AuthService {
     _globalEventSubscription?.cancel();
 
     // 4. Dengarkan event stream dari WebSocketService
-    _globalEventSubscription =
-        wsService.eventStream.listen((AppEvent appEvent) {
+    _globalEventSubscription = wsService.eventStream.listen((AppEvent appEvent) async {
+
       try {
         final notifData = appEvent.data as Map<String, dynamic>;
         final id = DateTime.now().millisecondsSinceEpoch.remainder(100000);
 
         switch (appEvent.event) {
           case 'user.followed':
-            final followerName =
-                notifData['follower_name'] as String? ?? 'Seseorang';
+            final followerName = notifData['follower_name'] as String? ?? 'Seseorang';
+
             final followerAvatar = notifData['follower_avatar'] as String?;
             NotificationSystemService.instance.showGroupedNotification(
               id: id,
@@ -106,6 +110,38 @@ class AuthService {
               groupChannelName: 'Interaksi Sosial',
             );
             break;
+          case 'group.new':
+            final messageData = notifData['message'] as Map<String, dynamic>?;
+            if (messageData == null) break;
+
+            final sender = messageData['sender'] as Map<String, dynamic>?;
+            final content = messageData['content'] as String?;
+            final groupId = messageData['group_id'] as int?;
+
+            if (sender != null && content != null && groupId != null) {
+              try {
+                // 1. Panggil API untuk mengambil detail grup
+                final groupDetails = await groupService.getGroupDetails(groupId);
+                final groupName = groupDetails['name'] as String? ?? 'Grup';
+                final groupAvatar = groupDetails['avatar_url'] as String?;
+
+                final senderName = sender['full_name'] as String? ?? 'Seseorang';
+
+                // 2. Tampilkan notifikasi dengan nama grup asli
+                NotificationSystemService.instance.showGroupedNotification(
+                  id: id,
+                  title: groupName, // <-- Gunakan nama grup dari API
+                  body: '$senderName: $content',
+                  groupKey: 'group_$groupId',
+                  groupChannelId: 'group_channel',
+                  groupChannelName: 'Pesan Grup',
+                  largeIconUrl: groupAvatar, // Gunakan avatar grup
+                );
+              } catch (e) {
+                debugPrint("Gagal mengambil detail grup untuk notifikasi: $e");
+              }
+            }
+            break;
 
           case 'comment.created':
             final userName = notifData['user_name'] as String? ?? 'Seseorang';
@@ -123,8 +159,8 @@ class AuthService {
             break;
 
           case 'announcement.created':
-            final announcementTitle =
-                notifData['title'] as String? ?? 'Pengumuman';
+            final announcementTitle = notifData['title'] as String? ?? 'Pengumuman';
+
             NotificationSystemService.instance.showGroupedNotification(
               id: id,
               title: 'Pengumuman Baru',
@@ -141,8 +177,8 @@ class AuthService {
       }
     });
 
-    print(
-        "🎧 Listener global untuk channel '$personalChannel' dan '$announcementsChannel' telah aktif.");
+    print("🎧 Listener global untuk channel '$personalChannel' dan '$announcementsChannel' telah aktif.");
+
   }
 
   // =======================================================================
@@ -246,11 +282,11 @@ class AuthService {
   }
 
   Future<Map<String, dynamic>> register(
-    String username,
-    String fullName,
-    String email,
-    String password,
-  ) async {
+      String username,
+      String fullName,
+      String email,
+      String password,
+      ) async {
     final response = await http.post(
       Uri.parse('$baseUrl/register'),
       body: {

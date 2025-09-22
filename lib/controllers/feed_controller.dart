@@ -64,7 +64,7 @@ class FeedController extends ChangeNotifier {
     notifyListeners();
     try {
       // fetchExplorePosts sudah mengembalikan data Post lengkap termasuk info like
-      posts = await PostService().fetchExplorePosts(tag: tag, sort: sort);
+      posts = await PostService().fetchExplorePosts();
     } catch (e) {
       print('Error memuat postingan explore: $e');
       _showErrorMessage('Gagal memuat postingan. Coba lagi.');

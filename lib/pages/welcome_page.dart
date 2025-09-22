@@ -209,7 +209,7 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
                         backgroundColor: primaryOrange,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
                       ),
-                      child: const Text('Lanjut', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                      child: const Text('Lanjutkan', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
                     ),
                   ),
                 ),

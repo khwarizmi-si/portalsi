@@ -4,10 +4,13 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/rendering.dart';
+import 'package:provider/provider.dart';
 
 // Halaman & Komponen UI
-import '../components/bottom_navigation.dart';
-import '../components/video_thumbnail_widget.dart'; // <-- 1. IMPORT WIDGET THUMBNAIL
+import '../components/video_thumbnail_widget.dart';
+import '../providers/scroll_provider.dart';
+
 import '../utils/navigation_helper.dart';
 import 'edit_profile_page.dart';
 import 'followers_following_page.dart';
@@ -27,6 +30,7 @@ import '../utils/zoom_page_route.dart';
 
 import 'package:palette_generator/palette_generator.dart';
 
+// --- WIDGET POPUP, GRID ITEM, DAN HERO DIALOG ROUTE TETAP SAMA ---
 class PostPopupContent extends StatefulWidget {
   final SimplePost post;
   final User user;
@@ -44,7 +48,7 @@ class PostPopupContent extends StatefulWidget {
 }
 
 class _PostPopupContentState extends State<PostPopupContent> {
-  Color _iconColor = Colors.white; // Default warna putih
+  Color _iconColor = Colors.white;
 
   @override
   void initState() {
@@ -52,70 +56,27 @@ class _PostPopupContentState extends State<PostPopupContent> {
     _updateIconColor();
   }
 
-  // Fungsi baru yang lebih akurat untuk menganalisis HANYA bagian atas gambar
   Future<void> _updateIconColor() async {
-    // Tambahkan print statement untuk diagnosis
-    print("Memulai analisis warna untuk gambar: ${widget.post.mediaUrl}");
     try {
       final PaletteGenerator paletteGenerator = await PaletteGenerator.fromImageProvider(
         NetworkImage(widget.post.mediaUrl),
         size: const Size(100, 100),
         maximumColorCount: 20,
       );
-
       final Color dominantColor = paletteGenerator.dominantColor?.color ?? Colors.black;
-      print("Warna dominan terdeteksi: $dominantColor");
-
       final double luminance = dominantColor.computeLuminance();
-      print("Luminance terhitung: $luminance");
-
       if (mounted) {
         setState(() {
           _iconColor = luminance > 0.4 ? Colors.black87 : Colors.white;
-          print("Warna ikon diatur menjadi: $_iconColor");
         });
       }
     } catch (e) {
-      // Jika ada error, kita akan melihatnya di console
       print("Error saat menganalisis warna gambar: $e");
-    }
-  }
-
-  Future<void> _generatePalette(ImageProvider imageProvider, ImageInfo imageInfo) async {
-    try {
-      // Tentukan area yang akan dianalisis: Bagian atas gambar, setinggi 20%
-      final region = Rect.fromLTWH(
-        0,
-        0,
-        imageInfo.image.width.toDouble(),
-        imageInfo.image.height.toDouble() * 0.2, // Analisis 20% bagian atas
-      );
-
-      final PaletteGenerator paletteGenerator = await PaletteGenerator.fromImageProvider(
-        imageProvider,
-        region: region, // <--- KUNCI UTAMA ADA DI SINI
-        size: const Size(100, 20), // Sesuaikan ukuran dengan region
-      );
-
-      final Color dominantColor = paletteGenerator.dominantColor?.color ?? Colors.black;
-      final double luminance = dominantColor.computeLuminance();
-
-      if (mounted) {
-        setState(() {
-          // Kita gunakan ambang 0.5 untuk pemisahan terang/gelap yang lebih jelas
-          // dan warna yang lebih kontras (black87)
-          _iconColor = luminance > 0.5 ? Colors.black87 : Colors.white;
-        });
-      }
-    } catch (e) {
-      print("Error saat membuat palet dari region: $e");
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // (Build method Anda tetap sama seperti sebelumnya, tidak perlu diubah)
-    // Cukup pastikan ikon dan teks menggunakan _iconColor
     return Material(
       color: Colors.transparent,
       child: Column(
@@ -166,8 +127,6 @@ class _PostPopupContentState extends State<PostPopupContent> {
   }
 }
 
-// WIDGET GRID ITEM
-
 class PressableGridItem extends StatefulWidget {
   final SimplePost post;
   final VoidCallback onTap;
@@ -204,14 +163,11 @@ class _PressableGridItemState extends State<PressableGridItem> {
 
   @override
   Widget build(BuildContext context) {
-    // -- 2. PERUBAHAN UTAMA DI SINI ---
-    // Tentukan widget apa yang akan ditampilkan berdasarkan tipe media
     Widget mediaDisplay;
     if (widget.post.isVideo) {
-      // Jika ini video, gunakan VideoThumbnailWidget
       mediaDisplay = VideoThumbnailWidget(videoUrl: widget.post.mediaUrl);
     } else {
-      // Jika bukan, gunakan CachedNetworkImage seperti sebelumnya
+
       mediaDisplay = CachedNetworkImage(
         imageUrl: widget.post.mediaUrl,
         fit: BoxFit.cover,
@@ -219,7 +175,7 @@ class _PressableGridItemState extends State<PressableGridItem> {
         errorWidget: (context, url, error) => Container(color: Colors.grey[300]),
       );
     }
-    // --- Batas Perubahan ---
+
 
     return GestureDetector(
       onTapDown: _onTapDown,
@@ -231,24 +187,31 @@ class _PressableGridItemState extends State<PressableGridItem> {
         duration: const Duration(milliseconds: 150),
         curve: Curves.easeInOut,
         child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            color: Colors.grey[200],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Hero(
-              tag: 'post-hero-${widget.post.postId}',
-              // Gunakan widget mediaDisplay yang sudah kita tentukan
-              child: mediaDisplay,
+          clipBehavior: Clip.antiAlias,
+          decoration: ShapeDecoration(
+            shape: ContinuousRectangleBorder(
+              borderRadius: BorderRadius.circular(40.0),
             ),
+            gradient: RadialGradient(
+              center: Alignment.center,
+              radius: 0.8,
+              colors: [
+                Colors.transparent,
+                Colors.black.withOpacity(0.4),
+              ],
+              stops: const [0.7, 1.0],
+
+            ),
+          ),
+          child: Hero(
+            tag: 'post-hero-${widget.post.postId}',
+            child: mediaDisplay,
           ),
         ),
       ),
     );
   }
 }
-
 
 class HeroDialogRoute<T> extends PageRoute<T> {
   HeroDialogRoute({required this.builder}) : super();
@@ -273,21 +236,47 @@ class HeroDialogRoute<T> extends PageRoute<T> {
 }
 
 
+// --- WIDGET UTAMA HALAMAN PROFIL ---
+
 class ProfilePage extends StatefulWidget {
   const ProfilePage({Key? key}) : super(key: key);
   @override
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClientMixin{
+class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClientMixin {
   final ProfileService _profileService = ProfileService();
   late Future<User> _userFuture;
   final GlobalKey _menuKey = GlobalKey();
+  late ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+
+    // 3. INISIALISASI CONTROLLER DAN TAMBAHKAN LISTENER
+    _scrollController = ScrollController();
+    _scrollController.addListener(() {
+      final scrollProvider = Provider.of<ScrollProvider>(context, listen: false);
+      final direction = _scrollController.position.userScrollDirection;
+
+      // Jika user scroll ke ATAS (reverse), maka tampilkan teks.
+      if (direction == ScrollDirection.reverse) {
+        scrollProvider.setScrolled(true);
+      }
+      // Jika user scroll ke BAWAH (forward), maka sembunyikan teks.
+      else if (direction == ScrollDirection.forward) {
+        scrollProvider.setScrolled(false);
+      }
+    });
+  }
+
+  // 4. JANGAN LUPA DISPOSE CONTROLLER
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   void _loadData() {
@@ -302,11 +291,11 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
     });
   }
 
+  // Kode logic lainnya tetap sama
   Future<void> _navigateToEditProfile(User currentUser) async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => EditProfilePage(initialProfile: currentUser)),
-
     );
     if (result == true && mounted) {
       _handleRefresh();
@@ -315,7 +304,6 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
 
   void _navigateToSettings() {
     Navigator.of(context).push(ZoomPageRoute(page: const SettingsPage(), buttonKey: _menuKey));
-
   }
 
   void _showPostPopup(BuildContext context, SimplePost post, User user) {
@@ -359,7 +347,6 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
       try {
         await PostService().deletePost(postId);
         _handleRefresh();
-
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Postingan berhasil dihapus.'), backgroundColor: Colors.green),
@@ -375,121 +362,9 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
     }
   }
 
-  void _onBottomNavTapped(int index) {
-    if (index == 4) return;
-    if (index == 0) Navigator.pushReplacementNamed(context, '/home');
-    // Tambahkan navigasi lain jika perlu
-  }
-
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: FutureBuilder<User>(
-        future: _userFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text("Gagal memuat data: ${snapshot.error}"),
-                  const SizedBox(height: 16),
-                  ElevatedButton(onPressed: _handleRefresh, child: const Text("Coba Lagi"))
-
-                ],
-              ),
-            );
-          }
-          if (!snapshot.hasData) {
-            return const Center(child: Text("Data pengguna tidak ditemukan."));
-          }
-
-          final user = snapshot.data!;
-          // 2. RefreshIndicator langsung dikembalikan
-          return RefreshIndicator(
-            onRefresh: _handleRefresh,
-            child: CustomScrollView(
-              slivers: [
-                _buildHeader(user),
-                SliverToBoxAdapter(child: _buildProfileSection(user)),
-                _buildPostGridSliver(user),
-              ],
-            ),
-          );
-        },
-
-      ),
-      // bottomNavigationBar: CustomBottomNavigation(selectedIndex: 4, onTap: _onBottomNavTapped),
-    );
-  }
-
-  Widget _buildHeader(User user) {
-    return SliverAppBar(
-      backgroundColor: Colors.transparent,
-      expandedHeight: 200,
-      pinned: false,
-      floating: true,
-      snap: true,
-      elevation: 0,
-      centerTitle: true,
-      title: Text(
-        user.username,
-        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: Colors.black),
-
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.refresh, color: Colors.black),
-          onPressed: _handleRefresh,
-          tooltip: 'Perbarui Profil',
-        ),
-        IconButton(
-          key: _menuKey,
-          icon: const Icon(Icons.menu, color: Colors.black),
-          onPressed: _navigateToSettings,
-        ),
-      ],
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: BoxDecoration(
-            image: DecorationImage(
-              image: CachedNetworkImageProvider(user.profilePictureUrl ?? 'https://i.pinimg.com/1200x/8c/56/c4/8c56c483afc07fbbc8d1c937c53c26b1.jpg'),
-
-              fit: BoxFit.cover,
-            ),
-          ),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.black.withOpacity(0.3), Colors.black.withOpacity(0.7)],
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-              ),
-            ),
-            child: Center(
-              child: Text(
-                user.username,
-                style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold, letterSpacing: 2),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _navigateToFollowersFollowing(User user, int initialTab) async { // <-- Tambahkan async
+  void _navigateToFollowersFollowing(User user, int initialTab) async {
     if (user.id == null) return;
-
-    // Lakukan perubahan yang sama seperti di other_profile_page
-    final result = await Navigator.push<Map<dynamic, dynamic>>( // <-- Tambahkan await
+    final result = await Navigator.push<Map<dynamic, dynamic>>(
       context,
       MaterialPageRoute(
         builder: (context) => FollowersFollowingPage(
@@ -498,7 +373,6 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
         ),
       ),
     );
-
     if (result != null && mounted) {
       NavigationHelper.navigateToProfile(
         context,
@@ -507,146 +381,365 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
     }
   }
 
+  @override
+  bool get wantKeepAlive => true;
 
-  Widget _buildProfileSection(User user) {
-    return Container(
-      color: Colors.transparent,
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Stack(
-                children: [
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.grey[200]!, width: 2),
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, 4), spreadRadius: -2),
-                      ],
-                      image: DecorationImage(
-                        image: CachedNetworkImageProvider(user.profilePictureUrl ?? 'https://via.placeholder.com/150'),
 
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: GestureDetector(
-                      onTap: () => _navigateToEditProfile(user),
-                      child: Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: Colors.blue[600],
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                        child: const Icon(Icons.edit, color: Colors.white, size: 12),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildStatItem(user.postsCount.toString(), 'postingan'),
-                    GestureDetector(
-                      onTap: () => _navigateToFollowersFollowing(user, 0),
-                      child: _buildStatItem(user.followersCount.toString(), 'pengikut'),
-                    ),
-                    GestureDetector(
-                      onTap: () => _navigateToFollowersFollowing(user, 1),
-                      child: _buildStatItem(user.followingCount.toString(), 'mengikuti'),
-                    ),
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    const pageBackgroundColor = Colors.transparent;
 
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Scaffold(
+      backgroundColor: pageBackgroundColor,
+      body: FutureBuilder<User>(
+        future: _userFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+            return Column(
               children: [
-                Text(
-                  user.fullName ?? 'Nama tidak tersedia',
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  user.bio ?? 'Tidak ada bio',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[700], height: 1.3),
-
+                _buildProfileAppBar(null),
+                const Expanded(child: Center(child: CircularProgressIndicator())),
+              ],
+            );
+          }
+          if (snapshot.hasError) {
+            return Column(
+              children: [
+                _buildProfileAppBar(null),
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text("Gagal memuat data: ${snapshot.error}"),
+                        const SizedBox(height: 16),
+                        ElevatedButton(onPressed: _handleRefresh, child: const Text("Coba Lagi")),
+                      ],
+                    ),
+                  ),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
+            );
+          }
+          if (!snapshot.hasData) {
+            return Column(
+              children: [
+                _buildProfileAppBar(null),
+                const Expanded(child: Center(child: Text("Data pengguna tidak ditemukan."))),
+              ],
+            );
+          }
+
+          final user = snapshot.data!;
+          // Seluruh halaman dibungkus Column
+          return Column(
             children: [
+              // 1. AppBar statis di paling atas
+              _buildProfileAppBar(user),
+
+              // 2. Konten yang bisa scroll dibungkus Expanded
               Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    boxShadow: [
-                      BoxShadow(color: Colors.blue.withOpacity(0.12), offset: const Offset(0, 3), blurRadius: 10, spreadRadius: -2),
+                child: RefreshIndicator(
+                  onRefresh: _handleRefresh,
+                  child: ListView(
+                    controller: _scrollController,
+                    padding: EdgeInsets.zero,
+                    children: [
+                      _buildBannerAndHeader(user),
+                      _buildProfileBody(user),
+                      _buildPostGrid(user),
                     ],
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: ElevatedButton(
-                    onPressed: () => _navigateToEditProfile(user),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue[600],
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    child: const Text('Edit profile', style: TextStyle(fontWeight: FontWeight.w600)),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.12), offset: const Offset(0, 3), blurRadius: 10, spreadRadius: -2),
-                    ],
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          fullscreenDialog: true,
-                          builder: (context) => ShareProfilePage(username: user.username),
-                        ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.grey[200],
-                      foregroundColor: Colors.grey[800],
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    child: const Text('Bagikan Profile', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                   ),
                 ),
               ),
             ],
-          ),
+          );
+        },
+      ),
+    );
+  }
+
+
+  // --- PERUBAHAN 2: FUNGSI BUILD WIDGET DISESUAIKAN ---
+  // Fungsi-fungsi ini tidak lagi mengembalikan 'Sliver'
+
+  Widget _buildProfileAppBar(User? user) {
+    return Container(
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFA),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
         ],
       ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                user?.username ?? 'Profil',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black),
+              ),
+            ),
+            IconButton(
+              key: _menuKey,
+              icon: const Icon(Icons.menu, color: Colors.black),
+              onPressed: _navigateToSettings,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Nama diubah dari _buildBannerAndHeaderSliver menjadi _buildBannerAndHeader
+  Widget _buildBannerAndHeader(User user) {
+    const double avatarRadius = 45;
+    const String placeholderBanner = 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=2070&auto=format&fit=crop';
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          height: 160,
+          decoration: BoxDecoration(
+              image: DecorationImage(
+                image: CachedNetworkImageProvider(user.profilePictureUrl ?? placeholderBanner),
+                fit: BoxFit.cover,
+              )),
+        ),
+        Positioned(
+          top: 165 - avatarRadius,
+          left: 16,
+          right: 16,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _buildAvatar(user, avatarRadius),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: _buildStats(user),
+                ),
+              ),
+            ],
+          ),
+        )
+      ],
+    );
+  }
+
+  // Nama diubah dari _buildProfileBodySliver menjadi _buildProfileBody
+  Widget _buildProfileBody(User user) {
+    const double avatarRadius = 45;
+
+    return Container(
+      color: Colors.transparent,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: avatarRadius + 16),
+          _buildInfo(user),
+          const SizedBox(height: 8),
+          _buildBio(user),
+          const SizedBox(height: 20),
+          _buildActionButtons(user),
+        ],
+      ),
+    );
+  }
+
+  // Nama diubah dari _buildPostGridSliver menjadi _buildPostGrid
+  Widget _buildPostGrid(User user) {
+    final posts = user.recentPosts;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 25.0),
+      constraints: const BoxConstraints(minHeight: 500),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            spreadRadius: 2,
+            blurRadius: 15,
+            offset: const Offset(0, -5),
+          )
+        ],
+      ),
+      child: (posts.isEmpty)
+          ? Container(
+        height: 300,
+        alignment: Alignment.center,
+        child: const Text('Belum ada postingan'),
+      )
+          : Padding(
+        padding: const EdgeInsets.fromLTRB(12, 24, 12, 12),
+        child: GridView.builder(
+          // PENTING: Dua properti ini wajib ada di dalam ListView
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+
+          padding: const EdgeInsets.all(12),
+          itemCount: posts.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+          ),
+          itemBuilder: (context, index) {
+            final SimplePost post = posts[index];
+            return PressableGridItem(
+              post: post,
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => PostDetail(postId: post.postId)));
+              },
+              onLongPress: () {
+                _showPostPopup(context, post, user);
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  // --- Widget-widget lainnya tetap sama (tidak diubah) ---
+
+  Widget _buildAvatar(User user, double radius) {
+    return Stack(
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: const Color(0xFFFAFAFA), width: 4),
+          ),
+          child: CircleAvatar(
+            radius: radius,
+            backgroundImage: CachedNetworkImageProvider(
+                user.profilePictureUrl ?? 'https://via.placeholder.com/150'),
+          ),
+        ),
+        Positioned(
+          bottom: 0,
+          right: 0,
+          child: Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFF03B293),
+                  Color(0xFF116C63),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFFAFAFA), width: 2),
+            ),
+            child: const Icon(Icons.add, color: Colors.white, size: 16),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStats(User user) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        _buildStatItem(user.postsCount.toString(), 'postingan'),
+        GestureDetector(
+          onTap: () => _navigateToFollowersFollowing(user, 0),
+          child: _buildStatItem(user.followersCount.toString(), 'pengikut'),
+        ),
+        GestureDetector(
+          onTap: () => _navigateToFollowersFollowing(user, 1),
+          child: _buildStatItem(user.followingCount.toString(), 'mengikuti'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfo(User user) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          user.fullName ?? 'Nama tidak tersedia',
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          "Visual Creator",
+          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+        )
+      ],
+    );
+  }
+
+  Widget _buildBio(User user) {
+    final bioItems = user.bio?.split('\n').where((line) => line.isNotEmpty).toList() ?? [];
+    if (bioItems.isEmpty) {
+      return const Text("Tidak ada bio", style: TextStyle(color: Colors.grey));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: bioItems.map((item) => Padding(
+        padding: const EdgeInsets.only(bottom: 8.0),
+        child: Text(item, style: TextStyle(fontSize: 14, color: Colors.grey[800], height: 1.4)),
+      )).toList(),
+    );
+  }
+
+  Widget _buildActionButtons(User user) {
+    return Row(
+      children: [
+        Expanded(
+          child: ElevatedButton(
+            onPressed: () => _navigateToEditProfile(user),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF0F0F0),
+              foregroundColor: Colors.black,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            child: const Text('Edit profile', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  fullscreenDialog: true,
+                  builder: (context) => ShareProfilePage(username: user.username),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF0F0F0),
+              foregroundColor: Colors.black,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+            ),
+            child: const Text('Bagikan Profile', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ),
+      ],
     );
   }
 
@@ -654,50 +747,10 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(count, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+        Text(count, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         const SizedBox(height: 2),
         Text(label, style: TextStyle(fontSize: 13, color: Colors.grey[600])),
       ],
-    );
-  }
-
-  Widget _buildPostGridSliver(User user) {
-    final posts = user.recentPosts;
-    if (posts.isEmpty) {
-      return const SliverToBoxAdapter(
-        child: Center(
-          child: Padding(
-            padding: EdgeInsets.all(50.0),
-            child: Text('Belum ada postingan'),
-          ),
-        ),
-      );
-    }
-    return SliverPadding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      sliver: SliverGrid(
-        delegate: SliverChildBuilderDelegate(
-              (context, index) {
-            final SimplePost post = posts[index];
-            return PressableGridItem(
-              post: post,
-              onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => PostDetail(postId: post.postId)));
-
-              },
-              onLongPress: () {
-                _showPostPopup(context, post, user);
-              },
-            );
-          },
-          childCount: posts.length,
-        ),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          crossAxisSpacing: 8,
-          mainAxisSpacing: 8,
-        ),
-      ),
     );
   }
 }
