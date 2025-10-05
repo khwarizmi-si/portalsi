@@ -111,6 +111,7 @@ class _AnimatedFeedGridItemState extends State<AnimatedFeedGridItem>
       mediaDisplay = Container(
         color: Colors.grey[200],
         child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
+
       );
     }
 
@@ -131,6 +132,7 @@ class _AnimatedFeedGridItemState extends State<AnimatedFeedGridItem>
               AspectRatio(
                 // Jika aspectRatio null, gunakan 1.0 (persegi) sebagai fallback.
                 aspectRatio: widget.post.aspectRatio ?? 1.0,
+
                 child: mediaDisplay,
               ),
               // ... Sisa kode untuk Gradient dan User Info tetap sama ...
