@@ -26,6 +26,34 @@ class FollowService {
     return await SecureStorage.getToken();
   }
 
+  Future<List<User>> searchUsers(String query) async {
+    if (query.trim().isEmpty) {
+      return [];
+    }
+
+    final token = await SecureStorage.getToken();
+    final url = Uri.parse('$_baseUrl/users/search?username=$query&full_name=$query');
+
+    try {
+      final response = await http.get(url, headers: {
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      });
+
+      if (response.statusCode == 200) {
+        // Konversi langsung dari List<dynamic> ke List<User>
+        final List<dynamic> data = json.decode(response.body);
+        return data.map((userData) => User.fromJson(userData)).toList();
+      } else {
+        print('Gagal mencari pengguna: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      print('Terjadi kesalahan saat mencari pengguna: $e');
+      return [];
+    }
+  }
+
   Future<List<User>> getFollowingList(int userId) async {
     final token = await SecureStorage.getToken();
     if (token == null) throw Exception('Token tidak ditemukan');
@@ -39,18 +67,15 @@ class FollowService {
       });
 
       if (response.statusCode == 200) {
-        final decodedBody = jsonDecode(response.body);
+        final data = jsonDecode(response.body);
 
-        // --- PERBAIKAN UTAMA: Ambil list dari key "following" ---
-        if (decodedBody is Map<String, dynamic> && decodedBody.containsKey('following')) {
-          final List<dynamic> followingList = decodedBody['following'];
-          return followingList.map((json) => User.fromJson(json)).toList();
-        } else {
-          // Jika tidak ada key "following", kembalikan list kosong
-          return [];
-        }
+        // Ambil list mentah (List<dynamic>) dari JSON
+        final List<dynamic> followingList = data['following'] ?? [];
+
+        // 2. KONVERSI list mentah menjadi List<User> sebelum dikembalikan
+        return followingList.map((userData) => User.fromJson(userData)).toList();
       } else {
-        throw Exception('Gagal memuat daftar following: ${response.body}');
+        return []; // Kembalikan list kosong dengan tipe yang benar
       }
     } catch (e) {
       throw Exception('Error saat memuat daftar following: $e');
@@ -347,7 +372,9 @@ class FollowService {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         _followersCache[cacheKey] = {...data, '_cached_at': DateTime.now().toIso8601String()};
-        return data['followers'] ?? [];
+        final List<dynamic> userList = data['followers'] ?? [];
+        return userList.map((userData) => User.fromJson(userData)).toList();
+        // return data['followers'] ?? [];
       } else {
         return [];
       }
@@ -357,7 +384,9 @@ class FollowService {
     }
   }
 
-  Future<List<dynamic>> getFollowing(dynamic userIdentifier, {bool forceRefresh = false}) async {
+  // lib/services/follow_service.dart
+
+  Future<List<User>> getFollowing(dynamic userIdentifier, {bool forceRefresh = false}) async {
     _totalRequests++;
     final cacheKey = 'following_$userIdentifier';
     if (!forceRefresh && _followingCache.containsKey(cacheKey)) {
@@ -366,23 +395,31 @@ class FollowService {
         _cacheHits++;
         print('✅ Cache hit: Following $userIdentifier (${_cacheHits}/$_totalRequests hits)');
         final data = Map<String, dynamic>.from(cached)..remove('_cached_at');
-        return data['following'] ?? [];
+
+        // Konversi dari cache
+        final List<dynamic> userList = data['following'] ?? [];
+        return userList.map((userData) => User.fromJson(userData)).toList();
       }
     }
     try {
       print('🌐 API call: Getting following for $userIdentifier');
       final headers = await _getHeaders();
       final res = await http.get(Uri.parse('$_baseUrl/users/$userIdentifier/following'), headers: headers).timeout(const Duration(seconds: 8));
+
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         _followingCache[cacheKey] = {...data, '_cached_at': DateTime.now().toIso8601String()};
-        return data['following'] ?? [];
+
+        // KUNCI PERBAIKAN: Konversi List<dynamic> menjadi List<User>
+        final List<dynamic> userList = data['following'] ?? [];
+        return userList.map((userData) => User.fromJson(userData)).toList();
+
       } else {
-        return [];
+        return []; // Kembalikan list kosong dengan tipe yang benar
       }
     } catch (e) {
       print('Error in getFollowing: $e');
-      return [];
+      return []; // Kembalikan list kosong jika error
     }
   }
 

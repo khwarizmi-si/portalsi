@@ -85,12 +85,16 @@ class UserWithStories {
   final String username;
   final String profilePictureUrl;
   final List<StoryDetail> stories;
+  final bool isViewed;
+  final bool isVerified;
 
   UserWithStories({
     required this.userId,
     required this.username,
     required this.profilePictureUrl,
+    this.isVerified = false,
     required this.stories,
+    this.isViewed = false,
   });
 
   factory UserWithStories.fromJson(Map<String, dynamic> json) {
@@ -99,10 +103,13 @@ class UserWithStories {
     stories.sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
     return UserWithStories(
-      userId: json['user_id'],
+      userId: int.tryParse(json['user_id'].toString()) ?? 0,
       username: json['username'],
       profilePictureUrl: json['profile_picture_url'],
+      isVerified: json['is_verified'] ?? false,
       stories: stories,
+      // 3. PARSING DARI JSON (ASUMSI NAMA FIELD DARI API ADALAH 'is_all_viewed')
+      isViewed: json['is_all_viewed'] ?? false,
     );
   }
 
@@ -112,6 +119,7 @@ class UserWithStories {
       'username': username,
       'profile_picture_url': profilePictureUrl,
       'stories': stories.map((s) => s.toJson()).toList(),
+      'is_all_viewed': isViewed,
     };
   }
 }

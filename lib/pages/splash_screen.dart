@@ -35,7 +35,8 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted) return;
 
     if (kIsWeb) {
-      _showDownloadPrompt();
+      // _showDownloadPrompt();
+      _continueToApp();
     } else {
       // --- PERUBAHAN UTAMA: PANGGIL PENGECEKAN IZIN ---
       _handlePermissions();
@@ -120,9 +121,13 @@ class _SplashScreenState extends State<SplashScreen> {
       return;
     }
 
+    if (kIsWeb) {
+      if (mounted) Navigator.of(context).pushReplacementNamed('/welcome');
+      return;
+    }
+
     try {
       print('🚀 Sesi aktif ditemukan. Menginisialisasi semua service...');
-      await AuthService.initializeWebSocket(token);
 
       final chatService = ChatService();
       final channels = await chatService.getActiveConversationChannels();

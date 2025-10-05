@@ -1,490 +1,424 @@
+// lib/components/bottom_navigation.dart
+import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:portal_si/pages/feed_page.dart';
-import 'package:portal_si/pages/dashboard_page.dart';
-import 'package:portal_si/pages/profile_page.dart';
-import 'package:portal_si/pages/notif_page.dart';
-import 'package:portal_si/pages/create_post_page.dart';
 import 'package:flutter/services.dart';
-import 'package:portal_si/services/notification_service.dart';
 import 'package:provider/provider.dart';
-
+import '../models/user_model.dart';
+import '../pages/create_announcement_page.dart';
+import '../pages/create_post_page.dart';
+import '../pages/create_story_page.dart';
+import '../providers/scroll_provider.dart';
 import '../utils/user_provider.dart';
 
-import '../pages/create_announcement_page.dart'; // Import service API Anda
+// Class baru untuk popup menu
+class _FabMenuPopup extends StatelessWidget {
+  final UserProvider userProvider;
+
+  const _FabMenuPopup({required this.userProvider});
+
+  @override
+  Widget build(BuildContext context) {
+    final currentUser = userProvider.currentUser;
+    final currentUserRole = currentUser?.role;
+
+    List<Widget> menuItems = [
+      _buildMenuItem(
+        context,
+        icon: Icons.grid_on,
+        text: 'Buat Postingan',
+        onTap: () {
+          Navigator.pop(context); // Tutup popup
+          Navigator.push(context, MaterialPageRoute(builder: (context) => CreatePostPage()));
+        },
+      ),
+      _buildMenuItem(
+        context,
+        icon: Icons.video_collection_outlined,
+        text: 'Upload Clips',
+        // --- 👇 PERBAIKAN UTAMA ADA DI SINI 👇 ---
+        onTap: () {
+          // JANGAN tutup menu utama dulu. Langsung tampilkan dialog.
+          showDialog(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              backgroundColor: Colors.grey[850],
+              title: const Text('Informasi Clips', style: TextStyle(color: Colors.white)),
+              content: const Text('Setiap postingan video yang Anda unggah akan menjadi Clips.', style: TextStyle(color: Colors.grey)),
+              actions: [
+                TextButton(
+                  child: const Text('Mengerti'),
+                  onPressed: () {
+                    // Urutan yang benar:
+                    // 1. Tutup dialog ini.
+                    Navigator.of(dialogContext).pop();
+                    // 2. Tutup menu utama (yang ada di belakang dialog).
+                    Navigator.of(context).pop();
+                    // 3. Buka halaman CreatePostPage.
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const CreatePostPage()));
+                  },
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+      _buildMenuItem(
+        context,
+        icon: Icons.add_circle_outline,
+        text: 'Upload Cerita Anda',
+        onTap: () {
+          Navigator.pop(context); // Tutup popup
+          if (currentUser != null) {
+            Navigator.push(context, MaterialPageRoute(builder: (context) => CreateStoryPage(
+              currentUser: currentUser,
+              heroTag: 'story_create_avatar_${currentUser.id}',
+            )));
+          }
+        },
+      ),
+    ];
+
+    if (currentUserRole == 'dev' || currentUserRole == 'teacher') {
+      menuItems.add(const Divider(height: 1, indent: 16, endIndent: 16, color: Colors.grey));
+      menuItems.add(
+        _buildMenuItem(
+          context,
+          icon: Icons.campaign_outlined,
+          text: 'Buat Pengumuman',
+          onTap: () {
+            Navigator.pop(context); // Tutup popup
+            Navigator.push(context, MaterialPageRoute(builder: (context) => const CreateAnnouncementPage()));
+          },
+        ),
+      );
+    }
+
+    return Material(
+      color: Colors.white.withOpacity(0.85),
+      elevation: 8.0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: menuItems,
+      ),
+    );
+  }
+
+  Widget _buildMenuItem(BuildContext context, {required IconData icon, required String text, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: text == 'Buat Pengumuman'
+          ? const BorderRadius.vertical(bottom: Radius.circular(16))
+          : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.grey.shade800),
+            const SizedBox(width: 16),
+            Text(text, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Route kustom untuk animasi popup
+class _FabPopupRoute<T> extends PopupRoute<T> {
+  final WidgetBuilder builder;
+  final GlobalKey fabKey;
+
+  _FabPopupRoute({required this.builder, required this.fabKey});
+
+  @override
+  Color? get barrierColor => Colors.black.withOpacity(0.5);
+
+  @override
+  bool get barrierDismissible => true;
+
+  @override
+  String? get barrierLabel => 'Close';
+
+  @override
+  Duration get transitionDuration => const Duration(milliseconds: 400);
+
+  @override
+  Widget buildPage(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation) {
+    final RenderBox fabRenderBox = fabKey.currentContext!.findRenderObject() as RenderBox;
+    final fabCenter = fabRenderBox.localToGlobal(fabRenderBox.size.center(Offset.zero));
+
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).size.height - fabCenter.dy + 20,
+          left: 24,
+          right: 24,
+        ),
+        child: builder(context),
+      ),
+    );
+  }
+
+  @override
+  Widget buildTransitions(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation, Widget child) {
+    final RenderBox fabRenderBox = fabKey.currentContext!.findRenderObject() as RenderBox;
+    final fabCenter = fabRenderBox.localToGlobal(fabRenderBox.size.center(Offset.zero));
+
+    final screenHeight = MediaQuery.of(context).size.height;
+    final alignmentY = (fabCenter.dy / screenHeight) * 2 - 1;
+
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 5 * animation.value, sigmaY: 5 * animation.value),
+      child: FadeTransition(
+        opacity: animation,
+        child: ScaleTransition(
+          alignment: Alignment(0.0, alignmentY),
+          scale: CurvedAnimation(parent: animation, curve: Curves.easeOutBack, reverseCurve: Curves.easeInCubic),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
 
 class CustomBottomNavigation extends StatefulWidget {
   final int selectedIndex;
   final Function(int) onTap;
+  final bool isDarkMode;
 
   const CustomBottomNavigation({
     Key? key,
     required this.selectedIndex,
     required this.onTap,
+    this.isDarkMode = false,
   }) : super(key: key);
 
   @override
   State<CustomBottomNavigation> createState() => _CustomBottomNavigationState();
 }
 
-class _CustomBottomNavigationState extends State<CustomBottomNavigation>
-    with TickerProviderStateMixin {
+class _CustomBottomNavigationState extends State<CustomBottomNavigation> with TickerProviderStateMixin {
+  final GlobalKey _fabKey = GlobalKey();
   late AnimationController _fabAnimationController;
-  late AnimationController _slideAnimationController;
-  late Animation<double> _fabScaleAnimation;
   late Animation<double> _fabRotationAnimation;
-  late Animation<Offset> _slideAnimation;
-  bool _isFabPressed = false;
-  bool isAdmin = false;
-
-  List<AnimationController> _iconAnimationControllers = [];
-  List<Animation<double>> _iconScaleAnimations = [];
-  List<Animation<double>> _iconBounceAnimations = [];
-  // Variabel untuk menampung jumlah notifikasi yang belum dibaca
-  int _unreadNotificationCount = 0;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-
-    // 💡 Asumsi Anda menggunakan Provider atau state management serupa.
-    // Jika tidak, sesuaikan cara mendapatkan instance UserProvider
-    // Anda dengan metode yang Anda gunakan.
-    final userProvider = Provider.of<UserProvider>(context);
-
-    // Perbarui nilai isAdmin dengan data dari provider
-    setState(() {
-      isAdmin = userProvider.currentUser?.isVerified == true;
-    });
-  }
+  late List<AnimationController> _iconAnimationControllers;
+  late List<Animation<double>> _iconScaleAnimations;
+  DateTime? _lastPressedAt;
 
   @override
   void initState() {
     super.initState();
+    _iconAnimationControllers = List.generate(
+      5,
+          (index) => AnimationController(vsync: this, duration: const Duration(milliseconds: 100)),
+    );
 
-    // FAB Animation Controller
+    _iconScaleAnimations = _iconAnimationControllers
+        .map((controller) => Tween<double>(begin: 1.0, end: 1.2)
+        .animate(CurvedAnimation(parent: controller, curve: Curves.easeOut)))
+        .toList();
+
     _fabAnimationController = AnimationController(
-      duration: Duration(milliseconds: 300),
       vsync: this,
+      duration: const Duration(milliseconds: 150),
     );
 
-    // Slide Animation Controller
-    _slideAnimationController = AnimationController(
-      duration: Duration(milliseconds: 400),
-      vsync: this,
-    );
+    _fabRotationAnimation = Tween<double>(begin: 0, end: 0.125).animate(
+        CurvedAnimation(parent: _fabAnimationController, curve: Curves.easeInOut));
+  }
 
-    _fabScaleAnimation = Tween<double>(begin: 1.0, end: 0.85).animate(
-      CurvedAnimation(parent: _fabAnimationController, curve: Curves.easeInOut),
-    );
-
-    _fabRotationAnimation = Tween<double>(begin: 0.0, end: 0.25).animate(
-      CurvedAnimation(parent: _fabAnimationController, curve: Curves.easeInOut),
-    );
-
-    _slideAnimation =
-        Tween<Offset>(begin: Offset(0.0, 0.0), end: Offset(0.0, 0.0)).animate(
-      CurvedAnimation(
-        parent: _slideAnimationController,
-        curve: Curves.elasticOut,
-      ),
-    );
-
-    // Initialize icon animations
-    for (int i = 0; i < 5; i++) {
-      final controller = AnimationController(
-        // Durasi sedikit lebih lama untuk gerakan yang lebih halus
-        duration: const Duration(milliseconds: 250), // Diubah dari 200
-        vsync: this,
-      );
-      _iconAnimationControllers.add(controller);
-
-      // Animasi skala yang lebih lembut
-      _iconScaleAnimations.add(
-        Tween<double>(begin: 1.0, end: 1.15).animate( // Diubah dari 1.2
-          // Gunakan kurva yang lebih halus, tidak memantul
-          CurvedAnimation(parent: controller, curve: Curves.easeOutCubic), // Diubah dari elasticOut
-        ),
-      );
-      // Animasi pantulan (bounce) yang lebih rendah
-      _iconBounceAnimations.add(
-        Tween<double>(begin: 0.0, end: -5.0).animate( // Diubah dari -8.0
-          // Gunakan kurva yang sama untuk konsistensi
-          CurvedAnimation(parent: controller, curve: Curves.easeOutCubic), // Diubah dari elasticOut
-        ),
-      );
+  @override
+  void didUpdateWidget(covariant CustomBottomNavigation oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectedIndex != oldWidget.selectedIndex) {
+      _playAnimationForIndex(widget.selectedIndex);
     }
+  }
 
-    _slideAnimationController.forward();
-    _loadNotificationCount();
+  void _playAnimationForIndex(int index) {
+    if (index >= 0 && index < 5 && index != 2) {
+      _iconAnimationControllers[index].forward(from: 0.0).then((_) {
+        if (mounted) {
+          _iconAnimationControllers[index].reverse();
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
     _fabAnimationController.dispose();
-    _slideAnimationController.dispose();
     for (var controller in _iconAnimationControllers) {
       controller.dispose();
     }
     super.dispose();
   }
 
-  // Fungsi untuk memuat jumlah notifikasi yang belum dibaca
-  Future<void> _loadNotificationCount() async {
-    try {
-      final notifications = await NotificationService()
-          .getNotifications(); // Ganti dengan service Anda
-      final unreadCount = notifications
-          .where((notif) => notif['is_read'] == false || notif['is_read'] == 0)
-          .length;
+  void _showCreateOptions(BuildContext context) {
+    _fabAnimationController.forward();
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
 
-      if (mounted) {
-        setState(() {
-          _unreadNotificationCount = unreadCount;
-        });
-      }
-    } catch (e) {
-      print('Error loading notification count: $e');
-    }
-  }
-
-  // Fungsi untuk refresh notification count (bisa dipanggil dari luar)
-  void refreshNotificationCount() {
-    _loadNotificationCount();
-  }
-
-  void _onItemTapped(int index) {
-    // Hapus semua logika Navigator.push dari sini
-
-    // Animate the tapped icon
-    _iconAnimationControllers[index].forward().then((_) {
-      _iconAnimationControllers[index].reverse();
-    });
-
-    // Slide animation
-    _slideAnimationController.reset();
-    _slideAnimationController.forward();
-
-    // Panggil callback onTap yang diberikan oleh parent (MainScaffold)
-    widget.onTap(index);
-  }
-
-  void _showCreateOptions() {
-    // Memberikan efek getaran realistis
-    HapticFeedback.mediumImpact();
-
-    // Menjalankan animasi rotasi dan skala yang sudah ada
-    _fabAnimationController.forward().then((_) {
+    Navigator.of(context).push(_FabPopupRoute(
+      fabKey: _fabKey,
+      builder: (context) {
+        return _FabMenuPopup(userProvider: userProvider);
+      },
+    )).then((_) {
       _fabAnimationController.reverse();
     });
+  }
 
-    // Menampilkan modal bottom sheet
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          padding: EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.only(
-              topLeft: Radius.circular(24),
-              topRight: Radius.circular(24),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "Buat Baru",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
-                ),
-              ),
-              SizedBox(height: 16),
-              ListTile(
-                leading: Icon(Icons.article_outlined, color: Colors.deepOrange),
-                title: Text("Buat Postingan"),
-                onTap: () {
-                  HapticFeedback.mediumImpact();
-                  Navigator.pop(context); // Tutup bottom sheet
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => CreatePostPage()),
-                  );
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.campaign_outlined, color: Colors.deepOrange),
-                title: Text("Buat Pengumuman"),
-                onTap: () {
-                  HapticFeedback.mediumImpact();
-                  Navigator.pop(context); // Tutup bottom sheet
-                  // Arahkan ke halaman baru
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => CreateAnnouncementPage()),
-                  );
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
+  Future<bool> _onWillPop() async {
+    // Jika sedang tidak di index 0 (Home), biarkan navigasi kembali/pop berjalan normal
+    // Kecuali jika Anda memiliki PopScope di halaman individual
+    if (widget.selectedIndex != 0) {
+      return true; // Izinkan pop jika tidak di halaman Home
+    }
+
+    // Jika di halaman Home (index 0)
+    final now = DateTime.now();
+    final isExitConfirmed = _lastPressedAt != null &&
+        now.difference(_lastPressedAt!) < const Duration(seconds: 2);
+
+    if (isExitConfirmed) {
+      return true; // Keluar
+    } else {
+      _lastPressedAt = now;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tekan kembali sekali lagi untuk keluar.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return false; // Tahan navigasi back
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return SlideTransition(
-      position: _slideAnimation,
+    final Color backgroundColor = widget.isDarkMode ? const Color(0xFF1A1A1A) : Colors.white;
+    final Color iconColor = widget.isDarkMode ? Colors.white70 : Colors.grey[500]!;
+    final Color fabColor = widget.isDarkMode ? Colors.grey.shade800 : Colors.white;
+
+    return Container(
+      height: 90,
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(30), topRight: Radius.circular(30)),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, -5))
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildIconItem(0, Icons.home_filled, isSelected: widget.selectedIndex == 0, iconColor: iconColor),
+          _buildIconItem(1, Icons.explore, isSelected: widget.selectedIndex == 1, iconColor: iconColor),
+          _buildFab(fabColor),
+          _buildIconItem(3, Icons.store, isSelected: widget.selectedIndex == 3, iconColor: iconColor),
+          _buildIconItem(4, Icons.person, isSelected: widget.selectedIndex == 4, iconColor: iconColor),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFab(Color fabColor) {
+    return GestureDetector(
+      key: _fabKey,
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        HapticFeedback.mediumImpact();
+        _showCreateOptions(context);
+      },
       child: Container(
-        height: 70,
+        width: 60,
+        height: 60,
         decoration: BoxDecoration(
-          // --- PERUBAHAN DI SINI ---
-          color: Colors.white, // Diubah dari Colors.white.withOpacity(0.95)
-          // --- Batas Perubahan ---
-          borderRadius: BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20), bottomLeft: Radius.circular(0), bottomRight: Radius.circular(0)), // Dibuat sama semua sisinya untuk estetika
+          // --- PERUBAHAN UTAMA ADA DI SINI ---
+          // Hapus 'color: fabColor,'
+          gradient: LinearGradient(
+            colors: [Colors.amber.shade600, Colors.orange.shade800],
+            begin: Alignment.topRight,
+            end: Alignment.bottomLeft,
+          ),
+          // --- AKHIR PERUBAHAN UTAMA ---
+          shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1), // Sedikit pudar agar lebih soft
-              blurRadius: 12,
-              offset: const Offset(0, 2),
-            ),
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 5))
           ],
         ),
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.center,
-          children: [
-            // Bottom Navigation Items
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  Expanded(child: _buildNavItem(Icons.home, 0)),
-                  Expanded(child: _buildNavItem(Icons.search, 1)),
-                  const SizedBox(width: 53), // Spasi untuk FAB tetap sama
-                  Expanded(child: _buildNavItem(Icons.shopping_cart, 3)), // Ganti ikon & indeks jika perlu
-                  Expanded(child: _buildNavItem(Icons.person_outline, 4)),
-                ],
-              ),
+        child: Center(
+          child: RotationTransition(
+            turns: _fabRotationAnimation,
+            child: const Icon(
+                Icons.add,
+                // Ubah warna ikon menjadi putih agar kontras dengan gradien
+                color: Colors.white, // <-- Direkomendasikan
+                size: 30
             ),
-
-            // Floating Action Button dengan animasi
-            Positioned(
-              top: -24,
-              // Widget yang memberikan efek visual "turun" saat ditekan
-              child: Transform.translate(
-                offset: Offset(0, _isFabPressed ? 2.0 : 0.0), // <-- EFEK 3D
-                child: GestureDetector(
-                  // Mendeteksi saat jari mulai menekan tombol
-                  onTapDown: (_) => setState(() => _isFabPressed = true),
-                  // Mendeteksi saat jari diangkat dari tombol
-                  onTapUp: (_) {
-                    setState(() => _isFabPressed = false);
-                    if(isAdmin) {
-                      _showCreateOptions();
-                      // Panggil fungsi bottom sheet
-                    } else {
-                      HapticFeedback.mediumImpact();
-                      Navigator.pop(context); // Tutup bottom sheet
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => CreatePostPage()),
-                      );
-                    }
-                  },
-                  // Mendeteksi jika sentuhan dibatalkan
-                  onTapCancel: () => setState(() => _isFabPressed = false),
-                  child: AnimatedBuilder(
-                    animation: _fabAnimationController,
-                    builder: (context, child) {
-                      return Transform.scale(
-                        scale: _fabScaleAnimation.value,
-                        child: Transform.rotate(
-                          angle: _fabRotationAnimation.value * 2 * 3.14159,
-                          child: Container(
-                            padding: EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                colors: [Colors.orangeAccent, Colors.deepOrange],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              // Bayangan (shadow) berubah saat ditekan untuk efek 3D
-                              boxShadow: _isFabPressed
-                                  ? [ // Efek saat ditekan
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.2),
-                                  blurRadius: 4,
-                                  offset: Offset(0, 2),
-                                ),
-                              ]
-                                  : [ // Efek normal
-                                BoxShadow(
-                                  color: Colors.black26,
-                                  blurRadius: 8,
-                                  offset: Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: Icon(
-                              Icons.add, // Icon tetap add
-                              color: Colors.white,
-                              size: 28,
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  // Widget khusus untuk item navigasi notifikasi dengan badge
-  Widget _buildNotificationNavItem() {
-    final isSelected = widget.selectedIndex == 3;
-
-    return GestureDetector(
-      onTap: () => _onItemTapped(3),
-      child: AnimatedBuilder(
-        animation: _iconAnimationControllers[3],
-        builder: (context, child) {
-          return Transform.scale(
-            scale: _iconScaleAnimations[3].value,
-            child: Transform.translate(
-              offset: Offset(0, _iconBounceAnimations[3].value),
-              child: Container(
-                padding: EdgeInsets.all(12),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    // Container icon notifikasi
-                    AnimatedContainer(
-                      duration: Duration(milliseconds: 200),
-                      padding: EdgeInsets.all(isSelected ? 8 : 4),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? Colors.orange.withOpacity(0.15)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(16),
-                        border: isSelected
-                            ? Border.all(
-                                color: Colors.orange.withOpacity(0.3),
-                                width: 1,
-                              )
-                            : null,
-                      ),
-                      child: Icon(
-                        Icons.favorite_border,
-                        color: isSelected ? Colors.orange : Colors.grey[500],
-                        size: 24,
-                      ),
+  Widget _buildIconItem(int index, IconData icon, {required bool isSelected, required Color iconColor}) {
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(30),
+          onTap: () {
+            // Cek apakah ikon yang diketuk adalah Beranda (index 0)
+            // dan apakah tab yang aktif saat ini juga Beranda.
+            if (index == 0 && widget.selectedIndex == 0) {
+              // Jika ya, panggil method untuk scroll ke atas.
+              HapticFeedback.lightImpact();
+              Provider.of<ScrollProvider>(context, listen: false).scrollToTop();
+            } else {
+              // Jika tidak, jalankan fungsi pindah tab seperti biasa.
+              HapticFeedback.mediumImpact();
+              _playAnimationForIndex(index);
+              widget.onTap(index);
+            }
+          },
+          child: AnimatedBuilder(
+            animation: _iconAnimationControllers[index],
+            builder: (context, child) {
+              return Transform.scale(
+                scale: _iconScaleAnimations[index].value,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: EdgeInsets.all(isSelected ? 8 : 4),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? Colors.orange.withOpacity(0.15)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
                     ),
-
-                    // Badge notifikasi
-                    if (_unreadNotificationCount > 0)
-                      Positioned(
-                        top: -2,
-                        right: -2,
-                        child: Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: _unreadNotificationCount > 9 ? 6 : 4,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            borderRadius: BorderRadius.circular(10),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black12,
-                                blurRadius: 2,
-                                offset: Offset(0, 1),
-                              ),
-                            ],
-                          ),
-                          constraints: BoxConstraints(
-                            minWidth: 16,
-                            minHeight: 16,
-                          ),
-                          child: Text(
-                            _unreadNotificationCount > 99
-                                ? '99+'
-                                : _unreadNotificationCount.toString(),
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: _unreadNotificationCount > 9 ? 10 : 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildNavItem(IconData icon, int index) {
-    final isSelected = widget.selectedIndex == index;
-
-    return GestureDetector(
-      onTap: () => {
-        HapticFeedback.mediumImpact(),
-        _onItemTapped(index),
-      },
-      child: AnimatedBuilder(
-        animation: _iconAnimationControllers[index],
-        builder: (context, child) {
-          return Transform.scale(
-            scale: _iconScaleAnimations[index].value,
-            child: Transform.translate(
-              offset: Offset(0, _iconBounceAnimations[index].value),
-              child: Container(
-                padding: EdgeInsets.all(12),
-                child: AnimatedContainer(
-                  duration: Duration(milliseconds: 200),
-                  padding: EdgeInsets.all(isSelected ? 8 : 4),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? Colors.orange.withOpacity(0.15)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(16),
-                    border: isSelected
-                        ? Border.all(
-                            color: Colors.orange.withOpacity(0.3),
-                            width: 1,
-                          )
-                        : null,
-                  ),
-                  child: Icon(
-                    icon,
-                    color: isSelected ? Colors.orange : Colors.grey[500],
-                    size: 24,
+                    child: Icon(
+                      icon,
+                      color: isSelected ? Colors.orange : iconColor,
+                      size: 24,
+                    ),
                   ),
                 ),
-              ),
-            ),
-          );
-        },
+              );
+            },
+          ),
+        ),
       ),
     );
   }

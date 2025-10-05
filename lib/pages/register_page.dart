@@ -98,16 +98,23 @@ class _RegisterPageState extends State<RegisterPage> {
         if (result['success'] == true) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(result['message'] ?? 'Registrasi berhasil! Silakan login.'),
+              // Menggunakan message dari result, jika ada
+              content: Text(result['message'] ?? 'Registrasi berhasil! Silakan cek email untuk verifikasi akun.'),
               backgroundColor: Colors.green,
             ),
           );
           Navigator.pushReplacementNamed(context, '/login');
         } else {
+          // --- MODIFIKASI: Menampilkan pesan error dari backend ---
+          // Menampilkan pesan error validasi spesifik
+          final errorMessage = result['message'] ?? 'Registrasi gagal. Coba lagi.';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(result['message'] ?? 'Registrasi gagal.'),
+              content: Text(errorMessage),
+              // Gunakan widget MultiLineSnackBar untuk menampilkan error multi-baris lebih baik (opsional)
+              // Untuk saat ini cukup Text widget saja.
               backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5), // Beri durasi lebih lama untuk pesan error
             ),
           );
         }
@@ -273,21 +280,21 @@ class _RegisterPageState extends State<RegisterPage> {
 
   // --- TAMBAHAN: Fungsi untuk validasi kekuatan password ---
   String? _validatePasswordStrength(String value) {
-    if (value.length < 8) {
-      return 'Password minimal 8 karakter';
+    if (value.length < 6) {
+      return 'Password minimal 6 karakter';
     }
-    if (!value.contains(RegExp(r'[A-Z]'))) {
-      return 'Harus ada minimal 1 huruf kapital';
-    }
-    if (!value.contains(RegExp(r'[a-z]'))) {
-      return 'Harus ada minimal 1 huruf kecil';
-    }
-    if (!value.contains(RegExp(r'[0-9]'))) {
-      return 'Harus ada minimal 1 angka';
-    }
-    if (!value.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
-      return 'Harus ada minimal 1 simbol';
-    }
+    // if (!value.contains(RegExp(r'[A-Z]'))) {
+    //   return 'Harus ada minimal 1 huruf kapital';
+    // }
+    // if (!value.contains(RegExp(r'[a-z]'))) {
+    //   return 'Harus ada minimal 1 huruf kecil';
+    // }
+    // if (!value.contains(RegExp(r'[0-9]'))) {
+    //   return 'Harus ada minimal 1 angka';
+    // }
+    // if (!value.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
+    //   return 'Harus ada minimal 1 simbol';
+    // }
     return null; // Return null jika password kuat
   }
   // Widget bantuan untuk text field (ditambah parameter inputFormatters)

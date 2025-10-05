@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:portal_si/pages/group_chat_room_page.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../components/verified_badge.dart';
 import '../controllers/message_list_controller.dart';
 import '../models/chat.dart';
 import 'chat_room.dart';
@@ -21,9 +22,9 @@ class MessageListPage extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (_) => MessageListController(),
       child: Scaffold(
-        backgroundColor: Colors.white, // <-- [UBAH] Latar belakang utama jadi putih
+        backgroundColor: Colors.white,
         appBar: AppBar(
-          backgroundColor: Colors.white, // <-- [UBAH] Warna AppBar
+          backgroundColor: Colors.white,
           elevation: 0,
           // Hapus tombol back jika ini adalah halaman utama di tab
           // leading: IconButton(
@@ -73,12 +74,12 @@ class MessageListPage extends StatelessWidget {
                       prefixIcon:
                       Icon(Icons.search, color: Colors.grey.shade600),
                       // [TAMBAHAN] Tambahkan tombol filter
-                      suffixIcon: IconButton(
-                        icon: Icon(Icons.tune_rounded, color: Colors.grey.shade600),
-                        onPressed: () {
-                          // TODO: Tambahkan logika untuk filter
-                        },
-                      ),
+                      // suffixIcon: IconButton(
+                      //   icon: Icon(Icons.tune_rounded, color: Colors.grey.shade600),
+                      //   onPressed: () {
+                      //     // TODO: Tambahkan logika untuk filter
+                      //   },
+                      // ),
                       filled: true,
                       fillColor: Colors.grey.shade100, // <-- [UBAH] Warna search bar
                       contentPadding: const EdgeInsets.all(16),
@@ -153,6 +154,11 @@ class _ConversationTile extends StatelessWidget {
     final String message = conversation.lastMessage;
     final String? imageUrl = conversation.displayImageUrl;
 
+    bool isVerified = false;
+    if (conversation is UserConversation) {
+      isVerified = (conversation as UserConversation).isPartnerVerified;
+    }
+
     return InkWell( // <-- [UBAH] Bungkus dengan InkWell
       onTap: () {
         if (conversation is UserConversation) {
@@ -201,20 +207,29 @@ class _ConversationTile extends StatelessWidget {
                   Row(
                     children: [
                       Flexible(
-                        child: Text(
-                          name,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: isUnread ? FontWeight.bold : FontWeight.w600,
-                            color: Colors.black87,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                name,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: isUnread ? FontWeight.bold : FontWeight.w600,
+                                  color: Colors.black87,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (isVerified) // Ini adalah "element if", bukan "collection if" yang menghasilkan Set
+                              const SizedBox(width: 6), // Widget individual
+                            if (isVerified) // Ini juga "element if"
+                              const VerifiedBadge(size: 16),
+                          ],
                         ),
                       ),
-                      // Add a small gap
                       const SizedBox(width: 6),
-                      // If it's a group, show the group icon
                       if (conversation is GroupConversation)
                         Icon(
                           Icons.group,
@@ -222,6 +237,17 @@ class _ConversationTile extends StatelessWidget {
                           color: Colors.grey.shade500,
                         ),
                     ],
+                  ),
+                  const SizedBox(height: 4), // Jarak antara nama dan pesan
+                  Text(
+                    message, // Menggunakan pesan terakhir dari model
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isUnread ? Colors.black87 : Colors.grey.shade600,
+                      fontWeight: isUnread ? FontWeight.bold : FontWeight.normal,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),

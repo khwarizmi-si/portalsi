@@ -1,4 +1,4 @@
-// lib/pages/chat_room.dart (SUDAH DIPERBAIKI UNTUK WEB)
+// lib/pages/chat_room.dart
 
 import 'dart:io';
 import 'dart:math';
@@ -10,6 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
+import '../components/verified_badge.dart'; // <-- 1. IMPORT VERIFIED BADGE
 import '../controllers/chat_room_controller.dart';
 import '../models/chat.dart';
 import '../models/user_model.dart';
@@ -18,11 +19,12 @@ import 'package:portal_si/pages/image_preview_screen.dart';
 import '../widgets/permission_dialog.dart';
 import 'camera_screen.dart';
 
-// --- TAMBAHKAN IMPORT BARU ---
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:file_picker/file_picker.dart';
 
-// --- Widget _AssetThumbnail (Tidak ada perubahan) ---
+import 'full_screen_image_viewer.dart';
+
+// --- Widget _AssetThumbnail ---
 class _AssetThumbnail extends StatelessWidget {
   final AssetEntity asset;
   final bool isSelected;
@@ -84,7 +86,7 @@ class _AssetThumbnail extends StatelessWidget {
   }
 }
 
-// --- Widget _GalleryPickerSheet (Tidak ada perubahan) ---
+// --- Widget _GalleryPickerSheet ---
 class _GalleryPickerSheet extends StatefulWidget {
   const _GalleryPickerSheet();
 
@@ -196,10 +198,10 @@ class _GalleryPickerSheetState extends State<_GalleryPickerSheet> {
           children: [
             Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
                   child: Row(
-                    children: const [
+                    children: [
                       Text('Recents', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                     ],
                   ),
@@ -259,7 +261,6 @@ class _GalleryPickerSheetState extends State<_GalleryPickerSheet> {
   }
 }
 
-// --- PERUBAHAN UTAMA ADA DI DALAM WIDGET INI ---
 class _AttachmentPopupMenu extends StatelessWidget {
   final Offset buttonPosition;
   final Size buttonSize;
@@ -269,21 +270,16 @@ class _AttachmentPopupMenu extends StatelessWidget {
     required this.buttonSize,
   });
 
-  // --- FUNGSI BARU: Untuk memilih dan mengirim gambar di web ---
   Future<void> _pickAndSendImagesForWeb(BuildContext context) async {
     final chatController = context.read<ChatRoomController>();
 
-    // 1. Buka dialog pilih file
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.image,
-      allowMultiple: true, // Izinkan memilih banyak gambar
+      allowMultiple: true,
     );
 
     if (result != null && result.files.isNotEmpty) {
       List<AssetEntity> webAssets = [];
-      // Tampilkan loading atau status "memproses" jika perlu
-
-      // 2. Loop setiap file yang dipilih dan ubah menjadi AssetEntity
       for (var file in result.files) {
         if (file.bytes != null) {
           try {
@@ -299,8 +295,6 @@ class _AttachmentPopupMenu extends StatelessWidget {
           }
         }
       }
-
-      // 3. Kirim semua AssetEntity yang berhasil dibuat
       if (webAssets.isNotEmpty) {
         chatController.sendMediaMessage(webAssets);
       }
@@ -349,7 +343,7 @@ class _AttachmentPopupMenu extends StatelessWidget {
                       final navigator = Navigator.of(context);
                       final chatController = context.read<ChatRoomController>();
 
-                      navigator.pop(); // Tutup popup
+                      navigator.pop();
 
                       navigator.push(
                         MaterialPageRoute(
@@ -369,14 +363,11 @@ class _AttachmentPopupMenu extends StatelessWidget {
                       final navigator = Navigator.of(context);
                       final chatController = context.read<ChatRoomController>();
 
-                      navigator.pop(); // Tutup popup
+                      navigator.pop();
 
-                      // --- LOGIKA KONDISIONAL DI SINI ---
                       if (kIsWeb) {
-                        // Jika di web, panggil fungsi baru
                         _pickAndSendImagesForWeb(context);
                       } else {
-                        // Jika di mobile, tampilkan galeri lama
                         showModalBottomSheet(
                           context: navigator.context,
                           isScrollControlled: true,
@@ -400,7 +391,6 @@ class _AttachmentPopupMenu extends StatelessWidget {
                     text: 'Pilih File',
                     onTap: () {
                       Navigator.pop(context);
-                      // Tambahkan logika pilih file dokumen di sini nanti
                     },
                   ),
                 ],
@@ -430,11 +420,6 @@ class _AttachmentPopupMenu extends StatelessWidget {
   }
 }
 
-
-// --- Sisa kode dari file chat_room.dart tidak perlu diubah ---
-// ...
-// (Salin-tempel sisa kode Anda di sini: _BouncyPopupRoute, ChatRoomPage,
-// _ChatAppBar, _MessageList, _MessageBubble, dll.)
 class _BouncyPopupRoute extends PageRouteBuilder {
   final Offset buttonPosition;
   final Size buttonSize;
@@ -482,7 +467,7 @@ class _BouncyPopupRoute extends PageRouteBuilder {
   );
 }
 
-class ChatRoomPage extends StatefulWidget { // <-- UBAH MENJADI StatefulWidget
+class ChatRoomPage extends StatefulWidget {
   final User user;
   const ChatRoomPage({super.key, required this.user});
 
@@ -491,22 +476,18 @@ class ChatRoomPage extends StatefulWidget { // <-- UBAH MENJADI StatefulWidget
 }
 
 class _ChatRoomPageState extends State<ChatRoomPage> {
-  // Pindahkan controller ke sini agar bisa diakses di initState
   late final ChatRoomController _chatController;
 
   @override
   void initState() {
     super.initState();
-    // Inisialisasi controller di sini
     _chatController = ChatRoomController(recipient: widget.user);
 
-    // Panggil pengecekan izin setelah frame pertama selesai di-render
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndRequestNotificationPermission();
     });
   }
 
-  // INI ADALAH FUNGSI BARU UNTUK IZIN NOTIFIKASI
   Future<void> _checkAndRequestNotificationPermission() async {
     PermissionStatus status = await Permission.notification.status;
 
@@ -526,7 +507,6 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Gunakan .value agar controller tidak dibuat ulang
     return ChangeNotifierProvider.value(
       value: _chatController,
       child: Scaffold(
@@ -542,7 +522,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
           ),
           child: Column(
             children: [
-              _ChatAppBar(user: widget.user), // <-- Akses user melalui 'widget.user'
+              _ChatAppBar(user: widget.user),
               Expanded(
                 child: Consumer<ChatRoomController>(
                   builder: (context, controller, _) {
@@ -623,14 +603,26 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        user.fullName ?? user.username,
-                        style: const TextStyle(
-                            color: Colors.black,
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold),
-                        overflow: TextOverflow.ellipsis,
+                      // -- 👇 MODIFIKASI DIMULAI DI SINI 👇 --
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              user.fullName ?? user.username,
+                              style: const TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          SizedBox(width: 6,),
+                          if (user.isVerified)
+                            const VerifiedBadge(size: 17),
+                        ],
                       ),
+                      // -- 👆 MODIFIKASI SELESAI DI SINI 👆 --
                       Text(
                         controller.isRecipientOnline ? 'Online' : 'Offline',
                         style: TextStyle(
@@ -641,12 +633,10 @@ class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                     ],
                   ),
                 ),
-                // [TAMBAHAN] Tombol dropdown menu diletakkan di sini
                 PopupMenuButton<String>(
                   icon: Icon(Icons.more_horiz, color: Colors.black.withOpacity(0.7)),
                   onSelected: (String value) {
                     if (value == 'reload') {
-                      // Panggil metode di controller untuk memuat ulang
                       Provider.of<ChatRoomController>(context, listen: false)
                           .reloadConversation();
                     }
@@ -677,23 +667,27 @@ class _MessageList extends StatelessWidget {
 
     return ListView.builder(
       reverse: true,
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 20),
-      itemCount: controller.messages.length,
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      itemCount: controller.messages.length + 1,
       itemBuilder: (context, index) {
+
+        if (index == controller.messages.length) {
+          return const SizedBox(height: 20);
+        }
+
         final message = controller.messages[index];
         final bool isMe = message.sender.id == controller.currentUser?.id;
 
-        final bool isGrouped = index < controller.messages.length - 1 &&
-            controller.messages[index + 1].sender.id == message.sender.id &&
-            message.timestamp
-                .difference(controller.messages[index + 1].timestamp)
-                .inMinutes <
-                2;
+        final bool showSenderName = !isMe &&
+            (index == controller.messages.length - 1 ||
+                index == 0 ||
+                (index > 0 && controller.messages[index - 1].sender.id != message.sender.id));
 
         return _MessageBubble(
           message: message,
           isMe: isMe,
-          isGrouped: isGrouped,
+          showSenderName: showSenderName,
+          sender: message.sender,
         );
       },
     );
@@ -703,203 +697,209 @@ class _MessageList extends StatelessWidget {
 class _MessageBubble extends StatelessWidget {
   final ChatMessage message;
   final bool isMe;
-  final bool isGrouped;
+  final bool showSenderName;
+  final User? sender;
 
   const _MessageBubble({
     required this.message,
     required this.isMe,
-    required this.isGrouped,
+    required this.showSenderName,
+    this.sender,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    final alignment = isMe ? Alignment.centerRight : Alignment.centerLeft;
-    final color = isMe ? const Color(0xFFFFA726) : Colors.white;
-    final timestampColor = isMe ? Colors.white70 : Colors.black54;
-
-    Widget messageContent;
-
-    void _openImagePreview(String path, String tag) {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ImagePreviewScreen(
-            imageUrl: path,
-            heroTag: tag,
-          ),
-        ),
-      );
+  Widget _buildMessageContent(BuildContext context) {
+    switch (message.type) {
+      case MessageType.image:
+        return _buildImageMessage(context);
+      case MessageType.video:
+        return const Text("📹 Video (belum didukung)");
+      case MessageType.file:
+        return const Text("📎 File (belum didukung)");
+      case MessageType.text:
+      default:
+        return Text(message.text ?? '',
+            style: TextStyle(
+                color: isMe ? Colors.white : Colors.black87,
+                fontSize: 16,
+                height: 1.3));
     }
+  }
 
-    if (message.type == MessageType.image) {
-      // --- PERUBAHAN UTAMA UNTUK MENAMPILKAN GAMBAR ---
-      Widget imageWidget;
+  Widget _buildImageMessage(BuildContext context) {
+    ImageProvider imageProvider;
 
-      if (message.localBytes != null) {
-        // 1. Prioritas utama: tampilkan dari bytes untuk preview web
-        imageWidget = Image.memory(message.localBytes!, fit: BoxFit.cover);
-      } else if (message.localFile != null) {
-        // 2. Prioritas kedua: tampilkan dari file untuk preview mobile
-        imageWidget = Image.file(message.localFile!, fit: BoxFit.cover);
-      } else if (message.mediaUrl != null) {
-        // 3. Terakhir: tampilkan dari URL jika sudah ter-upload
-        imageWidget = Image.network(
-          message.mediaUrl!,
-          fit: BoxFit.cover,
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return Center(
-              child: CircularProgressIndicator(
-                value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                    : null,
-                color: Colors.grey,
-              ),
-            );
-          },
-          errorBuilder: (context, error, stackTrace) {
-            return const Icon(Icons.broken_image, color: Colors.grey, size: 50);
-          },
-        );
-      } else {
-        // Fallback jika tidak ada data gambar sama sekali
-        imageWidget = const Icon(Icons.broken_image, color: Colors.grey, size: 50);
-      }
-
-      final String? displayImagePath = message.localFile?.path ?? message.mediaUrl;
-      final String heroTag = 'image-${message.id}';
-
-      messageContent = GestureDetector(
-        onTap: displayImagePath != null ? () => _openImagePreview(displayImagePath, heroTag) : null,
-        child: Hero(
-          tag: heroTag,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                imageWidget, // Gunakan widget gambar yang sudah dipilih
-                if (message.status == MessageStatus.sending && message.uploadProgress != null)
-                  ValueListenableBuilder<double>(
-                    valueListenable: message.uploadProgress!,
-                    builder: (context, progress, child) {
-                      return Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Container(color: Colors.black.withOpacity(0.6)),
-                          SizedBox(
-                            width: 100,
-                            height: 100,
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                _GradientCircularProgressIndicator(progress: progress),
-                                const SizedBox(height: 8),
-                                Text(
-                                  '${(progress * 100).toStringAsFixed(0)}%',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-
-                if (message.status == MessageStatus.failed)
-                  const Icon(Icons.error, color: Colors.red, size: 40),
-              ],
-            ),
-          ),
-        ),
-      );
+    if (message.localBytes != null) {
+      imageProvider = MemoryImage(message.localBytes!);
+    } else if (message.localFile != null) {
+      imageProvider = FileImage(message.localFile!);
+    } else if (message.mediaUrl != null && message.mediaUrl!.isNotEmpty) {
+      imageProvider = NetworkImage(message.mediaUrl!);
     } else {
-      messageContent = Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(
-            child: Text(
-              message.text ?? "",
-              style: TextStyle(color: isMe ? Colors.white : Colors.black87, fontSize: 16, height: 1.3),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Padding(
-            padding: const EdgeInsets.only(top: 4.0),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  DateFormat.Hm().format(message.timestamp),
-                  style: TextStyle(color: timestampColor, fontSize: 12),
-                ),
-                if (isMe) ...[
-                  const SizedBox(width: 4),
-                  Icon(
-                    _getStatusIcon(message.status),
-                    size: 16,
-                    color: message.status == MessageStatus.read
-                        ? Colors.lightBlue.shade100
-                        : timestampColor,
-                  ),
-                ]
-              ],
-            ),
-          )
-        ],
-      );
+      return const Icon(Icons.broken_image, color: Colors.grey, size: 50);
     }
 
-    return Align(
-      alignment: alignment,
-      child: Container(
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-        margin: EdgeInsets.only(
-          top: isGrouped ? 2.0 : 10.0,
-          bottom: 2.0,
-        ),
-        decoration: BoxDecoration(
-          color: (message.type == MessageType.text || message.text != null) ? color : Colors.transparent,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(20),
-            topRight: const Radius.circular(20),
-            bottomLeft: isMe || isGrouped ? const Radius.circular(20) : const Radius.circular(5),
-            bottomRight: !isMe || isGrouped ? const Radius.circular(20) : const Radius.circular(5),
+    final String heroTag = message.id.toString();
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          PageRouteBuilder(
+            opaque: false,
+            barrierColor: Colors.black.withOpacity(0.7),
+            pageBuilder: (BuildContext context, _, __) {
+              return FullScreenImageViewer(
+                imageProvider: imageProvider,
+                heroTag: heroTag,
+              );
+            },
           ),
-          boxShadow: (message.type == MessageType.text || message.text != null) ? [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            )
-          ] : [],
+        );
+      },
+      child: Hero(
+        tag: heroTag,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12.0),
+          child: Container(
+            constraints: const BoxConstraints(
+              maxWidth: 250,
+              maxHeight: 300,
+            ),
+            child: Image(
+              image: imageProvider,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Center(
+                  child: CircularProgressIndicator(
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                        : null,
+                  ),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return const Icon(Icons.error_outline, color: Colors.red, size: 40);
+              },
+            ),
+          ),
         ),
-        padding: (message.type == MessageType.text || message.text != null)
-            ? const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0)
-            : const EdgeInsets.all(4.0),
-        child: messageContent,
       ),
     );
   }
 
-  IconData _getStatusIcon(MessageStatus status) {
-    switch (status) {
-      case MessageStatus.sending:
-        return Icons.access_time_rounded;
-      case MessageStatus.sent:
-        return Icons.done_rounded;
-      case MessageStatus.read:
-        return Icons.done_all_rounded;
-      case MessageStatus.failed:
-        return Icons.error_outline_rounded;
-      default:
-        return Icons.done_rounded;
+  String _formatTime(DateTime dateTime) {
+    final localDateTime = dateTime.toLocal();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = DateTime(now.year, now.month, now.day - 1);
+    final messageDay = DateTime(localDateTime.year, localDateTime.month, localDateTime.day);
+
+    if (messageDay.isAtSameMomentAs(today)) {
+      return DateFormat.Hm().format(localDateTime);
+    } else if (messageDay.isAtSameMomentAs(yesterday)) {
+      return 'Kemarin, ${DateFormat.Hm().format(localDateTime)}';
+    } else if (now.difference(messageDay).inDays < 7) {
+      return DateFormat('EEEE, Hm').format(localDateTime);
+    } else {
+      return DateFormat('d MMMM yyyy, Hm').format(localDateTime);
     }
+  }
+
+  static Color getSenderColor(String senderId) {
+    final colors = [
+      Colors.blue.shade600,
+      Colors.green.shade600,
+      Colors.orange.shade600,
+      Colors.purple.shade600,
+      Colors.teal.shade600,
+      Colors.indigo.shade600,
+    ];
+    return colors[senderId.hashCode % colors.length];
+  }
+
+  Color _getSenderColor(String senderId) {
+    return getSenderColor(senderId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final messageSender = sender ?? message.sender;
+
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: EdgeInsets.only(top: 2, bottom: 2, left: isMe ? 64 : 16, right: isMe ? 16 : 64),
+        child: Column(
+          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            if (showSenderName && !isMe && sender != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 6),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 12,
+                      backgroundImage: sender!.profilePictureUrl != null
+                          ? NetworkImage(sender!.profilePictureUrl!)
+                          : null,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      sender!.fullName ?? sender!.username,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: _getSenderColor(message.sender.id.toString()),
+                      ),
+                    ),
+                    if (messageSender.isVerified)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4.0),
+                        child: Icon(Icons.verified, size: 14, color: Colors.blue.shade500),
+                      ),
+                  ],
+                ),
+              ),
+
+            Container(
+              padding: message.type == MessageType.text
+                  ? const EdgeInsets.symmetric(horizontal: 16, vertical: 10)
+                  : const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: isMe ? const Color(0xFFFF8D42) : Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(20),
+                  topRight: const Radius.circular(20),
+                  bottomLeft: isMe ? const Radius.circular(20) : const Radius.circular(4),
+                  bottomRight: isMe ? const Radius.circular(4) : const Radius.circular(20),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                children: [
+                  _buildMessageContent(context),
+                  if (message.type == MessageType.text)
+                    const SizedBox(height: 4),
+
+                  Padding(
+                    padding: message.type == MessageType.text
+                        ? EdgeInsets.zero
+                        : const EdgeInsets.only(top: 4.0, right: 4.0),
+                    child: Text(_formatTime(message.timestamp),
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: isMe ? Colors.white70 : Colors.grey.shade500,
+                            fontWeight: FontWeight.w500)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

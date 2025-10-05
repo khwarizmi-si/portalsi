@@ -6,7 +6,10 @@ import 'package:flutter/foundation.dart';
 // --- [TAMBAHAN] Import untuk Background Service & Service lainnya ---
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // <-- ADDED IMPORT
+import 'package:portal_si/pages/video_intro_screen.dart';
+import 'package:portal_si/providers/feed_provider.dart';
 import 'package:portal_si/providers/scroll_provider.dart';
+import 'package:portal_si/providers/shake_provider.dart';
 import 'package:portal_si/services/auth_service.dart';
 import 'package:portal_si/services/message_service.dart';
 import 'package:portal_si/utils/secure_storage.dart';
@@ -131,9 +134,19 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // --- [TAMBAHAN BARU] Panggil inisialisasi service di sini ---
-  await initializeBackgroundService();
+  // Kondisi untuk menjalankan background service hanya di Android & iOS
+  if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
+    await initializeBackgroundService();
+  } else {
+    // Opsional: Log jika service tidak diinisialisasi
+    debugPrint('ℹ️ Background Service tidak diinisialisasi pada platform ini (kIsWeb: $kIsWeb, platform: $defaultTargetPlatform).');
+  }
 
-  await NotificationSystemService.instance.initialize();
+  if (!kIsWeb) { // Or be more specific: !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)
+    await NotificationSystemService.instance.initialize();
+  } else {
+    debugPrint('ℹ️ NotificationSystemService tidak diinisialisasi pada platform web.');
+  }
 
   runApp(
     MultiProvider(
@@ -142,6 +155,8 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => HomeController()),
         ChangeNotifierProvider(create: (_) => UserProvider()),
         ChangeNotifierProvider(create: (_) => ScrollProvider()),
+        ChangeNotifierProvider(create: (_) => ShakeProvider()),
+        ChangeNotifierProvider(create: (_) => FeedProvider()),
       ],
       child: const MyApp(),
     ),
@@ -210,7 +225,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         title: 'Portal SI',
         theme: ThemeData(
           primarySwatch: Colors.blue,
-          fontFamily: 'Roboto',
+          fontFamily: 'AlanSans',
           visualDensity: VisualDensity.adaptivePlatformDensity,
         ),
         navigatorObservers: [
@@ -218,6 +233,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         ],
         // [DIUBAH] Halaman awal aplikasi sekarang SELALU SplashScreen
         home: const SplashScreen(),
+        // home: const VideoIntroScreen(),
         // [DIUBAH] initialRoute dihapus dan diganti 'home'
         routes: {
           '/login': (context) => const LoginPage(),
@@ -391,10 +407,10 @@ class _CacheDebugPageState extends State<CacheDebugPage> {
             ),
             const SizedBox(height: 8),
             const Text(
-              '• Check console for cache statistics\n'
-                  '• High hit rate (>70%) = good performance\n'
-                  '• Clean cache regularly\n'
-                  '• Monitor memory usage\n'
+              '• Check console for cache statistics'
+                  '• High hit rate (>70%) = good performance'
+                  '• Clean cache regularly'
+                  '• Monitor memory usage'
                   '• Remove this page in production',
               style: TextStyle(fontSize: 14),
             ),

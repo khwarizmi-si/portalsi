@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import '../models/song_model.dart';
+import '../models/user_model.dart';
 import '../widgets/collage_layout_view.dart';
 import '../widgets/music_picker_sheet.dart';
 import 'story_preview_page.dart';
@@ -130,7 +131,18 @@ class _GalleryItemTileState extends State<GalleryItemTile> with SingleTickerProv
 enum MultiSelectStep { selecting, layoutChoice }
 
 class CreateStoryPage extends StatefulWidget {
-  const CreateStoryPage({super.key});
+  final User currentUser;
+  final String heroTag;
+  final XFile? initialImage; // Opsional: untuk langsung upload gambar
+  final String? initialImageUrl; // Opsional: untuk menampilkan gambar dari URL
+
+  const CreateStoryPage({
+    Key? key,
+    required this.currentUser,
+    required this.heroTag,
+    this.initialImage,
+    this.initialImageUrl,
+  }) : super(key: key);
 
   @override
   State<CreateStoryPage> createState() => _CreateStoryPageState();

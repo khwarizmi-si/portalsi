@@ -1,9 +1,11 @@
 // lib/pages/my_story_view_page.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:page_transition/page_transition.dart';
 import 'package:share_plus/share_plus.dart';
 import '../components/post_card.dart';
+import '../controllers/story_content_controller.dart';
 import '../services/follow_service.dart';
 import '../widgets/story_content_view.dart';
 import '../models/story_model.dart';
@@ -21,22 +23,22 @@ class ShareUser {
 
 // Controller untuk komunikasi antara halaman ini dengan kontennya (StoryContentView).
 // Ini memungkinkan halaman untuk mengirim perintah 'pause' atau 'resume' ke video/musik di dalam konten.
-class StoryContentController {
-  VoidCallback? _pauseListener;
-  VoidCallback? _resumeListener;
-
-  void addListeners({VoidCallback? onPause, VoidCallback? onResume}) {
-    _pauseListener = onPause;
-    _resumeListener = onResume;
-  }
-
-  void pause() => _pauseListener?.call();
-  void resume() => _resumeListener?.call();
-  void dispose() {
-    _pauseListener = null;
-    _resumeListener = null;
-  }
-}
+// class StoryContentController {
+//   VoidCallback? _pauseListener;
+//   VoidCallback? _resumeListener;
+//
+//   void addListeners({VoidCallback? onPause, VoidCallback? onResume}) {
+//     _pauseListener = onPause;
+//     _resumeListener = onResume;
+//   }
+//
+//   void pause() => _pauseListener?.call();
+//   void resume() => _resumeListener?.call();
+//   void dispose() {
+//     _pauseListener = null;
+//     _resumeListener = null;
+//   }
+// }
 
 class MentionUser {
   final String username;
@@ -85,6 +87,8 @@ class _MyStoryViewPageState extends State<MyStoryViewPage> with SingleTickerProv
   bool _isLoadingUsers = false;
 
   final FollowService _followService = FollowService();
+
+
 
   // State untuk gestur dismiss
   double _scale = 1.0;
@@ -485,6 +489,7 @@ class _MyStoryViewPageState extends State<MyStoryViewPage> with SingleTickerProv
     }
 
     final StoryDetail currentStory = _stories[_currentIndex];
+    final imageUrl = widget.userWithStories.profilePictureUrl;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -598,7 +603,15 @@ class _MyStoryViewPageState extends State<MyStoryViewPage> with SingleTickerProv
                               children: [
                                 CircleAvatar(
                                   radius: 20,
-                                  backgroundImage: NetworkImage(widget.userWithStories.profilePictureUrl),
+                                  backgroundColor: Colors.grey.shade400, // Warna latar belakang jika tidak ada gambar
+                                  // Gunakan kondisi: jika imageUrl tidak null & tidak kosong, baru gunakan NetworkImage
+                                  backgroundImage: (imageUrl != null && imageUrl.isNotEmpty)
+                                      ? NetworkImage(imageUrl)
+                                      : null,
+                                  // Jika tidak ada gambar, tampilkan ikon sebagai gantinya
+                                  child: (imageUrl == null || imageUrl.isEmpty)
+                                      ? const Icon(Icons.person, size: 22, color: Colors.white)
+                                      : null,
                                 ),
                                 const SizedBox(width: 10),
                                 Column(
@@ -645,8 +658,42 @@ class _MyStoryViewPageState extends State<MyStoryViewPage> with SingleTickerProv
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                                   children: [
-                                    _buildFooterButton(Icons.share, "Kirim ke", onPressed: _showShareOnSheet),
-                                    _buildFooterButton(Icons.alternate_email, "Sebutkan", onPressed: _showMentionSheet),
+                                    // _buildFooterButton(Icons.share, "Kirim ke", onPressed: _showShareOnSheet),
+                                    _buildFooterButton(Icons.share, "Kirim ke", onPressed: () {
+                                      HapticFeedback.lightImpact();
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: const Text(
+                                            'Fitur ini akan segera hadir..',
+                                          ),
+                                          backgroundColor: Colors.blueAccent,
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }),
+                                    // _buildFooterButton(Icons.alternate_email, "Sebutkan", onPressed: _showMentionSheet),
+                                    _buildFooterButton(Icons.alternate_email, "Sebutkan", onPressed: () {
+                                      HapticFeedback.lightImpact();
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: const Text(
+                                            'Fitur ini akan segera hadir..',
+                                          ),
+                                          backgroundColor: Colors.blueAccent,
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              10,
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }),
                                     _buildFooterButton(Icons.more_horiz, "Lainnya", onPressed: _showMoreOptions),
                                   ],
                                 ),
@@ -722,10 +769,11 @@ class _MyStoryViewPageState extends State<MyStoryViewPage> with SingleTickerProv
         print('============================================');
 
         final users = followingList.map((user) {
-          final avatarUrl = user['profile_picture_url'] ?? 'https://via.placeholder.com/150';
+          // BENAR: Gunakan notasi titik untuk mengakses properti objek User
+          final avatarUrl = user.profilePictureUrl ?? 'https://via.placeholder.com/150';
           return ShareUser(
-            name: user['username'] ?? 'No Name',
-            avatarUrl: avatarUrl,
+            name: user.username, // <-- Ganti di sini
+            avatarUrl: avatarUrl, // <-- Dan di sini (jika ada)
           );
         }).toList();
 

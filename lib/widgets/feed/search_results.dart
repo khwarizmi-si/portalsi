@@ -51,7 +51,7 @@ class SearchResults extends StatelessWidget {
         final user = filteredResults[index];
         return UserSearchItem(
           user: user, // Kirim objek User langsung ke UserSearchItem
-          onTap: () => NavigationHelper.navigateToProfile2(context, user),
+          onTap: () => NavigationHelper.navigateToProfile(context, user),
         );
       },
     );

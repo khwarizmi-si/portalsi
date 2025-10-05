@@ -1,5 +1,4 @@
 // lib/models/announcement_model.dart
-import 'package:flutter/foundation.dart';
 
 class Announcement {
   final int id;
@@ -32,7 +31,6 @@ class Announcement {
     );
   }
 
-  // --- ✨ FUNGSI BARU UNTUK MENYIMPAN KE CACHE ---
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -51,12 +49,14 @@ class Creator {
   final String fullName;
   final String username;
   final String? profilePictureUrl;
+  final bool isVerified; // <-- 1. TAMBAHKAN PROPERTI INI
 
   Creator({
     required this.userId,
     required this.fullName,
     required this.username,
     this.profilePictureUrl,
+    this.isVerified = false, // <-- 2. TAMBAHKAN DI KONSTRUKTOR
   });
 
   factory Creator.fromJson(Map<String, dynamic> json) {
@@ -65,16 +65,17 @@ class Creator {
       fullName: json['full_name'],
       username: json['username'],
       profilePictureUrl: json['profile_picture_url'],
+      isVerified: json['is_verified'] ?? false, // <-- 3. TAMBAHKAN PARSING DARI JSON
     );
   }
 
-  // --- ✨ FUNGSI BARU UNTUK MENYIMPAN KE CACHE ---
   Map<String, dynamic> toJson() {
     return {
       'user_id': userId,
       'full_name': fullName,
       'username': username,
       'profile_picture_url': profilePictureUrl,
+      'is_verified': isVerified, // Jangan lupa tambahkan juga di sini
     };
   }
 }

@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import '../controllers/story_content_controller.dart';
 import '../models/story_model.dart';
 import '../pages/my_story_view_page.dart';
 

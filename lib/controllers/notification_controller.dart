@@ -164,19 +164,17 @@ class NotificationController extends ChangeNotifier {
     }
 
     if (notification.type == 'follow') {
+      // Pop halaman notifikasi saat ini
       Navigator.pop(context);
-      NavigationHelper.navigateToProfile(context, notification.sender.toJson());
+      // BAGIAN 1 (DIPERBAIKI): Kirim objek `notification.sender` secara langsung
+      NavigationHelper.navigateToProfile(context, notification.sender);
     } else if (notification.relatedPostId != null) {
       final post = _postCache[notification.relatedPostId];
       if (post != null) {
-        Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PostDetailPage(
-                postId: post.id,
-                initialPost: post,
-              ),
-            ));
+        // Pop halaman notifikasi saat ini
+        Navigator.pop(context);
+        // BAGIAN 2 (DIPERBAIKI): Gunakan NavigationHelper untuk menampilkan overlay
+        NavigationHelper.navigateToPostDetail(context, post.id, initialPost: post);
       }
     }
   }

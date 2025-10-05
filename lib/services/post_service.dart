@@ -1,8 +1,11 @@
 // lib/services/post_service.dart
 import 'dart:convert';
+import 'dart:developer';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
+import '../models/liker_model.dart';
+import '../models/paginated_response.dart';
 import '../utils/secure_storage.dart';
 import 'api_service.dart';
 
@@ -41,11 +44,22 @@ class PostService extends ApiService {
     final response = await http.Response.fromStream(streamedResponse);
 
     if (response.statusCode == 200 || response.statusCode == 201) {
+      // --- PERUBAHAN: Tambahkan log untuk respons body ---
+      log("✅ Respons Sukses dari Endpoint /posts:\n${response.body}");
+      // --- AKHIR PERUBAHAN ---
+
       final responseData = jsonDecode(response.body);
-      return Post.fromJson(responseData['data'] ?? responseData);
+      // Pastikan 'post' adalah Map sebelum dioper ke Post.fromJson
+      if (responseData['post'] is Map<String, dynamic>) {
+        return Post.fromJson(responseData['post'] as Map<String, dynamic>);
+      } else {
+        // Tambahkan penanganan jika 'post' tidak ada atau bukan Map
+        throw Exception('Format data post tidak valid dalam respons.');
+      }
     } else {
-      print("Gagal membuat postingan: ${response.body}");
-      return null;
+      throw Exception(
+          'Gagal membuat postingan. Status: ${response.statusCode}, Body: ${response.body}'
+      );
     }
   }
 
@@ -54,23 +68,24 @@ class PostService extends ApiService {
     return null;
   }
 
-  Future<List<dynamic>> fetchPosts({int page = 1}) async {
-
+  Future<PaginatedFeedResponse> fetchPosts({int page = 1}) async {
     final dynamic responseData = await get('posts', queryParams: {
       'page': page.toString(),
     });
 
     if (responseData is Map<String, dynamic> && responseData['feed'] is List) {
-      return responseData['feed'] as List<dynamic>;
-    } else if (responseData is Map<String, dynamic> && responseData['data'] is List) {
-      return responseData['data'];
-    } else if (responseData is List) {
-      return responseData;
+      // Ambil list feed seperti sebelumnya
+      final items = responseData['feed'] as List<dynamic>;
 
+      // --- 👇 CEK APAKAH ADA HALAMAN BERIKUTNYA 👇 ---
+      final bool hasNext = responseData['next_page_url'] != null;
+
+      // Kembalikan objek PaginatedFeedResponse
+      return PaginatedFeedResponse(feedItems: items, hasNextPage: hasNext);
     } else {
-      print(
-          '⚠️ Peringatan: Endpoint /posts tidak mengembalikan format list yang diharapkan. Data: $responseData');
-      return [];
+      // Jika format tidak sesuai, kembalikan data kosong dan anggap tidak ada halaman lagi
+      print('⚠️ Peringatan: Format respons /posts tidak sesuai.');
+      return PaginatedFeedResponse(feedItems: [], hasNextPage: false);
     }
   }
 
@@ -97,10 +112,83 @@ class PostService extends ApiService {
 
   Future<Post> getPostDetail(int id) async {
     final dynamic data = await get('posts/$id');
+    print('=============================================');
+    print('🔍 DEBUG: DATA MENTAH DARI API UNTUK POST ID #$id');
+    // Gunakan jsonEncode untuk format yang rapi (pretty print)
+    JsonEncoder encoder = const JsonEncoder.withIndent('  ');
+    String prettyprint = encoder.convert(data);
+    log(prettyprint); // log() lebih baik untuk string panjang
+    print('=============================================');
     if (data is Map<String, dynamic>) {
       return Post.fromJson(data);
     } else {
       throw Exception('Format data untuk post #$id tidak valid.');
+    }
+  }
+
+  Future<List<Liker>> getPostLikers(int postId) async {
+    try {
+      final currentUserId = await SecureStorage.getUserId(); // Ambil ID pengguna saat ini
+      final responseData = await get('posts/$postId/likes');
+
+      if (responseData is List) {
+        return responseData
+            .map((likeData) => Liker.fromJson(likeData, currentUserId ?? 0))
+            .toList();
+      }
+      return [];
+
+    } catch (e) {
+      log('❌ Gagal mengambil data likers untuk post $postId: $e');
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>> getClipsFeed({int? startingPostId, String? nextUrl}) async {
+    assert(startingPostId != null || nextUrl != null, 'Harus menyediakan startingPostId atau nextUrl');
+
+    try {
+      dynamic responseData;
+
+      // Jika ada nextUrl (untuk pagination), panggil dengan http.get langsung
+      if (nextUrl != null) {
+        log("🚀 Mencoba mengambil clips dari URL LENGKAP: $nextUrl");
+        final token = await SecureStorage.getToken();
+        final response = await http.get(
+          Uri.parse(nextUrl),
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        );
+        if (response.statusCode == 200) {
+          responseData = jsonDecode(response.body);
+        } else {
+          throw Exception('Endpoint tidak ditemukan (${response.statusCode}). URL: $nextUrl');
+        }
+      }
+      // Jika tidak ada nextUrl (panggilan pertama), gunakan ApiService.get
+      else {
+        final String endpoint = 'clips/$startingPostId';
+        log("🚀 Mencoba mengambil clips dari ENDPOINT: $endpoint");
+        responseData = await get(endpoint);
+      }
+
+      log("✅ SUKSES: Respons diterima.");
+
+      if (responseData is Map<String, dynamic>) {
+        final List<dynamic> clipsJson = responseData['next_clips'] as List? ?? [];
+        final List<Post> clips = clipsJson.map((json) => Post.fromJson(json)).toList();
+
+        return {
+          'clips': clips,
+          'next_page_url': responseData['next_page_url'],
+        };
+      }
+      return {'clips': [], 'next_page_url': null};
+    } catch (e) {
+      log('❌ Gagal mengambil clips feed: $e');
+      rethrow;
     }
   }
 

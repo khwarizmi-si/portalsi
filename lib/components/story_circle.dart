@@ -1,20 +1,24 @@
-// lib/widgets/story_circle.dart
-
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../models/story_model.dart';
+import '../models/user_model.dart';
 import '../pages/create_story_page.dart';
 import '../pages/my_story_view_page.dart';
 import '../pages/story_view_page.dart';
+import '../services/story_service.dart';
+import 'circular_avatar_fetcher.dart';
 
 class StoryCircle extends StatefulWidget {
   final String name;
   final bool isAddStory;
   final bool hasStory;
   final String? imageUrl;
-  final String? userProfileUrl;
+  final String? userProfileUrl; // <-- Parameter ini yang akan kita gunakan
+  final User? currentUserData;
   final UserWithStories? userStoryData;
   final List<UserWithStories>? previousStoriesQueue;
   final List<UserWithStories>? nextStoriesQueue;
+  final double radius;
 
   const StoryCircle({
     Key? key,
@@ -22,10 +26,12 @@ class StoryCircle extends StatefulWidget {
     this.isAddStory = false,
     this.hasStory = false,
     this.imageUrl,
+    this.currentUserData,
     this.userProfileUrl,
     this.userStoryData,
     this.nextStoriesQueue,
     this.previousStoriesQueue,
+    this.radius = 24.0,
   }) : super(key: key);
 
   @override
@@ -34,38 +40,119 @@ class StoryCircle extends StatefulWidget {
 
 class _StoryCircleState extends State<StoryCircle> {
   bool _isLoading = false;
+  late bool _isViewed;
+  final StoryService _storyService = StoryService();
 
-  Route _createSlideRightRoute() {
-    return PageRouteBuilder(
-      pageBuilder: (context, animation, secondaryAnimation) => const CreateStoryPage(),
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        const begin = Offset(-1.0, 0.0);
-        const end = Offset.zero;
-        const curve = Curves.easeOutCubic;
-        var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-        var offsetAnimation = animation.drive(tween);
-        return SlideTransition(
-          position: offsetAnimation,
-          child: child,
+
+  @override
+  void initState() {
+    super.initState();
+    _isViewed = widget.userStoryData?.isViewed ?? false;
+  }
+
+  Future<void> _navigateToCreateStory(User user) async {
+    var cameraStatus = await Permission.camera.status;
+    var photoStatus = await Permission.photos.status;
+    var microphoneStatus = await Permission.microphone.status;
+
+    final heroTag = 'story_create_avatar_${user.id}';
+
+    void proceedToCreateStory() {
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) => CreateStoryPage(
+            currentUser: user,
+            heroTag: heroTag,
+            initialImageUrl: user.profilePictureUrl,
+          ),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        ),
+      );
+    }
+
+    if (cameraStatus.isGranted && photoStatus.isGranted && microphoneStatus.isGranted) {
+      proceedToCreateStory();
+      return;
+    }
+
+    bool? wantsToProceed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Butuh Izin Anda'),
+          content: const Text('Untuk membuat Story, kami butuh izin untuk mengakses Kamera, Galeri Foto, dan Mikrofon Anda. Izinkan akses?'),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Nanti Saja'),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+            ),
+            TextButton(
+              child: const Text('Izinkan', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+            ),
+          ],
         );
       },
-      transitionDuration: const Duration(milliseconds: 800),
     );
+
+    if (wantsToProceed != true) {
+      return;
+    }
+
+    await [
+      Permission.camera,
+      Permission.photos,
+      Permission.microphone,
+    ].request();
+
+    var newCameraStatus = await Permission.camera.status;
+    var newPhotoStatus = await Permission.photos.status;
+    var newMicrophoneStatus = await Permission.microphone.status;
+
+    if (newCameraStatus.isGranted && newPhotoStatus.isGranted && newMicrophoneStatus.isGranted) {
+      proceedToCreateStory();
+    } else {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Izin ditolak. Silakan aktifkan melalui Pengaturan Aplikasi.'),
+          action: SnackBarAction(
+            label: 'PENGATURAN',
+            onPressed: openAppSettings,
+          ),
+        ),
+      );
+    }
   }
 
-  void _navigateToCreateStory() {
-    Navigator.of(context).push(_createSlideRightRoute());
-  }
-
-  // --- FUNGSI INI DIPERBAIKI ---
   Future<void> _navigateToViewStory(String heroTag) async {
     if (widget.userStoryData == null || widget.userStoryData!.stories.isEmpty) return;
+
+    if (!_isViewed) {
+      setState(() {
+        _isViewed = true;
+      });
+    }
+
+    _storyService.viewStory(widget.userStoryData!.stories.first.storyId).catchError((e) {
+      print("Gagal menandai story sebagai dilihat: $e");
+      if (mounted) {
+        setState(() {
+          _isViewed = false;
+        });
+      }
+    });
 
     setState(() { _isLoading = true; });
 
     final firstStory = widget.userStoryData!.stories.first;
 
-    // PERBAIKAN: Hanya precache jika mediaUrl tidak null dan bukan video
     if (!firstStory.isVideo && firstStory.mediaUrl != null) {
       await precacheImage(NetworkImage(firstStory.mediaUrl!), context);
     }
@@ -79,7 +166,7 @@ class _StoryCircleState extends State<StoryCircle> {
       heroTag: heroTag,
       previousStories: widget.previousStoriesQueue,
       nextStories: widget.nextStoriesQueue,
-      userStories: [],
+      userStories: const [],
     )
         : StoryViewPage(
       userWithStories: widget.userStoryData!,
@@ -97,77 +184,40 @@ class _StoryCircleState extends State<StoryCircle> {
     );
   }
 
-  Widget _buildAddStoryNoContent(BuildContext context, String heroTag) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        GestureDetector(
-          onTap: widget.hasStory ? () => _navigateToViewStory(heroTag) : _navigateToCreateStory,
-          child: Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              image: DecorationImage(
-                image: NetworkImage(
-                  widget.userProfileUrl ?? 'https://i.pinimg.com/736x/19/5c/15/195c15bc600ba3e50ff5ac3be08c3667.jpg',
-                ),
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          bottom: -2,
-          right: -2,
-          child: GestureDetector(
-            onTap: _navigateToCreateStory,
-            child: _buildAddButton(),
-          ),
-        ),
-      ],
-    );
-  }
+  Widget _buildAddStory(BuildContext context, String heroTag) {
+    final int userId = widget.currentUserData?.id ?? 0;
+    // --- 👇 PERBAIKAN UTAMA DI SINI 👇 ---
+    // Sekarang kita menggunakan widget.userProfileUrl yang sudah dikirimkan
+    final String? profileUrl = widget.userProfileUrl;
+    final bool hasStory = widget.hasStory;
+    final bool isViewed = widget.userStoryData?.isViewed ?? true;
 
-  Widget _buildAddStoryWithContent(BuildContext context, String heroTag) {
     return Stack(
       clipBehavior: Clip.none,
+      alignment: Alignment.center,
       children: [
-        GestureDetector(
-          onTap: () => _navigateToViewStory(heroTag),
-          child: Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                colors: [Colors.purple, Colors.pink, Colors.orange, Colors.yellow],
-                begin: Alignment.topRight,
-                end: Alignment.bottomLeft,
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(3),
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white,
-                  image: DecorationImage(
-                    image: NetworkImage(
-                      widget.userProfileUrl ?? 'https://i.pinimg.com/736x/19/5c/15/195c15bc600ba3e50ff5ac3be08c3667.jpg',
-                    ),
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-            ),
-          ),
+        CircularAvatarFetcher(
+          userId: userId,
+          radius: widget.radius,
+          onTap: () {
+            if (widget.currentUserData != null) {
+              _navigateToCreateStory(widget.currentUserData!);
+            }
+          },
+          imageUrl: profileUrl,
+          hasStory: hasStory,
+          storyViewed: isViewed,
+          disableStoryBorder: false,
         ),
         Positioned(
           bottom: -2,
           right: -2,
           child: GestureDetector(
-            onTap: _navigateToCreateStory,
+            onTap: () {
+              if (widget.currentUserData != null) {
+                _navigateToCreateStory(widget.currentUserData!);
+              }
+            },
             child: _buildAddButton(),
           ),
         ),
@@ -176,104 +226,72 @@ class _StoryCircleState extends State<StoryCircle> {
   }
 
   Widget _buildAddButton() {
+    const double buttonSize = 30;
+    const double iconSize = 22;
+
     return Container(
-      width: 26,
-      height: 26,
+      width: buttonSize,
+      height: buttonSize,
       decoration: BoxDecoration(
-        color: Colors.blue,
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF03B293),
+            Color(0xFF116C63),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 2),
+        border: Border.all(color: const Color(0xFFFAFAFA), width: 2),
       ),
-      child: const Icon(Icons.add, color: Colors.white, size: 20),
+      child: const Icon(Icons.add, color: Colors.white, size: iconSize),
     );
   }
 
   Widget _buildOtherStory() {
-    return Container(
-      width: 60,
-      height: 60,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          colors: [Colors.orange, Colors.pink],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(3),
-        child: Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white,
-            image: DecorationImage(
-              image: NetworkImage(widget.imageUrl ?? 'https://via.placeholder.com/150'),
-              fit: BoxFit.cover,
-            ),
-          ),
-        ),
-      ),
+    final int userId = widget.userStoryData?.userId ?? 0;
+
+    return CircularAvatarFetcher(
+      userId: userId,
+      radius: widget.radius,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final heroTag = 'story_hero_${widget.userStoryData?.userId ?? widget.name}';
+    final double avatarSize = widget.radius * 2 + 10;
 
-    return widget.isAddStory
-        ? Container(
+    final heroTag = widget.isAddStory
+        ? 'story_hero_add_story'
+        : 'story_hero_${widget.userStoryData?.userId ?? widget.name}';
+
+    return Container(
       margin: const EdgeInsets.only(right: 12),
       child: Column(
         children: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              Hero(
-                tag: heroTag,
-                child: widget.hasStory
-                    ? _buildAddStoryWithContent(context, heroTag)
-                    : _buildAddStoryNoContent(context, heroTag),
-              ),
-              if (_isLoading)
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.5),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Center(
-                    child: SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
+          SizedBox(
+            width: avatarSize,
+            height: avatarSize,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Hero(
+                  tag: heroTag,
+                  child: SizedBox(
+                    width: avatarSize,
+                    height: avatarSize,
+                    child: widget.isAddStory
+                        ? _buildAddStory(context, heroTag)
+                        : GestureDetector(
+                      onTap: _isLoading ? null : () => _navigateToViewStory(heroTag),
+                      child: _buildOtherStory(),
                     ),
                   ),
                 ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(widget.name, style: const TextStyle(fontSize: 12, color: Colors.black87), maxLines: 1),
-        ],
-      ),
-    )
-        : GestureDetector(
-      onTap: _isLoading ? null : () => _navigateToViewStory(heroTag),
-      child: Container(
-        margin: const EdgeInsets.only(right: 12),
-        child: Column(
-          children: [
-            Stack(
-              alignment: Alignment.center,
-              children: [
-                Hero(tag: heroTag, child: _buildOtherStory()),
                 if (_isLoading)
                   Container(
-                    width: 60,
-                    height: 60,
+                    width: avatarSize,
+                    height: avatarSize,
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.5),
                       shape: BoxShape.circle,
@@ -291,10 +309,10 @@ class _StoryCircleState extends State<StoryCircle> {
                   ),
               ],
             ),
-            const SizedBox(height: 6),
-            Text(widget.name, style: const TextStyle(fontSize: 12, color: Colors.black87), maxLines: 1),
-          ],
-        ),
+          ),
+          const SizedBox(height: 6),
+          Text(widget.name, style: const TextStyle(fontSize: 12, color: Colors.black87), maxLines: 1),
+        ],
       ),
     );
   }

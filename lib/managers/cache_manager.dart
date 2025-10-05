@@ -54,7 +54,7 @@ class CacheManager {
       }
     } catch (e) {
       if (kDebugMode) {
-        print('❌ Critical data preloading failed: $e');
+        print('❌ Critical data preloading failed. (Error details logged previously)');
       }
     }
   }

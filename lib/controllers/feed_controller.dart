@@ -183,35 +183,8 @@ class FeedController extends ChangeNotifier {
     );
   }
 
-  Future<void> navigateToPostDetail(Post post) async {
-    // Gunakan 'await' untuk menunggu halaman PostDetailPage ditutup
-    final result = await Navigator.push<Map<String, dynamic>>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => PostDetailPage(
-          postId: post.id,
-          initialPost: post,
-          // Parameter di bawah ini sebenarnya tidak diperlukan lagi
-          // karena PostDetailPage akan mengambilnya dari 'initialPost'.
-          // Namun, membiarkannya di sini tidak akan menyebabkan error.
-          username: post.user.username,
-          timeAgo: timeAgoFromDate(post.createdAt.toIso8601String()),
-          imageUrl: post.mediaUrl ?? '',
-          content: post.caption ?? '',
-          comments: post.commentsCount,
-          profileImageUrl: post.user.profilePictureUrl ?? '',
-          likes: post.likesCount,
-          isVerified: post.user.isVerified,
-          isLiked: post.isLikedByUser,
-        ),
-      ),
-    );
-
-    // Jika ada data yang dikembalikan (artinya pengguna mengklik profil di dalam halaman detail),
-    // maka jalankan navigasi ke profil tersebut.
-    if (result != null && context.mounted) { // <-- Ganti menjadi 'context.mounted'
-      NavigationHelper.navigateToProfile(context, result);
-    }
+  void navigateToPostDetail(Post post) {
+    NavigationHelper.navigateToPostDetail(context, post.id, initialPost: post);
   }
 
   void _showErrorMessage(String message) {

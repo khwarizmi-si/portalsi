@@ -1,15 +1,76 @@
 // lib/services/group_service.dart
 
 import 'dart:convert';
+import 'dart:developer';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:path/path.dart' as path;
 import 'package:portal_si/models/user_model.dart'; // Pastikan import User model
+import '../models/group_member_model.dart';
+import '../models/group_model.dart';
 import '../utils/secure_storage.dart';
 
 class GroupService {
   final String _baseUrl = 'https://api-new.portalsi.com/api';
+
+  Future<bool> updateGroup({
+    required int groupId,
+    required String name,
+    String? description,
+    File? avatarFile,
+  }) async {
+    final token = await SecureStorage.getToken();
+    if (token == null) {
+      throw Exception('Token tidak ditemukan.');
+    }
+
+    // Gunakan MultipartRequest karena ada kemungkinan upload file (avatar)
+    final request = http.MultipartRequest(
+      'POST', // Sesuai dokumentasi, gunakan POST
+      Uri.parse('$_baseUrl/groups/$groupId'),
+    );
+
+    // Set header
+    request.headers['Authorization'] = 'Bearer $token';
+    request.headers['Accept'] = 'application/json';
+
+    // Tambahkan fields ke form-data
+    request.fields['name'] = name;
+    if (description != null) {
+      request.fields['description'] = description;
+    }
+    // Catatan: API Anda mungkin memerlukan '_method' = 'PUT' atau 'PATCH'
+    // jika backend framework (spt. Laravel) menggunakannya untuk meniru method tsb.
+    // request.fields['_method'] = 'PATCH'; // Contoh jika diperlukan
+
+    // Tambahkan file avatar jika ada
+    if (avatarFile != null) {
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          'avatar', // 'name' dari field file di API
+          avatarFile.path,
+          contentType: MediaType('image', 'jpeg'), // Sesuaikan tipe konten jika perlu
+        ),
+      );
+    }
+
+    try {
+      final response = await request.send();
+
+      // Anda bisa membaca respons jika perlu
+      // final responseBody = await response.stream.bytesToString();
+      // print('Status Code: ${response.statusCode}');
+      // print('Response Body: $responseBody');
+
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      // Tangani error jaringan atau lainnya
+      print('Error saat update grup: $e');
+      return false;
+    }
+  }
 
   /// Membuat grup baru dengan nama, deskripsi, dan gambar.
   Future<Map<String, dynamic>?> createGroup({
@@ -61,6 +122,31 @@ class GroupService {
     }
   }
 
+  Future<List<Group>> getParentGroups() async {
+    final token = await SecureStorage.getToken();
+    final url = Uri.parse('$_baseUrl/special-groups');
+
+    final response = await http.get(
+      url,
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    // Cetak status code dan body respons, baik sukses maupun gagal
+    print('URL: $url');
+    print('Status Code: ${response.statusCode}');
+    print('Response Body: ${response.body}');
+
+    if (response.statusCode == 200) {
+      final List<dynamic> jsonList = json.decode(response.body);
+      return jsonList.map((json) => Group.fromJson(json)).toList();
+    } else {
+      throw Exception('Failed to load parent groups');
+    }
+  }
+
   /// Mengambil detail spesifik dari sebuah grup berdasarkan ID.
   Future<Map<String, dynamic>> getGroupDetails(int groupId) async {
     final token = await SecureStorage.getToken();
@@ -88,34 +174,38 @@ class GroupService {
     }
   }
 
-  /// Mengambil daftar anggota dari sebuah grup.
-  Future<List<User>> getGroupMembers(int groupId) async {
+  Future<String> getUserRoleInGroup(int groupId) async {
     final token = await SecureStorage.getToken();
-    if (token == null) throw Exception('Token tidak ditemukan');
+    if (token == null) throw Exception('Token not found');
 
-    final url = Uri.parse('$_baseUrl/groups/$groupId/members');
+    final url = Uri.parse('$_baseUrl/groups/$groupId/role');
+
     try {
-      final response = await http.get(url, headers: {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/json',
-      });
+      final response = await http.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      );
+
+      // --- [TAMBAHKAN BARIS INI UNTUK MELAKUKAN LOGGING] ---
+      debugPrint("Respons dari API getUserRoleInGroup: ${response.body}");
+      // --- BATAS TAMBAHAN ---
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body)['data'];
-        return data.map((json) => User.fromJson(json)).toList();
+        final decodedBody = json.decode(response.body);
+        return decodedBody['role'] ?? 'member';
       } else {
-        throw Exception('Gagal memuat anggota grup: ${response.body}');
+        return 'member';
       }
     } catch (e) {
-      throw Exception('Error saat memuat anggota grup: $e');
+      debugPrint("Error getting user role: $e");
+      return 'member';
     }
   }
 
-  Future<bool> addMemberByIdentifier({
-    required int groupId,
-    required String identifier,
-    String role = 'member',
-  }) async {
+  Future<bool> addMember(int groupId, int userId) async {
     final token = await SecureStorage.getToken();
     if (token == null) throw Exception('Token tidak ditemukan');
 
@@ -128,32 +218,141 @@ class GroupService {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: jsonEncode({
-          'identifier': identifier,
-          'role': role,
-        }),
+        // Body API Anda kemungkinan mengharapkan sebuah List,
+        // jadi kita kirim satu ID di dalam list.
+        body: jsonEncode({'user_ids': [userId]}),
       );
 
-      // API yang sukses biasanya mengembalikan 200 (OK) atau 201 (Created)
+      // Sukses jika status code 200 (OK) atau 201 (Created)
       if (response.statusCode == 200 || response.statusCode == 201) {
-        debugPrint('✅ Anggota $identifier berhasil ditambahkan ke grup $groupId');
+        debugPrint('✅ Anggota dengan ID $userId berhasil ditambahkan ke grup $groupId');
         return true;
       } else {
-        debugPrint('Gagal menambah anggota: ${response.body}');
-        return false;
+        // Coba decode error message dari API jika ada
+        final errorData = jsonDecode(response.body);
+        final errorMessage = errorData['message'] ?? 'Gagal menambah anggota.';
+        throw Exception(errorMessage);
       }
     } catch (e) {
+      // Tangkap dan lempar kembali error agar bisa ditampilkan di UI
       throw Exception('Error saat menambah anggota: $e');
     }
   }
 
-  /// Mengambil history percakapan dari sebuah grup.
-  Future<Map<String, dynamic>> getGroupMessages(int groupId, {int? page}) async {
-    final token = await SecureStorage.getToken();
-    if (token == null) throw Exception('Token tidak ditemukan');
+  /// Mengambil daftar anggota dari sebuah grup.
+  // Future<List<User>> getGroupMembers(int groupId) async {
+  //   final token = await SecureStorage.getToken();
+  //   if (token == null) throw Exception('Token tidak ditemukan');
+  //
+  //   final url = Uri.parse('$_baseUrl/groups/$groupId/members');
+  //   try {
+  //     final response = await http.get(url, headers: {
+  //       'Authorization': 'Bearer $token',
+  //       'Accept': 'application/json',
+  //     });
+  //
+  //     if (response.statusCode == 200) {
+  //       final List<dynamic> data = jsonDecode(response.body)['data'];
+  //       return data.map((json) => User.fromJson(json)).toList();
+  //     } else {
+  //       throw Exception('Gagal memuat anggota grup: ${response.body}');
+  //     }
+  //   } catch (e) {
+  //     throw Exception('Error saat memuat anggota grup: $e');
+  //   }
+  // }
 
-    // Jika page null, jangan tambahkan parameter query
-    final url = Uri.parse('$_baseUrl/groups/$groupId/messages${page != null ? '?page=$page' : ''}');
+  Future<bool> _performPostAction(String endpoint) async {
+    final token = await SecureStorage.getToken();
+    if (token == null) throw Exception('Token not found');
+
+    final url = Uri.parse('$_baseUrl$endpoint');
+    final response = await http.post(
+      url,
+      headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
+    );
+    // Mengembalikan true jika request berhasil (status code 2xx)
+    return response.statusCode >= 200 && response.statusCode < 300;
+  }
+
+  /// Mengeluarkan anggota dari grup (DELETE)
+  Future<bool> removeMember(int groupId, int userId) async {
+    final token = await SecureStorage.getToken();
+    if (token == null) throw Exception('Token not found');
+
+    final url = Uri.parse('$_baseUrl/groups/$groupId/members/$userId');
+    final response = await http.delete(
+      url,
+      headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
+    );
+    return response.statusCode == 200 || response.statusCode == 204;
+  }
+
+  /// Menjadikan anggota sebagai admin
+  Future<bool> promoteMember(int groupId, int userId) {
+    return _performPostAction('/groups/$groupId/members/$userId/promote');
+  }
+
+  /// Menurunkan admin menjadi anggota biasa
+  Future<bool> demoteMember(int groupId, int userId) {
+    return _performPostAction('/groups/$groupId/members/$userId/demote');
+  }
+
+  /// Membisukan anggota
+  Future<bool> muteMember(int groupId, int userId) {
+    return _performPostAction('/groups/$groupId/members/$userId/mute');
+  }
+
+  /// Membatalkan bisu anggota
+  Future<bool> unmuteMember(int groupId, int userId) {
+    return _performPostAction('/groups/$groupId/members/$userId/unmute');
+  }
+
+  Future<List<GroupMember>> getGroupMembers(int groupId) async { // <-- 2. UBAH TIPE RETURN
+    final token = await SecureStorage.getToken();
+    final url = Uri.parse('$_baseUrl/groups/$groupId/members');
+
+    try {
+      final response = await http.get(url, headers: {
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      });
+
+      // ... (kode logging Anda bisa tetap di sini jika diperlukan)
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = json.decode(response.body);
+
+        if (responseData['data'] is List) {
+          final List<dynamic> memberListJson = responseData['data'];
+
+          // 3. LAKUKAN MAPPING DARI JSON KE OBJEK GroupMember
+          return memberListJson
+              .map((jsonItem) => GroupMember.fromJson(jsonItem as Map<String, dynamic>))
+              .toList();
+
+        } else {
+          throw Exception("Format respons tidak valid: key 'data' bukan sebuah List.");
+        }
+      } else {
+        throw Exception('Gagal memuat anggota grup: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Terjadi kesalahan: $e');
+    }
+  }
+
+  Future<List<dynamic>> searchUsers(String query) async {
+    // Jika query kosong, kembalikan list kosong agar tidak memanggil API
+    if (query.trim().isEmpty) {
+      return [];
+    }
+
+    final token = await SecureStorage.getToken();
+    // Endpoint sesuai dengan gambar: /users/search?username=...
+    // Kita akan menggunakan 'username' sebagai parameter pencarian utama
+    final url = Uri.parse('$_baseUrl/users/search?username=$query&full_name=$query');
+
     try {
       final response = await http.get(url, headers: {
         'Authorization': 'Bearer $token',
@@ -161,7 +360,67 @@ class GroupService {
       });
 
       if (response.statusCode == 200) {
-        // Kembalikan seluruh body yang sudah di-decode
+        final List<dynamic> data = json.decode(response.body);
+        return data;
+      } else {
+        // Jika gagal, kembalikan list kosong atau lempar error
+        print('Gagal mencari pengguna: ${response.statusCode}');
+        return [];
+      }
+    } catch (e) {
+      print('Terjadi kesalahan saat mencari pengguna: $e');
+      return [];
+    }
+  }
+
+  Future<bool> addMemberByIdentifier({required int groupId, required String identifier}) async {
+    final token = await SecureStorage.getToken();
+    if (token == null) {
+      throw Exception('Autentikasi gagal: Token tidak ditemukan.');
+    }
+
+    final url = Uri.parse('$_baseUrl/groups/$groupId/members');
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        // Body ini sudah sesuai dengan format yang Anda inginkan
+        body: jsonEncode({
+          'identifier': identifier, // Akan berisi username, misal: "faisal"
+          'role': 'member'
+        }),
+      );
+
+      debugPrint("Respons dari API addMember (identifier: $identifier): ${response.body}");
+
+      return response.statusCode == 200 || response.statusCode == 201;
+
+    } catch (e) {
+      debugPrint("Error saat menambahkan anggota '$identifier': $e");
+      return false;
+    }
+  }
+
+  /// Mengambil history percakapan dari sebuah grup.
+  Future<Map<String, dynamic>> getGroupMessages(int groupId) async {
+    final token = await SecureStorage.getToken();
+    if (token == null) throw Exception('Token tidak ditemukan');
+
+    // [MODIFIKASI] URL disederhanakan, tidak ada lagi query parameter '?page='
+    final url = Uri.parse('$_baseUrl/groups/$groupId/messages');
+    try {
+      final response = await http.get(url, headers: {
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      });
+
+      if (response.statusCode == 200) {
+        // Kembalikan seluruh body yang sudah di-decode, ini sudah sesuai
         return jsonDecode(response.body) as Map<String, dynamic>;
       } else {
         throw Exception('Gagal memuat pesan grup: ${response.body}');
@@ -172,34 +431,55 @@ class GroupService {
   }
 
   /// Mengirim pesan baru ke sebuah grup menggunakan form-data.
-  Future<Map<String, dynamic>> sendGroupMessage({
+  Future<Map<String, dynamic>?> sendMessage({
     required int groupId,
     required String content,
+    int? replyToId,
   }) async {
     final token = await SecureStorage.getToken();
     if (token == null) throw Exception('Token tidak ditemukan');
 
     final url = Uri.parse('$_baseUrl/groups/$groupId/messages');
-    var request = http.MultipartRequest('POST', url);
 
-    request.headers['Authorization'] = 'Bearer $token';
-    request.headers['Accept'] = 'application/json';
-    request.fields['content'] = content;
+    final body = {
+      'content': content,
+      // Menggunakan kunci 'reply_to' sesuai konfirmasi
+      if (replyToId != null) 'reply_to': replyToId,
+    };
+
+    // Logging Payload
+    log('API Request: POST $url');
+    log('Payload Sent: ${jsonEncode(body)}');
 
     try {
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
+      final response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(body),
+      );
 
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-        return responseData['data'] as Map<String, dynamic>;
+      // Logging Response Code dan Body
+      log('API Response Status: ${response.statusCode}');
+      log('API Response Body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return jsonDecode(response.body) as Map<String, dynamic>; // Pastikan ini Map
       } else {
-        throw Exception('Gagal mengirim pesan grup: ${response.body}');
+        // Jika terjadi error (misalnya 4xx atau 5xx), throw exception dengan body.
+        final responseBody = response.body.isNotEmpty ? response.body : 'No response body.';
+        log('API Error: $responseBody');
+        throw Exception('Gagal mengirim pesan. Status: ${response.statusCode}');
       }
     } catch (e) {
-      throw Exception('Error saat mengirim pesan grup: $e');
+      log('Error saat mengirim pesan: $e');
+      throw Exception('Error koneksi saat mengirim pesan: $e');
     }
   }
+
 
   /// Menambah satu atau lebih anggota baru ke dalam grup.
   Future<void> addMembers(int groupId, List<int> userIds) async {
@@ -227,28 +507,6 @@ class GroupService {
     }
   }
 
-  /// Menghapus seorang anggota dari grup.
-  Future<void> removeMember(int groupId, int userId) async {
-    final token = await SecureStorage.getToken();
-    if (token == null) throw Exception('Token tidak ditemukan');
-
-    final url = Uri.parse('$_baseUrl/groups/$groupId/members/$userId');
-    try {
-      final response = await http.delete(url, headers: {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/json',
-      });
-
-      if (response.statusCode != 200) {
-        throw Exception('Gagal menghapus anggota: ${response.body}');
-      }
-      debugPrint('✅ Anggota $userId berhasil dihapus dari grup $groupId');
-    } catch (e) {
-      throw Exception('Error saat menghapus anggota: $e');
-    }
-  }
-
-
   Future<List<Map<String, dynamic>>> getUnreadGroupMessages(int groupId) async {
     final token = await SecureStorage.getToken();
     if (token == null) throw Exception('Token tidak ditemukan');
@@ -261,7 +519,9 @@ class GroupService {
       });
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body)['messages'];
+        final decodedBody = jsonDecode(response.body);
+        // ✨ PERBAIKAN: Gunakan ?? [] untuk menjamin nilai tidak null.
+        final List<dynamic> data = decodedBody['messages'] ?? [];
         return data.cast<Map<String, dynamic>>();
       } else {
         throw Exception('Gagal memuat pesan belum dibaca: ${response.body}');

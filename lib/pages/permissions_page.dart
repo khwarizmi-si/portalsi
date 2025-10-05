@@ -24,9 +24,9 @@ class _PermissionsPageState extends State<PermissionsPage> {
   final List<Permission> _requiredPermissions = [
     Permission.notification,
     Permission.camera,
-    // Permission.storage, // Untuk Android versi lama
+    Permission.storage, // Untuk Android versi lama//
     Permission.photos,  // Untuk Android 13+
-    // Permission.videos,  // Untuk Android 13+
+    Permission.videos,  // Untuk Android 13+//
   ];
 
   bool _isLoading = false;
@@ -61,22 +61,28 @@ class _PermissionsPageState extends State<PermissionsPage> {
       );
     } else {
       // Jika ada yang ditolak, beri tahu pengguna
-      print("Satu atau lebih izin tidak diberikan.");
-      // developer.log('Satu atau lebih izin tidak diberikan.', name: 'PermissionsPage');
-      statuses.forEach((permission, status) {
-        if (!status.isGranted) {
-          print("Izin yang tidak diberikan: ${permission.toString()} - Status: ${status.toString()}");
-          // developer.log('Izin yang tidak diberikan: ${permission.toString()} - Status: ${status.toString()}', name: 'PermissionsPage');
-        }
-      });
-      if (mounted) { // Pastikan widget masih mounted sebelum menampilkan SnackBar
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Beberapa izin tidak diberikan. Fitur mungkin terbatas.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      // print("Satu atau lebih izin tidak diberikan.");
+      // // developer.log('Satu atau lebih izin tidak diberikan.', name: 'PermissionsPage');
+      // statuses.forEach((permission, status) {
+      //   if (!status.isGranted) {
+      //     print("Izin yang tidak diberikan: ${permission.toString()} - Status: ${status.toString()}");
+      //     // developer.log('Izin yang tidak diberikan: ${permission.toString()} - Status: ${status.toString()}', name: 'PermissionsPage');
+      //   }
+      // });
+      // if (mounted) { // Pastikan widget masih mounted sebelum menampilkan SnackBar
+      //   ScaffoldMessenger.of(context).showSnackBar(
+      //     const SnackBar(
+      //       content: Text('Beberapa izin tidak diberikan. Fitur mungkin terbatas.'),
+      //       backgroundColor: Colors.red,
+      //     ),
+      //   );
+      // }
+      print("Semua izin diberikan.");
+      // developer.log('Semua izin diberikan.', name: 'PermissionsPage');
+      widget.onPermissionsGranted();
+      Navigator.of(context).push(
+        SlideTransitionRoute(page: const WelcomePage()),
+      );
     }
 
     if (mounted) {

@@ -128,6 +128,7 @@ abstract class Conversation {
 /// Model spesifik untuk percakapan antar pengguna (type: "user").
 class UserConversation extends Conversation {
   final User partner;
+  final bool isPartnerVerified; // <-- 1. TAMBAHKAN PROPERTI INI
 
   UserConversation({
     required super.id,
@@ -136,31 +137,24 @@ class UserConversation extends Conversation {
     required super.unreadCount,
     super.lastMediaUrl,
     required this.partner,
+    this.isPartnerVerified = false, // <-- 2. TAMBAHKAN DI KONSTRUKTOR
   });
 
-  // Mengimplementasikan getter dari abstract class
   @override
   String get displayName => partner.fullName ?? partner.username;
 
   @override
   String? get displayImageUrl => partner.profilePictureUrl;
 
-  // Di dalam file: lib/models/chat.dart
-
   factory UserConversation.fromJson(Map<String, dynamic> json) {
     final conversationData = json['conversation'] as Map<String, dynamic>;
     final lastChatData = json['last_chat'] as Map<String, dynamic>?;
 
-    final partnerUser = User(
-      id: conversationData['id'],
-      username: conversationData['username'] ?? 'unknown',
-      fullName: conversationData['name'],
-      profilePictureUrl: conversationData['profile_picture_url'],
-    );
+    final partnerUser = User.fromJson(conversationData); // Gunakan User.fromJson
 
     String displayMessage = 'Mulai percakapan';
     DateTime timestamp = DateTime.now();
-    bool isRead = true; // Default value
+    bool isRead = true;
     String? lastMedia;
 
     if (lastChatData != null) {
@@ -176,17 +170,12 @@ class UserConversation extends Conversation {
         timestamp = DateTime.parse(sentAtString.replaceFirst(' ', 'T'));
       }
 
-      // --- PERBAIKAN UTAMA DI SINI ---
       final isReadValue = lastChatData['is_read'];
       if (isReadValue is bool) {
-        // Jika datanya boolean (true/false)
         isRead = isReadValue;
       } else if (isReadValue is int) {
-        // Jika datanya integer (1/0)
         isRead = isReadValue == 1;
       }
-      // Jika null atau tipe lain, akan menggunakan nilai default `true`
-      // --- BATAS PERBAIKAN ---
     }
 
     return UserConversation(
@@ -194,8 +183,10 @@ class UserConversation extends Conversation {
       partner: partnerUser,
       lastMessage: displayMessage,
       timestamp: timestamp,
-      unreadCount: isRead ? 0 : 1, // Logika ini sekarang aman
+      unreadCount: isRead ? 0 : 1,
       lastMediaUrl: lastMedia,
+      // -- 👇 3. PARSING is_verified DARI JSON 👇 --
+      isPartnerVerified: conversationData['is_verified'] ?? false,
     );
   }
 }
@@ -230,8 +221,15 @@ class GroupConversation extends Conversation {
     // Tangani kasus di mana 'sent_at' mungkin kosong atau null untuk grup baru
     DateTime? timestamp;
     if (json['sent_at'] != null && json['sent_at'].isNotEmpty) {
-      timestamp = DateTime.parse(json['sent_at']);
+      // Perhatikan: JSON API untuk Grup menggunakan format ISO 8601 (ada 'T' dan 'Z')
+      timestamp = DateTime.parse(json['sent_at']); // [PERBAIKAN: Gunakan parse standar]
     }
+
+    // Ambil pesan terakhir. Jika kosong, gunakan teks default.
+    final String lastMsg = json['last_message'] as String? ?? '';
+    final String? lastMedia = json['last_media'] as String?;
+
+    String displayMessage = lastMsg.isNotEmpty ? lastMsg : (lastMedia != null && lastMedia.isNotEmpty ? '📎 Media' : 'Mulai percakapan');
 
     return GroupConversation(
       group: Group.fromJson(json),
@@ -239,11 +237,13 @@ class GroupConversation extends Conversation {
       groupName: json['name'],
       avatarUrl: json['avatar_url'],
       description: json['description'],
-      lastMessage: json['last_message'] ?? '',
+      // vvv [PASTIKAN MENGGUNAKAN LOGIKA DISPLAY MESSAGE] vvv
+      lastMessage: displayMessage,
+      // ^^^ [BATAS PERBAIKAN] ^^^
       timestamp: timestamp,
       // Logika unreadCount untuk grup mungkin berbeda, sesuaikan jika perlu
       unreadCount: 0, // Contoh sederhana, API Anda mungkin punya field lain
-      lastMediaUrl: json['last_media'],
+      lastMediaUrl: lastMedia,
     );
   }
 }

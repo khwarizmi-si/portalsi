@@ -231,10 +231,9 @@ class FollowManager {
       // Get following list
       final following = await _followService.getFollowing(currentUserId);
       final followingUsernames = following
-          .map((user) => user['username']?.toString())
-          .where((username) => username != null)
-          .cast<String>()
-          .toSet();
+          .map((user) => user.username) // <-- BENAR: Gunakan notasi titik
+          .where((username) => username != null) // Ini untuk menangani jika username bisa null
+          .toSet(); // .cast<String>() sudah tidak diperlukan lagi
 
       // Update cache for all target usernames
       for (final targetUsername in targetUsernames) {

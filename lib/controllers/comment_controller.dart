@@ -2,16 +2,23 @@
 import 'package:flutter/material.dart';
 import '../models/comment_model.dart';
 import '../models/user_model.dart';
+import '../services/comment_like_service.dart';
 import '../services/comment_service.dart';
 import '../services/user_service.dart';
 import '../utils/comment_utils.dart';
 
 class CommentController extends ChangeNotifier {
   final int postId;
+  final CommentLikeService _commentLikeService = CommentLikeService();
+  List<Comment> _originalComments;
 
+  bool _isDisposed = false;
   // Gunakan singleton instance dari service
   final CommentService _commentService = CommentService();
   final ProfileService _profileService = ProfileService();
+
+  Comment? _replyingToComment;
+  Comment? get replyingToComment => _replyingToComment;
 
   // STATE: Daftar komentar
   List<Comment> _comments = [];
@@ -27,21 +34,72 @@ class CommentController extends ChangeNotifier {
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
 
-  CommentController({required this.postId}) {
-    // Saat controller dibuat, langsung mulai ambil data
+  CommentController({required this.postId, required List<Comment> initialComments})
+      : _originalComments = initialComments {
+    // Proses komentar awal, lalu muat data user
+    _comments = CommentUtils.flattenComments(_originalComments);
+    _isLoading = true; // Set loading untuk proses ambil data user
     _initialize();
+  }
+
+  void setReplyingTo(Comment? comment) {
+    _replyingToComment = comment;
+    notifyListeners(); // Beri tahu UI untuk update
+  }
+
+  Future<void> toggleCommentLike(Comment comment) async {
+    final originalLikedStatus = comment.liked;
+    final originalLikesCount = comment.likes;
+
+    final index = _comments.indexWhere((c) => c.id == comment.id);
+    if (index == -1) return;
+
+    // 1. Optimistic Update (tetap sama)
+    _comments[index].liked = !originalLikedStatus;
+    _comments[index].likes += originalLikedStatus ? -1 : 1;
+    notifyListeners();
+
+    // --- 👇 2. LOGIKA KONTROL SEKARANG ADA DI SINI 👇 ---
+    try {
+      bool success;
+      if (_comments[index].liked) {
+        // Jika UI sekarang dalam status liked, panggil service untuk like
+        success = await _commentLikeService.likeComment(comment.id);
+      } else {
+        // Jika UI sekarang dalam status unliked, panggil service untuk unlike
+        success = await _commentLikeService.unlikeComment(comment.id);
+      }
+
+      if (!success) {
+        throw Exception('Server failed to process the request.');
+      }
+    } catch (e) {
+      // 3. Fallback (tetap sama)
+      if (!_isDisposed) {
+        _comments[index].liked = originalLikedStatus;
+        _comments[index].likes = originalLikesCount;
+        notifyListeners();
+      }
+    }
   }
 
   /// Mengambil data awal yang dibutuhkan oleh halaman komentar.
   Future<void> _initialize() async {
-    // Ambil data user dan komentar secara bersamaan untuk efisiensi
+    // --- 👇 PERUBAHAN UTAMA DI SINI 👇 ---
+    // Kita jalankan kedua proses ini secara bersamaan untuk efisiensi
     await Future.wait([
-      _loadCurrentUser(),
-      loadComments(),
+      _loadCurrentUser(), // Tetap ambil data user
+      loadComments(),     // Panggil fungsi untuk memuat komentar dari server
     ]);
 
-    _isLoading = false;
-    notifyListeners(); // Beri tahu UI bahwa loading selesai
+    _isLoading = false; // Hentikan loading setelah semua data siap
+    // notifyListeners(); //tidak perlu di sini karena sudah dipanggil di dalam loadComments()
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true; // Set flag menjadi true saat di-dispose
+    super.dispose();
   }
 
   /// Mengambil data profil user yang sedang login.
@@ -67,62 +125,57 @@ class CommentController extends ChangeNotifier {
   /// Mengambil daftar komentar dari server.
   Future<void> loadComments() async {
     _errorMessage = null;
+    notifyListeners();
     try {
+      // Panggil PostService untuk mendapatkan detail post TERBARU
+      // Asumsi Anda punya PostService.getPostDetail(postId)
+      // final post = await PostService().getPostDetail(postId);
+      // _originalComments = post.comments;
+
+      // Untuk sementara, kita pakai lagi CommentService sebagai fallback refresh
       final fetchedComments = await _commentService.getComments(postId);
-      // Urutkan komentar berdasarkan tanggal, yang terbaru di atas
-      _comments = CommentUtils.sortCommentsByDate(fetchedComments);
+
+      // Proses dan ratakan komentar yang baru di-refresh
+      _comments = CommentUtils.flattenComments(fetchedComments);
     } catch (e) {
-      _errorMessage = 'Gagal memuat komentar.';
+      _errorMessage = 'Gagal memuat ulang komentar.';
       debugPrint("Error di loadComments: $e");
     }
-    // Selalu panggil notifyListeners setelah ada perubahan data
     notifyListeners();
   }
 
   /// Menangani logika pengiriman komentar baru.
-  Future<bool> submitComment(String content) async {
-    // Validasi: jangan kirim jika kosong atau user tidak ada
+  Future<bool> postComment(String content) async {
     if (content.isEmpty || _currentUser == null) return false;
 
-    // 1. Optimistic Update: Buat komentar "sementara" secara lokal
     final tempComment = CommentUtils.createTemporaryComment(
       postId: postId,
       content: content,
       username: _currentUser!.username,
     );
-
-    // Langsung tambahkan ke daftar dan perbarui UI
     _comments.insert(0, tempComment);
     notifyListeners();
 
     try {
-      // 2. Kirim komentar asli ke server di background
-      await _commentService.addComment(postId, content);
+      // Cek apakah kita sedang membalas atau membuat komentar baru
+      if (_replyingToComment != null) {
+        await _commentService.addCommentReply(postId, content, _replyingToComment!.id);
+      } else {
+        await _commentService.addComment(postId, content);
+      }
 
-      // 3. Jika berhasil, sinkronisasi ulang dengan server untuk mendapatkan
-      //    data komentar yang asli (dengan ID dan timestamp dari server).
+      // Setelah berhasil, reset mode membalas dan muat ulang komentar
+      setReplyingTo(null);
       await loadComments();
       return true;
     } catch (e) {
-      // 4. Rollback: Jika pengiriman gagal, hapus komentar sementara
       _comments.removeWhere((c) => c.id == tempComment.id);
-      _errorMessage = "Gagal mengirim komentar.";
-      notifyListeners(); // Perbarui UI untuk menghapus komentar sementara
+      _errorMessage = "Gagal mengirim balasan.";
+
+      // Tetap reset mode membalas walaupun gagal
+      setReplyingTo(null);
+      notifyListeners();
       return false;
     }
-  }
-
-  /// Menangani logika suka/batal suka pada komentar.
-  void toggleCommentLike(int commentId) {
-    final index = _comments.indexWhere((c) => c.id == commentId);
-    if (index == -1) return;
-
-    final comment = _comments[index];
-    comment.liked = !comment.liked;
-    comment.likes += comment.liked ? 1 : -1;
-    notifyListeners();
-
-    // TODO: Panggil service untuk mengirim status like ke server di background
-    // _commentService.toggleLike(commentId).catchError((e) { ... });
   }
 }

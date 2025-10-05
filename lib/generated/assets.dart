@@ -2,13 +2,15 @@
 class Assets {
   Assets._();
 
+  static const String assetsEmojis = 'assets/emojis.json';
   static const String assetsLogoGoogle = 'assets/logo_google.png';
-  static const String assetsLogoLaRg = 'assets/logo_la_rg.png';
   static const String assetsLogoSekolah = 'assets/logo_sekolah.png';
   static const String assetsLogoakunrg = 'assets/logoakunrg.png';
   static const String assetsLogopsi = 'assets/logopsi.png';
   static const String assetsLogopsifull = 'assets/logopsifull.png';
   static const String assetsLogopsinb = 'assets/logopsinb.png';
+  static const String assetsOpening = 'assets/opening.mp4';
+  static const String fontsAlanSansVariableFontWght = 'assets/fonts/AlanSans-VariableFont_wght.ttf';
   static const String imagesBackground = 'assets/images/background.png';
   static const String imagesChatBg = 'assets/images/chat_bg.png';
   static const String imagesDownloadAppIllustration = 'assets/images/download_app_illustration.png';

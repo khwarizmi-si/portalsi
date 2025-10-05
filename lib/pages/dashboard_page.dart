@@ -4,6 +4,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:portal_si/components/circular_avatar_fetcher.dart';
+import 'package:portal_si/pages/portfolio_page.dart';
+import 'package:portal_si/pages/story_view_page.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:timeago/timeago.dart' as timeago;
@@ -12,24 +15,31 @@ import 'package:timeago/timeago.dart' as timeago;
 import 'package:portal_si/components/post_card.dart';
 import 'package:portal_si/components/story_section.dart';
 import 'package:portal_si/widgets/comment_section.dart';
-import 'package:portal_si/components/bottom_navigation.dart';
 import 'package:portal_si/pages/notif_page.dart';
 import 'package:portal_si/pages/message_list_page.dart';
 import 'package:portal_si/pages/announcement_list_page.dart';
 
 // State Management & Model
+import '../app_state.dart';
+import '../components/verified_badge.dart';
 import '../controllers/home_controller.dart';
+import '../models/group_model.dart';
+import '../models/user_model.dart';
+import '../providers/navigation_provider.dart';
 import '../services/follow_service.dart';
+import '../services/group_service.dart';
+import '../services/story_service.dart';
 import '../utils/user_provider.dart';
 import '../models/post_model.dart';
 import '../models/announcement_model.dart';
 import '../models/story_model.dart';
-import '../providers/scroll_provider.dart'; // <-- 1. IMPORT SCROLL PROVIDER
+import '../providers/scroll_provider.dart';
 
 // Servis & Helper
 import '../services/notification_service.dart';
 import '../utils/navigation_helper.dart';
-import '../helper/time_helper.dart';
+import 'group_chat_room_page.dart';
+import 'main_scaffold.dart';
 
 
 class DashboardPage extends StatefulWidget {
@@ -41,37 +51,244 @@ class DashboardPage extends StatefulWidget {
 
 class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientMixin{
   final ScrollController _scrollController = ScrollController();
-  // Variabel _isScrolled tidak lagi diperlukan di sini
   int _unreadNotificationCount = 0;
   final GlobalKey _notificationIconKey = GlobalKey();
   final GlobalKey _anncIconKey = GlobalKey();
   final GlobalKey _msgIconKey = GlobalKey();
 
+  final GlobalKey _announcementButtonKey = GlobalKey();
+  final GlobalKey _portfolioButtonKey = GlobalKey();
+
+  void _showPermissionDeniedDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text("Akses Ditolak"),
+        content: const Text("Hanya Parents dan Teacher yang dapat mengakses fitur ini. Anda tidak memiliki izin untuk mengakses fitur ini."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text("OK"),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   void initState() {
     super.initState();
-    // --- 2. MODIFIKASI LISTENER ---
-    // Hubungkan listener dengan ScrollProvider
     _scrollController.addListener(() {
       final scrollProvider = Provider.of<ScrollProvider>(context, listen: false);
       final direction = _scrollController.position.userScrollDirection;
 
-      // Jika user scroll ke ATAS (reverse), maka tampilkan teks.
       if (direction == ScrollDirection.reverse) {
         scrollProvider.setScrolled(true);
       }
-      // Jika user scroll ke BAWAH (forward), maka sembunyikan teks.
       else if (direction == ScrollDirection.forward) {
         scrollProvider.setScrolled(false);
+      }
+
+      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+        Provider.of<HomeController>(context, listen: false).fetchMorePosts();
       }
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<ScrollProvider>(context, listen: false).setDashboardController(_scrollController);
       Provider.of<UserProvider>(context, listen: false).fetchCurrentUser();
       Provider.of<HomeController>(context, listen: false).loadDashboardData();
     });
     _loadNotificationCount();
+  }
+
+  Widget _buildQuickAccessItem({
+    required IconData icon,
+    required String label,
+    VoidCallback? onTap,
+    bool isSpecial = false,
+    Key? key,
+  }) {
+    return GestureDetector(
+      key: key,
+      onTap: onTap,
+      child: Column(
+        children: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              if (isSpecial)
+                Positioned(
+                  top: 5,
+                  left: -4,
+                  child: Container(
+                    width: 62,
+                    height: 62,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(18.0),
+                    ),
+                  ),
+                ),
+              Container(
+                width: 64, height: 64,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.amber.shade400, Colors.orange.shade500],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20.0),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.orange.withOpacity(0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Icon(icon, color: Colors.white, size: 30),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickAccessButtons() {
+    return Consumer<UserProvider>(
+      builder: (context, userProvider, child) {
+        final currentUserRole = userProvider.currentUser?.role;
+
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 20.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildQuickAccessItem(
+                icon: Icons.group_outlined,
+                label: 'Group SI',
+                isSpecial: true,
+                onTap: () async {
+                  final allowedRoles = ['teacher', 'parent'];
+
+                  if (currentUserRole != null && allowedRoles.contains(currentUserRole)) {
+                    HapticFeedback.lightImpact();
+                    try {
+                      final groups = await GroupService().getParentGroups();
+                      if (!mounted) return;
+
+                      if (groups.length == 1) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => GroupChatRoomPage(group: groups.first),
+                          ),
+                        );
+                      } else if (groups.length > 1) {
+                        _showGroupSelectionDialog(context, groups);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Tidak ada grup yang ditemukan.')),
+                        );
+                      }
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Gagal memuat grup: $e')),
+                      );
+                    }
+                  } else {
+                    HapticFeedback.heavyImpact();
+                    mainScaffoldKey.currentState?.triggerShake();
+                    _showPermissionDeniedDialog();
+                  }
+                },
+              ),
+              _buildQuickAccessItem(
+                icon: Icons.storefront_outlined,
+                label: 'Marketplace',
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  Provider.of<NavigationProvider>(context, listen: false).navigateToTab(3);
+                },
+              ),
+              _buildQuickAccessItem(
+                key: _portfolioButtonKey,
+                icon: Icons.school_outlined,
+                label: 'Portfolio',
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  final RenderBox renderBox = _portfolioButtonKey.currentContext!.findRenderObject() as RenderBox;
+                  final originOffset = renderBox.localToGlobal(Offset.zero) + Offset(renderBox.size.width / 2, renderBox.size.height / 2);
+                  Navigator.push(context, ScaleFromPositionRoute(widget: const PortfolioPage(), originOffset: originOffset));
+                },
+              ),
+              _buildQuickAccessItem(
+                key: _announcementButtonKey,
+                icon: Icons.campaign_outlined,
+                label: 'Pengumuman',
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  final RenderBox renderBox = _announcementButtonKey.currentContext!.findRenderObject() as RenderBox;
+                  final originOffset = renderBox.localToGlobal(Offset.zero) + Offset(renderBox.size.width / 2, renderBox.size.height / 2);
+                  Navigator.push(context, ScaleFromPositionRoute(widget: const AnnouncementListPage(), originOffset: originOffset)).then((_) => _loadNotificationCount());
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showGroupSelectionDialog(BuildContext context, List<Group> groups) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Pilih Grup', style: TextStyle(fontWeight: FontWeight.bold)),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: groups.length,
+              itemBuilder: (context, index) {
+                final group = groups[index];
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundImage: group.avatarUrl != null && group.avatarUrl!.isNotEmpty
+                        ? NetworkImage(group.avatarUrl!)
+                        : null,
+                    child: group.avatarUrl == null || group.avatarUrl!.isEmpty
+                        ? const Icon(Icons.group)
+                        : null,
+                  ),
+                  title: Text(group.name),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => GroupChatRoomPage(group: group),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _loadNotificationCount() async {
@@ -97,7 +314,7 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
     super.dispose();
   }
 
-  void _showCommentSheet(BuildContext context, int postId) {
+  void _showCommentSheet(BuildContext context, Post post) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -105,7 +322,10 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
       builder: (context) {
         return SizedBox(
           height: MediaQuery.of(context).size.height * 0.9,
-          child: CommentSection(postId: postId),
+          child: CommentSection(
+            postId: post.id,
+            initialComments: post.comments,
+          ),
         );
       },
     );
@@ -137,74 +357,74 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
     );
   }
 
-  PreferredSizeWidget _buildAppBar(BuildContext context) {
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(kToolbarHeight),
-      child: Consumer<UserProvider>(
-        builder: (context, userProvider, child) {
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-            ),
-            child: AppBar(
-              backgroundColor: Colors.white,
-              elevation: 0,
-              title: const Text('Portal SI', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 24)),
-              actions: [
-                IconButton(
-                  key: _anncIconKey,
-                  onPressed: () {
-                    HapticFeedback.lightImpact();
-                    final RenderBox renderBox = _anncIconKey.currentContext!.findRenderObject() as RenderBox;
-                    final originOffset = renderBox.localToGlobal(Offset.zero) + Offset(renderBox.size.width / 2, renderBox.size.height / 2);
-                    Navigator.push(context, ScaleFromPositionRoute(widget: const AnnouncementListPage(), originOffset: originOffset)).then((_) => _loadNotificationCount());
-                  },
-                  icon: const Icon(Icons.campaign_outlined, color: Colors.black),
-                  tooltip: 'List Pengumuman',
+  Widget _buildAppBar(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top - 25, bottom: 5),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 18),
+          )
+        ],
+      ),
+      child: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        title: const Text('Portal SI', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 26)),
+        actions: [
+          IconButton(
+            key: _anncIconKey,
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              final RenderBox renderBox = _anncIconKey.currentContext!.findRenderObject() as RenderBox;
+              final originOffset = renderBox.localToGlobal(Offset.zero) + Offset(renderBox.size.width / 2, renderBox.size.height / 2);
+              Navigator.push(context, ScaleFromPositionRoute(widget: const AnnouncementListPage(), originOffset: originOffset)).then((_) => _loadNotificationCount());
+            },
+            icon: const Icon(Icons.campaign_outlined, color: Colors.black),
+            tooltip: 'List Pengumuman',
+          ),
+          Stack(
+            children: [
+              IconButton(
+                key: _notificationIconKey,
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  final RenderBox renderBox = _notificationIconKey.currentContext!.findRenderObject() as RenderBox;
+                  final originOffset = renderBox.localToGlobal(Offset.zero) + Offset(renderBox.size.width / 2, renderBox.size.height / 2);
+                  Navigator.push(context, ScaleFromPositionRoute(widget: const NotificationPage(), originOffset: originOffset)).then((_) => _loadNotificationCount());
+                },
+                icon: const Icon(Icons.notifications, color: Colors.black),
+                tooltip: 'Notifikasi',
+              ),
+              if (_unreadNotificationCount > 0)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white, width: 1.5)),
+                    constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                    child: Text(_unreadNotificationCount > 99 ? '99+' : _unreadNotificationCount.toString(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                  ),
                 ),
-                Stack(
-                  children: [
-                    IconButton(
-                      key: _notificationIconKey,
-                      onPressed: () {
-                        HapticFeedback.lightImpact();
-                        final RenderBox renderBox = _notificationIconKey.currentContext!.findRenderObject() as RenderBox;
-                        final originOffset = renderBox.localToGlobal(Offset.zero) + Offset(renderBox.size.width / 2, renderBox.size.height / 2);
-                        Navigator.push(context, ScaleFromPositionRoute(widget: const NotificationPage(), originOffset: originOffset)).then((_) => _loadNotificationCount());
-                      },
-                      icon: const Icon(Icons.notifications, color: Colors.black),
-                      tooltip: 'Notifikasi',
-                    ),
-                    if (_unreadNotificationCount > 0)
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white, width: 1.5)),
-                          constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                          child: Text(_unreadNotificationCount > 99 ? '99+' : _unreadNotificationCount.toString(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                        ),
-                      ),
-                  ],
-                ),
-                IconButton(
-                  key: _msgIconKey,
-                  onPressed: () {
-                    HapticFeedback.lightImpact();
-                    final RenderBox renderBox = _msgIconKey.currentContext!.findRenderObject() as RenderBox;
-                    final originOffset = renderBox.localToGlobal(Offset.zero) + Offset(renderBox.size.width / 2, renderBox.size.height / 2);
-                    Navigator.push(context, ScaleFromPositionRoute(widget: const MessageListPage(), originOffset: originOffset)).then((_) => _loadNotificationCount());
-                  },
-                  icon: const Icon(Icons.send_outlined, color: Colors.black),
-                  tooltip: 'Pesan',
-                ),
-                const SizedBox(width: 8),
-              ],
-            ),
-          );
-        },
+            ],
+          ),
+          IconButton(
+            key: _msgIconKey,
+            onPressed: () {
+              HapticFeedback.lightImpact();
+              final RenderBox renderBox = _msgIconKey.currentContext!.findRenderObject() as RenderBox;
+              final originOffset = renderBox.localToGlobal(Offset.zero) + Offset(renderBox.size.width / 2, renderBox.size.height / 2);
+              Navigator.push(context, ScaleFromPositionRoute(widget: const MessageListPage(), originOffset: originOffset)).then((_) => _loadNotificationCount());
+            },
+            icon: const Icon(Icons.send_outlined, color: Colors.black),
+            tooltip: 'Pesan',
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
     );
   }
@@ -220,7 +440,12 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
         }
         if (controller.feedItems.isEmpty && controller.pinnedPost == null && controller.pinnedAnnouncements.isEmpty) {
           return RefreshIndicator(
-            onRefresh: () => controller.refreshDashboardData(),
+            onRefresh: () async {
+              await Future.wait([
+                Provider.of<HomeController>(context, listen: false).refreshDashboardData(),
+                Provider.of<UserProvider>(context, listen: false).fetchCurrentUser(),
+              ]);
+            },
             child: const CustomScrollView(
               slivers: [
                 SliverFillRemaining(child: Center(child: Text('Tidak ada konten untuk ditampilkan.')))
@@ -230,12 +455,19 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
         }
 
         return RefreshIndicator(
-          onRefresh: () => controller.refreshDashboardData(),
-          // 3. Pastikan controller sudah terpasang di sini (sudah benar)
+          onRefresh: () async {
+            // --- 👇 PERBAIKAN UTAMA DI SINI 👇 ---
+            // Panggil refresh untuk HomeController DAN UserProvider secara bersamaan
+            await Future.wait([
+              Provider.of<HomeController>(context, listen: false).refreshDashboardData(),
+              Provider.of<UserProvider>(context, listen: false).fetchCurrentUser(),
+            ]);
+          },
           child: CustomScrollView(
             controller: _scrollController,
             slivers: [
               SliverToBoxAdapter(child: StorySection(stories: controller.stories)),
+              SliverToBoxAdapter(child: _buildQuickAccessButtons()),
               SliverToBoxAdapter(child: PinnedAnnouncementsSection(announcements: controller.pinnedAnnouncements)),
               _buildPinnedPost(context, controller),
               SliverList(
@@ -247,24 +479,15 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                     if (itemType == 'post') {
                       final Post post = Post.fromJson(item as Map<String, dynamic>);
                       return PostCard(
-                        username: post.user.username,
-                        isBookmarked: post.isBookmarked,
-                        onBookmark: () => controller.toggleBookmark(post.id),
-                        timeAgo: timeAgoFromDate(post.createdAt.toIso8601String()),
-                        mediaUrl: post.mediaUrl ?? '',
-                        isVideo: post.isVideo,
-                        comments: post.commentsCount,
-                        content: post.caption ?? '',
-                        isVerified: post.user.isVerified,
-                        profileImageUrl: post.user.profilePictureUrl ?? '',
-                        user: post.user.toJson(),
-                        likes: post.likesCount,
-                        isLiked: post.isLikedByUser,
+                        post: post,
                         onLike: () => controller.toggleLike(post.id),
+                        onBookmark: () => controller.toggleBookmark(post.id),
+                        onComment: () => _showCommentSheet(context, post),
                         onShare: () {},
-                        onComment: () => _showCommentSheet(context, post.id),
-                        postId: post.id,
-                        onProfileTap: () => NavigationHelper.navigateToProfile(context, post.user.toJson()),
+                        onProfileTap: () {
+                          AppState.navFrom = "dashboard";
+                          NavigationHelper.navigateToProfile(context, post.user);
+                        },
                       );
                     } else if (itemType == 'suggestion') {
                       final List<dynamic> users = item['users'] ?? [];
@@ -276,6 +499,14 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                   childCount: controller.feedItems.length,
                 ),
               ),
+              SliverToBoxAdapter(
+                child: controller.isFetchingMore
+                    ? const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+                    : const SizedBox.shrink(),
+              ),
             ],
           ),
         );
@@ -283,7 +514,6 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
     );
   }
 
-  // Sisa kode di bawah ini tidak perlu diubah
   Widget _buildPinnedPost(BuildContext context, HomeController controller) {
     final pinnedPost = controller.pinnedPost;
     if (pinnedPost == null) {
@@ -297,7 +527,7 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
       child: _PinnedPostCard(
         post: pinnedPost,
         controller: controller,
-        onComment: () => _showCommentSheet(context, pinnedPost.id),
+        onComment: () => _showCommentSheet(context, pinnedPost),
       ),
     );
   }
@@ -445,25 +675,16 @@ class _PinnedPostCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4.0),
             child: PostCard(
-              username: post.user.username,
-              timeAgo: timeAgoFromDate(post.createdAt.toIso8601String()),
-              mediaUrl: post.mediaUrl ?? '',
-              isVideo: post.isVideo,
-              likes: post.likesCount,
-              comments: post.commentsCount,
-              content: post.caption ?? '',
-              isVerified: post.user.isVerified,
-              isLiked: post.isLikedByUser,
-              isBookmarked: false,
-              profileImageUrl: post.user.profilePictureUrl ?? '',
-              user: post.user.toJson(),
+              post: post,
+              hasCardDecoration: false,
               onLike: () => controller.toggleLike(post.id),
               onBookmark: () {},
               onShare: () {},
               onComment: onComment,
-              postId: post.id,
-              onProfileTap: () => NavigationHelper.navigateToProfile(context, post.user.toJson()),
-              hasCardDecoration: false,
+              onProfileTap: () {
+                AppState.navFrom = "dashboard";
+                NavigationHelper.navigateToProfile(context, post.user);
+              },
             ),
           ),
         ],
@@ -493,7 +714,6 @@ class ScaleFromPositionRoute extends PageRouteBuilder {
   );
 }
 
-// --- 👇 KELAS ANNOUNCEMENTCARD DENGAN FUNGSI EXPAND ---
 class AnnouncementCard extends StatefulWidget {
   final Announcement announcement;
   final Function(bool) onExpansionChanged;
@@ -550,15 +770,27 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  radius: 22,
-                  backgroundImage: widget.announcement.creator.profilePictureUrl != null
-                      ? CachedNetworkImageProvider(widget.announcement.creator.profilePictureUrl!)
-                      : null,
-                  child: widget.announcement.creator.profilePictureUrl == null
-                      ? const Icon(Icons.person)
-                      : null,
+                GestureDetector(
+                  onTap: () {
+                    AppState.navFrom = "dashboard";
+                    final userToNavigate = User(
+                      id: widget.announcement.creator.userId,
+                      username: widget.announcement.creator.username,
+                      fullName: widget.announcement.creator.fullName,
+                      isVerified: widget.announcement.creator.isVerified,
+                      profilePictureUrl: widget.announcement.creator.profilePictureUrl,
+                    );
+                    NavigationHelper.navigateToProfile(
+                      context,
+                      userToNavigate,
+                    );
+                  },
+                  child: CircularAvatarFetcher(
+                    radius: 22,
+                    userId: widget.announcement.creator.userId,
+                  ),
                 ),
+
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
@@ -578,10 +810,19 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
                           ),
                           const SizedBox(width: 6),
                           Flexible(
-                            child: Text(
-                              widget.announcement.creator.fullName,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    widget.announcement.creator.fullName,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                                  ),
+                                ),
+                                if (widget.announcement.creator.isVerified)
+                                  const VerifiedBadge(size: 14),
+                              ],
                             ),
                           ),
                         ],
@@ -654,7 +895,6 @@ class SuggestionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Jika tidak ada user, sembunyikan seluruh bagian
     if (users.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -684,7 +924,6 @@ class SuggestionCard extends StatelessWidget {
                   return const SizedBox.shrink();
                 }
 
-                // Setiap kartu sekarang mengelola statenya sendiri
                 return _SuggestionProfileCard(
                   key: ValueKey(user['user_id']),
                   user: user,
@@ -711,16 +950,15 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
   bool _isLoading = false;
   bool _isFollowed = false;
   bool _showShimmer = false;
+  bool _isLoadingStory = false;
 
   final FollowService _followService = FollowService();
+  final StoryService _storyService = StoryService();
 
-  // --- ⬇️ PERUBAHAN UTAMA: FUNGSI INI SEKARANG MENGATUR FOLLOW & UNFOLLOW ⬇️ ---
   Future<void> _toggleFollowStatus() async {
     setState(() => _isLoading = true);
 
     bool success;
-
-    // Jika sudah mengikuti, jalankan unfollow. Jika belum, jalankan follow.
     if (_isFollowed) {
       success = await _followService.unfollowUser(widget.user['user_id']);
     } else {
@@ -730,22 +968,19 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
     if (!mounted) return;
 
     if (success) {
-      // Perbarui state berdasarkan aksi yang berhasil
       setState(() {
-        _isFollowed = !_isFollowed; // Balikkan status follow
+        _isFollowed = !_isFollowed;
       });
 
-      // Hanya tampilkan shimmer saat follow, bukan saat unfollow
       if (_isFollowed) {
         setState(() => _showShimmer = true);
-        Future.delayed(const Duration(milliseconds: 1500), () {
+        Future.delayed(const Duration(milliseconds: 1800), () {
           if (mounted) {
             setState(() => _showShimmer = false);
           }
         });
       }
     } else {
-      // Tampilkan pesan error jika aksi gagal
       final action = _isFollowed ? "berhenti mengikuti" : "mengikuti";
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -754,27 +989,62 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
         ),
       );
     }
-
-    // Selesaikan loading setelah semua proses selesai
     setState(() => _isLoading = false);
+  }
+
+  Future<void> _navigateToStoryView() async {
+    if (_isLoadingStory) return;
+
+    final navigator = Navigator.of(context);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    setState(() => _isLoadingStory = true);
+
+    try {
+      final userWithStories = await _storyService.getStoriesForUser(widget.user['user_id']);
+
+      if (mounted && userWithStories.stories.isNotEmpty) {
+        navigator.push(
+          PageRouteBuilder(
+            opaque: false,
+            pageBuilder: (_, __, ___) => StoryViewPage(
+              userWithStories: userWithStories,
+              heroTag: 'story_hero_${userWithStories.userId}',
+            ),
+            transitionsBuilder: (_, animation, __, child) => FadeTransition(opacity: animation, child: child),
+          ),
+        );
+      }
+    } catch (e) {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(content: Text('Gagal memuat story: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if(mounted) {
+        setState(() => _isLoadingStory = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final profilePic = widget.user['profile_picture_url'] ?? '';
     final username = widget.user['username'] ?? 'No Username';
     final fullName = widget.user['full_name'] ?? 'No Name';
     final bool isFollowBack = widget.user['is_follow_back'] ?? false;
     final String buttonText = _isFollowed ? 'Mengikuti' : (isFollowBack ? 'Ikuti Balik' : 'Ikuti');
+    final bool isVerified = widget.user['is_verified'] ?? false;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4.0),
       child: Stack(
         children: [
-          // LAPISAN 1: KONTEN KARTU
           InkWell(
-            onTap: () => NavigationHelper.navigateToProfile(context, widget.user),
-            borderRadius: BorderRadius.circular(12),
+            onTap: () {
+              AppState.navFrom = "dashboard";
+              final userToNavigate = User.fromJson(widget.user);
+              NavigationHelper.navigateToProfile(context, userToNavigate);
+            },
+            borderRadius: BorderRadius.circular(20),
             child: Container(
               width: 140,
               padding: const EdgeInsets.all(12),
@@ -786,39 +1056,65 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircleAvatar(
-                    radius: 30,
-                    backgroundImage: profilePic.isNotEmpty ? CachedNetworkImageProvider(profilePic) : null,
-                    child: profilePic.isEmpty ? const Icon(Icons.person, size: 30) : null,
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 68,
+                        height: 68,
+                        child: CircularAvatarFetcher(
+                          userId: widget.user['user_id'] as int,
+                          radius: 30,
+                        ),
+                      ),
+                      if (_isLoadingStory)
+                        const SizedBox(
+                          width: 68,
+                          height: 68,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3.5,
+                            color: Colors.orange,
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 8),
-                  Text(username, style: const TextStyle(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          username,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (isVerified)
+                        const SizedBox(width: 2,),
+                      if (isVerified)
+                        const VerifiedBadge(size: 14),
+                    ],
+                  ),
                   const SizedBox(height: 2),
                   Text(fullName, style: TextStyle(fontSize: 12, color: Colors.grey.shade600), overflow: TextOverflow.ellipsis),
                   const Spacer(),
                   ElevatedButton(
                     onPressed: _isLoading ? null : _toggleFollowStatus,
                     style: ElevatedButton.styleFrom(
-                      // 1. Ubah backgroundColor: jadi transparan jika belum difollow (untuk gradien)
                       backgroundColor: _isFollowed ? Colors.grey.shade300 : Colors.transparent,
-                      shadowColor: _isFollowed ? Colors.black.withOpacity(0.2) : Colors.transparent, // Agar bayangan juga hilang
-
-                      // 2. Nolkan padding di sini, karena akan kita atur di dalam Container
+                      shadowColor: _isFollowed ? Colors.black.withOpacity(0.2) : Colors.transparent,
                       padding: EdgeInsets.zero,
-
-                      // Properti lain yang relevan tetap di sini
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       elevation: _isFollowed ? 0 : 2,
                     ),
                     child: Ink(
-                      // 3. Bungkus dengan Ink agar efek klik tetap ada di atas gradien
                       decoration: BoxDecoration(
-                        // 4. Terapkan logika gradien di sini
                         gradient: _isFollowed
-                            ? null // Tidak ada gradien saat sudah diikuti
+                            ? null
                             : LinearGradient(
                           colors: [
-                            Colors.amber.shade600, // Ganti Colors.blue dengan gradien
+                            Colors.amber.shade600,
                             Colors.orange.shade800,
                           ],
                           begin: Alignment.centerLeft,
@@ -827,9 +1123,7 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Container(
-                        // 5. Gunakan constraints sebagai pengganti minimumSize
                         constraints: const BoxConstraints(minWidth: 88, minHeight: 36),
-                        // Atur padding yang sebenarnya di sini
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         alignment: Alignment.center,
                         child: _isLoading
@@ -837,14 +1131,12 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            // Pastikan warna loading sesuai dengan warna teks
+                            strokeWidth: 3.5,
                             color: _isFollowed ? Colors.black54 : Colors.white,
                           ),
                         )
                             : Text(
                           buttonText,
-                          // 6. Atur warna teks di sini agar konsisten
                           style: TextStyle(
                             color: _isFollowed ? Colors.black54 : Colors.white,
                           ),
@@ -856,8 +1148,6 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
               ),
             ),
           ),
-
-          // LAPISAN 2: EFEK KILAU (SHIMMER)
           if (_showShimmer)
             Positioned.fill(
               child: ClipRRect(

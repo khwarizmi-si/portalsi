@@ -1,35 +1,38 @@
 // lib/pages/profile_page.dart
 
-import 'dart:io';
+import 'dart:developer';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/rendering.dart';
+import 'package:portal_si/pages/story_view_page.dart';
 import 'package:provider/provider.dart';
-
-// Halaman & Komponen UI
+import 'package:shimmer/shimmer.dart';
 import '../components/video_thumbnail_widget.dart';
+import '../app_state.dart';
+import '../components/circular_avatar_fetcher.dart';
+import '../components/verified_badge.dart';
+// --- IMPORT TAMBAHAN YANG DIBUTUHKAN ---
+import '../utils/user_provider.dart';
+import '../providers/navigation_provider.dart';
 import '../providers/scroll_provider.dart';
+import '../services/follow_service.dart';
+import '../services/story_service.dart';
 import '../utils/navigation_helper.dart';
+import 'clips_viewer_page.dart';
+import 'create_story_page.dart';
 import 'edit_profile_page.dart';
 import 'followers_following_page.dart';
 import 'post_detail.dart';
 import 'settings_page.dart';
 import 'share_profile_page.dart';
-
-// Model & Service
-import '../models/post_model.dart';
 import '../models/user_model.dart';
+import '../models/post_model.dart';
 import '../services/post_service.dart';
 import '../services/user_service.dart';
-
-// Helper & Util
 import '../utils/zoom_page_route.dart';
-
-
 import 'package:palette_generator/palette_generator.dart';
 
-// --- WIDGET POPUP, GRID ITEM, DAN HERO DIALOG ROUTE TETAP SAMA ---
 class PostPopupContent extends StatefulWidget {
   final SimplePost post;
   final User user;
@@ -189,19 +192,29 @@ class _PressableGridItemState extends State<PressableGridItem> {
             shape: ContinuousRectangleBorder(
               borderRadius: BorderRadius.circular(40.0),
             ),
-            gradient: RadialGradient(
-              center: Alignment.center,
-              radius: 0.8,
-              colors: [
-                Colors.transparent,
-                Colors.black.withOpacity(0.4),
-              ],
-              stops: const [0.7, 1.0],
-            ),
           ),
-          child: Hero(
-            tag: 'post-hero-${widget.post.postId}',
-            child: mediaDisplay,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (widget.post.isVideo)
+                mediaDisplay
+              else
+                Hero(
+                  tag: 'post-hero-${widget.post.postId}',
+                  child: mediaDisplay,
+                ),
+              if (widget.post.isVideo)
+                const Positioned(
+                  top: 8.0,
+                  right: 8.0,
+                  child: Icon(
+                    Icons.video_camera_back_rounded,
+                    color: Colors.white,
+                    size: 22.0,
+                    shadows: [Shadow(color: Colors.black87, blurRadius: 8)],
+                  ),
+                )
+            ],
           ),
         ),
       ),
@@ -231,9 +244,6 @@ class HeroDialogRoute<T> extends PageRoute<T> {
   }
 }
 
-
-// --- WIDGET UTAMA HALAMAN PROFIL ---
-
 class ProfilePage extends StatefulWidget {
   const ProfilePage({Key? key}) : super(key: key);
   @override
@@ -243,32 +253,31 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClientMixin {
   final ProfileService _profileService = ProfileService();
   late Future<User> _userFuture;
+  late Future<List<dynamic>> _suggestionsFuture;
   final GlobalKey _menuKey = GlobalKey();
   late ScrollController _scrollController;
+  final StoryService _storyService = StoryService();
+  bool _showSuggestions = true;
+  Key _avatarKey = UniqueKey();
 
   @override
   void initState() {
     super.initState();
     _loadData();
-
-    // 3. INISIALISASI CONTROLLER DAN TAMBAHKAN LISTENER
     _scrollController = ScrollController();
     _scrollController.addListener(() {
       final scrollProvider = Provider.of<ScrollProvider>(context, listen: false);
       final direction = _scrollController.position.userScrollDirection;
 
-      // Jika user scroll ke ATAS (reverse), maka tampilkan teks.
       if (direction == ScrollDirection.reverse) {
         scrollProvider.setScrolled(true);
       }
-      // Jika user scroll ke BAWAH (forward), maka sembunyikan teks.
       else if (direction == ScrollDirection.forward) {
         scrollProvider.setScrolled(false);
       }
     });
   }
 
-  // 4. JANGAN LUPA DISPOSE CONTROLLER
   @override
   void dispose() {
     _scrollController.dispose();
@@ -278,23 +287,76 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
   void _loadData() {
     setState(() {
       _userFuture = _profileService.getProfile();
+      _suggestionsFuture = _profileService.fetchSuggestions();
     });
   }
 
+  Future<void> _navigateToCreateStory(User user) async {
+    final heroTag = 'story_create_avatar_${user.id}';
+    final result = await Navigator.push(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => CreateStoryPage(
+          currentUser: user,
+          heroTag: heroTag,
+          initialImageUrl: user.profilePictureUrl,
+        ),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+      ),
+    );
+    if (result == true && mounted) {
+      await _handleRefresh();
+    }
+  }
+
+  // --- 👇 PERUBAHAN UTAMA ADA DI FUNGSI INI 👇 ---
   Future<void> _handleRefresh() async {
-    setState(() {
-      _userFuture = _profileService.refreshProfile();
-    });
+    try {
+      // 1. Ambil UserProvider terlebih dahulu
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      // 2. Simpan role yang ada saat ini sebelum di-refresh
+      final String? existingRole = userProvider.currentUser?.role;
+
+      // 3. Panggil API untuk mendapatkan data profil yang baru (yang tidak punya role)
+      final User newlyFetchedUser = await _profileService.refreshProfile();
+
+      // 4. Buat objek User yang sudah dikoreksi: gabungkan data baru dengan role yang lama
+      final User correctedUser = newlyFetchedUser.copyWith(role: existingRole);
+
+      // 5. Perbarui state global dengan data User yang sudah benar dan lengkap
+      if (mounted) {
+        await userProvider.updateCurrentUser(correctedUser);
+      }
+
+      // 6. Perbarui state lokal untuk FutureBuilder di halaman ini
+      setState(() {
+        _userFuture = Future.value(correctedUser); // Gunakan data yang sudah dikoreksi
+        _suggestionsFuture = _profileService.fetchSuggestions();
+        _avatarKey = UniqueKey();
+      });
+
+    } catch (e) {
+      // Tangani error jika gagal refresh
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memperbarui profil: $e'), backgroundColor: Colors.red),
+        );
+        setState(() {
+          _userFuture = Future.error(e);
+        });
+      }
+    }
   }
 
-  // Kode logic lainnya tetap sama
   Future<void> _navigateToEditProfile(User currentUser) async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => EditProfilePage(initialProfile: currentUser)),
     );
     if (result == true && mounted) {
-      _handleRefresh();
+      await _handleRefresh();
     }
   }
 
@@ -342,7 +404,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
     if (confirmDelete == true) {
       try {
         await PostService().deletePost(postId);
-        _handleRefresh();
+        await _handleRefresh();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Postingan berhasil dihapus.'), backgroundColor: Colors.green),
@@ -360,19 +422,23 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
 
   void _navigateToFollowersFollowing(User user, int initialTab) async {
     if (user.id == null) return;
-    final result = await Navigator.push<Map<dynamic, dynamic>>(
+
+    final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
         builder: (context) => FollowersFollowingPage(
           userId: user.id!,
+          username: user.username,
           initialTab: initialTab,
         ),
       ),
     );
+
     if (result != null && mounted) {
+      final userToNavigate = User.fromJson(result);
       NavigationHelper.navigateToProfile(
         context,
-        Map<String, dynamic>.from(result),
+        userToNavigate,
       );
     }
   }
@@ -428,13 +494,9 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
           }
 
           final user = snapshot.data!;
-          // Seluruh halaman dibungkus Column
           return Column(
             children: [
-              // 1. AppBar statis di paling atas
               _buildProfileAppBar(user),
-
-              // 2. Konten yang bisa scroll dibungkus Expanded
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: _handleRefresh,
@@ -442,8 +504,8 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
                     controller: _scrollController,
                     padding: EdgeInsets.zero,
                     children: [
-                      _buildBannerAndHeader(user),
-                      _buildProfileBody(user),
+                      _buildProfileHeader(user),
+                      if (_showSuggestions) _buildSuggestions(),
                       _buildPostGrid(user),
                     ],
                   ),
@@ -456,15 +518,41 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
     );
   }
 
+  Widget _buildSuggestions() {
+    return FutureBuilder<List<dynamic>>(
+      future: _suggestionsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Container(
+            height: 230,
+            alignment: Alignment.center,
+            child: const CircularProgressIndicator(),
+          );
+        }
 
-  // --- PERUBAHAN 2: FUNGSI BUILD WIDGET DISESUAIKAN ---
-  // Fungsi-fungsi ini tidak lagi mengembalikan 'Sliver'
+        if (snapshot.hasError) {
+          return Container(
+            height: 230,
+            alignment: Alignment.center,
+            child: Text('Gagal memuat saran: ${snapshot.error}'),
+          );
+        }
+
+        if (snapshot.hasData) {
+          final suggestions = snapshot.data!;
+          return SuggestionCard(users: suggestions);
+        }
+
+        return const SizedBox.shrink();
+      },
+    );
+  }
 
   Widget _buildProfileAppBar(User? user) {
     return Container(
       padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
       decoration: BoxDecoration(
-        color: const Color(0xFFFAFAFA),
+        color: const Color(0xFFFFFFFF),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -478,9 +566,17 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
         child: Row(
           children: [
             Expanded(
-              child: Text(
-                user?.username ?? 'Profil',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    user?.username ?? 'Profil',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black),
+                  ),
+                  const SizedBox(width: 5,),
+                  if (user?.isVerified ?? false)
+                    const VerifiedBadge(size: 18),
+                ],
               ),
             ),
             IconButton(
@@ -494,66 +590,116 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
     );
   }
 
-  // Nama diubah dari _buildBannerAndHeaderSliver menjadi _buildBannerAndHeader
-  Widget _buildBannerAndHeader(User user) {
+  Widget _buildProfileHeader(User user) {
     const double avatarRadius = 45;
     const String placeholderBanner = 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=2070&auto=format&fit=crop';
+    final String bannerImageUrl = (user.bannerUrl != null && user.bannerUrl!.isNotEmpty)
+        ? user.bannerUrl!
+        : placeholderBanner;
+
+    final String heroAvatarTag = 'profile_avatar_hero_${user.id}';
 
     return Stack(
-      clipBehavior: Clip.none,
       children: [
-        Container(
-          height: 160,
-          decoration: BoxDecoration(
-              image: DecorationImage(
-                image: CachedNetworkImageProvider(user.profilePictureUrl ?? placeholderBanner),
-                fit: BoxFit.cover,
-              )),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 160,
+              decoration: BoxDecoration(
+                image: DecorationImage(
+                  image: CachedNetworkImageProvider(bannerImageUrl),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: avatarRadius + 22),
+                  _buildInfo(user),
+                  const SizedBox(height: 8),
+                  _buildBio(user),
+                  const SizedBox(height: 20),
+                  _buildActionButtons(user),
+                ],
+              ),
+            ),
+          ],
         ),
         Positioned(
-          top: 165 - avatarRadius,
+          top: 170 - avatarRadius,
           left: 16,
           right: 16,
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              _buildAvatar(user, avatarRadius),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
-                  child: _buildStats(user),
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                _buildAvatarWithStoryAddButton(user, avatarRadius, heroAvatarTag),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 0.0),
+                    child: _buildStats(user),
+                  ),
                 ),
-              ),
-            ],
+              ]
           ),
-        )
+        ),
       ],
     );
   }
 
-  // Nama diubah dari _buildProfileBodySliver menjadi _buildProfileBody
-  Widget _buildProfileBody(User user) {
-    const double avatarRadius = 45;
-
-    return Container(
-      color: Colors.transparent,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: avatarRadius + 16),
-          _buildInfo(user),
-          const SizedBox(height: 8),
-          _buildBio(user),
-          const SizedBox(height: 20),
-          _buildActionButtons(user),
-        ],
+  Widget _buildAvatarWithStoryAddButton(User user, double radius, String heroTag) {
+    return Hero(
+      tag: heroTag,
+      child: Material(
+        color: Colors.transparent,
+        child: Stack(
+          alignment: Alignment.bottomRight,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 0),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: CircularAvatarFetcher(
+                key: _avatarKey,
+                radius: radius,
+                userId: user.id ?? 0,
+                onStoryClosed: _handleRefresh,
+              ),
+            ),
+            GestureDetector(
+              onTap: () => _navigateToCreateStory(user),
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF03B293), Color(0xFF116C63)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: const Icon(Icons.add, color: Colors.white, size: 20),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // Nama diubah dari _buildPostGridSliver menjadi _buildPostGrid
   Widget _buildPostGrid(User user) {
     final posts = user.recentPosts;
 
@@ -579,12 +725,10 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
         child: const Text('Belum ada postingan'),
       )
           : Padding(
-        padding: const EdgeInsets.fromLTRB(12, 24, 12, 12),
+        padding: const EdgeInsets.fromLTRB(12, 24, 12, 72),
         child: GridView.builder(
-          // PENTING: Dua properti ini wajib ada di dalam ListView
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-
           padding: const EdgeInsets.all(12),
           itemCount: posts.length,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -595,9 +739,27 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
           itemBuilder: (context, index) {
             final SimplePost post = posts[index];
             return PressableGridItem(
+              key: ValueKey(post.postId),
               post: post,
               onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => PostDetail(postId: post.postId)));
+                if (post.isVideo) {
+                  final fullPostObject = Post(
+                    id: post.postId,
+                    caption: post.caption,
+                    mediaUrl: post.mediaUrl,
+                    isVideo: post.isVideo,
+                    createdAt: post.createdAt,
+                    user: user,
+                    likesCount: 0,
+                    commentsCount: 0,
+                    isLikedByUser: false,
+                    isBookmarked: false,
+                  );
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => ClipsViewerPage(initialClip: fullPostObject)));
+                } else {
+                  final navProvider = Provider.of<NavigationProvider>(context, listen: false);
+                  navProvider.showOverlay(PostDetail(postId: post.postId));
+                }
               },
               onLongPress: () {
                 _showPostPopup(context, post, user);
@@ -606,47 +768,6 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
           },
         ),
       ),
-    );
-  }
-
-  // --- Widget-widget lainnya tetap sama (tidak diubah) ---
-
-  Widget _buildAvatar(User user, double radius) {
-    return Stack(
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: const Color(0xFFFAFAFA), width: 4),
-          ),
-          child: CircleAvatar(
-            radius: radius,
-            backgroundImage: CachedNetworkImageProvider(
-                user.profilePictureUrl ?? 'https://via.placeholder.com/150'),
-          ),
-        ),
-        Positioned(
-          bottom: 0,
-          right: 0,
-          child: Container(
-            width: 26,
-            height: 26,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [
-                  Color(0xFF03B293),
-                  Color(0xFF116C63),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFFAFAFA), width: 2),
-            ),
-            child: const Icon(Icons.add, color: Colors.white, size: 16),
-          ),
-        ),
-      ],
     );
   }
 
@@ -676,10 +797,6 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         const SizedBox(height: 2),
-        Text(
-          "Visual Creator",
-          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-        )
       ],
     );
   }
@@ -692,7 +809,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: bioItems.map((item) => Padding(
-        padding: const EdgeInsets.only(bottom: 8.0),
+        padding: const EdgeInsets.only(bottom: 2.0),
         child: Text(item, style: TextStyle(fontSize: 14, color: Colors.grey[800], height: 1.4)),
       )).toList(),
     );
@@ -711,7 +828,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),
-            child: const Text('Edit profile', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text('Edit Profil', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ),
         const SizedBox(width: 12),
@@ -735,6 +852,25 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
             child: const Text('Bagikan Profile', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ),
+        const SizedBox(width: 12),
+        ElevatedButton(
+          onPressed: () {
+            setState(() {
+              _showSuggestions = !_showSuggestions;
+            });
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFF0F0F0),
+            foregroundColor: Colors.black,
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.all(12),
+          ),
+          child: Icon(
+            _showSuggestions ? Icons.person_add_disabled_outlined : Icons.person_add_alt_1_outlined,
+            semanticLabel: _showSuggestions ? 'Sembunyikan Saran' : 'Tampilkan Saran',
+          ),
+        ),
       ],
     );
   }
@@ -743,10 +879,262 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(count, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        Text(count, style: const TextStyle(fontSize: 16, fontWeight:
+        FontWeight.bold)),
         const SizedBox(height: 2),
         Text(label, style: TextStyle(fontSize: 13, color: Colors.grey[600])),
       ],
+    );
+  }
+}
+
+class SuggestionCard extends StatelessWidget {
+  final List<dynamic> users;
+  const SuggestionCard({super.key, required this.users});
+
+  @override
+  Widget build(BuildContext context) {
+    if (users.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      height: 230,
+      margin: const EdgeInsets.symmetric(vertical: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text(
+              'Temukan Orang',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              itemCount: users.length,
+              itemBuilder: (context, index) {
+                final user = users[index];
+                if (user is! Map<String, dynamic> || user['user_id'] == null) {
+                  return const SizedBox.shrink();
+                }
+
+                return _SuggestionProfileCard(
+                  key: ValueKey(user['user_id']),
+                  user: user,
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SuggestionProfileCard extends StatefulWidget {
+  final Map<String, dynamic> user;
+
+  const _SuggestionProfileCard({super.key, required this.user});
+
+  @override
+  State<_SuggestionProfileCard> createState() => _SuggestionProfileCardState();
+}
+
+class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
+  bool _isLoading = false;
+  bool _isFollowed = false;
+  bool _showShimmer = false;
+  bool _isLoadingStory = false;
+
+  final FollowService _followService = FollowService();
+  final StoryService _storyService = StoryService();
+
+  Future<void> _toggleFollowStatus() async {
+    setState(() => _isLoading = true);
+
+    bool success;
+    if (_isFollowed) {
+      success = await _followService.unfollowUser(widget.user['user_id']);
+    } else {
+      success = await _followService.followUser(widget.user['user_id']);
+    }
+
+    if (!mounted) return;
+
+    if (success) {
+      setState(() {
+        _isFollowed = !_isFollowed;
+      });
+
+      if (_isFollowed) {
+        setState(() => _showShimmer = true);
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          if (mounted) {
+            setState(() => _showShimmer = false);
+          }
+        });
+      }
+    } else {
+      final action = _isFollowed ? "berhenti mengikuti" : "mengikuti";
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal $action ${widget.user['username']}'),
+          backgroundColor: Colors.red.shade600,
+        ),
+      );
+    }
+    setState(() => _isLoading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final username = widget.user['username'] ?? 'No Username';
+    final fullName = widget.user['full_name'] ?? 'No Name';
+    final bool isFollowBack = widget.user['is_follow_back'] ?? false;
+    final String buttonText = _isFollowed ? 'Mengikuti' : (isFollowBack ? 'Ikuti Balik' : 'Ikuti');
+    final bool isVerified = widget.user['is_verified'] ?? false;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+      child: Stack(
+        children: [
+          InkWell(
+            onTap: () {
+              log("Profile Card Tapped");
+              AppState.navFrom = "profile";
+
+              final userToNavigate = User.fromJson(widget.user);
+
+              NavigationHelper.navigateToProfile(context, userToNavigate);
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: 140,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 68,
+                        height: 68,
+                        child: CircularAvatarFetcher(
+                          radius: 30,
+                          userId: widget.user['user_id'] as int,
+                        ),
+                      ),
+                      if (_isLoadingStory)
+                        const SizedBox(
+                          width: 68,
+                          height: 68,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3.5,
+                            color: Colors.orange,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          username,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (isVerified)
+                        SizedBox(width: 2,),
+                      if (isVerified)
+                        const VerifiedBadge(size: 14),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(fullName, style: TextStyle(fontSize: 12, color: Colors.grey.shade600), overflow: TextOverflow.ellipsis),
+                  const Spacer(),
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _toggleFollowStatus,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isFollowed ? Colors.grey.shade300 : Colors.transparent,
+                      shadowColor: _isFollowed ? Colors.black.withOpacity(0.2) : Colors.transparent,
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: _isFollowed ? 0 : 2,
+                    ),
+                    child: Ink(
+                      decoration: BoxDecoration(
+                        gradient: _isFollowed
+                            ? null
+                            : LinearGradient(
+                          colors: [
+                            Colors.amber.shade600,
+                            Colors.orange.shade800,
+                          ],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Container(
+                        constraints: const BoxConstraints(minWidth: 88, minHeight: 36),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        alignment: Alignment.center,
+                        child: _isLoading
+                            ? SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3.5,
+                            color: _isFollowed ? Colors.black54 : Colors.white,
+                          ),
+                        )
+                            : Text(
+                          buttonText,
+                          style: TextStyle(
+                            color: _isFollowed ? Colors.black54 : Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                ],
+              ),
+            ),
+          ),
+          if (_showShimmer)
+            Positioned.fill(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Shimmer.fromColors(
+                  baseColor: Colors.transparent,
+                  highlightColor: Colors.white.withOpacity(0.6),
+                  period: const Duration(milliseconds: 1000),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

@@ -44,13 +44,14 @@ defaultConfig {
     applicationId = "com.portal.si"
     minSdk = flutter.minSdkVersion
     targetSdk = 36
-    versionCode = 5
-    versionName = "1.0.3-earlyaccess"
+    versionCode = 16
+    versionName = "1.3.15-earlyaccess"
+    multiDexEnabled = true
 }
 
 //    buildTypes {
 //        release {
-//            // TODO: Add your own signing config for the release build.
+//            // TODO: Add your own signizng config for the release build.
 //            // Signing with the debug keys for now, so `flutter run --release` works.
 //            signingConfig = signingConfigs.getByName("debug")
 //        }
@@ -71,6 +72,7 @@ defaultConfig {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    implementation("androidx.multidex:multidex:2.0.1")
 }
 
 flutter {

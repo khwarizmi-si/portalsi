@@ -1,16 +1,23 @@
-// lib/models/post_model.dart
+import 'comment_model.dart';
 import 'user_model.dart';
 
 class Post {
   final int id;
   final String? caption;
   final String? mediaUrl;
+  final String? location;
   final bool isVideo;
   final DateTime createdAt;
   final User user;
-  // --- 1. TAMBAHKAN PROPERTI DIMENSI ---
   final int? mediaWidth;
   final int? mediaHeight;
+  final List<Comment> comments;
+
+  // Properti untuk data musik (SUDAH ADA)
+  final String? musicTrackName;
+  final String? musicArtistName;
+  final String? musicPreviewUrl;
+  final String? musicAlbumArtUrl;
 
   int likesCount;
   int commentsCount;
@@ -26,15 +33,20 @@ class Post {
     required this.likesCount,
     required this.commentsCount,
     required this.isLikedByUser,
+    this.location,
     required this.user,
-    this.mediaWidth, // Tambahkan di konstruktor
-    this.mediaHeight, // Tambahkan di konstruktor
+    this.mediaWidth,
+    this.mediaHeight,
     required this.isBookmarked,
+    this.comments = const [],
+    // Tambahkan properti musik di konstruktor (SUDAH ADA)
+    this.musicTrackName,
+    this.musicArtistName,
+    this.musicPreviewUrl,
+    this.musicAlbumArtUrl,
   });
 
-  // --- 2. BUAT GETTER UNTUK ASPECT RATIO ---
   double get aspectRatio {
-    // Memberikan rasio aspek default 1.0 (persegi) jika data tidak ada
     if (mediaWidth != null && mediaHeight != null && mediaWidth! > 0 && mediaHeight! > 0) {
       return mediaWidth! / mediaHeight!;
     }
@@ -42,21 +54,42 @@ class Post {
   }
 
   factory Post.fromJson(Map<String, dynamic> json) {
+    var commentsFromJson = json['comments'] as List? ?? [];
+    List<Comment> commentList =
+    commentsFromJson.map((c) => Comment.fromJson(c)).toList();
+
+    final postData = json['post'] is Map<String, dynamic> ? json['post'] : json;
+
+    final User postUser;
+    if (postData['user'] != null && postData['user'] is Map<String, dynamic>) {
+      postUser = User.fromJson(postData['user']);
+    } else {
+      postUser = User(
+          id: postData['user_id'],
+          username: ''
+      );
+    }
+
     return Post(
-      id: json['post_id'],
-      caption: json['caption'],
-      mediaUrl: json['media_url'],
-      isVideo: json['is_video'] == 1,
-      createdAt: DateTime.parse(json['created_at']),
-      likesCount: json['likes_count'] ?? 0,
-      commentsCount: json['comments_count'] ?? 0,
-      isLikedByUser: json['is_liked'] ?? false,
-      isBookmarked: json['is_bookmarked'] ?? false,
-      user: User.fromJson(json['user']),
-      // --- 3. PARSING DATA DIMENSI DARI JSON ---
-      // Pastikan backend Anda mengirimkan 'media_width' dan 'media_height'
-      mediaWidth: json['media_width'],
-      mediaHeight: json['media_height'],
+      id: int.tryParse(postData['post_id']?.toString() ?? postData['id']?.toString() ?? '0') ?? 0,
+      caption: postData['caption'], // Perubahan: Hapus ?? '' agar bisa null
+      mediaUrl: postData['media_url'],
+      isVideo: postData['is_video'] == 1 || postData['is_video'].toString() == '1',
+      createdAt: DateTime.parse(postData['created_at']),
+      likesCount: postData['likes_count'] ?? 0,
+      commentsCount: postData['comments_count'] ?? 0,
+      isLikedByUser: postData['is_liked'] ?? false,
+      location: postData['location'], // Perubahan: Hapus ?? '' agar bisa null
+      isBookmarked: postData['is_bookmarked'] ?? false,
+      user: postUser,
+      mediaWidth: postData['media_width'],
+      mediaHeight: postData['media_height'],
+      comments: commentList,
+      // --- 👇 PASTIKAN BAGIAN INI ADA 👇 ---
+      musicTrackName: postData['music_track_name'],
+      musicArtistName: postData['music_artist_name'],
+      musicPreviewUrl: postData['music_preview_url'],
+      musicAlbumArtUrl: postData['music_album_art_url'],
     );
   }
 
@@ -89,6 +122,7 @@ class Post {
     bool? isLikedByUser,
     int? mediaWidth,
     int? mediaHeight,
+    List<Comment>? comments,
   }) {
     return Post(
       id: id ?? this.id,
@@ -103,6 +137,7 @@ class Post {
       isLikedByUser: isLikedByUser ?? this.isLikedByUser,
       mediaWidth: mediaWidth ?? this.mediaWidth,
       mediaHeight: mediaHeight ?? this.mediaHeight,
+      comments: comments ?? this.comments,
     );
   }
 }

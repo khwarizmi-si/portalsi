@@ -1,5 +1,7 @@
 // lib/models/user_model.dart
 
+import 'dart:developer';
+
 class SimplePost {
   final int postId;
   final String? caption;
@@ -12,17 +14,27 @@ class SimplePost {
     this.caption,
     required this.mediaUrl,
     required this.createdAt,
-    this.isVideo = false, // <-- TAMBAHKAN DI KONSTRUKTOR
+    required this.isVideo, // <-- TAMBAHKAN DI KONSTRUKTOR
   });
 
   factory SimplePost.fromJson(Map<String, dynamic> json) {
+    // --- Log untuk Debugging ---
+    final rawIsVideo = json['is_video'];
+    final bool parsedIsVideo = rawIsVideo == 1;
+
+    log('--- 🕵️‍♂️ Debugging Post #${json['post_id']} ---');
+    log('Nilai mentah "is_video" dari API: $rawIsVideo (Tipe Data: ${rawIsVideo.runtimeType})');
+    log('Hasil parsing menjadi "isVideo": $parsedIsVideo');
+    log('----------------------------------------');
+    // --- Batas Log ---
+
     return SimplePost(
       postId: json['post_id'],
       caption: json['caption'],
       mediaUrl: json['media_url'],
       createdAt: DateTime.parse(json['created_at']),
-      // Pastikan backend Anda mengirimkan 'is_video' (berupa bool atau int 0/1)
-      isVideo: json['is_video'] == true || json['is_video'] == 1, // <-- TAMBAHKAN LOGIKA PARSING
+      // Gunakan hasil parsing yang sudah kita buat
+      isVideo: parsedIsVideo,
     );
   }
 
@@ -36,6 +48,8 @@ class SimplePost {
     };
   }
 }
+
+// lib/models/user_model.dart
 
 class User {
   final int? id;
@@ -52,6 +66,10 @@ class User {
   final List<SimplePost> recentPosts;
   final bool isOnline;
   final DateTime? lastSeen;
+  final String? bannerUrl;
+  final bool hasStory;
+  final bool storyViewed;
+  final String? role; // <-- TAMBAHKAN PROPERTI INI
 
   User({
     this.id,
@@ -60,15 +78,18 @@ class User {
     this.fullName,
     this.bio,
     this.profilePictureUrl,
-    // --- PERUBAHAN 1: Tambahkan nilai default untuk membuatnya opsional ---
     this.isVerified = false,
     this.isPrivate = false,
     this.followersCount = 0,
+    this.bannerUrl,
     this.followingCount = 0,
     this.postsCount = 0,
     this.recentPosts = const [],
     this.isOnline = false,
     this.lastSeen,
+    this.hasStory = false,
+    this.storyViewed = false,
+    this.role, // <-- TAMBAHKAN DI KONSTRUKTOR
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -81,6 +102,7 @@ class User {
       email: json['email'],
       fullName: json['full_name'] ?? json['name'],
       bio: json['bio'],
+      bannerUrl: json['banner_url'],
       profilePictureUrl: json['profile_picture_url'],
       isVerified: json['is_verified'] ?? false,
       isPrivate: json['is_private'] ?? false,
@@ -90,9 +112,13 @@ class User {
       recentPosts: recentPostsList,
       isOnline: json['is_online'] ?? false,
       lastSeen: json['last_seen'] != null ? DateTime.parse(json['last_seen']) : null,
+      hasStory: json['has_story'] ?? false,
+      storyViewed: json['story_viewed'] ?? false,
+      role: json['role'], // <-- TAMBAHKAN LOGIKA PARSING
     );
   }
 
+  // Method toJson() dan copyWith() tetap sama
   Map<String, dynamic> toJson() {
     return {
       'user_id': id,
@@ -100,6 +126,7 @@ class User {
       'username': username,
       'email': email,
       'full_name': fullName,
+      'banner_url': bannerUrl,
       'bio': bio,
       'profile_picture_url': profilePictureUrl,
       'is_verified': isVerified,
@@ -108,6 +135,7 @@ class User {
       'following_count': followingCount,
       'posts_count': postsCount,
       'recent_posts': recentPosts.map((post) => post.toJson()).toList(),
+      'role': role, // <-- TAMBAHKAN KE JSON
     };
   }
 
@@ -122,9 +150,11 @@ class User {
     bool? isVerified,
     bool? isPrivate,
     int? followersCount,
+    String? bannerUrl,
     int? followingCount,
     int? postsCount,
     List<SimplePost>? recentPosts,
+    String? role,
   }) {
     return User(
       id: id ?? this.id,
@@ -135,10 +165,12 @@ class User {
       profilePictureUrl: profilePictureUrl ?? this.profilePictureUrl,
       isVerified: isVerified ?? this.isVerified,
       isPrivate: isPrivate ?? this.isPrivate,
+      bannerUrl: bannerUrl ?? this.bannerUrl,
       followersCount: followersCount ?? this.followersCount,
       followingCount: followingCount ?? this.followingCount,
       postsCount: postsCount ?? this.postsCount,
       recentPosts: recentPosts ?? this.recentPosts,
+      role: role ?? this.role,
     );
   }
 }

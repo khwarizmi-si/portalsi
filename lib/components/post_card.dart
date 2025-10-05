@@ -1,67 +1,106 @@
 import 'package:flutter/material.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:marquee/marquee.dart';
+import 'package:portal_si/components/post_action_counts.dart';
+import 'package:portal_si/components/post_info_section.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../components/post_header.dart';
-import '../components/zoomable_image_overlay.dart';
+import 'package:portal_si/components/post_header.dart';
+import 'package:portal_si/models/post_model.dart';
+import 'package:portal_si/pages/clips_viewer_page.dart';
+
+// --- WIDGET BARU UNTUK TAMPILAN ZOOM GAMBAR ---
+class _FullScreenImageViewer extends StatelessWidget {
+  const _FullScreenImageViewer({
+    required this.imageUrl,
+    required this.heroTag,
+  });
+
+  final String imageUrl;
+  final String heroTag;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black.withOpacity(0.85),
+      body: Stack(
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            onVerticalDragUpdate: (details) {
+              if (details.primaryDelta! > 10) {
+                Navigator.of(context).pop();
+              }
+            },
+            child: InteractiveViewer(
+              panEnabled: true,
+              minScale: 1.0,
+              maxScale: 4.0,
+              // --- 👇 PERBAIKAN UTAMA ADA DI SINI 👇 ---
+              // Memberi ruang gerak tambahan sebesar 100 piksel di setiap sisi.
+              // Ini membuat gambar yang di-zoom bisa digeser dengan lebih leluasa.
+              boundaryMargin: const EdgeInsets.all(100),
+              child: Center(
+                child: Hero(
+                  tag: heroTag,
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 40,
+            right: 16,
+            child: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white, size: 30),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class PostCard extends StatefulWidget {
-  final String username;
-  final String timeAgo;
-  final String mediaUrl;
-  final int likes;
-  final int comments;
-  final String content;
-  final bool isVerified;
-  final bool isLiked;
-  final bool isBookmarked;
+  final Post post;
   final VoidCallback onLike;
   final VoidCallback onBookmark;
   final VoidCallback onShare;
   final VoidCallback onComment;
-  final String? profileImageUrl;
-  final Map<String, dynamic> user;
-  final int postId;
   final VoidCallback? onProfileTap;
   final bool hasCardDecoration;
-  final bool isVideo;
 
   const PostCard({
     super.key,
-    required this.username,
-    required this.timeAgo,
-    required this.mediaUrl,
-    required this.likes,
-    required this.comments,
-    required this.content,
-    required this.isVerified,
-    required this.isLiked,
-    required this.isBookmarked,
+    required this.post,
     required this.onLike,
     required this.onBookmark,
     required this.onShare,
     required this.onComment,
-    required this.profileImageUrl,
-    required this.user,
-    required this.postId,
     this.onProfileTap,
     this.hasCardDecoration = true,
-    this.isVideo = false,
   });
 
   @override
   State<PostCard> createState() => _PostCardState();
 }
 
-// 1. Tambahkan "with TickerProviderStateMixin" untuk animasi
 class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
   VideoPlayerController? _videoController;
   Future<void>? _initializeVideoPlayerFuture;
-  bool _isMuted = true;
+  bool _isVideoMuted = true;
   bool _wasPlayingBeforeHold = false;
   bool _videoEnded = false;
-
-  // 2. Deklarasikan AnimationController untuk bookmark
+  late final AudioPlayer _audioPlayer;
+  bool _isMusicMuted = false;
+  late AnimationController _heartAnimationController;
+  late Animation<double> _heartAnimation;
+  bool _isHeartVisible = false;
   late AnimationController _bookmarkAnimationController;
   late Animation<double> _bookmarkScaleAnimation;
 
@@ -69,133 +108,149 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _initVideoPlayer();
+    _initAudioPlayer();
 
-    // Inisialisasi controller animasi
-    _bookmarkAnimationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 350),
-    );
+    _bookmarkAnimationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 350));
+    _bookmarkScaleAnimation = Tween<double>(begin: 1.0, end: 1.4).animate(CurvedAnimation(parent: _bookmarkAnimationController, curve: Curves.elasticOut));
+    _heartAnimationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _heartAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween<double>(begin: 0.0, end: 1.4), weight: 50),
+      TweenSequenceItem(tween: Tween<double>(begin: 1.4, end: 1.0), weight: 50),
+    ]).animate(CurvedAnimation(parent: _heartAnimationController, curve: Curves.easeOut));
+    _heartAnimationController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        setState(() => _isHeartVisible = false);
+      }
+    });
+  }
 
-    // Definisikan animasi scale dengan efek "bounce" (elastis)
-    _bookmarkScaleAnimation = Tween<double>(begin: 1.0, end: 1.4).animate(
-      CurvedAnimation(
-        parent: _bookmarkAnimationController,
-        curve: Curves.elasticOut,
-      ),
-    );
+  Future<void> _initAudioPlayer() async {
+    _audioPlayer = AudioPlayer();
+    final musicUrl = widget.post.musicPreviewUrl;
+    if (musicUrl != null && musicUrl.isNotEmpty) {
+      try {
+        await _audioPlayer.setUrl(musicUrl);
+        await _audioPlayer.setLoopMode(LoopMode.one);
+      } catch (e) {
+        print("Error loading audio source: $e");
+      }
+    }
   }
 
   @override
   void dispose() {
     _videoController?.removeListener(_videoListener);
     _videoController?.dispose();
-    _bookmarkAnimationController.dispose(); // 3. Jangan lupa dispose controller
+    _audioPlayer.dispose();
+    _bookmarkAnimationController.dispose();
+    _heartAnimationController.dispose();
     super.dispose();
   }
 
-  // 4. Buat fungsi baru untuk menangani tap pada bookmark
-  void _onBookmarkTap() {
-    // Panggil callback logika yang diberikan dari parent widget
-    widget.onBookmark();
+  // --- FUNGSI BARU UNTUK NAVIGASI KE ZOOM VIEW ---
+  void _openImageZoom(BuildContext context) {
+    if (widget.post.isVideo || widget.post.mediaUrl == null || widget.post.mediaUrl!.isEmpty) return;
 
-    // Mainkan animasi: maju lalu mundur
-    _bookmarkAnimationController.forward().then((_) {
-      _bookmarkAnimationController.reverse();
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false, // Membuat background transparan
+        barrierDismissible: true,
+        pageBuilder: (BuildContext context, _, __) {
+          return _FullScreenImageViewer(
+            imageUrl: widget.post.mediaUrl!,
+            heroTag: 'post-image-hero-${widget.post.id}',
+          );
+        },
+      ),
+    );
+  }
+
+  void _toggleMusicMute() {
+    if (_audioPlayer.audioSource == null) return;
+    setState(() {
+      _isMusicMuted = !_isMusicMuted;
+      _audioPlayer.setVolume(_isMusicMuted ? 0.0 : 1.0);
     });
+  }
+
+  void _onBookmarkTap() {
+    widget.onBookmark();
+    _bookmarkAnimationController.forward().then((_) => _bookmarkAnimationController.reverse());
+  }
+
+  void _onDoubleTap() {
+    if (!widget.post.isLikedByUser) {
+      widget.onLike();
+    }
+    setState(() => _isHeartVisible = true);
+    _heartAnimationController.forward(from: 0.0);
   }
 
   @override
   Widget build(BuildContext context) {
     return VisibilityDetector(
-      key: Key('post-card-${widget.postId}'),
+      key: Key('post-card-${widget.post.id}'),
       onVisibilityChanged: (visibilityInfo) {
-        if (_videoController == null || !_videoController!.value.isInitialized || _videoEnded) return;
-
-        if (visibilityInfo.visibleFraction > 0.6) {
-          if (!_videoController!.value.isPlaying) {
-            _videoController!.play();
+        if (_videoController != null && _videoController!.value.isInitialized && !_videoEnded) {
+          if (visibilityInfo.visibleFraction > 0.6) {
+            if (!_videoController!.value.isPlaying) _videoController!.play();
+          } else {
+            if (_videoController!.value.isPlaying) _videoController!.pause();
           }
-        } else {
-          if (_videoController!.value.isPlaying) {
-            _videoController!.pause();
+        }
+
+        if (_audioPlayer.audioSource != null) {
+          if (visibilityInfo.visibleFraction > 0.6) {
+            if (!_audioPlayer.playing) _audioPlayer.play();
+          } else {
+            if (_audioPlayer.playing) _audioPlayer.pause();
           }
         }
       },
       child: Container(
-        margin: widget.hasCardDecoration
-            ? const EdgeInsets.only(bottom: 8, left: 16, right: 16)
-            : EdgeInsets.zero,
-        decoration: widget.hasCardDecoration
-            ? BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border(
-            bottom: BorderSide(color: Colors.grey.shade200, width: 0.5),
-            top: BorderSide(color: Colors.grey.shade200, width: 0.5),
-          ),
-        )
-            : null,
+        margin: widget.hasCardDecoration ? const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0) : EdgeInsets.zero,
+        decoration: widget.hasCardDecoration ? BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade200, width: 0.5)) : null,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: PostHeader(
-                username: widget.username,
-                timeAgo: widget.timeAgo,
-                profileImageUrl: widget.profileImageUrl ?? '',
-                isVerified: widget.isVerified,
-                user: widget.user,
-                onProfileTap: widget.onProfileTap,
-              ),
-            ),
-            if (widget.mediaUrl.isNotEmpty) _buildMediaWidget(),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Row(
-                children: [
-                  _buildActionButton(
-                    icon: widget.isLiked ? Icons.favorite : Icons.favorite_border,
-                    color: widget.isLiked ? Colors.red : Colors.black87,
-                    onTap: widget.onLike,
-                  ),
-                  _buildActionButton(
-                    icon: Icons.chat_bubble_outline,
-                    onTap: widget.onComment,
-                  ),
-                  const Spacer(),
-                  // 5. Ganti ikon bookmark dengan widget animasi
-                  ScaleTransition(
-                    scale: _bookmarkScaleAnimation,
-                    child: _buildActionButton(
-                      icon: widget.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                      color: widget.isBookmarked ? Colors.blue.shade700 : Colors.black87,
-                      onTap: _onBookmarkTap, // Gunakan fungsi tap yang baru
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-              child: Text('${widget.likes} suka', style: const TextStyle(fontWeight: FontWeight.bold)),
-            ),
-            if (widget.content.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: RichText(
-                  text: TextSpan(
-                    style: DefaultTextStyle.of(context).style,
-                    children: <TextSpan>[
-                      TextSpan(text: widget.username, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      TextSpan(text: ' ${widget.content}'),
-                    ],
-                  ),
+            Padding(padding: const EdgeInsets.all(12), child: PostHeader(post: widget.post, onProfileTap: widget.onProfileTap)),
+            if (widget.post.mediaUrl != null && widget.post.mediaUrl!.isNotEmpty) _buildMediaWidget(),
+            _buildMusicInfo(),
+            PostActionCounts(post: widget.post, onLike: widget.onLike, onComment: widget.onComment, onShare: widget.onShare, onBookmark: _onBookmarkTap),
+            PostInfoSection(post: widget.post),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMusicInfo() {
+    final musicTrackName = widget.post.musicTrackName;
+    if (musicTrackName == null || musicTrackName.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: InkWell(
+        onTap: () {},
+        borderRadius: BorderRadius.circular(8),
+        child: Row(
+          children: [
+            const Icon(Icons.music_note, size: 16, color: Colors.black54),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SizedBox(
+                height: 20,
+                child: Marquee(
+                  text: '${widget.post.musicTrackName} • ${widget.post.musicArtistName ?? 'Unknown Artist'}',
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                  scrollAxis: Axis.horizontal,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  blankSpace: 20.0,
+                  velocity: 50.0,
+                  pauseAfterRound: const Duration(seconds: 1),
                 ),
               ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-              child: Text(widget.timeAgo, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
             ),
           ],
         ),
@@ -203,182 +258,155 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
     );
   }
 
-  // Sisa kode di bawah ini tidak ada perubahan
-  void _initVideoPlayer() {
-    if (widget.isVideo && widget.mediaUrl.isNotEmpty) {
-      _videoEnded = false;
-      _videoController = VideoPlayerController.networkUrl(Uri.parse(widget.mediaUrl));
-      _initializeVideoPlayerFuture = _videoController!.initialize().then((_) {
-        if (mounted) {
-          setState(() {});
-        }
-      });
-      _videoController!.setLooping(false);
-      _videoController!.addListener(_videoListener);
-      _videoController!.setVolume(_isMuted ? 0.0 : 1.0);
-    }
-  }
-
-  void _videoListener() {
-    if (_videoController != null &&
-        !_videoController!.value.isPlaying &&
-        _videoController!.value.position >= _videoController!.value.duration &&
-        !_videoEnded) {
-      if (mounted) {
-        setState(() {
-          _videoEnded = true;
-        });
-      }
-    }
-  }
-
-  void _toggleMute() {
-    if (_videoController == null) return;
-    setState(() {
-      _isMuted = !_isMuted;
-      _videoController!.setVolume(_isMuted ? 0.0 : 1.0);
-    });
-  }
-
-  void _replayVideo() {
-    if (_videoController == null) return;
-    setState(() {
-      _videoEnded = false;
-    });
-    _videoController!.seekTo(Duration.zero);
-    _videoController!.play();
-  }
-
-  Widget _buildActionButton({required IconData icon, Color? color, required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Icon(icon, color: color ?? Colors.black87, size: 26),
-      ),
-    );
-  }
-
+  // --- 👇 MODIFIKASI UTAMA PADA _buildMediaWidget 👇 ---
   Widget _buildMediaWidget() {
-    if (widget.isVideo) {
-      return FutureBuilder(
+    Widget mediaContent;
+    final heroTag = 'post-image-hero-${widget.post.id}';
+
+    if (widget.post.isVideo) {
+      mediaContent = FutureBuilder(
         future: _initializeVideoPlayerFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.done && _videoController != null && _videoController!.value.isInitialized) {
             return AspectRatio(
               aspectRatio: _videoController!.value.aspectRatio,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  GestureDetector(
-                    onTap: _toggleMute,
-                    onLongPress: () {
-                      if (_videoController != null && _videoController!.value.isPlaying) {
-                        _wasPlayingBeforeHold = true;
-                        _videoController!.pause();
-                      }
-                    },
-                    onLongPressEnd: (_) {
-                      if (_videoController != null && _wasPlayingBeforeHold) {
-                        _videoController!.play();
-                        _wasPlayingBeforeHold = false;
-                      }
-                    },
-                    child: VideoPlayer(_videoController!),
-                  ),
-                  Positioned(
-                    bottom: 8,
-                    right: 8,
-                    child: GestureDetector(
-                      onTap: _toggleMute,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.5),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          _isMuted ? Icons.volume_off : Icons.volume_up,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (_videoEnded)
-                    _buildReplayOverlay(),
-                ],
-              ),
+              child: VideoPlayer(_videoController!),
             );
           }
-          return AspectRatio(
-            aspectRatio: 16.0 / 9.0,
-            child: Container(color: Colors.grey.shade200, child: const Center(child: CircularProgressIndicator(strokeWidth: 2))),
-          );
+          return AspectRatio(aspectRatio: 16.0 / 9.0, child: Container(color: Colors.grey.shade200, child: const Center(child: CircularProgressIndicator(strokeWidth: 2))));
         },
       );
     } else {
-      final heroTag = 'feed-post-${widget.postId}';
-      return GestureDetector(
-        onTap: () {
-          Navigator.of(context).push(
-            PageRouteBuilder(
-              opaque: false,
-              pageBuilder: (context, animation, secondaryAnimation) =>
-                  ZoomableImageOverlay(
-                    imageUrl: widget.mediaUrl,
-                    heroTag: heroTag,
-                  ),
-              transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                return FadeTransition(opacity: animation, child: child);
-              },
-            ),
-          );
-        },
-        child: Hero(
-          tag: heroTag,
-          child: CachedNetworkImage(
-            imageUrl: widget.mediaUrl,
-            placeholder: (context, url) => AspectRatio(
-              aspectRatio: 1.0,
-              child: Container(color: Colors.grey.shade200),
-            ),
-            errorWidget: (context, url, error) => AspectRatio(
-              aspectRatio: 1.0,
-              child: Container(
-                color: Colors.grey.shade200,
-                child: Icon(Icons.broken_image, color: Colors.grey.shade400),
-              ),
-            ),
-          ),
+      mediaContent = Hero(
+        tag: heroTag,
+        child: CachedNetworkImage(
+          imageUrl: widget.post.mediaUrl!,
+          placeholder: (context, url) => AspectRatio(aspectRatio: 1.0, child: Container(color: Colors.grey.shade200)),
+          errorWidget: (context, url, error) => AspectRatio(aspectRatio: 1.0, child: Container(color: Colors.grey.shade200, child: Icon(Icons.broken_image, color: Colors.grey.shade400))),
         ),
       );
     }
+
+    return ClipRRect(
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          GestureDetector(
+            onDoubleTap: _onDoubleTap,
+            onTap: widget.post.isVideo ? _toggleVideoMute : () => _openImageZoom(context),
+            child: mediaContent,
+          ),
+          if (widget.post.isVideo)
+            Positioned(
+              bottom: 8,
+              right: 8,
+              child: GestureDetector(
+                onTap: _toggleVideoMute,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), shape: BoxShape.circle),
+                  child: Icon(_isVideoMuted ? Icons.volume_off : Icons.volume_up, color: Colors.white, size: 18),
+                ),
+              ),
+            ),
+          if (widget.post.musicPreviewUrl != null && widget.post.musicPreviewUrl!.isNotEmpty)
+            Positioned(
+              bottom: 8,
+              left: 8,
+              child: GestureDetector(
+                onTap: _toggleMusicMute,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), shape: BoxShape.circle),
+                  child: Icon(_isMusicMuted ? Icons.volume_off : Icons.volume_up, color: Colors.white, size: 18),
+                ),
+              ),
+            ),
+          if (_isHeartVisible)
+            ScaleTransition(scale: _heartAnimation, child: const Icon(Icons.favorite, color: Colors.white, size: 80, shadows: [Shadow(color: Colors.black38, blurRadius: 12)])),
+          if (_videoEnded) _buildReplayOverlay(),
+        ],
+      ),
+    );
+  }
+
+  void _initVideoPlayer() {
+    if (widget.post.isVideo && widget.post.mediaUrl != null && widget.post.mediaUrl!.isNotEmpty) {
+      _videoEnded = false;
+      _videoController = VideoPlayerController.networkUrl(Uri.parse(widget.post.mediaUrl!));
+      _initializeVideoPlayerFuture = _videoController!.initialize().then((_) {
+        if (mounted) setState(() {});
+      });
+      _videoController!.setLooping(false);
+      _videoController!.addListener(_videoListener);
+      _videoController!.setVolume(_isVideoMuted ? 0.0 : 1.0);
+    }
+  }
+
+  void _videoListener() {
+    if (_videoController != null && !_videoController!.value.isPlaying && _videoController!.value.position >= _videoController!.value.duration && !_videoEnded) {
+      if (mounted) setState(() => _videoEnded = true);
+    }
+  }
+
+  void _toggleVideoMute() {
+    if (_videoController == null) return;
+    setState(() {
+      _isVideoMuted = !_isVideoMuted;
+      _videoController!.setVolume(_isVideoMuted ? 0.0 : 1.0);
+    });
+  }
+
+  void _replayVideo() {
+    if (_videoController == null) return;
+    setState(() => _videoEnded = false);
+    _videoController!.seekTo(Duration.zero);
+    _videoController!.play();
   }
 
   Widget _buildReplayOverlay() {
-    return Container(
-      color: Colors.black.withOpacity(0.6),
-      child: SizedBox(
-        width: double.infinity,
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withOpacity(0.6),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Text(
-              'Pemutaran video telah berakhir.',
-              style: TextStyle(color: Colors.white),
-            ),
-            const SizedBox(height: 8),
-            TextButton.icon(
-              icon: const Icon(Icons.replay, color: Colors.white),
-              label: const Text('Putar Lagi', style: TextStyle(color: Colors.white)),
-              style: TextButton.styleFrom(
-                backgroundColor: Colors.white.withOpacity(0.2),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              ),
-              onPressed: _replayVideo,
-            ),
+            const Text('Pemutaran selesai', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextButton.icon(
+                  icon: const Icon(Icons.replay, color: Colors.white, size: 20),
+                  label: const Text('Putar Lagi', style: TextStyle(color: Colors.white)),
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.white.withOpacity(0.2),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  ),
+                  onPressed: _replayVideo,
+                ),
+                const SizedBox(width: 12),
+                TextButton.icon(
+                  icon: const Icon(Icons.movie_filter_outlined, color: Colors.black, size: 20),
+                  label: const Text('Lainnya di Clips', style: TextStyle(color: Colors.black)),
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.white.withOpacity(0.8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  ),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ClipsViewerPage(initialClip: widget.post),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            )
           ],
         ),
       ),

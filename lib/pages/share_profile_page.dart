@@ -32,13 +32,13 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
 
   /// Membuka dialog share sistem untuk membagikan link profil
   void _onShareProfile() {
-    final String profileUrl = 'https://www.instagram.com/user/${widget.username}/';
+    final String profileUrl = 'https://portalsi.com/user/index.html?username=${widget.username}';
     Share.share('Cek akun Portal SI saya niih! $profileUrl');
   }
 
   /// Menyalin link profil ke clipboard
   void _onCopyLink() {
-    final String profileUrl = 'https://www.portalsi.com/user/${widget.username}/';
+    final String profileUrl = 'https://portalsi.com/user/index.html?username=${widget.username}';
     Clipboard.setData(ClipboardData(text: profileUrl)).then((_) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Link copied to clipboard!')),
@@ -92,7 +92,7 @@ class _ShareProfilePageState extends State<ShareProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    final String qrData = 'https://www.instagram.com/${widget.username}/';
+    final String qrData = 'https://www.portalsi.com/user/${widget.username}/';
 
     return Scaffold(
       extendBodyBehindAppBar: true,
