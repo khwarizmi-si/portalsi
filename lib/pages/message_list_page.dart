@@ -1,9 +1,10 @@
-// lib/pages/message_list_page.dart
+// lib/pages/message_list_page.dart (FINAL & FIXED)
 
 import 'package:flutter/material.dart';
 import 'package:portal_si/pages/group_chat_room_page.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../components/verified_badge.dart';
 import '../controllers/message_list_controller.dart';
 import '../models/chat.dart';
 import 'chat_room.dart';
@@ -13,58 +14,84 @@ import 'new_message_page.dart';
 class MessageListPage extends StatelessWidget {
   const MessageListPage({super.key});
 
+  Widget _buildAppBar(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
+      color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+        child: Row(
+          children: const [
+            Text(
+              'Pesan',
+              style: TextStyle(
+                  color: Colors.black, fontWeight: FontWeight.bold, fontSize: 24),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // [MODIFIKASI] Hapus themeColor dari sini, kita definisikan di dalam tile
-    // final themeColor = const Color(0xFFFFA726);
-
     return ChangeNotifierProvider(
       create: (_) => MessageListController(),
       child: Scaffold(
-        backgroundColor: Colors.white, // <-- [UBAH] Latar belakang utama jadi putih
-        appBar: AppBar(
-          backgroundColor: Colors.white, // <-- [UBAH] Warna AppBar
-          elevation: 0,
-          // Hapus tombol back jika ini adalah halaman utama di tab
-          // leading: IconButton(
-          //   icon: const Icon(Icons.arrow_back, color: Colors.black87),
-          //   onPressed: () => Navigator.of(context).pop(),
-          // ),
-          title: const Text(
-            'Pesan',
-            style: TextStyle(
-                color: Colors.black, fontWeight: FontWeight.bold, fontSize: 24), // Sedikit perbesar
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.edit_outlined, // <-- [UBAH] Ganti ikon
-                  color: Colors.black87, size: 28),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const NewMessagePage()),
-                );
-              },
+        backgroundColor: Colors.white,
+        appBar: null,
+        // --- [PERBAIKAN 1: MENGGUNAKAN SIZEDBOX UNTUK UKURAN KUSTOM] ---
+        floatingActionButton: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            // Tombol atas dengan ukuran kustom 48x48
+            SizedBox(
+              width: 48,
+              height: 48,
+              child: FloatingActionButton(
+                heroTag: 'fab_new_message',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const NewMessagePage()),
+                  );
+                },
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black87,
+                elevation: 4.0,
+                tooltip: 'Tulis Pesan Baru',
+                child: const Icon(Icons.edit_outlined, size: 24),
+              ),
             ),
-            // Hapus tombol group jika tidak ada di desain
-            IconButton(
-              icon: const Icon(Icons.group_add_outlined,
-                  color: Colors.black87, size: 28),
-              onPressed: () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const CreateGroupPage()));
-              },
+            const SizedBox(height: 16),
+            // Tombol bawah dengan ukuran kustom 65x65
+            SizedBox(
+              width: 65,
+              height: 65,
+              child: FloatingActionButton(
+                heroTag: 'fab_new_group',
+                onPressed: () {
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const CreateGroupPage()));
+                },
+                backgroundColor: const Color(0xFFE0AD05),
+                elevation: 4.0,
+                tooltip: 'Buat Grup Baru',
+                child: const Icon(Icons.group_add_outlined, color: Colors.white, size: 26),
+              ),
+
             ),
           ],
         ),
         body: Column(
           children: [
-            // Search Bar
+            _buildAppBar(context),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: Consumer<MessageListController>(
                 builder: (context, controller, _) {
-                  return TextField( // <-- [UBAH] Sederhanakan search bar
+                  return TextField(
                     onChanged: (value) =>
                         controller.filterConversations(value),
                     decoration: InputDecoration(
@@ -72,17 +99,10 @@ class MessageListPage extends StatelessWidget {
                       hintStyle: TextStyle(color: Colors.grey.shade500),
                       prefixIcon:
                       Icon(Icons.search, color: Colors.grey.shade600),
-                      // [TAMBAHAN] Tambahkan tombol filter
-                      suffixIcon: IconButton(
-                        icon: Icon(Icons.tune_rounded, color: Colors.grey.shade600),
-                        onPressed: () {
-                          // TODO: Tambahkan logika untuk filter
-                        },
-                      ),
                       filled: true,
-                      fillColor: Colors.grey.shade100, // <-- [UBAH] Warna search bar
+                      fillColor: Colors.grey.shade100,
                       contentPadding: const EdgeInsets.all(16),
-                      border: OutlineInputBorder( // <-- [UBAH] Tambahkan border
+                      border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(30),
                         borderSide: BorderSide.none,
                       ),
@@ -91,7 +111,6 @@ class MessageListPage extends StatelessWidget {
                 },
               ),
             ),
-            // Daftar Percakapan
             Expanded(
               child: Consumer<MessageListController>(
                 builder: (context, controller, _) {
@@ -107,15 +126,20 @@ class MessageListPage extends StatelessWidget {
                             style:
                             TextStyle(fontSize: 16, color: Colors.grey)));
                   }
-                  return ListView.builder(
-                    // [UBAH] Hapus padding horizontal dari ListView
-                    padding: const EdgeInsets.only(bottom: 100),
-                    itemCount: controller.filteredConversations.length,
-                    itemBuilder: (context, index) {
-                      final conversation =
-                      controller.filteredConversations[index];
-                      return _ConversationTile(conversation: conversation);
-                    },
+                  return RefreshIndicator(
+                    onRefresh: () => controller.fetchConversations(),
+                    child: ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 100),
+                      itemCount: controller.filteredConversations.length,
+                      itemBuilder: (context, index) {
+                        final conversation =
+                        controller.filteredConversations[index];
+                        return _ConversationTile(
+                          conversation: conversation,
+                          controller: controller,
+                        );
+                      },
+                    ),
                   );
                 },
               ),
@@ -129,14 +153,15 @@ class MessageListPage extends StatelessWidget {
 
 class _ConversationTile extends StatelessWidget {
   final Conversation conversation;
+  final MessageListController controller;
 
-  // [UBAH] Hapus themeColor dari constructor
-  const _ConversationTile({required this.conversation});
+  const _ConversationTile({
+    required this.conversation,
+    required this.controller,
+  });
 
   String _formatTimestamp(DateTime? dt) {
     if (dt == null) return '';
-    // Logika format waktu bisa disesuaikan agar lebih mirip gambar
-    // Contoh: '1 jam', '5 jam'
     final now = DateTime.now();
     final difference = now.difference(dt);
     if (difference.inHours < 24 && dt.day == now.day) {
@@ -153,27 +178,36 @@ class _ConversationTile extends StatelessWidget {
     final String message = conversation.lastMessage;
     final String? imageUrl = conversation.displayImageUrl;
 
-    return InkWell( // <-- [UBAH] Bungkus dengan InkWell
-      onTap: () {
+    // --- [PERBAIKAN 2: LOGIKA isVerified] ---
+    bool isVerified = false;
+    // Lakukan pengecekan tipe sebelum mengakses properti
+    if (conversation is UserConversation) {
+      // Kita cast secara eksplisit untuk memastikan tipe data benar
+      isVerified = (conversation as UserConversation).isPartnerVerified;
+    }
+
+    return InkWell(
+      onTap: () async {
+        Widget page;
         if (conversation is UserConversation) {
-          final userChat = conversation as UserConversation;
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (_) => ChatRoomPage(user: userChat.partner)),
-          );
+          page = ChatRoomPage(user: (conversation as UserConversation).partner);
         } else if (conversation is GroupConversation) {
-          final groupChat = conversation as GroupConversation;
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => GroupChatRoomPage(group: groupChat.group),
-            ),
-          );
+          page = GroupChatRoomPage(group: (conversation as GroupConversation).group);
+        } else {
+          return;
+        }
+
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => page),
+        );
+
+        if (context.mounted) {
+          debugPrint("Kembali ke daftar pesan, memuat ulang data...");
+          controller.fetchConversations();
         }
       },
       child: Padding(
-        // [TAMBAHAN] Tambahkan padding horizontal di sini
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
@@ -201,20 +235,32 @@ class _ConversationTile extends StatelessWidget {
                   Row(
                     children: [
                       Flexible(
-                        child: Text(
-                          name,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: isUnread ? FontWeight.bold : FontWeight.w600,
-                            color: Colors.black87,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                name,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: isUnread ? FontWeight.bold : FontWeight.w600,
+                                  color: Colors.black87,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (isVerified)
+                              const SizedBox(width: 6),
+                            if (isVerified)
+                              VerifiedBadge(
+                                size: 16,
+                                profilePictureUrl: conversation.displayImageUrl,
+                              ),
+                          ],
                         ),
                       ),
-                      // Add a small gap
                       const SizedBox(width: 6),
-                      // If it's a group, show the group icon
                       if (conversation is GroupConversation)
                         Icon(
                           Icons.group,
@@ -222,6 +268,17 @@ class _ConversationTile extends StatelessWidget {
                           color: Colors.grey.shade500,
                         ),
                     ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    message,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isUnread ? Colors.black87 : Colors.grey.shade600,
+                      fontWeight: isUnread ? FontWeight.bold : FontWeight.normal,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),

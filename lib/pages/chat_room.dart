@@ -1,28 +1,43 @@
-// lib/pages/chat_room.dart (SUDAH DIPERBAIKI UNTUK WEB)
+// lib/pages/chat_room.dart (FINAL DENGAN PERBAIKAN BUG)
 
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:portal_si/pages/story_view_page.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:collection/collection.dart';
+
+import '../components/verified_badge.dart';
 import '../controllers/chat_room_controller.dart';
 import '../models/chat.dart';
 import '../models/user_model.dart';
 import 'package:portal_si/pages/image_preview_screen.dart';
 
+import '../services/story_service.dart';
 import '../widgets/permission_dialog.dart';
 import 'camera_screen.dart';
 
-// --- TAMBAHKAN IMPORT BARU ---
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:file_picker/file_picker.dart';
 
-// --- Widget _AssetThumbnail (Tidak ada perubahan) ---
+import 'full_screen_image_viewer.dart';
+
+// ===== PALET WARNA =====
+const Color kLightSurfaceColor = Colors.white;
+const Color kSentBubbleColor = Color(0xFFFF9A47);
+const Color kReceivedBubbleColor = Color(0xFFE9E9EB);
+const Color kTextColor = Colors.black87;
+const Color kSentTextColor = Colors.white;
+const Color kSubtleTextColor = Colors.black54;
+// ===============================================
+
 class _AssetThumbnail extends StatelessWidget {
   final AssetEntity asset;
   final bool isSelected;
@@ -64,7 +79,7 @@ class _AssetThumbnail extends StatelessWidget {
                   width: 24,
                   height: 24,
                   decoration: BoxDecoration(
-                    color: Theme.of(context).primaryColor,
+                    color: kSentBubbleColor,
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 2),
                   ),
@@ -84,7 +99,6 @@ class _AssetThumbnail extends StatelessWidget {
   }
 }
 
-// --- Widget _GalleryPickerSheet (Tidak ada perubahan) ---
 class _GalleryPickerSheet extends StatefulWidget {
   const _GalleryPickerSheet();
 
@@ -141,7 +155,8 @@ class _GalleryPickerSheetState extends State<_GalleryPickerSheet> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       decoration: BoxDecoration(
-        color: Colors.grey.shade900.withOpacity(0.9),
+          color: Colors.white.withOpacity(0.9),
+          border: Border(top: BorderSide(color: Colors.grey.shade200))
       ),
       child: Row(
         children: [
@@ -176,8 +191,8 @@ class _GalleryPickerSheetState extends State<_GalleryPickerSheet> {
                 Navigator.pop(context);
               }
             },
-            backgroundColor: const Color(0xFF3B82F6),
-            child: const Icon(Icons.send),
+            backgroundColor: kSentBubbleColor,
+            child: const Icon(Icons.send, color: kSentTextColor,),
           )
         ],
       ),
@@ -192,98 +207,152 @@ class _GalleryPickerSheetState extends State<_GalleryPickerSheet> {
       minChildSize: 0.5,
       expand: false,
       builder: (_, scrollController) {
-        return Stack(
-          children: [
-            Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                  child: Row(
-                    children: const [
-                      Text('Recents', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: _isLoading
-                      ? const Center(child: CircularProgressIndicator())
-                      : GridView.builder(
-                    controller: scrollController,
-                    padding: const EdgeInsets.only(bottom: 90),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      crossAxisSpacing: 2,
-                      mainAxisSpacing: 2,
+        return Container(
+          decoration: const BoxDecoration(
+              color: kLightSurfaceColor,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20))
+          ),
+          child: Stack(
+            children: [
+              Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                    child: Row(
+                      children: [
+                        const Text('Galeri', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: kTextColor)),
+                      ],
                     ),
-                    itemCount: _assets.length,
-                    itemBuilder: (context, index) {
-                      final asset = _assets[index];
-                      final isSelected = _selectedAssets.contains(asset);
-                      return GestureDetector(
-                        onTap: () => _toggleSelection(asset),
-                        child: _AssetThumbnail(
-                          asset: asset,
-                          isSelected: isSelected,
-                          selectionIndex: isSelected ? _selectedAssets.indexOf(asset) : 0,
-                        ),
-                      );
-                    },
                   ),
-                ),
-              ],
-            ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                transitionBuilder: (child, animation) {
-                  return SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 1),
-                      end: Offset.zero,
-                    ).animate(animation),
-                    child: child,
-                  );
-                },
-                child: _selectedAssets.isNotEmpty
-                    ? _buildBottomActionBar()
-                    : const SizedBox.shrink(),
+                  Expanded(
+                    child: _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : GridView.builder(
+                      controller: scrollController,
+                      padding: const EdgeInsets.only(bottom: 90),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        crossAxisSpacing: 2,
+                        mainAxisSpacing: 2,
+                      ),
+                      itemCount: _assets.length,
+                      itemBuilder: (context, index) {
+                        final asset = _assets[index];
+                        final isSelected = _selectedAssets.contains(asset);
+                        return GestureDetector(
+                          onTap: () => _toggleSelection(asset),
+                          child: _AssetThumbnail(
+                            asset: asset,
+                            isSelected: isSelected,
+                            selectionIndex: isSelected ? _selectedAssets.indexOf(asset) : 0,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  transitionBuilder: (child, animation) {
+                    return SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, 1),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    );
+                  },
+                  child: _selectedAssets.isNotEmpty
+                      ? _buildBottomActionBar()
+                      : const SizedBox.shrink(),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
   }
 }
 
-// --- PERUBAHAN UTAMA ADA DI DALAM WIDGET INI ---
-class _AttachmentPopupMenu extends StatelessWidget {
+// === ANIMASI ROUTE BARU ===
+class _FadeSlideUpRoute extends PageRouteBuilder {
+  final Widget page;
   final Offset buttonPosition;
   final Size buttonSize;
 
-  const _AttachmentPopupMenu({
+  _FadeSlideUpRoute({
+    required this.page,
     required this.buttonPosition,
     required this.buttonSize,
-  });
+  }) : super(
+    opaque: false,
+    barrierDismissible: true,
+    barrierColor: Colors.black.withOpacity(0.15),
+    transitionDuration: const Duration(milliseconds: 300),
+    pageBuilder: (context, animation, secondaryAnimation) => page,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curve = CurvedAnimation(parent: animation, curve: Curves.easeOutQuint);
 
-  // --- FUNGSI BARU: Untuk memilih dan mengirim gambar di web ---
+      final screenHeight = MediaQuery.of(context).size.height;
+      final popupBottomPosition = screenHeight - buttonPosition.dy;
+
+      return Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 2.0, sigmaY: 2.0),
+                child: Container(color: Colors.transparent),
+              ),
+            ),
+          ),
+
+          // --- PERBAIKAN POSISI ADA DI SINI ---
+          Positioned(
+            // Atur jarak dari bawah layar agar tepat di atas tombol
+            bottom: popupBottomPosition + 8,
+
+            // Atur jarak dari kiri layar sesuai posisi tombol
+            left: buttonPosition.dx,
+
+            child: FadeTransition(
+              opacity: curve,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.1),
+                  end: Offset.zero,
+                ).animate(curve),
+                child: child,
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+// === WIDGET POPUP MENU YANG DIPERBARUI ===
+class _AttachmentPopupMenu extends StatelessWidget {
+  const _AttachmentPopupMenu({super.key});
+
   Future<void> _pickAndSendImagesForWeb(BuildContext context) async {
     final chatController = context.read<ChatRoomController>();
 
-    // 1. Buka dialog pilih file
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.image,
-      allowMultiple: true, // Izinkan memilih banyak gambar
+      allowMultiple: true,
     );
 
     if (result != null && result.files.isNotEmpty) {
       List<AssetEntity> webAssets = [];
-      // Tampilkan loading atau status "memproses" jika perlu
-
-      // 2. Loop setiap file yang dipilih dan ubah menjadi AssetEntity
       for (var file in result.files) {
         if (file.bytes != null) {
           try {
@@ -299,8 +368,6 @@ class _AttachmentPopupMenu extends StatelessWidget {
           }
         }
       }
-
-      // 3. Kirim semua AssetEntity yang berhasil dibuat
       if (webAssets.isNotEmpty) {
         chatController.sendMediaMessage(webAssets);
       }
@@ -309,120 +376,108 @@ class _AttachmentPopupMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mediaQuery = MediaQuery.of(context);
-    final screenHeight = mediaQuery.size.height;
-    final screenWidth = mediaQuery.size.width;
-
-    final popupBottomPosition = screenHeight - buttonPosition.dy;
-    final popupRightPosition = screenWidth - (buttonPosition.dx + buttonSize.width);
-
-    return Stack(
-      children: [
-        Positioned(
-          bottom: popupBottomPosition + 8,
-          right: popupRightPosition,
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade200),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 15,
-                    offset: const Offset(0, -4),
-                  )
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildPopupMenuItem(
-                    context,
-                    icon: Icons.camera_alt_outlined,
-                    text: 'Buka Kamera',
-                    onTap: () {
-                      final navigator = Navigator.of(context);
-                      final chatController = context.read<ChatRoomController>();
-
-                      navigator.pop(); // Tutup popup
-
-                      navigator.push(
-                        MaterialPageRoute(
-                          builder: (_) => ChangeNotifierProvider.value(
-                            value: chatController,
-                            child: const CameraScreen(),
-                          ),
-                        ),
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: 250,
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        decoration: BoxDecoration(
+          color: kLightSurfaceColor,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 15,
+              offset: const Offset(0, 4),
+            )
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildPopupMenuItem(
+              context,
+              icon: Icons.camera_alt_rounded,
+              text: 'Kamera',
+              iconBackgroundColor: Colors.pink,
+              onTap: () {
+                final navigator = Navigator.of(context);
+                final chatController = context.read<ChatRoomController>();
+                navigator.pop();
+                navigator.push(
+                  MaterialPageRoute(
+                    builder: (_) => ChangeNotifierProvider.value(
+                      value: chatController,
+                      child: const CameraScreen(),
+                    ),
+                  ),
+                );
+              },
+            ),
+            _buildPopupMenuItem(
+              context,
+              icon: Icons.image_rounded,
+              text: 'Galeri',
+              iconBackgroundColor: Colors.purple,
+              onTap: () {
+                final navigator = Navigator.of(context);
+                final chatController = context.read<ChatRoomController>();
+                navigator.pop();
+                if (kIsWeb) {
+                  _pickAndSendImagesForWeb(context);
+                } else {
+                  showModalBottomSheet(
+                    context: navigator.context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) {
+                      return ChangeNotifierProvider.value(
+                        value: chatController,
+                        child: const _GalleryPickerSheet(),
                       );
                     },
-                  ),
-                  _buildPopupMenuItem(
-                    context,
-                    icon: Icons.image_outlined,
-                    text: 'Unggah Gambar',
-                    onTap: () {
-                      final navigator = Navigator.of(context);
-                      final chatController = context.read<ChatRoomController>();
-
-                      navigator.pop(); // Tutup popup
-
-                      // --- LOGIKA KONDISIONAL DI SINI ---
-                      if (kIsWeb) {
-                        // Jika di web, panggil fungsi baru
-                        _pickAndSendImagesForWeb(context);
-                      } else {
-                        // Jika di mobile, tampilkan galeri lama
-                        showModalBottomSheet(
-                          context: navigator.context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.white,
-                          shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                          ),
-                          builder: (_) {
-                            return ChangeNotifierProvider.value(
-                              value: chatController,
-                              child: const _GalleryPickerSheet(),
-                            );
-                          },
-                        );
-                      }
-                    },
-                  ),
-                  _buildPopupMenuItem(
-                    context,
-                    icon: Icons.description_outlined,
-                    text: 'Pilih File',
-                    onTap: () {
-                      Navigator.pop(context);
-                      // Tambahkan logika pilih file dokumen di sini nanti
-                    },
-                  ),
-                ],
-              ),
+                  );
+                }
+              },
             ),
-          ),
+            _buildPopupMenuItem(
+              context,
+              icon: Icons.insert_drive_file_rounded,
+              text: 'Dokumen',
+              iconBackgroundColor: Colors.orange,
+              onTap: () {
+                Navigator.pop(context);
+              },
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
   Widget _buildPopupMenuItem(BuildContext context,
-      {required IconData icon, required String text, required VoidCallback onTap}) {
+      {required IconData icon,
+        required String text,
+        required VoidCallback onTap,
+        required Color iconBackgroundColor}) {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
         child: Row(
           children: [
-            Icon(icon, color: Colors.grey.shade700, size: 24),
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: iconBackgroundColor,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: Colors.white, size: 20),
+            ),
             const SizedBox(width: 16),
-            Text(text, style: const TextStyle(color: Colors.black87, fontSize: 16)),
+            Text(text, style: const TextStyle(color: kTextColor, fontSize: 16, fontWeight: FontWeight.w500)),
           ],
         ),
       ),
@@ -430,86 +485,122 @@ class _AttachmentPopupMenu extends StatelessWidget {
   }
 }
 
-
-// --- Sisa kode dari file chat_room.dart tidak perlu diubah ---
-// ...
-// (Salin-tempel sisa kode Anda di sini: _BouncyPopupRoute, ChatRoomPage,
-// _ChatAppBar, _MessageList, _MessageBubble, dll.)
-class _BouncyPopupRoute extends PageRouteBuilder {
-  final Offset buttonPosition;
-  final Size buttonSize;
-
-  _BouncyPopupRoute({
-    required Widget page,
-    required this.buttonPosition,
-    required this.buttonSize,
-  }) : super(
-    opaque: false,
-    barrierDismissible: true,
-    barrierColor: Colors.black.withOpacity(0.15),
-    transitionDuration: const Duration(milliseconds: 500),
-    pageBuilder: (context, animation, secondaryAnimation) => page,
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final bouncyAnimation = CurvedAnimation(
-        parent: animation,
-        curve: Curves.elasticOut,
-        reverseCurve: Curves.easeInCubic,
-      );
-
-      final screenWidth = MediaQuery.of(context).size.width;
-      final screenHeight = MediaQuery.of(context).size.height;
-
-      final buttonCenterX = buttonPosition.dx + (buttonSize.width / 2);
-      final buttonCenterY = buttonPosition.dy + (buttonSize.height / 2);
-
-      final alignmentX = (buttonCenterX / screenWidth) * 2 - 1;
-      final alignmentY = (buttonCenterY / screenHeight) * 2 - 1;
-
-      final dynamicAlignment = Alignment(alignmentX, alignmentY);
-
-      return BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 2.0, sigmaY: 2.0),
-        child: ScaleTransition(
-          scale: bouncyAnimation,
-          alignment: dynamicAlignment,
-          child: FadeTransition(
-            opacity: animation,
-            child: child,
-          ),
-        ),
-      );
-    },
-  );
-}
-
-class ChatRoomPage extends StatefulWidget { // <-- UBAH MENJADI StatefulWidget
+class ChatRoomPage extends StatefulWidget {
   final User user;
-  const ChatRoomPage({super.key, required this.user});
+  final String? initialReplyText;
+  final int? initialStoryId;
+  final String? initialStoryMediaUrl;
+
+  const ChatRoomPage({
+    super.key,
+    required this.user,
+    this.initialReplyText,
+    this.initialStoryId,
+    this.initialStoryMediaUrl,
+  });
 
   @override
   State<ChatRoomPage> createState() => _ChatRoomPageState();
 }
 
 class _ChatRoomPageState extends State<ChatRoomPage> {
-  // Pindahkan controller ke sini agar bisa diakses di initState
   late final ChatRoomController _chatController;
+  final ScrollController _scrollController = ScrollController();
+  bool _showJumpToBottom = false;
 
   @override
   void initState() {
     super.initState();
-    // Inisialisasi controller di sini
     _chatController = ChatRoomController(recipient: widget.user);
-
-    // Panggil pengecekan izin setelah frame pertama selesai di-render
+    _scrollController.addListener(_scrollListener);
+    _initializeAndSendInitialMessage();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAndRequestNotificationPermission();
+      // --- 👇 TAMBAHKAN LOGIKA UNTUK MENGIRIM PESAN AWAL 👇 ---
+      // Cek apakah ada "paket data" balasan cerita yang dibawa
+      if (widget.initialReplyText != null && widget.initialStoryId != null) {
+        // Jika ada, panggil controller untuk mengirimnya
+        _chatController.sendStoryResponseMessage(
+          widget.initialReplyText!,
+          widget.initialStoryId!,
+          widget.initialStoryMediaUrl,
+        );
+      }
+      // --- 👆 BATAS PENAMBAHAN 👆 ---
+
+      if (!kIsWeb) {
+        _checkAndRequestNotificationPermission();
+      }
     });
+
   }
 
-  // INI ADALAH FUNGSI BARU UNTUK IZIN NOTIFIKASI
+  void _scrollListener() {
+    if (_scrollController.offset > 300) {
+      if (!_showJumpToBottom) {
+        setState(() => _showJumpToBottom = true);
+      }
+    } else {
+      if (_showJumpToBottom) {
+        setState(() => _showJumpToBottom = false);
+      }
+    }
+  }
+
+  void _jumpToBottom() {
+    _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _openStoryFromChat(ChatMessage message) async {
+    if (message.recipient.id == null || message.storyId == null) return;
+
+    // TIDAK PERLU LAGI MENGAMBIL DATA DI SINI.
+    // Cukup navigasi langsung.
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => StoryViewPage(
+          initialUserId: message.recipient.id!, // KIRIM USER ID PENERIMA
+          initialStoryId: message.storyId, // KIRIM STORY ID AWAL
+          heroTag: 'story_from_chat_${message.storyId}',
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_scrollListener);
+    _scrollController.dispose();
+    _chatController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initializeAndSendInitialMessage() async {
+    // 1. TUNGGU sampai semua proses inisialisasi di controller selesai
+    await _chatController.initialize();
+
+    // 2. SETELAH SELESAI, baru kita kirim pesan awal jika ada
+    if (widget.initialReplyText != null && widget.initialStoryId != null && mounted) {
+      _chatController.sendStoryResponseMessage(
+        widget.initialReplyText!,
+        widget.initialStoryId!,
+        widget.initialStoryMediaUrl,
+      );
+    }
+
+    // Pindahkan pengecekan izin notifikasi ke sini
+    if (!kIsWeb && mounted) {
+      _checkAndRequestNotificationPermission();
+    }
+  }
+
   Future<void> _checkAndRequestNotificationPermission() async {
     PermissionStatus status = await Permission.notification.status;
-
     if (status.isDenied && mounted) {
       await showDialog(
         context: context,
@@ -526,52 +617,90 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Gunakan .value agar controller tidak dibuat ulang
-    return ChangeNotifierProvider.value(
-      value: _chatController,
-      child: Scaffold(
-        backgroundColor: Colors.grey.shade100,
-        body: Container(
-          decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            image: const DecorationImage(
-              image: AssetImage('assets/images/chat_bg.png'),
-              fit: BoxFit.cover,
-              opacity: 0.05,
-            ),
-          ),
-          child: Column(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Color(0xFFFFEDB3),
+        statusBarIconBrightness: Brightness.dark,
+        systemNavigationBarColor: Colors.white,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+      child: ChangeNotifierProvider.value(
+        value: _chatController,
+        child: Scaffold(
+          backgroundColor: const Color(0xFFFFEDB3),
+          appBar: null,
+          body: Column(
             children: [
-              _ChatAppBar(user: widget.user), // <-- Akses user melalui 'widget.user'
+              _ChatAppBar(user: widget.user),
+              // Consumer<ChatRoomController>(
+              //   builder: (context, controller, _) {
+              //     if (controller.debugStatus == null) {
+              //       return const SizedBox.shrink(); // Jangan tampilkan apa-apa jika null
+              //     }
+              //     return Container(
+              //       width: double.infinity,
+              //       color: Colors.yellow.shade200,
+              //       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              //       child: Text(
+              //         controller.debugStatus!,
+              //         textAlign: TextAlign.center,
+              //         style: const TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.bold),
+              //       ),
+              //     );
+              //   },
+              // ),
               Expanded(
-                child: Consumer<ChatRoomController>(
-                  builder: (context, controller, _) {
-                    if (controller.errorMessage != null && !controller.isLoading) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (ModalRoute.of(context)?.isCurrent != true) return;
-                        showDialog(
-                          context: context,
-                          barrierDismissible: false,
-                          builder: (BuildContext dialogContext) {
-                            return NetworkErrorDialog(
-                              errorMessage: controller.errorMessage!,
-                              onRetry: () {
-                                Navigator.of(dialogContext).pop();
-                                controller.fetchMessages();
-                              },
-                            );
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+                  child: Container(
+                    color: kLightSurfaceColor,
+                    child: Stack(
+                      children: [
+                        Consumer<ChatRoomController>(
+                          builder: (context, controller, _) {
+                            if (controller.errorMessage != null && !controller.isLoading) {
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (ModalRoute.of(context)?.isCurrent != true) return;
+                                showDialog(
+                                  context: context,
+                                  barrierDismissible: false,
+                                  builder: (BuildContext dialogContext) {
+                                    return NetworkErrorDialog(
+                                      errorMessage: controller.errorMessage!,
+                                      onRetry: () {
+                                        Navigator.of(dialogContext).pop();
+                                        // PERBAIKAN: Pemanggilan loadMessages
+                                        controller.fetchMessages();
+                                      },
+                                    );
+                                  },
+                                );
+                              });
+                              return const _ChatRoomSkeletonLoader();
+                            }
+                            if (controller.isLoading && controller.messages.isEmpty) {
+                              return const _ChatRoomSkeletonLoader();
+                            }
+                            return _MessageList(scrollController: _scrollController, currentUser: controller.currentUser);
                           },
-                        );
-                      });
-                      return const _ChatRoomSkeletonLoader();
-                    }
-                    if (controller.isLoading) {
-                      return const _ChatRoomSkeletonLoader();
-                    }
-                    return _MessageList();
-                  },
+                        ),
+                        if (_showJumpToBottom)
+                          Positioned(
+                            bottom: 16,
+                            right: 16,
+                            child: FloatingActionButton.small(
+                              onPressed: _jumpToBottom,
+                              backgroundColor: kLightSurfaceColor,
+                              elevation: 3,
+                              child: const Icon(Icons.arrow_downward, color: kTextColor, size: 20,),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
+              // PERBAIKAN: Hapus const
               const _MessageInputBar(),
             ],
           ),
@@ -581,119 +710,174 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   }
 }
 
-class _ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
+class _ChatAppBar extends StatelessWidget {
   final User user;
   const _ChatAppBar({required this.user});
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<ChatRoomController>(
-      builder: (context, controller, child) {
-        return Container(
-          padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              )
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 10.0),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.black87),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-                CircleAvatar(
-                  radius: 22,
-                  backgroundColor: Colors.grey[300],
-                  backgroundImage: user.profilePictureUrl != null &&
-                      user.profilePictureUrl!.isNotEmpty
-                      ? NetworkImage(user.profilePictureUrl!)
-                      : null,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        user.fullName ?? user.username,
-                        style: const TextStyle(
-                            color: Colors.black,
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        controller.isRecipientOnline ? 'Online' : 'Offline',
-                        style: TextStyle(
-                            color: controller.isRecipientOnline ? Colors.green.shade600 : Colors.grey.shade600,
-                            fontSize: 13
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // [TAMBAHAN] Tombol dropdown menu diletakkan di sini
-                PopupMenuButton<String>(
-                  icon: Icon(Icons.more_horiz, color: Colors.black.withOpacity(0.7)),
-                  onSelected: (String value) {
-                    if (value == 'reload') {
-                      // Panggil metode di controller untuk memuat ulang
-                      Provider.of<ChatRoomController>(context, listen: false)
-                          .reloadConversation();
-                    }
-                  },
-                  itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                    const PopupMenuItem<String>(
-                      value: 'reload',
-                      child: Text('Muat ulang percakapan'),
+    return Container(
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
+      decoration: const BoxDecoration(
+        color: Color(0xFFFFEDB3),
+        // border: Border(bottom: BorderSide(color: Colors.grey.shade300, width: 1)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 10.0),
+        child: Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.arrow_back, color: kTextColor),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: Colors.grey[300],
+              backgroundImage:
+              user.profilePictureUrl != null && user.profilePictureUrl!.isNotEmpty
+                  ? NetworkImage(user.profilePictureUrl!)
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      user.fullName ?? user.username,
+                      style: const TextStyle(
+                          color: kTextColor,
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ],
+                  ),
+                  if (user.isVerified) ...[
+                    const SizedBox(width: 6),
+                    const VerifiedBadge(size: 17),
+                  ]
+                ],
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.call_outlined, color: kSubtleTextColor),
+              onPressed: () {},
+            ),
+            IconButton(
+              icon: const Icon(Icons.videocam_outlined, color: kSubtleTextColor),
+              onPressed: () {},
+            ),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, color: kSubtleTextColor),
+              color: kLightSurfaceColor,
+              onSelected: (String value) {
+                if (value == 'reload') {
+                  Provider.of<ChatRoomController>(context, listen: false)
+                      .reloadConversation();
+                }
+              },
+              itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                const PopupMenuItem<String>(
+                  value: 'reload',
+                  child: Text('Muat ulang percakapan', style: TextStyle(color: kTextColor)),
                 ),
               ],
             ),
-          ),
-        );
-      },
+          ],
+        ),
+      ),
     );
+  }
+}
+
+class _DateSeparator extends StatelessWidget {
+  final DateTime date;
+  const _DateSeparator({required this.date});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16.0),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade300,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            DateFormat.yMMMMEEEEd('id_ID').format(date),
+            style: const TextStyle(
+              color: kSubtleTextColor,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum BubblePosition { single, first, middle, last }
+
+class _MessageList extends StatelessWidget {
+  final ScrollController scrollController;
+  final User? currentUser;
+
+  const _MessageList({required this.scrollController, required this.currentUser});
+
+  bool _isSameDay(DateTime d1, DateTime d2) {
+    return d1.year == d2.year && d1.month == d2.month && d1.day == d2.day;
   }
 
   @override
-  Size get preferredSize => const Size.fromHeight(kToolbarHeight + 10);
-}
-
-class _MessageList extends StatelessWidget {
-  @override
   Widget build(BuildContext context) {
     final controller = context.watch<ChatRoomController>();
+    final messages = controller.messages;
+    final User safeCurrentUser = controller.currentUser ?? User(username: 'Self');
+    final openStoryCallback = (context.findAncestorStateOfType<_ChatRoomPageState>())!._openStoryFromChat;
 
     return ListView.builder(
+      controller: scrollController,
       reverse: true,
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 20),
-      itemCount: controller.messages.length,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      itemCount: messages.length,
       itemBuilder: (context, index) {
-        final message = controller.messages[index];
-        final bool isMe = message.sender.id == controller.currentUser?.id;
+        final message = messages[index];
+        final isMe = message.sender.id == safeCurrentUser.id;
 
-        final bool isGrouped = index < controller.messages.length - 1 &&
-            controller.messages[index + 1].sender.id == message.sender.id &&
-            message.timestamp
-                .difference(controller.messages[index + 1].timestamp)
-                .inMinutes <
-                2;
+        final bool isFirst = index == messages.length - 1 ||
+            messages[index + 1].sender.id != message.sender.id;
+        final bool isLast =
+            index == 0 || messages[index - 1].sender.id != message.sender.id;
 
-        return _MessageBubble(
-          message: message,
-          isMe: isMe,
-          isGrouped: isGrouped,
+        BubblePosition position;
+        if (isFirst && isLast) {
+          position = BubblePosition.single;
+        } else if (isFirst) {
+          position = BubblePosition.first;
+        } else if (isLast) {
+          position = BubblePosition.last;
+        } else {
+          position = BubblePosition.middle;
+        }
+
+        final bool showDateSeparator = index == messages.length - 1 ||
+            !_isSameDay(
+                message.timestamp, messages[index + 1].timestamp);
+
+        return Column(
+          children: [
+            if (showDateSeparator) _DateSeparator(date: message.timestamp),
+            _MessageBubble(
+              message: message,
+              isMe: isMe,
+              position: position,
+              currentUser: safeCurrentUser,
+              onStoryThumbnailTap: openStoryCallback,
+            ),
+          ],
         );
       },
     );
@@ -703,226 +887,253 @@ class _MessageList extends StatelessWidget {
 class _MessageBubble extends StatelessWidget {
   final ChatMessage message;
   final bool isMe;
-  final bool isGrouped;
+  final BubblePosition position;
+  final User currentUser;
+  final Function(ChatMessage) onStoryThumbnailTap;
 
   const _MessageBubble({
     required this.message,
     required this.isMe,
-    required this.isGrouped,
+    required this.position,
+    required this.currentUser,
+    required this.onStoryThumbnailTap,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    final alignment = isMe ? Alignment.centerRight : Alignment.centerLeft;
-    final color = isMe ? const Color(0xFFFFA726) : Colors.white;
-    final timestampColor = isMe ? Colors.white70 : Colors.black54;
-
-    Widget messageContent;
-
-    void _openImagePreview(String path, String tag) {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ImagePreviewScreen(
-            imageUrl: path,
-            heroTag: tag,
-          ),
-        ),
-      );
+  Widget _buildMessageContent(BuildContext context) {
+    switch (message.type) {
+      case MessageType.image:
+        return _buildImageMessage(context);
+      case MessageType.video:
+        return Text("➤ Video (belum didukung)", style: TextStyle(color: isMe ? kSentTextColor : kTextColor.withOpacity(0.8)));
+      case MessageType.file:
+        return Text("➤ File (belum didukung)", style: TextStyle(color: isMe ? kSentTextColor : kTextColor.withOpacity(0.8)));
+      case MessageType.text:
+      default:
+        return Text(message.text ?? '',
+            style: TextStyle(
+                color: isMe ? kSentTextColor : kTextColor,
+                fontSize: 16,
+                height: 1.3));
     }
+  }
 
-    if (message.type == MessageType.image) {
-      // --- PERUBAHAN UTAMA UNTUK MENAMPILKAN GAMBAR ---
-      Widget imageWidget;
-
-      if (message.localBytes != null) {
-        // 1. Prioritas utama: tampilkan dari bytes untuk preview web
-        imageWidget = Image.memory(message.localBytes!, fit: BoxFit.cover);
-      } else if (message.localFile != null) {
-        // 2. Prioritas kedua: tampilkan dari file untuk preview mobile
-        imageWidget = Image.file(message.localFile!, fit: BoxFit.cover);
-      } else if (message.mediaUrl != null) {
-        // 3. Terakhir: tampilkan dari URL jika sudah ter-upload
-        imageWidget = Image.network(
-          message.mediaUrl!,
-          fit: BoxFit.cover,
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return Center(
-              child: CircularProgressIndicator(
-                value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                    : null,
-                color: Colors.grey,
-              ),
-            );
-          },
-          errorBuilder: (context, error, stackTrace) {
-            return const Icon(Icons.broken_image, color: Colors.grey, size: 50);
-          },
-        );
-      } else {
-        // Fallback jika tidak ada data gambar sama sekali
-        imageWidget = const Icon(Icons.broken_image, color: Colors.grey, size: 50);
-      }
-
-      final String? displayImagePath = message.localFile?.path ?? message.mediaUrl;
-      final String heroTag = 'image-${message.id}';
-
-      messageContent = GestureDetector(
-        onTap: displayImagePath != null ? () => _openImagePreview(displayImagePath, heroTag) : null,
-        child: Hero(
-          tag: heroTag,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                imageWidget, // Gunakan widget gambar yang sudah dipilih
-                if (message.status == MessageStatus.sending && message.uploadProgress != null)
-                  ValueListenableBuilder<double>(
-                    valueListenable: message.uploadProgress!,
-                    builder: (context, progress, child) {
-                      return Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Container(color: Colors.black.withOpacity(0.6)),
-                          SizedBox(
-                            width: 100,
-                            height: 100,
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                _GradientCircularProgressIndicator(progress: progress),
-                                const SizedBox(height: 8),
-                                Text(
-                                  '${(progress * 100).toStringAsFixed(0)}%',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-
-                if (message.status == MessageStatus.failed)
-                  const Icon(Icons.error, color: Colors.red, size: 40),
-              ],
-            ),
-          ),
-        ),
-      );
-    } else {
-      messageContent = Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        mainAxisSize: MainAxisSize.min,
+  // BARU: Konten Khusus untuk Story Response
+  Widget _buildStoryResponseContent(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onStoryThumbnailTap(message),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Flexible(
-            child: Text(
-              message.text ?? "",
-              style: TextStyle(color: isMe ? Colors.white : Colors.black87, fontSize: 16, height: 1.3),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Padding(
-            padding: const EdgeInsets.only(top: 4.0),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  DateFormat.Hm().format(message.timestamp),
-                  style: TextStyle(color: timestampColor, fontSize: 12),
+          if (message.respondedStoryMediaUrl != null)
+            Container(
+              constraints: const BoxConstraints(maxHeight: 100, maxWidth: 200),
+              padding: const EdgeInsets.only(bottom: 8),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Gambar media story yang ditanggapi
+                    Image.network(
+                      message.respondedStoryMediaUrl!,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                          height: 100,
+                          color: Colors.grey.shade300,
+                          child: const Center(child: Icon(Icons.broken_image, color: kSubtleTextColor))),
+                    ),
+                    Container(
+                      width: double.infinity,
+                      height: double.infinity,
+                      color: Colors.black.withOpacity(0.4),
+                      child: Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.flash_on, color: Colors.white, size: 16),
+                            const SizedBox(width: 4),
+                            Text('Cerita', style: TextStyle(color: kSentTextColor, fontWeight: FontWeight.bold, fontSize: 14)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                if (isMe) ...[
-                  const SizedBox(width: 4),
-                  Icon(
-                    _getStatusIcon(message.status),
-                    size: 16,
-                    color: message.status == MessageStatus.read
-                        ? Colors.lightBlue.shade100
-                        : timestampColor,
-                  ),
-                ]
-              ],
+              ),
             ),
-          )
-        ],
-      );
-    }
 
-    return Align(
-      alignment: alignment,
-      child: Container(
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-        margin: EdgeInsets.only(
-          top: isGrouped ? 2.0 : 10.0,
-          bottom: 2.0,
-        ),
-        decoration: BoxDecoration(
-          color: (message.type == MessageType.text || message.text != null) ? color : Colors.transparent,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(20),
-            topRight: const Radius.circular(20),
-            bottomLeft: isMe || isGrouped ? const Radius.circular(20) : const Radius.circular(5),
-            bottomRight: !isMe || isGrouped ? const Radius.circular(20) : const Radius.circular(5),
+          // Teks respons
+          Text(
+            message.text ?? 'Tanggapan cerita',
+            style: TextStyle(
+              color: isMe ? kSentTextColor : kTextColor,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              height: 1.3,
+            ),
           ),
-          boxShadow: (message.type == MessageType.text || message.text != null) ? [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            )
-          ] : [],
-        ),
-        padding: (message.type == MessageType.text || message.text != null)
-            ? const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0)
-            : const EdgeInsets.all(4.0),
-        child: messageContent,
+        ],
       ),
     );
   }
 
-  IconData _getStatusIcon(MessageStatus status) {
-    switch (status) {
-      case MessageStatus.sending:
-        return Icons.access_time_rounded;
-      case MessageStatus.sent:
-        return Icons.done_rounded;
-      case MessageStatus.read:
-        return Icons.done_all_rounded;
-      case MessageStatus.failed:
-        return Icons.error_outline_rounded;
-      default:
-        return Icons.done_rounded;
-    }
-  }
-}
 
-class _GradientCircularProgressIndicator extends StatelessWidget {
-  final double progress;
-  const _GradientCircularProgressIndicator({required this.progress});
+  Widget _buildImageMessage(BuildContext context) {
+    ImageProvider imageProvider;
+
+    if (message.localBytes != null) {
+      imageProvider = MemoryImage(message.localBytes!);
+    } else if (message.localFile != null) {
+      imageProvider = FileImage(message.localFile!);
+    } else if (message.mediaUrl != null && message.mediaUrl!.isNotEmpty) {
+      imageProvider = NetworkImage(message.mediaUrl!);
+    } else {
+      return const Icon(Icons.broken_image, color: Colors.grey, size: 50);
+    }
+
+    final String heroTag = message.id.toString();
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          PageRouteBuilder(
+            opaque: false,
+            barrierColor: Colors.black.withOpacity(0.7),
+            pageBuilder: (BuildContext context, _, __) {
+              return FullScreenImageViewer(
+                imageProvider: imageProvider,
+                heroTag: heroTag,
+              );
+            },
+          ),
+        );
+      },
+      child: Hero(
+        tag: heroTag,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12.0),
+          child: Container(
+            constraints: const BoxConstraints(
+              maxWidth: 250,
+              maxHeight: 300,
+            ),
+            child: Image(
+              image: imageProvider,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return const Center(child: CircularProgressIndicator());
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return const Icon(Icons.error_outline, color: Colors.red, size: 40);
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatTime(DateTime dateTime) {
+    return DateFormat.Hm('id_ID').format(dateTime.toLocal());
+  }
 
   @override
   Widget build(BuildContext context) {
-    return ShaderMask(
-      shaderCallback: (rect) {
-        return const SweepGradient(
-          startAngle: 0.0,
-          endAngle: 2 * 3.14,
-          stops: [0.0, 1.0],
-          colors: [Colors.orange, Colors.deepOrange],
-        ).createShader(rect);
-      },
-      child: CircularProgressIndicator(
-        value: progress,
-        valueColor: const AlwaysStoppedAnimation(Colors.white),
-        strokeWidth: 4,
-        backgroundColor: Colors.white.withOpacity(0.3),
+    final showSenderInfo = !isMe && (position == BubblePosition.first || position == BubblePosition.single);
+    final showTimestamp = position == BubblePosition.last || position == BubblePosition.single;
+
+    final Radius cornerRadius = const Radius.circular(18);
+    final Radius flatRadius = const Radius.circular(4);
+
+    final BorderRadius borderRadius = BorderRadius.only(
+      topLeft: isMe ? cornerRadius : (position == BubblePosition.first || position == BubblePosition.single ? cornerRadius : flatRadius),
+      topRight: isMe ? (position == BubblePosition.first || position == BubblePosition.single ? cornerRadius : flatRadius) : cornerRadius,
+      bottomLeft: isMe ? cornerRadius : (position == BubblePosition.last || position == BubblePosition.single ? cornerRadius : flatRadius),
+      bottomRight: isMe ? (position == BubblePosition.last || position == BubblePosition.single ? cornerRadius : flatRadius) : cornerRadius,
+    );
+
+    final bool isStoryResponse = message.isStoryResponse; // <-- DETEKSI
+
+    return Container(
+      margin: EdgeInsets.only(
+        top: 2,
+        bottom: position == BubblePosition.last || position == BubblePosition.single ? 10 : 2,
+        left: isMe ? 0 : 8,
+        right: isMe ? 8 : 0,
+      ),
+      child: Column(
+        crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          if (showSenderInfo)
+            Padding(
+              padding: const EdgeInsets.only(left: 46, bottom: 4),
+              child: Text(
+                message.sender.fullName ?? message.sender.username,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: kSubtleTextColor,
+                ),
+              ),
+            ),
+
+          Row(
+            mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (!isMe && (position == BubblePosition.last || position == BubblePosition.single))
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: Colors.grey[300],
+                  backgroundImage: message.sender.profilePictureUrl != null
+                      ? NetworkImage(message.sender.profilePictureUrl!)
+                      : null,
+                )
+              else if (!isMe)
+                const SizedBox(width: 32),
+
+              const SizedBox(width: 8),
+
+              Container(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.75,
+                ),
+                padding: isStoryResponse
+                    ? const EdgeInsets.all(12)
+                    : message.type == MessageType.text
+                    ? const EdgeInsets.symmetric(horizontal: 14, vertical: 10)
+                    : const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: isMe ? kSentBubbleColor : kReceivedBubbleColor,
+                  borderRadius: borderRadius,
+                  // Tambahkan highlight border untuk Story Response yang diterima
+                  border: isStoryResponse && !isMe
+                      ? Border.all(color: Colors.blueAccent.shade200, width: 2)
+                      : null,
+                ),
+                child: isStoryResponse
+                    ? _buildStoryResponseContent(context) // Tampilkan bubble story
+                    : _buildMessageContent(context),      // Tampilkan bubble biasa
+              ),
+            ],
+          ),
+
+          if (showTimestamp)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, right: 2, left: 40),
+              child: Text(
+                _formatTime(message.timestamp),
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: kSubtleTextColor,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -945,86 +1156,94 @@ class _MessageInputBarState extends State<_MessageInputBar> {
     super.dispose();
   }
 
+  void _sendMessage() {
+    final text = _textController.text.trim();
+    if (text.isEmpty) return;
+
+    // Panggil controller untuk mengirim pesan
+    Provider.of<ChatRoomController>(context, listen: false).sendMessage(text);
+
+    _textController.clear();
+    // Asumsi ada metode _scrollToBottom() di parent widget atau logic scroll otomatis
+  }
+
   @override
   Widget build(BuildContext context) {
     final chatController = context.read<ChatRoomController>();
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0)
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0)
           .copyWith(bottom: MediaQuery.of(context).padding.bottom + 8.0),
       decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 15,
-            offset: const Offset(0, -5),
-          )
-        ],
+          color: kLightSurfaceColor,
+          border: Border(top: BorderSide(color: Colors.grey.shade200, width: 1.5))
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          IconButton(
+            key: _attachIconKey,
+            icon: const Icon(Icons.add, color: kSubtleTextColor, size: 28,),
+            onPressed: () {
+              final RenderBox renderBox =
+              _attachIconKey.currentContext!.findRenderObject() as RenderBox;
+              final size = renderBox.size;
+              final position = renderBox.localToGlobal(Offset.zero);
+
+              final chatController = context.read<ChatRoomController>();
+
+              Navigator.of(context).push(
+                _FadeSlideUpRoute(
+                  buttonPosition: position,
+                  buttonSize: size,
+                  page: ChangeNotifierProvider.value(
+                    value: chatController,
+                    child: const _AttachmentPopupMenu(),
+                  ),
+                ),
+              );
+            },
+          ),
+
           Expanded(
-            child: TextField(
-              controller: _textController,
-              decoration: const InputDecoration.collapsed(
-                hintText: 'Ketik pesan...',
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: kReceivedBubbleColor,
+                borderRadius: BorderRadius.circular(24),
               ),
-              maxLines: 5,
-              minLines: 1,
-              onChanged: (_) => setState(() {}),
-              textCapitalization: TextCapitalization.sentences,
+              child: TextField(
+                controller: _textController,
+                style: const TextStyle(color: kTextColor),
+                decoration: const InputDecoration(
+                    hintText: 'Ketik pesan...',
+                    hintStyle: TextStyle(color: kSubtleTextColor),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 12)
+                ),
+                maxLines: 5,
+                minLines: 1,
+                onChanged: (_) => setState(() {}),
+                textCapitalization: TextCapitalization.sentences,
+                onSubmitted: (_) => _sendMessage(),
+              ),
             ),
           ),
-          if (!kIsWeb)
-            IconButton(
-              key: _attachIconKey,
-              icon: const Icon(Icons.attach_file_rounded, color: Colors.black54),
-              onPressed: () {
-                final RenderBox renderBox =
-                _attachIconKey.currentContext!.findRenderObject() as RenderBox;
-                final size = renderBox.size;
-                final position = renderBox.localToGlobal(Offset.zero);
+          const SizedBox(width: 8),
 
-                final chatController = context.read<ChatRoomController>();
-
-                Navigator.of(context).push(
-                  _BouncyPopupRoute(
-                    buttonPosition: position,
-                    buttonSize: size,
-                    page: ChangeNotifierProvider.value(
-                      value: chatController,
-                      child: _AttachmentPopupMenu(
-                        buttonPosition: position,
-                        buttonSize: size,
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
           if (_textController.text.trim().isNotEmpty)
-            CircleAvatar(
-              radius: 22,
-              backgroundColor: const Color(0xFFFFA726),
-              child: IconButton(
-                icon: const Icon(
-                  Icons.send_rounded,
-                  color: Colors.white,
-                ),
-                onPressed: () {
-                  if (_textController.text
-                      .trim()
-                      .isNotEmpty) {
-                    chatController.sendMessage(_textController.text);
-                    _textController.clear();
-                    setState(() {});
-                  }
-                },
-              ),
+            FloatingActionButton.small(
+              onPressed: () {
+                if (_textController.text.trim().isNotEmpty) {
+                  chatController.sendMessage(_textController.text);
+                  _textController.clear();
+                  setState(() {});
+                }
+              },
+              backgroundColor: kSentBubbleColor,
+              elevation: 0,
+              child: const Icon(Icons.send_rounded, color: Colors.white, size: 20,),
             ),
-
         ],
       ),
     );
@@ -1032,7 +1251,7 @@ class _MessageInputBarState extends State<_MessageInputBar> {
 }
 
 class _ChatRoomSkeletonLoader extends StatelessWidget {
-  const _ChatRoomSkeletonLoader({super.key});
+  const _ChatRoomSkeletonLoader();
 
   @override
   Widget build(BuildContext context) {
@@ -1083,45 +1302,33 @@ class NetworkErrorDialog extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(24.0),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: kLightSurfaceColor,
           shape: BoxShape.rectangle,
           borderRadius: BorderRadius.circular(20.0),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black26,
-              blurRadius: 10.0,
-              offset: Offset(0.0, 10.0),
-            ),
-          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             const Text(
-              '😩',
-              style: TextStyle(fontSize: 60),
-            ),
-            const SizedBox(height: 16.0),
-            const Text(
-              'Jaringan Anda Bermasalah',
+              'Gagal Terhubung',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 22.0,
-                color: Color(0xFF4D0015),
+                color: kTextColor,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 16.0),
             const Text(
-              'Terdapat masalah pada jaringan Anda. Klik tombol muat ulang dibawah ini atau coba untuk mulai ulang aplikasi.',
+              'Terdapat masalah pada jaringan Anda. Klik tombol muat ulang untuk mencoba lagi.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16.0, color: Colors.black54),
+              style: TextStyle(fontSize: 16.0, color: kSubtleTextColor),
             ),
             const SizedBox(height: 24.0),
             ElevatedButton(
               onPressed: onRetry,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4F46E5),
+                backgroundColor: kSentBubbleColor,
                 padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12.0),
@@ -1131,27 +1338,6 @@ class NetworkErrorDialog extends StatelessWidget {
                 'Muat Ulang',
                 style: TextStyle(fontSize: 18, color: Colors.white),
               ),
-            ),
-            const SizedBox(height: 20.0),
-            Text(
-              'Laporkan ke Admin: $errorMessage',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12.0, color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 8.0),
-            const Text.rich(
-              TextSpan(
-                style: TextStyle(fontSize: 14.0, color: Colors.black87),
-                children: [
-                  TextSpan(text: 'Bentuk partisipasi Anda adalah '),
-                  TextSpan(
-                    text: 'sangat bermanfaat',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  TextSpan(text: ' bagi kami.'),
-                ],
-              ),
-              textAlign: TextAlign.center,
             ),
           ],
         ),

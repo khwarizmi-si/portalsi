@@ -60,4 +60,21 @@ class CommentUtils {
       liked: false,
     );
   }
+
+  static List<Comment> flattenComments(List<Comment> comments) {
+    List<Comment> flatList = [];
+
+    void traverse(List<Comment> currentComments, int depth) {
+      for (var comment in currentComments) {
+        comment.depth = depth; // Set level kedalaman
+        flatList.add(comment);
+        if (comment.replies.isNotEmpty) {
+          traverse(comment.replies, depth + 1); // Lakukan rekursi untuk balasan
+        }
+      }
+    }
+
+    traverse(comments, 0);
+    return flatList;
+  }
 }

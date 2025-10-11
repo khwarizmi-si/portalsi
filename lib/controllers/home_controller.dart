@@ -1,9 +1,11 @@
 // lib/controllers/home_controller.dart
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/announcement_model.dart';
+import '../models/paginated_response.dart';
 import '../models/post_model.dart';
 import '../models/story_model.dart';
 import '../services/announcement_service.dart';
@@ -16,19 +18,23 @@ class HomeController with ChangeNotifier {
   final PostService _postService = PostService();
   final AnnouncementService _announcementService = AnnouncementService();
   final StoryService _storyService = StoryService();
-
-  List<dynamic> _feedItems = []; // Sebelumnya: _posts
   final BookmarkService _bookmarkService = BookmarkService();
+  final LikeService _likeService = LikeService();
+  StreamSubscription? _likeUpdatesSubscription;
 
+  List<dynamic> _feedItems = [];
   List<UserWithStories> _stories = [];
   List<Announcement> _pinnedAnnouncements = [];
   Post? _pinnedPost;
 
   bool _isLoading = false;
   String? _errorMessage;
+  int _currentPage = 1;
+  bool _hasNextPage = true;
+  bool _isFetchingMore = false;
 
-  List<dynamic> get feedItems => _feedItems; // Sebelumnya: posts
-
+  List<dynamic> get feedItems => _feedItems;
+  bool get isFetchingMore => _isFetchingMore;
   List<UserWithStories> get stories => _stories;
   List<Announcement> get pinnedAnnouncements => _pinnedAnnouncements;
   Post? get pinnedPost => _pinnedPost;
@@ -37,32 +43,23 @@ class HomeController with ChangeNotifier {
 
   static const int _cacheDurationMinutes = 10;
 
-  final LikeService _likeService = LikeService();
-  StreamSubscription? _likeUpdatesSubscription;
-
   HomeController() {
     _initializeServices();
   }
 
   void _initializeServices() {
     // _likeService.connect();
-
     _likeUpdatesSubscription = _likeService.likeUpdates.listen((update) {
-      // --- 👇 PERBAIKAN 1: Gunakan _feedItems, bukan _posts ---
       final index = _feedItems.indexWhere((item) =>
-          item is Map<String, dynamic> &&
+      item is Map<String, dynamic> &&
           item['type'] == 'post' &&
           item['post_id'] == update.postId);
 
       if (index != -1) {
-        // Buat salinan map agar bisa diubah dan memicu UI update
         final postMap = Map<String, dynamic>.from(_feedItems[index]);
         postMap['likes_count'] = update.likesCount;
         postMap['is_liked'] = update.isLiked;
         _feedItems[index] = postMap;
-
-        print("🔄 UI diperbarui via WebSocket untuk post #${update.postId}");
-
         notifyListeners();
       }
     });
@@ -71,47 +68,33 @@ class HomeController with ChangeNotifier {
   Future<void> _saveToCache(String key, List<dynamic> data) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(key, jsonEncode(data));
-    await prefs.setInt(
-        '${key}_timestamp', DateTime.now().millisecondsSinceEpoch);
-    print("📦 Data untuk '$key' disimpan ke cache.");
+    await prefs.setInt('${key}_timestamp', DateTime.now().millisecondsSinceEpoch);
   }
 
-  Future<List<T>> _loadFromCache<T>(
-      String key, T Function(Map<String, dynamic>) fromJson) async {
+  Future<List<T>> _loadFromCache<T>(String key, T Function(Map<String, dynamic>) fromJson) async {
     final prefs = await SharedPreferences.getInstance();
     final cachedData = prefs.getString(key);
     final cachedTimestamp = prefs.getInt('${key}_timestamp');
-
     if (cachedData != null && cachedTimestamp != null) {
       final cacheTime = DateTime.fromMillisecondsSinceEpoch(cachedTimestamp);
-      if (DateTime.now().difference(cacheTime).inMinutes <
-          _cacheDurationMinutes) {
-        print("✅ Memuat '$key' dari CACHE.");
+      if (DateTime.now().difference(cacheTime).inMinutes < _cacheDurationMinutes) {
         final List<dynamic> jsonData = jsonDecode(cachedData);
-        return jsonData
-            .map((item) => fromJson(item as Map<String, dynamic>))
-            .toList();
+        return jsonData.map((item) => fromJson(item as Map<String, dynamic>)).toList();
       }
     }
-    print("⚠️ Cache '$key' KOSONG/KADALUARSA.");
     return [];
   }
 
-  // Fungsi baru ini khusus untuk memuat feed yang berisi mixed-types
   Future<List<dynamic>> _loadRawListFromCache(String key) async {
     final prefs = await SharedPreferences.getInstance();
     final cachedData = prefs.getString(key);
     final cachedTimestamp = prefs.getInt('${key}_timestamp');
-
     if (cachedData != null && cachedTimestamp != null) {
       final cacheTime = DateTime.fromMillisecondsSinceEpoch(cachedTimestamp);
-      if (DateTime.now().difference(cacheTime).inMinutes <
-          _cacheDurationMinutes) {
-        print("✅ Memuat '$key' dari CACHE.");
+      if (DateTime.now().difference(cacheTime).inMinutes < _cacheDurationMinutes) {
         return jsonDecode(cachedData) as List<dynamic>;
       }
     }
-    print("⚠️ Cache '$key' KOSONG/KADALUARSA.");
     return [];
   }
 
@@ -121,133 +104,118 @@ class HomeController with ChangeNotifier {
     notifyListeners();
 
     try {
-      // Panggil fungsi cache yang sesuai untuk setiap tipe data
-      final cachedFeed = await _loadRawListFromCache('posts');
-      final cachedStories =
-          await _loadFromCache('stories', UserWithStories.fromJson);
-      final cachedAnnouncements =
-          await _loadFromCache('announcements', Announcement.fromJson);
-
-      if (cachedFeed.isNotEmpty ||
-          cachedStories.isNotEmpty ||
-          cachedAnnouncements.isNotEmpty) {
-        _feedItems = cachedFeed;
-
-        _stories = cachedStories;
-        _pinnedAnnouncements = cachedAnnouncements;
-        notifyListeners();
-      }
-
-      if (cachedFeed.isEmpty ||
-          cachedStories.isEmpty ||
-          cachedAnnouncements.isEmpty) {
-        await refreshDashboardData(isInitialLoad: true);
-      }
+      // --- 👇 PERUBAHAN 1: LOGIKA CACHE DIHAPUS 👇 ---
+      // Logika sebelumnya yang memeriksa cache (`_loadFromCache`, `_loadRawListFromCache`)
+      // dihapus dari sini agar selalu mengambil data baru dari server.
+      await refreshDashboardData(isInitialLoad: true);
     } catch (e) {
       _errorMessage = e.toString();
-    } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  /// Memaksa refresh semua data dari API dan memperbarui cache.
   Future<void> refreshDashboardData({bool isInitialLoad = false}) async {
-    if (!isInitialLoad) {
-      notifyListeners();
+    if (isInitialLoad) {
+      _isLoading = true;
     }
+    _errorMessage = null;
+    _currentPage = 1;
+    notifyListeners();
 
     try {
       final results = await Future.wait([
         _postService.fetchPosts(page: 1),
         _storyService.getStoryFeed(),
-        _announcementService.getPinnedAnnouncements(),
+        _announcementService.refreshPinnedAnnouncements(),
         _postService.fetchPinnedPost(),
       ]);
 
-      _feedItems = results[0] as List<dynamic>;
+      final paginatedResponse = results[0] as PaginatedFeedResponse;
+      final storiesData = results[1] as List<dynamic>; // <-- Data mentah cerita
+      final announcementsData = results[2] as List<Announcement>;
+      final pinnedPostData = results[3] as Post?;
 
-      _stories = (results[1] as List<dynamic>)
-          .map((e) => UserWithStories.fromJson(e))
-          .toList();
-      _pinnedAnnouncements = results[2] as List<Announcement>;
-      _pinnedPost = results[3] as Post?;
+      // --- 👇 TAMBAHKAN LOG PENTING INI DI SINI 👇 ---
+      log('--- 🕵️‍♂️ MENGINTIP DATA MENTAH STORY FEED SETELAH REFRESH ---');
+      log(jsonEncode(storiesData));
+      log('----------------------------------------------------------');
+      // --- 👆 BATAS LOG 👆 ---
 
-      print("===== HASIL REFRESH DASHBOARD DATA =====");
-      print("Feed Items: ${_feedItems.length} item");
-      print("Stories: ${_stories.length} item");
-      print("Pinned Announcements: ${_pinnedAnnouncements.length} item");
-      print("Pinned Post: ${_pinnedPost != null ? 'Ada' : 'Tidak Ada'}");
-      print("========================================");
+      _feedItems = paginatedResponse.feedItems;
+      _hasNextPage = paginatedResponse.hasNextPage;
+      _stories = storiesData.map((e) => UserWithStories.fromJson(e)).toList();
+      _pinnedAnnouncements = announcementsData;
+      _pinnedPost = pinnedPostData;
 
+      // SIMPAN DATA BARU KE CACHE (KECUALI STORY)
       await _saveToCache('posts', _feedItems);
-
-      await _saveToCache('stories', _stories.map((s) => s.toJson()).toList());
-      await _saveToCache('announcements',
-          _pinnedAnnouncements.map((a) => a.toJson()).toList());
+      // --- 👇 PERUBAHAN 2: PENYIMPANAN CACHE STORY DINONAKTIFKAN 👇 ---
+      // await _saveToCache('stories', _stories.map((s) => s.toJson()).toList());
+      await _saveToCache('announcements', _pinnedAnnouncements.map((a) => a.toJson()).toList());
 
       _errorMessage = null;
     } catch (e) {
       _errorMessage = e.toString();
     } finally {
-      if (isInitialLoad) _isLoading = false;
+      _isLoading = false;
+      if (isInitialLoad) {
+        _isFetchingMore = false;
+      }
       notifyListeners();
     }
   }
 
-  Future<void> toggleLike(int postId) async {
-    final index = _feedItems.indexWhere((item) =>
-        item is Map<String, dynamic> &&
-        item['type'] == 'post' &&
-        item['post_id'] == postId);
+  Future<void> fetchMorePosts() async {
+    if (_isFetchingMore || !_hasNextPage) return;
+    _isFetchingMore = true;
+    notifyListeners();
+    _currentPage++;
+    try {
+      final response = await _postService.fetchPosts(page: _currentPage);
+      _feedItems.addAll(response.feedItems);
+      _hasNextPage = response.hasNextPage;
+    } catch (e) {
+      _currentPage--;
+      print("Gagal memuat halaman selanjutnya: $e");
+    }
+    _isFetchingMore = false;
+    notifyListeners();
+  }
 
+  Future<void> toggleLike(int postId) async {
+    final index = _feedItems.indexWhere((item) => item is Map<String, dynamic> && item['type'] == 'post' && item['post_id'] == postId);
     if (index != -1) {
       final postMap = Map<String, dynamic>.from(_feedItems[index]);
       final isLiked = postMap['is_liked'] ?? false;
       final likesCount = postMap['likes_count'] ?? 0;
-
       postMap['is_liked'] = !isLiked;
       postMap['likes_count'] = likesCount + (!isLiked ? 1 : -1);
-
       _feedItems[index] = postMap;
       notifyListeners();
     }
-
     // _likeService.toggleLikeSocket(postId);
     LikeService().toggleLikeHttp(postId);
   }
 
   Future<void> toggleBookmark(int postId) async {
-    // Cari item post di dalam feedItems
     final itemIndex = feedItems.indexWhere((item) => item is Map && item['type'] == 'post' && item['post_id'] == postId);
-
-
-    if (itemIndex == -1) return; // Post tidak ditemukan
-
-    // Buat salinan post dari Map
+    if (itemIndex == -1) return;
     final postMap = Map<String, dynamic>.from(feedItems[itemIndex] as Map);
     final currentStatus = postMap['is_bookmarked'] ?? false;
-
-    // 1. Optimistic Update: Langsung perbarui UI
     postMap['is_bookmarked'] = !currentStatus;
     feedItems[itemIndex] = postMap;
     notifyListeners();
-
     try {
-      // 2. Panggil API di latar belakang
       if (postMap['is_bookmarked'] == true) {
         await _bookmarkService.addBookmark(postId);
       } else {
         await _bookmarkService.removeBookmark(postId);
       }
     } catch (e) {
-      // 3. Jika Gagal: Kembalikan state UI ke semula dan tampilkan error
       postMap['is_bookmarked'] = currentStatus;
       feedItems[itemIndex] = postMap;
       notifyListeners();
-
-      // Tampilkan pesan error (opsional, butuh BuildContext)
-      // ScaffoldMessenger.of(context).showSnackBar(...)
       print("Gagal mengubah bookmark: $e");
     }
   }

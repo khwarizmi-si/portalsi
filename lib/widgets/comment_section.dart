@@ -1,28 +1,37 @@
 // lib/widgets/comment_section.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../app_state.dart';
+import '../components/circular_avatar_fetcher.dart';
+import '../components/verified_badge.dart';
 import '../controllers/comment_controller.dart';
 import '../models/comment_model.dart';
 import '../models/user_model.dart';
 import '../utils/comment_utils.dart';
+import '../utils/navigation_helper.dart';
 
 // Widget utama yang dipanggil oleh showModalBottomSheet
 class CommentSection extends StatelessWidget {
   final ScrollController? scrollController;
   final int postId;
   final VoidCallback? onCommentAdded;
+  final List<Comment> initialComments;
 
   const CommentSection({
     Key? key,
     this.scrollController,
     required this.postId,
     this.onCommentAdded,
+    required this.initialComments,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => CommentController(postId: postId),
+      create: (_) => CommentController(
+        postId: postId,
+        initialComments: initialComments, // <-- Perubahan di sini
+      ),
       // Gunakan Material agar semua komponennya (seperti TextField) berfungsi normal
       child: Material(
         color: Colors.white,
@@ -137,7 +146,10 @@ class _CommentList extends StatelessWidget {
       itemCount: controller.comments.length,
       itemBuilder: (context, index) {
         final comment = controller.comments[index];
-        return _CommentItem(comment: comment);
+        return Padding(padding: EdgeInsets.only(left: 16.0),
+        child: _CommentItem(comment: comment),
+        );
+        // _CommentItem(comment: comment);
       },
     );
   }
@@ -151,33 +163,46 @@ class _CommentItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isTemporary = CommentUtils.isTemporary(comment);
+    final controller = Provider.of<CommentController>(context, listen: false);
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+      padding: EdgeInsets.only(
+          left: (comment.depth * 24.0), top: 12.0, bottom: 12.0, right: 8.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Avatar
-          CircleAvatar(
+          // =================================================================
+          // --- GANTI BAGIAN AVATAR DENGAN INI ---
+          // =================================================================
+          CircularAvatarFetcher(
             radius: 18,
-            backgroundColor: Colors.grey[200],
-            backgroundImage: comment.profilePictureUrl != null &&
-                    comment.profilePictureUrl!.isNotEmpty
-                ? NetworkImage(comment.profilePictureUrl!)
-                : null,
-            child: comment.profilePictureUrl == null ||
-                    comment.profilePictureUrl!.isEmpty
-                ? Text(comment.username[0].toUpperCase(),
-                    style: const TextStyle(fontWeight: FontWeight.bold))
-                : null,
+            userId: comment.userId,
+            onTap: isTemporary ? null : () {
+              Navigator.pop(context);
+
+              // 1. Buat objek User baru dari data yang ada di 'comment'
+              final userToNavigate = User(
+                id: comment.userId,
+                username: comment.username,
+                profilePictureUrl: comment.profilePictureUrl,
+                // Tambahkan properti lain dari 'comment' jika ada dan diperlukan
+                // Contoh: fullName: comment.fullName, isVerified: comment.isVerified
+              );
+
+              // 2. Kirim objek User yang baru dibuat ke fungsi navigasi
+              NavigationHelper.navigateToProfile(
+                context,
+                userToNavigate,
+              );
+            },
           ),
+          // =================================================================
           const SizedBox(width: 12),
           // Konten Komentar
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Gunakan RichText untuk style username yang berbeda.
                 RichText(
                   text: TextSpan(
                     style: const TextStyle(fontSize: 13, color: Colors.black87),
@@ -186,6 +211,11 @@ class _CommentItem extends StatelessWidget {
                         text: '${comment.username} ',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
+                      if (comment.isVerified)
+                        const WidgetSpan(
+                          child: VerifiedBadge(size: 14),
+                          alignment: PlaceholderAlignment.middle,
+                        ),
                       TextSpan(
                         text: comment.content,
                       ),
@@ -200,34 +230,49 @@ class _CommentItem extends StatelessWidget {
                       style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                     ),
                     const SizedBox(width: 16),
-                    Text(
-                      'Balas',
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.w600),
-                    ),
+                    if (!isTemporary)
+                      GestureDetector(
+                        onTap: () {
+                          controller.setReplyingTo(comment);
+                        },
+                        child: Text(
+                          'Balas',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ),
                   ],
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           // Tombol Like
-          Column(
-            children: [
-              Icon(
-                comment.liked ? Icons.favorite : Icons.favorite_border,
-                color: comment.liked ? Colors.red : Colors.grey,
-                size: 16,
-              ),
-              if (comment.likes > 0) ...[
-                const SizedBox(height: 2),
-                Text(comment.likes.toString(),
-                    style: const TextStyle(fontSize: 11, color: Colors.grey))
-              ]
-            ],
-          )
+          if (!isTemporary)
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  icon: Icon(
+                    comment.liked ? Icons.favorite : Icons.favorite_border,
+                    color: comment.liked ? Colors.red : Colors.grey,
+                    size: 18,
+                  ),
+                  onPressed: () => controller.toggleCommentLike(comment),
+                ),
+                if (comment.likes > 0) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    comment.likes.toString(),
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  )
+                ]
+              ],
+            )
         ],
       ),
     );
@@ -272,7 +317,7 @@ class _CommentInputState extends State<_CommentInput> {
     _textController.clear();
     FocusScope.of(context).unfocus(); // Tutup keyboard
 
-    final success = await widget.controller.submitComment(content);
+    final success = await widget.controller.postComment(content);
 
     if (success && mounted) {
       widget.onCommentAdded?.call();
@@ -292,59 +337,90 @@ class _CommentInputState extends State<_CommentInput> {
   @override
   Widget build(BuildContext context) {
     final User? currentUser = widget.controller.currentUser;
+    final replyingTo = widget.controller.replyingToComment;
     // Padding ini penting agar input field tidak tertutup oleh UI sistem (misal: gesture bar)
     return Padding(
       padding:
           EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Colors.grey[200]!, width: 1.0)),
-        ),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: Colors.grey[200],
-              backgroundImage: currentUser?.profilePictureUrl != null &&
-                      currentUser!.profilePictureUrl!.isNotEmpty
-                  ? NetworkImage(currentUser.profilePictureUrl!)
-                  : null,
-              child: currentUser?.profilePictureUrl == null ||
-                      currentUser!.profilePictureUrl!.isEmpty
-                  ? const Icon(Icons.person, size: 18)
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextField(
-                controller: _textController,
-                autofocus: true,
-                decoration: InputDecoration(
-                  hintText:
-                      'Tambahkan komentar sebagai ${currentUser?.username ?? 'Anda'}...',
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                  isCollapsed: true,
-                ),
-                maxLines: null, // Agar bisa multiline
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (replyingTo != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: Colors.grey[100],
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Membalas kepada ${replyingTo.username}',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close, size: 16, color: Colors.grey[600]),
+                    onPressed: () {
+                      // Batalkan mode membalas
+                      widget.controller.setReplyingTo(null);
+                    },
+                    constraints: BoxConstraints(),
+                    padding: EdgeInsets.zero,
+                  )
+                ],
               ),
             ),
-            const SizedBox(width: 12),
-            // Tombol 'Post' hanya aktif jika ada teks.
-            TextButton(
-              onPressed: _canPost ? _submit : null,
-              child: Text(
-                'Post',
-                style: TextStyle(
-                  color: _canPost ? Colors.blue : Colors.grey[400],
-                  fontWeight: FontWeight.bold,
+          Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: Colors.grey[200]!, width: 1.0)),
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: Colors.grey[200],
+                backgroundImage: currentUser?.profilePictureUrl != null &&
+                        currentUser!.profilePictureUrl!.isNotEmpty
+                    ? NetworkImage(currentUser.profilePictureUrl!)
+                    : null,
+                child: currentUser?.profilePictureUrl == null ||
+                        currentUser!.profilePictureUrl!.isEmpty
+                    ? const Icon(Icons.person, size: 18)
+                    : null,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _textController,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    // --- 👇 UBAH HINT TEXT SESUAI KONTEKS 👇 ---
+                    hintText: replyingTo != null
+                        ? 'Tulis balasan Anda...'
+                        : 'Tambahkan komentar sebagai ${currentUser?.username ?? 'Anda'}...',
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                    isCollapsed: true,
+                  ),
+                  maxLines: null,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(width: 12),
+              // Tombol 'Post' hanya aktif jika ada teks.
+              TextButton(
+                onPressed: _canPost ? _submit : null,
+                child: Text(
+                  'Post',
+                  style: TextStyle(
+                    color: _canPost ? Colors.blue : Colors.grey[400],
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
+    ],
       ),
     );
   }

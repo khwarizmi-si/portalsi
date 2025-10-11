@@ -4,7 +4,9 @@ import 'package:page_transition/page_transition.dart';
 import '../widgets/accounts_center_sheet_content.dart'; // Sesuaikan dengan path Anda
 import '../services/auth_service.dart';
 import 'account_privacy_page.dart';
-import 'bookmarks_page.dart'; // Sesuaikan dengan path Anda
+import 'bookmarks_page.dart';
+import 'change_password_page.dart';
+import 'login_history_page.dart'; // Sesuaikan dengan path Anda
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({Key? key}) : super(key: key);
@@ -174,17 +176,37 @@ class _SettingsPageState extends State<SettingsPage> {
           //   title: 'Pusat Akun',
           //   onTap: () => _showAccountsCenterSheet(context),
           // ),
+          // _buildStyledMenuItem(
+          //   icon: Icons.lock_outline,
+          //   title: 'Privasi Akun',
+          //   trailingText: 'Publik',
+          //   onTap: () {
+          //     Navigator.push(
+          //       context,
+          //       PageTransition(
+          //         type: PageTransitionType.rightToLeft, // Tipe animasi dari kanan ke kiri
+          //         child: const AccountPrivacyPage(),
+          //       ),
+          //     );
+          //   },
+          // ),
           _buildStyledMenuItem(
-            icon: Icons.lock_outline,
-            title: 'Privasi Akun',
-            trailingText: 'Publik',
+            icon: Icons.history, // Atau Icons.devices
+            title: 'Histori Login',
             onTap: () {
               Navigator.push(
                 context,
-                PageTransition(
-                  type: PageTransitionType.rightToLeft, // Tipe animasi dari kanan ke kiri
-                  child: const AccountPrivacyPage(),
-                ),
+                MaterialPageRoute(builder: (context) => const LoginHistoryPage()),
+              );
+            },
+          ),
+          _buildStyledMenuItem(
+            icon: Icons.password_rounded, // Atau Icons.key_outlined
+            title: 'Ubah Kata Sandi',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ChangePasswordPage()),
               );
             },
           ),
@@ -197,7 +219,23 @@ class _SettingsPageState extends State<SettingsPage> {
               MaterialPageRoute(builder: (context) => BookmarksPage()),
             );
           }),
-          _buildStyledMenuItem(icon: Icons.history, title: 'Arsip Cerita Anda', onTap: () {}),
+          _buildStyledMenuItem(icon: Icons.history, title: 'Arsip Cerita Anda', onTap: () {
+            HapticFeedback.lightImpact();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text(
+                  'Fitur ini akan segera hadir..',
+                ),
+                backgroundColor: Colors.blueAccent,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(
+                    10,
+                  ),
+                ),
+              ),
+            );
+          }),
           // _buildStyledMenuItem(icon: Icons.bar_chart, title: 'Aktivitas Anda', onTap: () {}),
           // _buildStyledMenuItem(icon: Icons.notifications_none, title: 'Notifikasi', onTap: () {}),
 

@@ -1,5 +1,6 @@
 import 'dart:async'; // <-- TAMBAHAN: Import untuk Timer/Future.delayed
 import 'package:app_links/app_links.dart';
+import 'package:flutter/foundation.dart' show kIsWeb; // ADDED IMPORT for kIsWeb
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_web_browser/flutter_web_browser.dart';
@@ -7,6 +8,7 @@ import 'package:page_transition/page_transition.dart';
 import 'package:portal_si/pages/register_page.dart';
 import 'package:portal_si/services/auth_service.dart';
 import 'package:portal_si/utils/secure_storage.dart';
+import 'package:url_launcher/url_launcher.dart'; // ADDED IMPORT for url_launcher
 
 import '../models/user_model.dart';
 import '../services/user_cache_service.dart';
@@ -132,41 +134,45 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       _isLoading = true;
     });
 
+    const String forgotPasswordUrl = 'https://portalsi.com/forgot-password';
+
     try {
-      final baseUrl = 'https://portalsi.com/forgot-password';
-
-      final finalUri = Uri.parse(baseUrl);
-
-      await FlutterWebBrowser.openWebPage(
-        url: finalUri.toString(),
-        customTabsOptions: const CustomTabsOptions(
-          colorScheme: CustomTabsColorScheme.system,
-          showTitle: true,
-          urlBarHidingEnabled: true,
-        ),
-        safariVCOptions: const SafariViewControllerOptions(
-          barCollapsingEnabled: true,
-          preferredBarTintColor: Colors.white,
-          preferredControlTintColor: Colors.black,
-          dismissButtonStyle: SafariViewControllerDismissButtonStyle.close,
-        ),
-      );
-
+      if (kIsWeb) {
+        // For web, use url_launcher to open in a new tab
+        if (!await launchUrl(Uri.parse(forgotPasswordUrl), webOnlyWindowName: '_blank')) {
+          throw 'Could not launch $forgotPasswordUrl';
+        }
+      } else {
+        // For mobile, use FlutterWebBrowser
+        await FlutterWebBrowser.openWebPage(
+          url: forgotPasswordUrl,
+          customTabsOptions: const CustomTabsOptions(
+            colorScheme: CustomTabsColorScheme.system,
+            showTitle: true,
+            urlBarHidingEnabled: true,
+          ),
+          safariVCOptions: const SafariViewControllerOptions(
+            barCollapsingEnabled: true,
+            preferredBarTintColor: Colors.white,
+            preferredControlTintColor: Colors.black,
+            dismissButtonStyle: SafariViewControllerDismissButtonStyle.close,
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Gagal memproses login: $e'),
+            content: Text('Gagal membuka halaman lupa password: $e'),
             backgroundColor: Colors.red,
           ),
         );
       }
     } finally {
       if (mounted) {
-        // MODIFIKASI: Kita tidak lagi set _isLoading ke false di sini
-        // karena kita menunggu redirect untuk menutup halaman.
-        // Jika pengguna menutup browser secara manual, kita perlu cara lain
-        // untuk menghandle-nya, tapi untuk alur sukses, ini lebih baik.
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
@@ -257,23 +263,21 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         _passwordController.text.trim(),
       );
 
+      print('HASIL DARI API: $result');
+
       _hideLoadingAnimation();
 
       if (result['success'] == true && mounted) {
-
         if (result['user'] != null) {
-          final user = User.fromJson(result['user']); // Asumsi API mengembalikan data user
+          final user = User.fromJson(result['user']);
           await UserCacheService().saveUser(user);
         }
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['message']),
-            backgroundColor: Colors.green,
-          ),
-        );
+        // Cukup langsung navigasi, tanpa menampilkan SnackBar
         Navigator.pushNamedAndRemoveUntil(context, '/home', (Route<dynamic> route) => false);
+
       } else if (mounted) {
+        // Biarkan SnackBar untuk notifikasi error tetap ada
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(result['message']),

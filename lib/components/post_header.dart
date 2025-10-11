@@ -1,25 +1,23 @@
+// lib/components/post_header.dart
+
 import 'package:flutter/material.dart';
-import '../services/follow_service.dart';
-import '../utils/secure_storage.dart';
+import 'package:portal_si/models/post_model.dart';
+import 'package:portal_si/services/follow_service.dart';
+import 'package:portal_si/components/circular_avatar_fetcher.dart';
+import 'package:portal_si/helper/time_helper.dart'; // Pastikan path ini benar
 
 class PostHeader extends StatefulWidget {
-  final String username;
-  final String timeAgo;
-  final String profileImageUrl;
-  final bool isVerified;
-  final Map<String, dynamic> user;
+  final Post post;
   final VoidCallback? onProfileTap;
   final VoidCallback? onFollowChanged;
+  final List<Widget>? actions; // <--- TAMBAHAN UTAMA DI SINI
 
   const PostHeader({
     super.key,
-    required this.username,
-    required this.timeAgo,
-    required this.profileImageUrl,
-    required this.isVerified,
-    required this.user,
+    required this.post,
     this.onProfileTap,
     this.onFollowChanged,
+    this.actions, // <--- TAMBAHAN UTAMA DI SINI
   });
 
   @override
@@ -35,7 +33,6 @@ class _PostHeaderState extends State<PostHeader> {
   String? followStatus;
   String? currentUsername;
 
-  // Cache untuk menghindari API calls berulang
   static final Map<String, bool> _isCurrentUserCache = {};
   static final Map<String, bool> _privateAccountCache = {};
   static String? _cachedCurrentUsername;
@@ -49,26 +46,19 @@ class _PostHeaderState extends State<PostHeader> {
   @override
   void didUpdateWidget(PostHeader oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Hanya refresh jika username benar-benar berubah
-    if (oldWidget.username != widget.username) {
+    if (oldWidget.post.user.username != widget.post.user.username) {
       _initializeData();
     }
   }
 
   Future<void> _initializeData() async {
-    // Fast check untuk current user
     await _checkIfCurrentUser();
-
     if (isCurrentUser) {
-      // Jika current user, tidak perlu API calls lain
       if (mounted) setState(() => isLoading = false);
       return;
     }
-
     setState(() => isLoading = true);
-
     try {
-      // Parallel execution untuk account type dan follow status
       await Future.wait([
         _checkAccountType(),
         _checkFollowStatus(),
@@ -82,58 +72,42 @@ class _PostHeaderState extends State<PostHeader> {
     }
   }
 
-  // Optimized: Cache current username
   Future<void> _getCurrentUsername() async {
     if (_cachedCurrentUsername != null) {
       currentUsername = _cachedCurrentUsername;
       return;
     }
-
     try {
       final myProfile = await _followService.getMyProfile();
       currentUsername = myProfile['username'];
-      _cachedCurrentUsername = currentUsername; // Cache it
+      _cachedCurrentUsername = currentUsername;
     } catch (e) {
       print('Error getting current username: $e');
     }
   }
 
-  // Optimized: Check with caching
   Future<void> _checkIfCurrentUser() async {
-    final targetUsername = widget.username;
-
-    // Check cache first
+    final targetUsername = widget.post.user.username;
     if (_isCurrentUserCache.containsKey(targetUsername)) {
       isCurrentUser = _isCurrentUserCache[targetUsername]!;
       return;
     }
-
     await _getCurrentUsername();
-
     isCurrentUser =
         currentUsername != null && currentUsername == targetUsername;
-
-    // Cache the result
     _isCurrentUserCache[targetUsername] = isCurrentUser;
   }
 
-  // Optimized: Cache account type
   Future<void> _checkAccountType() async {
-    final targetUsername = widget.username;
-
-    // Check cache first
+    final targetUsername = widget.post.user.username;
     if (_privateAccountCache.containsKey(targetUsername)) {
       isPrivateAccount = _privateAccountCache[targetUsername]!;
       return;
     }
-
     try {
       final profile = await _followService.getUserProfile(targetUsername);
       isPrivateAccount = profile['is_private'] ?? false;
-
-      // Cache the result
       _privateAccountCache[targetUsername] = isPrivateAccount;
-
       if (mounted) {
         setState(() {});
       }
@@ -143,21 +117,14 @@ class _PostHeaderState extends State<PostHeader> {
     }
   }
 
-  // Optimized: Use efficient follow status check
   Future<void> _checkFollowStatus() async {
     try {
-      print('🔍 Checking follow status for ${widget.username}');
-
-      final statusData = await _followService.getFollowStatus(widget.username);
-
+      final statusData = await _followService.getFollowStatus(widget.post.user.username);
       if (mounted) {
         setState(() {
           isFollowing = statusData['isFollowing'] ?? false;
           followStatus = statusData['status'];
         });
-
-        print(
-            '📊 Follow status updated: isFollowing=$isFollowing, status=$followStatus');
       }
     } catch (e) {
       print('Error checking follow status: $e');
@@ -172,31 +139,21 @@ class _PostHeaderState extends State<PostHeader> {
 
   Future<void> _handleFollowAction() async {
     if (isLoading || isCurrentUser) return;
-
     setState(() => isLoading = true);
-
     try {
       bool success;
       String action = isFollowing ? 'unfollow' : 'follow';
-
       if (isFollowing) {
-        success = await _followService.unfollowUser(widget.username);
+        success = await _followService.unfollowUser(widget.post.user.username);
       } else {
-        success = await _followService.followUser(widget.username);
+        success = await _followService.followUser(widget.post.user.username);
       }
-
       if (success) {
-        // Clear cache untuk user ini agar data fresh
-        _privateAccountCache.remove(widget.username);
+        _privateAccountCache.remove(widget.post.user.username);
         _followService.clearFollowStatusCache();
-
-        // Wait for server processing
         await Future.delayed(const Duration(milliseconds: 300));
-
-        // Refresh status
         await _checkFollowStatus();
         widget.onFollowChanged?.call();
-
         if (mounted) {
           _showSuccessMessage(action);
         }
@@ -218,12 +175,11 @@ class _PostHeaderState extends State<PostHeader> {
     String message;
     if (action == 'follow') {
       message = isPrivateAccount
-          ? 'Permintaan mengikuti @${widget.username} terkirim'
-          : 'Berhasil mengikuti @${widget.username}';
+          ? 'Permintaan mengikuti @${widget.post.user.username} terkirim'
+          : 'Berhasil mengikuti @${widget.post.user.username}';
     } else {
-      message = 'Berhasil berhenti mengikuti @${widget.username}';
+      message = 'Berhasil berhenti mengikuti @${widget.post.user.username}';
     }
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -247,19 +203,35 @@ class _PostHeaderState extends State<PostHeader> {
 
   @override
   Widget build(BuildContext context) {
+    // Tentukan widget aksi (berisi tombol follow dan tombol hapus/more)
+    final List<Widget> actionWidgets = [];
+
+    // 1. Tambahkan tombol follow/unfollow jika pengguna bukan pemilik postingan
+    final followButton = _buildFollowButton(); // Ubah nama metode dari _buildTrailingWidget()
+    if (followButton != null) {
+      actionWidgets.add(followButton);
+    }
+
+    // 2. Tambahkan widget actions tambahan (misalnya, tombol 'more' untuk pemilik)
+    if (widget.actions != null) {
+      // Tambahkan sedikit jarak jika ada tombol follow
+      if (followButton != null && widget.actions!.isNotEmpty) {
+        actionWidgets.add(const SizedBox(width: 8));
+      }
+      actionWidgets.addAll(widget.actions!);
+    }
+
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-      leading: GestureDetector(
-        onTap: widget.onProfileTap,
-        child: CircleAvatar(
-          backgroundImage: widget.profileImageUrl.isNotEmpty
-              ? NetworkImage(widget.profileImageUrl)
-              : null,
-          radius: 30,
-          backgroundColor: Colors.grey[300],
-          child: widget.profileImageUrl.isEmpty
-              ? Icon(Icons.person, size: 30, color: Colors.grey[600])
-              : null,
+      leading: SizedBox(
+        width: 60,
+        height: 60,
+        child: Center(
+          child: CircularAvatarFetcher(
+            userId: widget.post.user.id ?? 0,
+            radius: 24,
+            onTap: widget.onProfileTap,
+          ),
         ),
       ),
       title: GestureDetector(
@@ -268,13 +240,13 @@ class _PostHeaderState extends State<PostHeader> {
           children: [
             Flexible(
               child: Text(
-                '@${widget.username}',
+                widget.post.user.username,
                 style:
-                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (widget.isVerified) ...[
+            if (widget.post.user.isVerified) ...[
               const SizedBox(width: 4),
               const Icon(Icons.verified, color: Colors.blue, size: 16),
             ],
@@ -282,14 +254,17 @@ class _PostHeaderState extends State<PostHeader> {
         ),
       ),
       subtitle: Text(
-        widget.timeAgo,
+        timeAgoFromDate(widget.post.createdAt.toIso8601String()),
         style: TextStyle(color: Colors.grey[600], fontSize: 12),
       ),
-      trailing: _buildTrailingWidget(),
+      trailing: Row( // <--- WRAP DALAM ROW
+        mainAxisSize: MainAxisSize.min,
+        children: actionWidgets,
+      ),
     );
   }
 
-  Widget? _buildTrailingWidget() {
+  Widget? _buildFollowButton() {
     if (isCurrentUser) return null;
     if (isFollowing && followStatus == 'accepted') return null;
 
@@ -307,50 +282,52 @@ class _PostHeaderState extends State<PostHeader> {
       child: ElevatedButton(
         onPressed: isLoading ? null : _handleFollowAction,
         style: ElevatedButton.styleFrom(
-          backgroundColor: _getButtonColor(),
-          foregroundColor: Colors.white,
-          elevation: 0,
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
           padding: EdgeInsets.zero,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
         ),
-        child: isLoading
-            ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
-            : Text(
-                _getButtonText(),
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 11,
-                ),
+        child: Ink(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.amber.shade600, Colors.orange.shade800],
+              begin: Alignment.topRight,
+              end: Alignment.bottomLeft,
+            ),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Container(
+            alignment: Alignment.center,
+            child: isLoading
+                ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
               ),
+            )
+                : Text(
+              _getButtonText(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
 
-  Color _getButtonColor() {
-    if (!isFollowing) return Colors.blue[600]!;
-
-    switch (followStatus) {
-      case 'pending':
-        return Colors.orange[600]!;
-      default:
-        return Colors.grey[600]!;
-    }
-  }
 
   String _getButtonText() {
     if (!isFollowing) {
       return isPrivateAccount ? 'Minta Ikuti' : 'Ikuti';
     }
-
     switch (followStatus) {
       case 'pending':
         return 'Diminta';
@@ -359,14 +336,11 @@ class _PostHeaderState extends State<PostHeader> {
     }
   }
 
-  // Clear cache when widget is disposed
   @override
   void dispose() {
-    // Optional: clear cache entries for this user
     super.dispose();
   }
 
-  // Static method to clear all cache
   static void clearCache() {
     _isCurrentUserCache.clear();
     _privateAccountCache.clear();

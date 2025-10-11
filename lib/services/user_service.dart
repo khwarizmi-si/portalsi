@@ -96,20 +96,109 @@ class ProfileService {
     }
   }
 
-  Future<bool> updateProfile(User user) async {
+  Future<List<dynamic>> fetchSuggestions() async {
     try {
+      // Menggunakan _getHeaders() untuk mendapatkan token secara otomatis
       final headers = await _getHeaders();
-      final response = await _client.post(
-        Uri.parse('$_baseUrl/account/settings'),
+      final response = await _client.get(
+        Uri.parse('$_baseUrl/suggestions'),
         headers: headers,
-        body: json.encode(user.toJson()),
       );
+
       if (response.statusCode == 200) {
-        await refreshProfile();
-        return true;
+        final Map<String, dynamic> data = json.decode(response.body);
+        // Pastikan ada key 'users' dan merupakan sebuah List
+        if (data['users'] is List) {
+          return data['users'] as List<dynamic>;
+        } else {
+          // Jika format tidak sesuai, kembalikan list kosong
+          return [];
+        }
+      } else {
+        // Jika request gagal, lempar error
+        throw Exception('Gagal memuat saran profil. Status: ${response.statusCode}');
       }
-      return false;
     } catch (e) {
+      print("Error di fetchSuggestions: $e");
+      rethrow; // Lempar kembali error untuk ditangani oleh FutureBuilder
+    }
+  }
+
+  Future<bool> updateProfile(User user, {XFile? profilePicture, XFile? banner}) async {
+    try {
+      final token = await SecureStorage.getToken();
+      if (token == null) throw Exception('Authentication required');
+
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$_baseUrl/account/settings'),
+      );
+
+      // 1. Tambahkan Headers
+      request.headers.addAll({
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      });
+
+      // 2. Tambahkan field-field teks dari model User
+      // API Anda mengharapkan `full_name`, bukan `fullName`
+      request.fields['username'] = user.username;
+      if (user.fullName != null) request.fields['full_name'] = user.fullName!;
+      if (user.email != null) request.fields['email'] = user.email!;
+      if (user.bio != null) request.fields['bio'] = user.bio!;
+      request.fields['is_private'] = user.isPrivate ? '1' : '0';
+
+
+      // 3. Tambahkan file foto profil jika ada yang baru
+      if (profilePicture != null) {
+        if (kIsWeb) {
+          Uint8List fileBytes = await profilePicture.readAsBytes();
+          request.files.add(http.MultipartFile.fromBytes(
+            'profile_picture', // Sesuaikan dengan nama field di API
+            fileBytes,
+            filename: profilePicture.name,
+          ));
+        } else {
+          request.files.add(await http.MultipartFile.fromPath(
+            'profile_picture', // Sesuaikan dengan nama field di API
+            profilePicture.path,
+            filename: profilePicture.name,
+          ));
+        }
+      }
+
+      // 4. Tambahkan file banner jika ada yang baru
+      if (banner != null) {
+        if (kIsWeb) {
+          Uint8List fileBytes = await banner.readAsBytes();
+          request.files.add(http.MultipartFile.fromBytes(
+            'banner', // Sesuaikan dengan nama field di API
+            fileBytes,
+            filename: banner.name,
+          ));
+        } else {
+          request.files.add(await http.MultipartFile.fromPath(
+            'banner', // Sesuaikan dengan nama field di API
+            banner.path,
+            filename: banner.name,
+          ));
+        }
+      }
+
+      // 5. Kirim request dan proses response
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        await refreshProfile(); // Refresh cache setelah berhasil update
+        return true;
+      } else {
+        print("Gagal update profil. Status: ${response.statusCode}");
+        print("Body: ${response.body}");
+        return false;
+      }
+    } catch (e) {
+      print("Error di updateProfile service: $e");
       rethrow;
     }
   }
@@ -135,64 +224,6 @@ class ProfileService {
   // =======================================================================
   // ❗❗ PERUBAHAN UTAMA ADA DI DUA FUNGSI DI BAWAH INI ❗❗
   // =======================================================================
-
-  /// [DIPERBAIKI] Mengunggah gambar profil baru ke server.
-  /// Menerima parameter XFile agar kompatibel dengan web dan mobile.
-  Future<String?> uploadProfilePicture(XFile imageFile) async {
-    try {
-      final token = await SecureStorage.getToken();
-      if (token == null) {
-        throw Exception('Authentication required');
-      }
-
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$_baseUrl/account/settings'),
-      );
-
-      request.headers.addAll({
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/json',
-      });
-
-      if (kIsWeb) {
-        // Untuk Web
-        Uint8List fileBytes = await imageFile.readAsBytes();
-        request.files.add(
-          http.MultipartFile.fromBytes(
-            'profile_picture',
-            fileBytes,
-            filename: imageFile.name,
-          ),
-        );
-      } else {
-        // Untuk Mobile (dengan perbaikan)
-        request.files.add(
-          await http.MultipartFile.fromPath(
-            'profile_picture',
-            imageFile.path,
-            filename: imageFile.name, // <-- Perbaikan ditambahkan di sini
-          ),
-        );
-      }
-
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
-      if (response.statusCode == 200) {
-        await refreshProfile();
-        final Map<String, dynamic> data = json.decode(response.body);
-        // Baris ini sudah benar, Anda menyesuaikannya dengan respons API Anda.
-        return data['user']['profile_picture_url'];
-      } else {
-        final errorBody = json.decode(response.body);
-        final errorMessage = errorBody['message'] ?? 'Failed to upload image: ${response.statusCode}';
-        throw Exception(errorMessage);
-      }
-    } catch (e) {
-      throw Exception('Error uploading image: $e');
-    }
-  }
 
   /// [DIPERBAIKI] Memilih gambar dari galeri atau kamera.
   /// Mengembalikan XFile agar bisa diproses lebih lanjut untuk web/mobile.

@@ -135,4 +135,35 @@ class CommentLikeService {
       return 0;
     }
   }
+
+  Future<bool> likeComment(int commentId) async {
+    final authToken = await SecureStorage.getToken();
+    if (authToken == null) return false;
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/comments/$commentId/like'),
+      headers: {
+        'Authorization': 'Bearer $authToken',
+        'Accept': 'application/json',
+      },
+    );
+    // Sukses jika status 200 (OK) atau 201 (Created)
+    return response.statusCode == 200 || response.statusCode == 201;
+  }
+
+  // --- 👇 FUNGSI BARU: KHUSUS UNTUK UNLIKE (DELETE) 👇 ---
+  Future<bool> unlikeComment(int commentId) async {
+    final authToken = await SecureStorage.getToken();
+    if (authToken == null) return false;
+
+    final response = await http.delete(
+      Uri.parse('$baseUrl/comments/$commentId/like'),
+      headers: {
+        'Authorization': 'Bearer $authToken',
+        'Accept': 'application/json',
+      },
+    );
+    // Sukses jika status 200 (OK) atau 204 (No Content)
+    return response.statusCode == 200 || response.statusCode == 204;
+  }
 }

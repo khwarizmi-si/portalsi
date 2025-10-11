@@ -1,19 +1,19 @@
 // comment_bottom_sheet.dart
 import 'package:flutter/material.dart';
+import '../models/post_model.dart';
 import '../widgets/comment_section.dart';
 
-void showCommentSheet(BuildContext context, int postId,
-    {VoidCallback? onCommentAdded}) {
+void showCommentSheet(BuildContext context, Post post, {VoidCallback? onCommentAdded}) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    isDismissible: true, // klik luar bisa nutup
-    enableDrag: true, // swipe ke bawah bisa nutup
+    isDismissible: true,
+    enableDrag: true,
     builder: (_) {
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => Navigator.of(context).pop(), // klik luar nutup
+        onTap: () => Navigator.of(context).pop(),
         child: DraggableScrollableSheet(
           initialChildSize: 0.75,
           minChildSize: 0.5,
@@ -21,12 +21,14 @@ void showCommentSheet(BuildContext context, int postId,
           expand: false,
           builder: (_, controller) {
             return GestureDetector(
-              onTap: () {}, // agar tap di dalam tidak menutup
+              onTap: () {},
               child: ClipRRect(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(27)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(27)),
+                // --- 👇 PERBAIKAN #2: Sesuaikan pemanggilan CommentSection 👇 ---
                 child: CommentSection(
                   scrollController: controller,
-                  postId: postId,
+                  postId: post.id, // Ambil id dari objek post
+                  initialComments: post.comments, // Kirim daftar komentar dari post
                   onCommentAdded: onCommentAdded,
                 ),
               ),

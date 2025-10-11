@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,6 +20,59 @@ class ChatService extends ApiService {
   factory ChatService() => _instance;
 
   static const String _cacheKey = 'conversations_cache';
+
+  // --- 👇 PENAMBAHAN UNTUK MEMPERBAIKI ERROR 'sendStoryResponse' 👇 ---
+  Future<ChatMessage> sendStoryResponse({
+    required int receiverId,
+    required String content,
+    required int storyId,
+    required String? respondedMediaUrl,
+    required User currentUser,
+    required User recipient,
+  }) async {
+    // 1. LOG SAAT FUNGSI DIPANGGIL
+    log(
+      'Mencoba mengirim story response ke user ID: $receiverId dengan konten: "$content"',
+      name: 'ChatService',
+    );
+
+    try {
+      final body = {
+        'receiver_id': receiverId.toString(),
+        'content': content,
+        'is_story_response': '1',
+        'story_id': storyId.toString(),
+        'responded_media_url': respondedMediaUrl ?? '',
+      };
+
+      final response = await postMultipart(
+        'messages/send',
+        body: body,
+      );
+
+      // 2. LOG SAAT BERHASIL (YANG SUDAH ADA SEBELUMNYA)
+      log(
+        '✅ SUCCESS: Respons API untuk sendStoryResponse:\n${jsonEncode(response)}',
+        name: 'ChatService',
+      );
+
+      return ChatMessage.fromJson(
+        response['data'],
+        currentUser,
+        recipient,
+      );
+    } catch (e, stackTrace) {
+      // 3. LOG SAAT TERJADI ERROR
+      log(
+        '❌ ERROR: Gagal saat mengirim story response.',
+        name: 'ChatService',
+        error: e, // Mencetak objek error
+        stackTrace: stackTrace, // Mencetak jejak error untuk debugging mendalam
+      );
+      rethrow; // Tetap lemparkan error agar bisa ditangani di level controller
+    }
+  }
+  // --- 👆 AKHIR PERBAIKAN 👆 ---
 
 
   Future<List<String>> getActiveConversationChannels() async {

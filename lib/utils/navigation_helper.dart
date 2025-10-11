@@ -2,7 +2,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import '../app_state.dart';
+import '../models/post_model.dart';
 import '../models/user_model.dart';
+import '../pages/post_detail.dart';
+import '../pages/post_detail_page.dart';
 import '../providers/navigation_provider.dart';
 import 'secure_storage.dart';
 import '../pages/other_profile_page.dart';
@@ -69,63 +73,31 @@ class NavigationHelper {
   }
 
 
-  static Future<void> navigateToProfile(
-    BuildContext context,
-    Map<String, dynamic> user, {
-    bool showHapticFeedback = true,
-    bool debugMode = false,
-  }) async {
-    if (showHapticFeedback) {
-      HapticFeedback.lightImpact();
+  static Future<void> navigateToProfile(BuildContext context, User user) async {
+    final navProvider = Provider.of<NavigationProvider>(context, listen: false);
+
+    // Cek apakah user yang dituju adalah user yang sedang login
+    final currentUserId = await SecureStorage.getUserId();
+    if (currentUserId != null && user.id != null && user.id == currentUserId) {
+      navProvider.navigateToTab(4);
+      return;
     }
 
-    final username = user['username'] ?? 'Unknown User';
-    final userId = _extractUserId(user);
+    final newPage = OtherProfilePage(username: user.username);
 
-    if (debugMode) {
-      debugPrint(
-          '🔍 NavigationHelper: Navigating to profile: $username (user_id: $userId)');
+    // INI BAGIAN KUNCINYA
+    if (navProvider.overlayPage != null) {
+      navProvider.replaceOverlay(newPage); // Jika sudah ada, ganti
+    } else {
+      navProvider.showOverlay(newPage); // Jika belum ada, tampilkan
     }
+  }
 
-    try {
-      final currentUserId = await SecureStorage.getUserId();
+  static void navigateToPostDetail(BuildContext context, int postId, {Post? initialPost}) {
+    final navProvider = Provider.of<NavigationProvider>(context, listen: false);
 
-      if (debugMode) {
-        debugPrint('🔍 NavigationHelper: Current user_id: $currentUserId');
-      }
-
-      // Jika user_id sama dengan user yang login
-      if (currentUserId != null && userId != null && userId == currentUserId) {
-        if (debugMode) {
-          debugPrint('✅ NavigationHelper: Navigating to own profile');
-        }
-        Provider.of<NavigationProvider>(context, listen: false).navigateToTab(4);
-        return;
-      }
-
-      // Jika berbeda, navigate ke OtherProfilePage
-      if (debugMode) {
-        debugPrint('✅ NavigationHelper: Navigating to other profile');
-      }
-
-      Provider.of<NavigationProvider>(context, listen: false).showOverlay(
-        OtherProfilePage(username: username),
-      );
-    } catch (e) {
-      if (debugMode) {
-        debugPrint('❌ NavigationHelper Error: $e');
-      }
-
-      // Fallback: navigate ke OtherProfilePage
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => OtherProfilePage(
-            username: username,
-          ),
-        ),
-      );
-    }
+    // Kirim postId dan juga initialPost ke halaman detail
+    navProvider.showOverlay(PostDetailPage(postId: postId, initialPost: initialPost));
   }
 
   /// Navigate ke profile berdasarkan username (legacy method)

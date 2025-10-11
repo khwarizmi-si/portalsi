@@ -64,8 +64,9 @@ class WebSocketService {
     _subscription = _channel!.stream.listen(
       _handleMessage,
       onDone: () {
+        // TAMBAHKAN INI
+        debugPrint("🚨 WebSocket DONE. Koneksi ditutup. Kode: ${_channel?.closeCode}, Alasan: ${_channel?.closeReason}");
         _statusController.add("disconnected");
-        // [MODIFIKASI] Gagalkan completer jika koneksi terputus sebelum siap
         if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
           _connectionCompleter!.completeError("WebSocket disconnected before connection was established.");
         }
@@ -73,9 +74,9 @@ class WebSocketService {
         _reconnect();
       },
       onError: (error) {
-        debugPrint("❌ WebSocket Error: $error");
+        // TAMBAHKAN INI
+        debugPrint("🔥 WebSocket ERROR: $error");
         _statusController.add("error");
-        // [MODIFIKASI] Gagalkan completer jika ada error
         if (_connectionCompleter != null && !_connectionCompleter!.isCompleted) {
           _connectionCompleter!.completeError(error);
         }

@@ -1,19 +1,103 @@
+// lib/pages/other_profile_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:page_transition/page_transition.dart';
 import 'package:portal_si/models/user_model.dart';
 import 'package:portal_si/pages/portfolio_pages.dart';
 import 'package:portal_si/pages/post_detail.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
-import '../components/bottom_navigation.dart';
+import '../app_state.dart';
+import '../components/circular_avatar_fetcher.dart';
+import '../components/verified_badge.dart';
 import '../components/video_thumbnail_widget.dart';
+import '../models/post_model.dart';
 import '../providers/navigation_provider.dart';
-import '../services/user_service.dart'; // Hanya import service yang benar
-import '../services/follow_service.dart'; // Hanya import service yang benar
+import '../services/user_service.dart';
+import '../services/follow_service.dart';
 import '../utils/navigation_helper.dart';
 import 'chat_room.dart';
+import 'clips_viewer_page.dart';
 import 'followers_following_page.dart';
+import 'fullscreen_image_viewer.dart';
+
+// --- 👇 WIDGET BARU UNTUK BIO 👇 ---
+class _ExpandableBio extends StatefulWidget {
+  final String bio;
+  const _ExpandableBio({required this.bio});
+
+  @override
+  State<_ExpandableBio> createState() => _ExpandableBioState();
+}
+
+class _ExpandableBioState extends State<_ExpandableBio> {
+  bool _isExpanded = false;
+  bool _isLongBio = false;
+
+  // Teks dianggap panjang jika melebihi 120 karakter ATAU lebih dari 3 baris
+  final int maxChars = 120;
+  final int maxLinesThreshold = 3;
+
+  @override
+  void initState() {
+    super.initState();
+    _isLongBio = widget.bio.length > maxChars || widget.bio.split('\n').length > maxLinesThreshold;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Jika bio kosong, jangan tampilkan apa-apa
+    if (widget.bio.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // Jika bio tidak panjang, tampilkan seperti biasa tanpa tombol
+    if (!_isLongBio) {
+      return Text(
+        widget.bio,
+        style: TextStyle(color: Colors.grey[800], fontSize: 15, height: 1.5),
+      );
+    }
+
+    // Jika bio panjang, tampilkan dengan tombol "Baca Selengkapnya"
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AnimatedSize(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.fastOutSlowIn,
+          alignment: Alignment.topLeft,
+          child: Text(
+            widget.bio,
+            maxLines: _isExpanded ? null : maxLinesThreshold,
+            overflow: _isExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
+            style: TextStyle(color: Colors.grey[800], fontSize: 15, height: 1.5),
+          ),
+        ),
+        const SizedBox(height: 5),
+        GestureDetector(
+          onTap: () {
+            setState(() {
+              _isExpanded = !_isExpanded;
+            });
+          },
+          child: Text(
+            _isExpanded ? 'Tampilkan lebih sedikit' : 'Baca Selengkapnya',
+            style: TextStyle(
+              color: Colors.grey[700],
+              fontWeight: FontWeight.bold,
+              fontSize: 15,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+// --- 👆 BATAS WIDGET BARU 👆 ---
+
 
 class OtherProfilePage extends StatefulWidget {
   final String username;
@@ -24,7 +108,8 @@ class OtherProfilePage extends StatefulWidget {
   State<OtherProfilePage> createState() => _OtherProfilePageState();
 }
 
-class _OtherProfilePageState extends State<OtherProfilePage> with TickerProviderStateMixin {
+class _OtherProfilePageState extends State<OtherProfilePage>
+    with TickerProviderStateMixin {
   User? _profileData;
 
   bool _isLoading = true;
@@ -34,7 +119,6 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
-  // Pisahkan instance service agar lebih rapi
   final ProfileService _profileService = ProfileService();
   final FollowService _followService = FollowService();
 
@@ -57,6 +141,71 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
     super.dispose();
   }
 
+  void _showAvatarPopup(BuildContext context) {
+    if (_profileData == null || _profileData!.profilePictureUrl == null) return;
+
+    final String heroTag = 'profile_${_profileData!.username}';
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(10),
+          elevation: 0,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 300,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+                ),
+                child: Text(
+                  _profileData!.username,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(context).pop();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => FullScreenImageViewer(
+                        imageUrl: _profileData!.profilePictureUrl!,
+                        heroTag: heroTag,
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  width: 300,
+                  height: 300,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                    image: DecorationImage(
+                      fit: BoxFit.cover,
+                      image: NetworkImage(_profileData!.profilePictureUrl!),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _loadAllData() async {
     setState(() {
       _isLoading = true;
@@ -65,8 +214,8 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
 
     try {
       final profile = await _profileService.getOtherProfile(widget.username);
-      final followStatus = await _followService.getFollowStatus(widget.username);
-
+      final followStatus =
+      await _followService.getFollowStatus(widget.username);
 
       if (mounted) {
         setState(() {
@@ -95,7 +244,6 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
       final originalFollowersCount = _profileData!.followersCount;
       final originalFollowingState = _isFollowing;
 
-      // Optimistic UI update
       setState(() {
         _isFollowing = !_isFollowing;
         _profileData = _profileData!.copyWith(
@@ -108,49 +256,49 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
           : await _followService.unfollowUser(username);
 
       if (!success && mounted) {
-        // Revert UI if API call fails
-
         setState(() {
           _isFollowing = originalFollowingState;
-          _profileData = _profileData!.copyWith(followersCount: originalFollowersCount);
+          _profileData =
+              _profileData!.copyWith(followersCount: originalFollowersCount);
         });
       }
-
     } catch (e) {
-      await _loadAllData();
+      final originalFollowersCount = _profileData!.followersCount;
+      final originalFollowingState = _isFollowing;
+      setState(() {
+        _isFollowing = originalFollowingState;
+        _profileData =
+            _profileData!.copyWith(followersCount: originalFollowersCount);
+      });
     } finally {
       if (mounted) setState(() => _isFollowActionLoading = false);
     }
   }
 
-  void _navigateToFollowersFollowing(int initialTab) async { // <-- Tambahkan async
+  void _navigateToFollowersFollowing(int initialTab) async {
     if (_profileData == null || _profileData!.id == null) return;
 
-    // --- PERUBAHAN UTAMA DI SINI ---
-    // Kita akan menunggu (await) hasil dari halaman yang dibuka
-    final result = await Navigator.push<Map<dynamic, dynamic>>( // <-- Tambahkan await dan tipe data
+    final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
         builder: (context) => FollowersFollowingPage(
           userId: _profileData!.id!,
+          username: _profileData!.username,
           initialTab: initialTab,
         ),
       ),
     );
 
-    // Jika ada data yang dikembalikan (artinya user mengklik profil)
-    // dan halaman ini masih aktif, maka jalankan navigasi.
     if (result != null && mounted) {
+      final userToNavigate = User.fromJson(result);
       NavigationHelper.navigateToProfile(
         context,
-        Map<String, dynamic>.from(result), // Lakukan cast di sini
+        userToNavigate,
       );
     }
-    // --- Batas Perubahan ---
   }
 
   void _navigateToChatRoom() {
-    // Pastikan data profil tidak null sebelum navigasi
     if (_profileData != null) {
       Navigator.push(
         context,
@@ -163,148 +311,213 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
 
   @override
   Widget build(BuildContext context) {
-    // BUNGKUS DENGAN PADDING DI SINI
-    return Padding(
-      // Beri jarak di bawah setinggi navigasi bar + margin-nya
-      // Anda bisa sesuaikan nilai 100.0 ini jika perlu
-      padding: const EdgeInsets.only(bottom: 100.0),
-      child: PopScope(
-        canPop: false,
-        onPopInvoked: (didPop) {
-          if (didPop) return;
-          Provider.of<NavigationProvider>(context, listen: false).hideOverlay();
-        },
-        child: Material(
-          color: Colors.transparent,
-          // Tambahkan clipRRect agar sudutnya melengkung, serasi dengan nav bar
-          clipBehavior: Clip.antiAlias,
-          borderRadius: BorderRadius.circular(20.0),
-          child: _buildBody(),
+    return _buildBody();
+  }
+
+  Widget _buildOtherProfileAppBar(User? user) {
+    return Container(
+      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFA),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 10.0),
+        child: Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.black),
+              onPressed: () {
+                Provider.of<NavigationProvider>(context, listen: false).hideOverlay();
+              },
+            ),
+
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    user?.username ?? '',
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (user?.isVerified ?? false)
+                  const VerifiedBadge(size: 18),
+              ],
+            ),
+          ],
         ),
       ),
     );
   }
 
   Widget _buildBody() {
-    // --- PERUBAHAN DI SINI ---
-    // Jika sedang loading, tampilkan widget skeleton
-    if (_isLoading) return const ProfilePageSkeleton();
-    // return const ProfilePageSkeleton();
-    // --- Batas Perubahan ---
+    Widget screenContent;
 
-    if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(_error!),
-            ElevatedButton(onPressed: _loadAllData, child: const Text('Coba Lagi')),
-          ],
-        ),
-      );
-    }
-    return RefreshIndicator(
-      onRefresh: _loadAllData,
-      child: FadeTransition(
-        opacity: _fadeAnimation,
-        child: CustomScrollView(
-          slivers: [
-            _buildSliverAppBar(),
-            SliverToBoxAdapter(child: _buildProfileSection()),
-            _buildPostGridSliver(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSliverAppBar() {
-    return SliverAppBar(
-      expandedHeight: 200,
-      pinned: true,
-      backgroundColor: Colors.white,
-      elevation: 1,
-      // 2. Perbarui aksi tombol kembali di SliverAppBar
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
-        onPressed: () {
-          // Panggil provider untuk menyembunyikan overlay
-          Provider.of<NavigationProvider>(context, listen: false).hideOverlay();
-        },
-      ),
-      title: Text(
-        _profileData?.username ?? 'Profil',
-        style: const TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.w600),
-      ),
-      flexibleSpace: FlexibleSpaceBar(
-        background: Hero(
-          tag: 'cover_${_profileData?.username ?? ''}',
-          child: Container(
-            decoration: BoxDecoration(
-              image: DecorationImage(
-                image: NetworkImage(_profileData?.profilePictureUrl ?? 'https://via.placeholder.com/400'),
-                fit: BoxFit.cover,
-              ),
-            ),
+    if (_isLoading) {
+      screenContent = const ProfilePageSkeleton();
+    } else if (_error != null) {
+      screenContent = Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(_error!),
+              ElevatedButton(
+                  onPressed: _loadAllData, child: const Text('Coba Lagi')),
+            ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildProfileSection() {
-    if (_profileData == null) return const SizedBox.shrink();
-
-    return Container(
-      color: Colors.transparent,
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+      );
+    } else {
+      screenContent = FadeTransition(
+        opacity: _animationController,
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Column(
             children: [
-              Hero(
-                tag: 'profile_${_profileData!.username}',
-                child: CircleAvatar(
-                  radius: 45,
-                  backgroundColor: Colors.grey[200],
-                  backgroundImage: _profileData!.profilePictureUrl != null && _profileData!.profilePictureUrl!.isNotEmpty
-                      ? NetworkImage(_profileData!.profilePictureUrl!)
-                      : null,
-                ),
-              ),
-              const SizedBox(width: 24),
+              _buildOtherProfileAppBar(_profileData),
               Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildStatItem(_profileData!.postsCount.toString(), 'Postingan', null),
-                    _buildStatItem(_profileData!.followersCount.toString(), 'Pengikut', () => _navigateToFollowersFollowing(0)),
-                    _buildStatItem(_profileData!.followingCount.toString(), 'Mengikuti', () => _navigateToFollowersFollowing(1)),
-                  ],
+                child: RefreshIndicator(
+                  onRefresh: _loadAllData,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        _buildCoverImage(),
+                        _buildProfileCard(),
+                        _buildPostGrid(),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          Text(
-            _profileData!.fullName ?? _profileData!.username,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-          ),
-          if (_profileData!.bio != null && _profileData!.bio!.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              _profileData!.bio!,
-              style: TextStyle(color: Colors.grey[700], height: 1.5, fontSize: 15),
-            ),
-          ],
-          const SizedBox(height: 20),
-          _buildActionButtons(),
-        ],
+        ),
+      );
+    }
+
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (bool didPop) {
+        if (!didPop) {
+          Provider.of<NavigationProvider>(context, listen: false).hideOverlay();
+        }
+      },
+      child: screenContent,
+    );
+  }
+
+  Widget _buildCoverImage() {
+    final imageUrl = _profileData?.bannerUrl?.isNotEmpty == true
+        ? _profileData!.bannerUrl!
+        : (_profileData?.profilePictureUrl?.isNotEmpty == true
+        ? _profileData!.profilePictureUrl!
+        : 'https://via.placeholder.com/400');
+
+    return Container(
+      height: 160,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        image: DecorationImage(
+          image: NetworkImage(imageUrl),
+          fit: BoxFit.cover,
+        ),
       ),
     );
   }
+
+  Widget _buildProfileCard() {
+    return Transform.translate(
+      offset: const Offset(0, -45),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 0.0),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(top: 45),
+              color: Colors.transparent,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 60, 24, 0),
+                child: _buildProfileInfo(),
+              ),
+            ),
+            Positioned(
+              top: 0,
+              left: 24,
+              child: GestureDetector(
+                onLongPress: () {
+                  HapticFeedback.vibrate();
+                  _showAvatarPopup(context);
+                },
+                child: Hero(
+                  tag: 'profile_${_profileData!.username}',
+                  child: CircularAvatarFetcher(
+                    radius: 45,
+                    userId: _profileData!.id ?? 0,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- 👇 METHOD INI TELAH DIMODIFIKASI 👇 ---
+  Widget _buildProfileInfo() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _profileData!.fullName ?? _profileData!.username,
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Menggunakan widget _ExpandableBio yang baru
+        _ExpandableBio(bio: _profileData?.bio ?? ''),
+
+        const SizedBox(height: 20),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            _buildStatText(_profileData!.postsCount.toString(), 'postingan'),
+            const SizedBox(width: 24),
+            _buildStatText(_profileData!.followersCount.toString(), 'pengikut',
+                onTap: () => _navigateToFollowersFollowing(0)),
+            const SizedBox(width: 24),
+            _buildStatText(_profileData!.followingCount.toString(), 'mengikuti',
+                onTap: () => _navigateToFollowersFollowing(1)),
+          ],
+        ),
+        const SizedBox(height: 24),
+        _buildActionButtons(),
+      ],
+    );
+  }
+
+  // --- 🗑️ METHOD _buildBioRow() TELAH DIHAPUS KARENA TIDAK DIGUNAKAN LAGI 🗑️ ---
 
   Widget _buildActionButtons() {
     return Column(
@@ -312,89 +525,55 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
         Row(
           children: [
             Expanded(
-              flex: 2,
               child: ElevatedButton(
-                onPressed: _isFollowActionLoading ? null : () { /* Panggil _handleFollowAction */ },
+                onPressed: _isFollowActionLoading ? null : _handleFollowAction,
                 style: ElevatedButton.styleFrom(
-                  // 1. Background dibuat transparan saat gradien aktif
-                  backgroundColor: _isFollowing ? Colors.grey[200] : Colors.transparent,
-                  shadowColor: Colors.transparent, // Hilangkan bayangan saat transparan
-
-                  // 2. Padding di-nol-kan di sini, karena akan dipindahkan ke dalam
-                  padding: EdgeInsets.zero,
-
-                  // Properti lain (bentuk, elevasi, sisi) tetap dipertahankan
-
+                  backgroundColor: _isFollowing ? Colors.grey[200] : const Color(0xFFF58723),
+                  foregroundColor: _isFollowing ? Colors.black : Colors.white,
                   elevation: _isFollowing ? 0 : 2,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    side: _isFollowing ? BorderSide(color: Colors.grey[300]!) : BorderSide.none,
+                      borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                child: _isFollowActionLoading
+                    ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+                    : Text(
+                  _isFollowing ? 'Mengikuti' : 'Ikuti',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
                   ),
                 ),
-                child: Ink(
-                  // 3. Ink untuk menampung gradien dan menjaga efek klik
-                  decoration: BoxDecoration(
-                    gradient: _isFollowing
-                        ? null // Tidak ada gradien saat sudah 'mengikuti'
-                        : LinearGradient( // Gradien biru menggantikan Colors.blueAccent
-
-                      colors: [
-                        Colors.amber.shade600,
-                        Colors.orange.shade800,
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Container(
-                    // 4. Padding yang sebenarnya diterapkan di sini
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    alignment: Alignment.center,
-                    // Lebar minimum untuk memastikan padding terlihat benar
-                    constraints: const BoxConstraints(minWidth: 88),
-                    child: _isFollowActionLoading
-                        ? SizedBox(
-
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        // 5. Warna loading indicator dibuat dinamis
-                        color: _isFollowing ? Colors.black54 : Colors.white,
-
-                      ),
-                    )
-                        : Text(
-                      _isFollowing ? 'Mengikuti' : 'Ikuti',
-                      // 6. Warna teks (foregroundColor) dipindahkan ke TextStyle
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: _isFollowing ? Colors.black : Colors.white,
-                      ),
-
-                    ),
-                  ),
-                ),
-              )
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: OutlinedButton(
-                // --- PERUBAHAN UTAMA DI SINI ---
-                onPressed: _navigateToChatRoom, // Panggil fungsi navigasi
-                // --- Batas Perubahan ---
+                onPressed: _navigateToChatRoom,
                 style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: Colors.grey[300]!),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  backgroundColor: Colors.grey[200],
+                  side: BorderSide.none,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
-                child: const Text('Pesan', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w600)),
+                child: Text('Kirim Pesan',
+                    style: TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14)),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 10,),
         Row(
           children: [
             Expanded(
@@ -432,100 +611,115 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
     );
   }
 
-  Widget _buildStatItem(String count, String label, VoidCallback? onTap) {
+  Widget _buildStatText(String count, String label, {VoidCallback? onTap}) {
     return GestureDetector(
       onTap: onTap,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(count, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 2),
-          Text(label, style: TextStyle(fontSize: 13, color: Colors.grey[600], fontWeight: FontWeight.w500)),
+      child: RichText(
+        textAlign: TextAlign.center,
+        text: TextSpan(
+          style: const TextStyle(color: Colors.black, fontSize: 15),
+          children: [
+            TextSpan(
+              text: count,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            TextSpan(
+              text: ' $label',
+              style: TextStyle(color: Colors.grey[700]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPostGrid() {
+    if (_profileData == null) {
+      return const SizedBox.shrink();
+    }
+    final posts = _profileData!.recentPosts;
+    const int columnCount = 3; // Definisikan jumlah kolom
+
+    return Container(
+      margin: const EdgeInsets.only(top: 0.0, left: 0, right: 0, bottom: 20),
+      padding: const EdgeInsets.only(bottom: 80.0),
+      constraints: const BoxConstraints(minHeight: 500),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24.0),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            spreadRadius: 2,
+            blurRadius: 15,
+            offset: const Offset(0, -5),
+          )
         ],
       ),
-    );
-  }
+      child: (posts.isEmpty)
+          ? Container(
+        height: 300,
+        alignment: Alignment.center,
+        child: const Text('Belum ada postingan'),
+      )
+          : Padding(
+        padding: const EdgeInsets.fromLTRB(12, 24, 12, 12),
+        // Bungkus GridView dengan AnimationLimiter
+        child: AnimationLimiter(
+          child: GridView.builder(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columnCount,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+            ),
+            itemCount: _profileData!.recentPosts.length,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemBuilder: (context, index) {
+              final post = _profileData!.recentPosts[index];
+              Widget mediaDisplay;
+              if (post.isVideo) {
+                mediaDisplay =
+                    VideoThumbnailWidget(videoUrl: post.mediaUrl);
+              } else {
+                mediaDisplay =
+                    Image.network(post.mediaUrl, fit: BoxFit.cover);
+              }
 
-  Widget _buildPostGridSliver() {
-    if (_profileData == null || _profileData!.recentPosts.isEmpty) {
-      return const SliverToBoxAdapter(
-        child: Center(
-          child: Padding(padding: EdgeInsets.symmetric(vertical: 50.0), child: Text('Belum ada postingan.')),
-        ),
-      );
-    }
-    return SliverPadding(
-      padding: const EdgeInsets.all(4),
-      sliver: SliverGrid(
-        delegate: SliverChildBuilderDelegate(
-              (context, index) {
-            final post = _profileData!.recentPosts[index];
+              // Bungkus setiap item dengan widget animasi
+              return AnimationConfiguration.staggeredGrid(
+                position: index,
+                duration: const Duration(milliseconds: 400),
+                columnCount: columnCount,
+                child: ScaleAnimation(
+                  child: FadeInAnimation(
+                    child: GestureDetector(
+                      onTap: () {
+                        final navProvider = Provider.of<NavigationProvider>(context, listen: false);
 
-            // Widget untuk menampilkan media (gambar atau thumbnail video)
-            Widget mediaDisplay;
-            if (post.isVideo) {
-              // Jika video, gunakan VideoThumbnailWidget
-              mediaDisplay = VideoThumbnailWidget(videoUrl: post.mediaUrl);
-            } else {
-              // Jika gambar, gunakan Image.network seperti biasa
-              mediaDisplay = Image.network(post.mediaUrl, fit: BoxFit.cover);
-            }
-
-            return GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => PostDetail(postId: post.postId),
+                        if (post.isVideo) {
+                          final fullPostObject = Post.fromJson({
+                            'id': post.postId,
+                            'caption': post.caption,
+                            'media_url': post.mediaUrl,
+                            'is_video': post.isVideo,
+                            'created_at': post.createdAt.toIso8601String(),
+                            'user': _profileData!.toJson(),
+                          });
+                          Navigator.push(context, MaterialPageRoute(builder: (context) => ClipsViewerPage(initialClip: fullPostObject)));
+                        } else {
+                          navProvider.replaceOverlay(PostDetail(postId: post.postId));
+                        }
+                      },
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: mediaDisplay,
+                      ),
+                    ),
                   ),
-                );
-              },
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Hero(
-                  tag: 'post_hero_${post.postId}',
-                  child: mediaDisplay, // <-- GUNAKAN WIDGET mediaDisplay DI SINI
                 ),
-              ),
-            );
-          },
-          childCount: _profileData!.recentPosts.length,
-        ),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          crossAxisSpacing: 4,
-          mainAxisSpacing: 4,
-        ),
-      ),
-    );
-  }
-
-  void _showImageDetail(SimplePost post, int index) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => Scaffold(
-          backgroundColor: Colors.black,
-          appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            leading: IconButton(
-              icon: const Icon(Icons.close, color: Colors.white),
-              onPressed: () { // Using a block body for clarity
-                Navigator.pop(context);
-                // FIX: Replace 'mainPost.user' with the correct variable '_profileData!'
-                if (_profileData != null) {
-                  NavigationHelper.navigateToProfile(
-                      context, _profileData!.toJson());
-                }
-              },
-            ),
-            title: Text(post.caption ?? '', style: const TextStyle(color: Colors.white)),
-          ),
-          body: Center(
-            child: Hero(
-              tag: 'post_${post.postId}_$index',
-              child: InteractiveViewer(child: Image.network(post.mediaUrl, fit: BoxFit.contain)),
-            ),
+              );
+            },
           ),
         ),
       ),
@@ -533,41 +727,6 @@ class _OtherProfilePageState extends State<OtherProfilePage> with TickerProvider
   }
 }
 
-extension UserCopyWith on User {
-  User copyWith({
-    int? id,
-    String? username,
-    String? fullName,
-    String? bio,
-    String? profilePictureUrl,
-    bool? isVerified,
-    bool? isPrivate,
-    int? followersCount,
-    int? followingCount,
-    int? postsCount,
-    List<SimplePost>? recentPosts,
-
-  }) {
-    return User(
-      id: id ?? this.id,
-      username: username ?? this.username,
-      followersCount: followersCount ?? this.followersCount,
-      email: this.email,
-      fullName: fullName ?? this.fullName,
-      bio: bio ?? this.bio,
-      profilePictureUrl: profilePictureUrl ?? this.profilePictureUrl,
-      isVerified: isVerified ?? this.isVerified,
-      isPrivate: isPrivate ?? this.isPrivate,
-      followingCount: followingCount ?? this.followingCount,
-      postsCount: postsCount ?? this.postsCount,
-      recentPosts: recentPosts ?? this.recentPosts,
-
-    );
-  }
-}
-// lib/pages/other_profile_page.dart
-
-/// Widget skeleton loading yang bisa di-scroll.
 class ProfilePageSkeleton extends StatelessWidget {
   const ProfilePageSkeleton({super.key});
 
@@ -576,88 +735,94 @@ class ProfilePageSkeleton extends StatelessWidget {
     return Shimmer.fromColors(
       baseColor: Colors.grey.shade200,
       highlightColor: Colors.grey.shade50,
-      child: SingleChildScrollView(
-        physics: const NeverScrollableScrollPhysics(),
-        child: Column(
-          children: [
-            // 1. Kerangka untuk Cover
-            Container(
-              height: 250,
-              color: Colors.white,
-            ),
-
-            // 2. Kerangka untuk Konten Profil
-            Container(
-              color: Colors.transparent,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      child: Column(
+        children: [
+          Container(
+            padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
+            color: Colors.white,
+            height: 60 + MediaQuery.of(context).padding.top,
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              physics: const NeverScrollableScrollPhysics(),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // --- Bagian Avatar & Statistik ---
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      const CircleAvatar(
-                        radius: 50,
-                        backgroundColor: Colors.white,
-                      ),
-                      const SizedBox(width: 24),
-                      Expanded(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            _buildStatSkeleton(),
-                            _buildStatSkeleton(),
-                            _buildStatSkeleton(),
-                          ],
-                        ),
-                      ),
-                    ],
+                  Container(
+                    height: 160,
+                    color: Colors.white,
                   ),
-                  const SizedBox(height: 24),
+                  Transform.translate(
+                    offset: const Offset(0, -45),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              const CircleAvatar(
+                                radius: 48,
+                                backgroundColor: Colors.white,
+                              ),
+                              const SizedBox(width: 20),
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.only(bottom: 8.0),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      _buildStatSkeleton(),
+                                      _buildStatSkeleton(),
+                                      _buildStatSkeleton(),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 24),
+                          _buildLineSkeleton(height: 22, width: 200),
+                          const SizedBox(height: 16),
+                          _buildLineSkeleton(height: 15),
+                          const SizedBox(height: 8),
+                          _buildLineSkeleton(height: 15, width: 250),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              Expanded(child: _buildLineSkeleton(height: 48, radius: 10)),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildLineSkeleton(height: 48, radius: 10)),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          _buildLineSkeleton(height: 48, radius: 10),
+                        ],
+                      ),
+                    ),
+                  ),
 
-                  // --- Bagian Nama & Bio ---
-                  _buildLineSkeleton(height: 18, width: 200),
-                  const SizedBox(height: 12),
-                  _buildLineSkeleton(height: 16),
-                  const SizedBox(height: 24),
-
-                  // --- Bagian Tombol Aksi ---
-                  Row(
-                    children: [
-                      Expanded(child: _buildLineSkeleton(height: 48, radius: 10)),
-                      const SizedBox(width: 16),
-                      Expanded(child: _buildLineSkeleton(height: 48, radius: 10)),
-                    ],
+                  const SizedBox(height: 4),
+                  Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: GridView.count(
+                      crossAxisCount: 3,
+                      crossAxisSpacing: 8,
+                      mainAxisSpacing: 8,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      children: List.generate(6, (index) => _buildGridItemSkeleton()),
+                    ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 4), // Sedikit spasi tambahan sebelum grid
-
-            // --- 3. PERUBAHAN UTAMA: GUNAKAN GridView.count ---
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: GridView.count(
-                crossAxisCount: 3, // Jumlah kolom
-
-                // --- KONTROL PENUH JARAK (GAP) DI SINI ---
-                crossAxisSpacing: 16, // Jarak horizontal
-                mainAxisSpacing: 16,  // Jarak vertikal
-                // --- Batas Kontrol Jarak ---
-
-                shrinkWrap: true, // Wajib agar GridView di dalam Column tahu ukurannya
-                physics: const NeverScrollableScrollPhysics(), // Wajib agar tidak bisa di-scroll
-                children: List.generate(3, (index) => _buildGridItemSkeleton()),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  // Helper untuk membuat satu item grid
   Widget _buildGridItemSkeleton() {
     return AspectRatio(
       aspectRatio: 1 / 1,
@@ -670,23 +835,20 @@ class ProfilePageSkeleton extends StatelessWidget {
     );
   }
 
-  // Helper untuk membuat kerangka statistik
   Widget _buildStatSkeleton() {
     return Column(
       children: [
-        _buildLineSkeleton(width: 45, height: 12),
+        _buildLineSkeleton(width: 35, height: 16, radius: 4),
         const SizedBox(height: 8),
-        _buildLineSkeleton(width: 45, height: 12),
+        _buildLineSkeleton(width: 50, height: 12, radius: 4),
       ],
     );
   }
 
-  // Helper utama untuk membuat satu baris/kotak kerangka
-  Widget _buildLineSkeleton({double? width, double height = 16, double radius = 8}) {
+  Widget _buildLineSkeleton(
+      {double? width, double height = 16, double radius = 8}) {
     return Container(
-      width: width ?? double.infinity,
-      // margin: EdgeInsets.only(bottom: 20),
-      padding: EdgeInsets.only(bottom: 40),
+      width: width,
       height: height,
       decoration: BoxDecoration(
         color: Colors.white,

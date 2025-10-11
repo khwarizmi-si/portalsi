@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:flutter/gestures.dart';
-import 'package:url_launcher/url_launcher.dart'; // Import package url_launcher
+import 'package:url_launcher/url_launcher.dart';
 
 class StorePage extends StatefulWidget {
   const StorePage({super.key});
@@ -12,19 +12,16 @@ class StorePage extends StatefulWidget {
 }
 
 class _StorePageState extends State<StorePage> with AutomaticKeepAliveClientMixin {
-  // Controller hanya akan diinisialisasi jika bukan di web
   late final WebViewController _controller;
   bool _isLoading = true;
   double _loadingProgress = 0;
 
-  // Ini penting agar state halaman tidak hilang saat berpindah tab
   @override
   bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
-    // Hanya inisialisasi WebView controller jika di platform mobile
     if (!kIsWeb) {
       _controller = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -50,10 +47,10 @@ class _StorePageState extends State<StorePage> with AutomaticKeepAliveClientMixi
     }
   }
 
-  // Fungsi untuk menangani tombol kembali di mobile
   Future<void> _onPopInvoked(bool didPop) async {
     if (didPop) return;
-    if (await _controller.canGoBack()) {
+    // Cek hanya jika bukan di web
+    if (!kIsWeb && await _controller.canGoBack()) {
       await _controller.goBack();
     }
   }
@@ -62,7 +59,6 @@ class _StorePageState extends State<StorePage> with AutomaticKeepAliveClientMixi
   Widget build(BuildContext context) {
     super.build(context);
 
-    // Cek platform: tampilkan UI berbeda untuk web dan mobile
     if (kIsWeb) {
       return _buildWebViewAlternative();
     } else {
@@ -70,7 +66,6 @@ class _StorePageState extends State<StorePage> with AutomaticKeepAliveClientMixi
     }
   }
 
-  // --- WIDGET UNTUK TAMPILAN MOBILE (KODE LAMA ANDA) ---
   Widget _buildMobileWebView() {
     return PopScope(
       canPop: false,
@@ -108,7 +103,6 @@ class _StorePageState extends State<StorePage> with AutomaticKeepAliveClientMixi
     );
   }
 
-  // --- WIDGET BARU UNTUK TAMPILAN WEB ---
   Widget _buildWebViewAlternative() {
     final storeUri = Uri.parse('https://store.portalsi.com/');
 
@@ -119,7 +113,7 @@ class _StorePageState extends State<StorePage> with AutomaticKeepAliveClientMixi
           "Marketplace PSI",
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 23),
         ),
-        backgroundColor: Colors.white.withOpacity(0.8),
+        backgroundColor: Colors.white,
         elevation: 1,
         centerTitle: false,
       ),
@@ -147,9 +141,7 @@ class _StorePageState extends State<StorePage> with AutomaticKeepAliveClientMixi
                 icon: const Icon(Icons.open_in_new),
                 label: const Text('Buka Marketplace'),
                 onPressed: () async {
-                  // Fungsi untuk membuka URL
                   if (await canLaunchUrl(storeUri)) {
-                    // Buka di tab baru (_blank)
                     await launchUrl(storeUri, webOnlyWindowName: '_blank');
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -172,23 +164,33 @@ class _StorePageState extends State<StorePage> with AutomaticKeepAliveClientMixi
     );
   }
 
-  // AppBar yang digunakan di versi mobile
+  // =======================================================================
+  // --- PERUBAHAN UTAMA ADA DI SINI ---
+  // =======================================================================
   Widget _buildAppBar() {
     return Container(
-      color: Colors.white.withOpacity(0.8),
-      child: Row(
-        children: [
-          const SizedBox(width: 16,),
-          const Text(
+      // Dekorasi ini meniru AppBar di chat_room.dart
+      decoration: BoxDecoration(
+        color: Colors.white,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6.0),
+        child: AppBar(
+          automaticallyImplyLeading: false, // Menghilangkan tombol back
+          title: const Text(
             "Marketplace PSI",
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 23),
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 23, color: Colors.black),
           ),
-          const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => _controller.reload(),
-          ),
-        ],
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: () => _controller.reload(),
+            ),
+          ],
+          backgroundColor: Colors.white, // Buat AppBar transparan
+          elevation: 0, // Hapus bayangan bawaan AppBar
+          iconTheme: const IconThemeData(color: Colors.black),
+        ),
       ),
     );
   }

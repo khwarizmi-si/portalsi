@@ -1,5 +1,8 @@
 // lib/services/comment_service.dart
 
+import 'package:http/http.dart' as http;
+
+import '../utils/secure_storage.dart';
 import 'api_service.dart';
 import '../models/comment_model.dart';
 import 'package:flutter/foundation.dart';
@@ -44,6 +47,28 @@ class CommentService extends ApiService {
           print('⚠️ Request gagal, menggunakan cache lama untuk post $postId');
         return _cache[postId]!;
       }
+      rethrow;
+    }
+  }
+
+  Future<Comment> addCommentReply(int postId, String content, int parentCommentId) async {
+    try {
+      final responseData = await post(
+        'posts/$postId/comments',
+        body: {
+          'content': content,
+          'parent_comment_id': parentCommentId.toString(), // Sesuai API
+        },
+      );
+
+      final newComment = Comment.fromJson(responseData['data']);
+      clearCache(postId); // Hapus cache agar balasan baru muncul saat refresh
+
+      if (kDebugMode) print('✅ Balasan berhasil dikirim untuk komentar $parentCommentId');
+
+      return newComment;
+    } catch (e) {
+      if (kDebugMode) print('❌ Gagal mengirim balasan untuk komentar $parentCommentId: $e');
       rethrow;
     }
   }

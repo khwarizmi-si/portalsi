@@ -2,11 +2,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:portal_si/components/post_card.dart';
-import 'package:portal_si/widgets/comment_section.dart'; // <-- 1. IMPORT WIDGET KOMENTAR
+import 'package:portal_si/providers/navigation_provider.dart'; // <-- Impor
+import 'package:portal_si/widgets/comment_section.dart';
 import 'package:provider/provider.dart';
+import '../app_state.dart';
 import '../controllers/post_detail_controller.dart';
 import '../models/post_model.dart';
-import '../helper/time_helper.dart';
 import '../utils/navigation_helper.dart';
 
 class PostDetailPage extends StatelessWidget {
@@ -17,166 +18,124 @@ class PostDetailPage extends StatelessWidget {
     super.key,
     required this.postId,
     this.initialPost,
-    // Parameter di bawah ini tidak lagi diperlukan karena data diambil dari controller
-    // Anda bisa menghapusnya dari mana pun Anda memanggil PostDetailPage
-    String? username,
-    String? timeAgo,
-    String? imageUrl,
-    String? content,
-    int? comments,
-    String? profileImageUrl,
-    int? likes,
-    bool? isVerified,
-    bool? isLiked,
   });
 
-  // --- 2. BUAT FUNGSI UNTUK MENAMPILKAN BOTTOM SHEET ---
-  void _showCommentSheet(BuildContext context, int postId) {
+  void _showCommentSheet(BuildContext context, Post post) {
+    AppState.commentFrom = "post_detail_page";
     HapticFeedback.lightImpact();
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true, // Penting agar sheet bisa setinggi layar
-      backgroundColor: Colors.transparent, // Latar belakang transparan
-      builder: (context) {
-        // Panggil widget CommentSection yang sudah Anda buat
-        return CommentSection(postId: postId);
-      },
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => CommentSection(
+        postId: post.id,
+        initialComments: post.comments,
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) {
-        final controller = PostDetailController(mainPostId: postId);
-        if (initialPost != null) {
-          controller.setInitialPost(initialPost!);
-        } else {
-          controller.loadData();
+    // --- PERUBAHAN 1: Bungkus dengan PopScope ---
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (bool didPop) {
+        if (!didPop) {
+          Provider.of<NavigationProvider>(context, listen: false).hideOverlay();
         }
-        return controller;
       },
-      child: Scaffold(
-        backgroundColor: Color(0xFFF5F5F5),
-        appBar: AppBar(title: const Text("Detail Postingan")),
-        body: Consumer<PostDetailController>(
-          builder: (context, controller, _) {
-            if (controller.isLoadingMainPost) {
-              return const Center(child: CircularProgressIndicator());
-            }
+      child: ChangeNotifierProvider(
+        create: (_) {
+          final controller = PostDetailController(mainPostId: postId);
+          if (initialPost != null) {
+            controller.setInitialPost(initialPost!);
+          } else {
+            controller.loadData();
+          }
+          return controller;
+        },
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            title: const Text("Detail Postingan"),
+            // --- PERUBAHAN 2: Tambahkan tombol kembali kustom ---
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () {
+                Provider.of<NavigationProvider>(context, listen: false)
+                    .hideOverlay();
+              },
+            ),
+          ),
+          body: Consumer<PostDetailController>(
+            builder: (context, controller, _) {
+              if (controller.isLoadingMainPost) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-            if (controller.mainPost == null) {
-              return const Center(child: Text("Post tidak ditemukan."));
-            }
+              if (controller.mainPost == null) {
+                return const Center(child: Text("Post tidak ditemukan."));
+              }
 
-            final Post mainPost = controller.mainPost!;
-            final heroTag = 'post_hero_${mainPost.id}';
+              final Post mainPost = controller.mainPost!;
 
-            return CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(
-                  child: PostCard(
-                    username: mainPost.user.username,
-                    timeAgo: timeAgoFromDate(mainPost.createdAt.toIso8601String()),
-                    mediaUrl: mainPost.mediaUrl ?? '',
-                    isVideo: mainPost.isVideo,
-                    likes: mainPost.likesCount,
-                    comments: mainPost.commentsCount,
-                    content: mainPost.caption ?? '',
-                    isVerified: mainPost.user.isVerified,
-                    isLiked: mainPost.isLikedByUser,
-                    isBookmarked: false,
-                    profileImageUrl: mainPost.user.profilePictureUrl ?? '',
-                    user: mainPost.user.toJson(),
-                    postId: mainPost.id,
-                    onLike: () => controller.toggleLike(mainPost.id),
-                    onBookmark: () {},
-                    onShare: () {},
-                    // --- 3. PANGGIL FUNGSI _showCommentSheet ---
-                    onComment: () => _showCommentSheet(context, mainPost.id),
-                    onProfileTap: () {
-                      Navigator.pop(context);
-                      NavigationHelper.navigateToProfile(context, mainPost.user.toJson());
-                    },
+              return CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: PostCard(
+                      post: mainPost,
+                      onLike: () => controller.toggleLike(mainPost.id),
+                      onBookmark: () {},
+                      onShare: () {},
+                      onComment: () => _showCommentSheet(context, mainPost),
+                      onProfileTap: () {
+                        // Cukup panggil helper, ia akan menangani sisanya
+                        NavigationHelper.navigateToProfile(context, mainPost.user);
+                      },
+                    ),
                   ),
-                ),
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
-                    child: Text("Postingan Terkait", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                  ),
-                ),
-                if (controller.isLoadingRelated)
                   const SliverToBoxAdapter(
-                      child: Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(16.0),
-                            child: CircularProgressIndicator(),
-                          ))),
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                      final relatedPost = controller.relatedPosts[index];
-                      return PostCard(
-                        username: relatedPost.user.username,
-                        timeAgo: timeAgoFromDate(relatedPost.createdAt.toIso8601String()),
-                        mediaUrl: relatedPost.mediaUrl ?? '',
-                        isVideo: relatedPost.isVideo,
-                        comments: relatedPost.commentsCount,
-                        content: relatedPost.caption ?? '',
-                        isVerified: relatedPost.user.isVerified,
-                        isBookmarked: false,
-                        profileImageUrl: relatedPost.user.profilePictureUrl ?? '',
-                        user: relatedPost.user.toJson(),
-                        postId: relatedPost.id,
-                        likes: relatedPost.likesCount,
-                        isLiked: relatedPost.isLikedByUser,
-                        onLike: () => controller.toggleLike(relatedPost.id),
-                        onBookmark: () {
-                          HapticFeedback.lightImpact();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Text(
-                                'Fitur ini akan segera hadir..',
-                              ),
-                              backgroundColor: Colors.blueAccent,
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  10,
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                        onShare: () {
-                          HapticFeedback.lightImpact();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Text(
-                                'Fitur ini akan segera hadir..',
-                              ),
-                              backgroundColor: Colors.blueAccent,
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  10,
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                        // --- 4. PANGGIL FUNGSI YANG SAMA UNTUK POSTINGAN TERKAIT ---
-                        onComment: () => _showCommentSheet(context, relatedPost.id),
-                        onProfileTap: () => NavigationHelper.navigateToProfile(context, relatedPost.user.toJson()),
-                      );
-                    },
-                    childCount: controller.relatedPosts.length,
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
+                      child: Text("Postingan Terkait",
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 18)),
+                    ),
                   ),
-                ),
-              ],
-            );
-          },
+                  if (controller.isLoadingRelated)
+                    const SliverToBoxAdapter(
+                        child: Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(16.0),
+                              child: CircularProgressIndicator(),
+                            ))),
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                        final relatedPost = controller.relatedPosts[index];
+                        return PostCard(
+                          post: relatedPost,
+                          onLike: () => controller.toggleLike(relatedPost.id),
+                          onBookmark: () {},
+                          onShare: () {},
+                          onComment: () =>
+                              _showCommentSheet(context, relatedPost),
+                          onProfileTap: () {
+                            Provider.of<NavigationProvider>(context, listen: false).hideOverlay();
+                            Future.delayed(const Duration(milliseconds: 100), () {
+                              NavigationHelper.navigateToProfile(
+                                  context, relatedPost.user);
+                            });
+                          },
+                        );
+                      },
+                      childCount: controller.relatedPosts.length,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );

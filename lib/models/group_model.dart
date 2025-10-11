@@ -22,4 +22,14 @@ class Group {
       memberCount: json['members_count'], // <-- TAMBAHKAN INI
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'avatar_url': avatarUrl,
+      // 'unread_message_count': unreadMessageCount,
+      'members_count': memberCount,
+    };
+  }
 }

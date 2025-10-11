@@ -1,24 +1,50 @@
+// lib/providers/navigation_provider.dart
 import 'package:flutter/material.dart';
 
 class NavigationProvider with ChangeNotifier {
-  // Fungsi callback untuk pindah tab (tetap ada)
-  late Function(int) navigateToTab;
-
-  // --- TAMBAHAN BARU ---
-  Widget? _overlayPage; // Variabel untuk menampung halaman overlay
-
-  // Getter untuk mengakses halaman overlay
+  Widget? _overlayPage;
   Widget? get overlayPage => _overlayPage;
+  bool get isOverlayActive => _overlayPage != null;
 
-  // Fungsi untuk menampilkan halaman overlay
+  late Function() _showAnimation;
+  late Function() _hideAnimation;
+
+  void registerAnimationTriggers({
+    required Function() showAnimation,
+    required Function() hideAnimation,
+  }) {
+    _showAnimation = showAnimation;
+    _hideAnimation = hideAnimation;
+  }
+
   void showOverlay(Widget page) {
+    if (_overlayPage != null) return; // Mencegah show dipanggil dua kali
     _overlayPage = page;
-    notifyListeners(); // Beri tahu listener (MainScaffold) bahwa ada perubahan
+    notifyListeners();
+    _showAnimation();
   }
 
-  // Fungsi untuk menyembunyikan/menghapus halaman overlay
-  void hideOverlay() {
-    _overlayPage = null;
-    notifyListeners(); // Beri tahu listener (MainScaffold) untuk kembali menampilkan PageView
+  Future<void> replaceOverlay(Widget newPage) async {
+    _hideAnimation();
+    // Tunggu animasi hide selesai
+    await Future.delayed(const Duration(milliseconds: 350));
+    _overlayPage = newPage;
+    notifyListeners();
+    _showAnimation();
   }
+
+  void hideOverlay() {
+    if (_overlayPage != null) {
+      _hideAnimation();
+    }
+  }
+
+  void clearOverlayPage() {
+    if (_overlayPage != null) {
+      _overlayPage = null;
+      notifyListeners();
+    }
+  }
+
+  late Function(int) navigateToTab;
 }

@@ -3,19 +3,27 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
+import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart'; // Pastikan import ini ada
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
-import 'package:portal_si/pages/post_detail_page.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
+import '../components/circular_avatar_fetcher.dart';
+import '../components/verified_badge.dart';
 import '../providers/scroll_provider.dart';
-
 import '../models/post_model.dart';
+import '../components/video_thumbnail_widget.dart';
 import '../models/user_model.dart';
+import '../utils/navigation_helper.dart';
 import '../utils/secure_storage.dart';
-import 'other_profile_page.dart';
+import 'clips_viewer_page.dart';
+import 'post_detail_page.dart';
+
 
 class FeedPage extends StatefulWidget {
   const FeedPage({super.key});
@@ -24,11 +32,11 @@ class FeedPage extends StatefulWidget {
   State<FeedPage> createState() => _FeedPageState();
 }
 
-class _FeedPageState extends State<FeedPage> {
+class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<FeedPage> {
   final ScrollController _scrollController = ScrollController();
   List<Post> _posts = [];
   int _currentPage = 1;
-  int _lastPage = 1;
+  bool _hasNextPage = true;
   bool _isLoading = true;
   bool _isFetchingMore = false;
   final TextEditingController _searchController = TextEditingController();
@@ -38,6 +46,10 @@ class _FeedPageState extends State<FeedPage> {
   bool _isSearchLoading = false;
   List<Post>? _cachedPosts;
   DateTime? _cacheTimestamp;
+  final FocusNode _searchFocusNode = FocusNode();
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -48,12 +60,19 @@ class _FeedPageState extends State<FeedPage> {
   }
 
   @override
+  void deactivate() {
+    _searchFocusNode.unfocus();
+    super.deactivate();
+  }
+
+  @override
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
     _debounce?.cancel();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -64,15 +83,18 @@ class _FeedPageState extends State<FeedPage> {
       if (query.isNotEmpty) {
         _searchUsers(query);
       } else {
-        setState(() {
-          _showSearchResults = false;
-          _searchResults = [];
-        });
+        if (mounted) {
+          setState(() {
+            _showSearchResults = false;
+            _searchResults = [];
+          });
+        }
       }
     });
   }
 
   Future<void> _searchUsers(String query) async {
+    if (!mounted) return;
     setState(() {
       _isSearchLoading = true;
       _showSearchResults = true;
@@ -92,16 +114,18 @@ class _FeedPageState extends State<FeedPage> {
       if (response.statusCode == 200) {
         final dynamic decodedData = json.decode(response.body);
         final List usersJson = decodedData is List ? decodedData : decodedData['data'];
-        setState(() {
-          _searchResults = usersJson.map((u) => User.fromJson(u)).toList();
-        });
+        if (mounted) {
+          setState(() {
+            _searchResults = usersJson.map((u) => User.fromJson(u)).toList();
+          });
+        }
       } else {
         log('❌ GAGAL mencari pengguna: ${response.body}');
       }
     } catch (e) {
       log('🚨 EXCEPTION saat mencari pengguna: $e');
     } finally {
-      if(mounted) {
+      if (mounted) {
         setState(() {
           _isSearchLoading = false;
         });
@@ -113,24 +137,34 @@ class _FeedPageState extends State<FeedPage> {
     if (_currentPage == 1 && !isRefresh && _cachedPosts != null && _cacheTimestamp != null) {
       final Duration cacheAge = DateTime.now().difference(_cacheTimestamp!);
       if (cacheAge < const Duration(minutes: 3)) {
-        setState(() {
-          _posts = _cachedPosts!;
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _posts = _cachedPosts!;
+            _isLoading = false;
+          });
+        }
         log('✅ Menggunakan data dari cache. Usia: ${cacheAge.inSeconds} detik.');
         return;
       }
     }
+
     if (isRefresh) {
+      if (mounted) {
+        setState(() {
+          _posts = [];
+          _currentPage = 1;
+          _hasNextPage = true;
+          _isLoading = true;
+        });
+      }
+    }
+
+    if (mounted) {
       setState(() {
-        _posts = [];
-        _currentPage = 1;
-        _isLoading = true;
+        _isFetchingMore = true;
       });
     }
-    setState(() {
-      _isFetchingMore = true;
-    });
+
     log('🚀 Memulai fetch data untuk halaman: $_currentPage');
     try {
       final String? token = await SecureStorage.getToken();
@@ -141,10 +175,12 @@ class _FeedPageState extends State<FeedPage> {
             const SnackBar(content: Text('Sesi Anda telah berakhir. Silakan login kembali.')),
           );
         }
-        setState(() {
-          _isLoading = false;
-          _isFetchingMore = false;
-        });
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _isFetchingMore = false;
+          });
+        }
         return;
       }
       final url = Uri.parse('https://api-new.portalsi.com/api/explore?page=$_currentPage');
@@ -157,20 +193,26 @@ class _FeedPageState extends State<FeedPage> {
         final data = json.decode(response.body);
         final List postsJson = data['data'];
         final List<Post> newPosts = postsJson.map((p) => Post.fromJson(p)).toList();
+
         if (_currentPage == 1) {
           _cachedPosts = newPosts;
           _cacheTimestamp = DateTime.now();
           log('💾 Data baru dari API disimpan ke cache.');
         }
-        setState(() {
-          if (isRefresh || _currentPage == 1) {
-            _posts = newPosts;
-          } else {
-            _posts.addAll(newPosts);
-          }
-          _lastPage = data['last_page'];
-          _currentPage++;
-        });
+
+        if (mounted) {
+          setState(() {
+            if (isRefresh || _currentPage == 1) {
+              _posts = newPosts;
+            } else {
+              _posts.addAll(newPosts);
+            }
+            _hasNextPage = data['next_page_url'] != null;
+            if (_hasNextPage) {
+              _currentPage++;
+            }
+          });
+        }
       } else {
         log('❌ GAGAL: Status code ${response.statusCode}');
         if (mounted) {
@@ -187,7 +229,7 @@ class _FeedPageState extends State<FeedPage> {
         );
       }
     } finally {
-      if(mounted) {
+      if (mounted) {
         setState(() {
           _isLoading = false;
           _isFetchingMore = false;
@@ -205,7 +247,7 @@ class _FeedPageState extends State<FeedPage> {
       scrollProvider.setScrolled(true);
     }
     if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
-      if (_currentPage <= _lastPage && !_isFetchingMore) {
+      if (_hasNextPage && !_isFetchingMore) {
         _fetchPosts();
       }
     }
@@ -217,9 +259,12 @@ class _FeedPageState extends State<FeedPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
-        statusBarColor: Colors.white,
+        systemNavigationBarColor: Color(0xFFFFFFFF),
+        systemNavigationBarIconBrightness: Brightness.dark,
+        statusBarColor: Color(0xFFFFFFFF),
         statusBarIconBrightness: Brightness.dark,
       ),
       child: PopScope(
@@ -228,15 +273,11 @@ class _FeedPageState extends State<FeedPage> {
           if (didPop) return;
           _searchController.clear();
         },
-        // --- 👇 PERUBAHAN UTAMA DI SINI 👇 ---
         child: Scaffold(
           backgroundColor: Colors.transparent,
-          // Hapus properti appBar
           body: Column(
             children: [
-              // Tambahkan AppBar kustom sebagai widget pertama
               _buildFeedAppBar(),
-              // Bungkus sisa body dengan Expanded
               Expanded(
                 child: _buildBody(),
               ),
@@ -247,10 +288,8 @@ class _FeedPageState extends State<FeedPage> {
     );
   }
 
-  // --- WIDGET BARU: APPBAR KUSTOM ---
   Widget _buildFeedAppBar() {
     return Container(
-      // Atur padding untuk status bar
       padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -262,9 +301,8 @@ class _FeedPageState extends State<FeedPage> {
           )
         ],
       ),
-      // Konten AppBar
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
         child: Container(
           height: 45,
           decoration: BoxDecoration(
@@ -273,11 +311,34 @@ class _FeedPageState extends State<FeedPage> {
           ),
           child: TextField(
             controller: _searchController,
-            decoration: const InputDecoration(
+            focusNode: _searchFocusNode,
+            decoration: InputDecoration( // Ubah menjadi InputDecoration
               hintText: 'Cari pengguna...',
               border: InputBorder.none,
-              prefixIcon: Icon(Icons.search, color: Colors.grey),
-              contentPadding: EdgeInsets.symmetric(vertical: 12.0),
+              prefixIcon: const Icon(Icons.search, color: Colors.grey),
+              contentPadding: const EdgeInsets.symmetric(vertical: 12.0),
+              // --- PERUBAHAN UTAMA ADA DI SINI ---
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                icon: const Icon(Icons.close, color: Colors.grey),
+                onPressed: () {
+                  // Membersihkan teks, menyembunyikan hasil, dan menghapus fokus
+                  _searchController.clear();
+                  if (_searchFocusNode.hasFocus) {
+                    _searchFocusNode.unfocus();
+                  }
+                  if (mounted) {
+                    setState(() {
+                      // setState akan dipanggil juga oleh _onSearchChanged,
+                      // tetapi ini memastikan tampilan segera diperbarui.
+                      _showSearchResults = false;
+                      _searchResults = [];
+                    });
+                  }
+                },
+              )
+                  : null,
+              // ------------------------------------
             ),
           ),
         ),
@@ -302,16 +363,32 @@ class _FeedPageState extends State<FeedPage> {
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverPadding(
-            padding: const EdgeInsets.all(8.0),
-            sliver: SliverMasonryGrid.count(
-              crossAxisCount: 3,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-              childCount: _posts.length,
-              itemBuilder: (context, index) {
-                final post = _posts[index];
-                return _buildPostItem(post);
-              },
+            padding: const EdgeInsets.only(left: 8.0, right: 8.0, bottom: 104.0, top: 8.0),
+            sliver: SliverGrid(
+              gridDelegate: SliverQuiltedGridDelegate(
+                crossAxisCount: 3,
+                mainAxisSpacing: 8.0,
+                crossAxisSpacing: 8.0,
+                pattern: const [
+                  QuiltedGridTile(1, 1),
+                  QuiltedGridTile(1, 1),
+                  QuiltedGridTile(2, 1),
+                  QuiltedGridTile(1, 1),
+                  QuiltedGridTile(1, 1),
+                  QuiltedGridTile(2, 1),
+                  QuiltedGridTile(1, 1),
+                  QuiltedGridTile(1, 1),
+                  QuiltedGridTile(1, 1),
+                  QuiltedGridTile(1, 1),
+                ],
+              ),
+              delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                  final post = _posts[index];
+                  return _buildPostItem(post);
+                },
+                childCount: _posts.length,
+              ),
             ),
           ),
           SliverToBoxAdapter(
@@ -339,24 +416,21 @@ class _FeedPageState extends State<FeedPage> {
       itemBuilder: (context, index) {
         final user = _searchResults[index];
         return ListTile(
-          leading: CircleAvatar(
-            backgroundImage: user.profilePictureUrl != null
-                ? NetworkImage(user.profilePictureUrl!)
-                : null,
-            child: user.profilePictureUrl == null
-                ? const Icon(Icons.person)
-                : null,
+          leading: CircularAvatarFetcher(
+            radius: 22,
+            userId: user.id ?? 0,
           ),
-          title: Text(user.username),
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(user.username),
+              if (user.isVerified) const SizedBox(width: 6),
+              if (user.isVerified) const VerifiedBadge(size: 15),
+            ],
+          ),
           subtitle: Text(user.fullName ?? ''),
           onTap: () {
-            FocusScope.of(context).unfocus();
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => OtherProfilePage(username: user.username),
-              ),
-            );
+            NavigationHelper.navigateToProfile(context, user);
           },
         );
       },
@@ -367,15 +441,11 @@ class _FeedPageState extends State<FeedPage> {
     final heroTag = 'post_hero_${post.id}';
     return GestureDetector(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => PostDetailPage(
-              postId: post.id,
-              initialPost: post,
-            ),
-          ),
-        );
+        if (post.isVideo) {
+          Navigator.push(context, MaterialPageRoute(builder: (context) => ClipsViewerPage(initialClip: post)));
+        } else {
+          NavigationHelper.navigateToPostDetail(context, post.id, initialPost: post);
+        }
       },
       child: Hero(
         tag: heroTag,
@@ -383,41 +453,41 @@ class _FeedPageState extends State<FeedPage> {
           clipBehavior: Clip.antiAlias,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           elevation: 3,
-          child: !post.isVideo
-              ? (post.mediaUrl != null && post.mediaUrl!.isNotEmpty
-              ? Image.network(
-            post.mediaUrl!,
-            fit: BoxFit.cover,
-            loadingBuilder: (context, child, progress) {
-              if (progress == null) return child;
-              return Container(color: Colors.grey[200]);
-            },
-            errorBuilder: (context, error, stackTrace) {
-              return Container(
-                color: Colors.grey[200],
-                child: Icon(Icons.broken_image, color: Colors.grey[400]),
-              );
-            },
-          )
-              : Container(
-            color: Colors.grey[200],
-            child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
-          ))
-              : AspectRatio(
-            aspectRatio: 1,
-            child: Stack(
-              alignment: Alignment.center,
-              fit: StackFit.expand,
-              children: [
-                Container(color: Colors.grey[300]),
-                const Icon(
-                  Icons.play_circle_outline,
-                  color: Colors.white,
-                  size: 40.0,
-                  shadows: [Shadow(color: Colors.black54, blurRadius: 10)],
-                ),
-              ],
-            ),
+          child: Stack(
+            alignment: Alignment.center,
+            fit: StackFit.expand,
+            children: [
+              if (post.isVideo)
+                (post.mediaUrl != null && post.mediaUrl!.isNotEmpty
+                    ? VideoThumbnailWidget(videoUrl: post.mediaUrl!)
+                    : Container(color: Colors.grey[300]))
+              else
+                (post.mediaUrl != null && post.mediaUrl!.isNotEmpty
+                    ? CachedNetworkImage(
+                  imageUrl: post.mediaUrl!,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(color: Colors.grey[200]),
+                  errorWidget: (context, url, error) => Container(
+                    color: Colors.grey[200],
+                    child: Icon(Icons.broken_image, color: Colors.grey[400]),
+                  ),
+                )
+                    : Container(
+                  color: Colors.grey[200],
+                  child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
+                )),
+              if (post.isVideo)
+                const Positioned(
+                  top: 8.0,
+                  right: 8.0,
+                  child: Icon(
+                    Icons.video_camera_back_rounded,
+                    color: Colors.white,
+                    size: 22.0,
+                    shadows: [Shadow(color: Colors.black87, blurRadius: 8)],
+                  ),
+                )
+            ],
           ),
         ),
       ),

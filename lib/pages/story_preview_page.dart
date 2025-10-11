@@ -1,8 +1,7 @@
-// lib/pages/story_preview_page.dart
-
 import 'dart:async';
+import 'dart:convert';
+import 'dart:developer';
 import 'dart:io';
-import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:audioplayers/audioplayers.dart';
@@ -13,35 +12,108 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:palette_generator/palette_generator.dart';
 import 'package:portal_si/pages/main_scaffold.dart';
+import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import '../models/song_model.dart';
 import '../models/user_model.dart';
+import '../providers/navigation_provider.dart';
+import '../providers/upload_provider.dart';
 import '../widgets/music_picker_sheet.dart';
 import 'close_friends_page.dart';
 import 'dashboard_page.dart';
 import '../utils/secure_storage.dart';
 import '../widgets/collage_layout_view.dart';
+import 'package:crop_image/crop_image.dart';
+import 'package:image_picker/image_picker.dart';
+
+// --- SALINAN MODEL & ENUM DARI text_overlay_model.dart ---
+enum TextBackgroundStyle { none, semiTransparent, solid }
+
+class TextOverlay {
+  String text;
+  Offset position;
+  Color color;
+  double scale;
+  double rotation;
+  FontWeight fontWeight;
+  TextBackgroundStyle backgroundStyle;
+  String fontFamily;
+  TextAlign textAlign;
+  final bool isLink;
+  final String? url;
+
+  TextOverlay({
+    required this.text,
+    this.position = const Offset(100, 150),
+    this.color = Colors.white,
+    this.scale = 1.0,
+    this.rotation = 0.0,
+    this.fontWeight = FontWeight.bold,
+    this.backgroundStyle = TextBackgroundStyle.semiTransparent,
+    this.fontFamily = 'Roboto',
+    this.textAlign = TextAlign.center,
+    this.isLink = false,
+    this.url,
+  });
+
+  TextOverlay copyWith({
+    String? text,
+    Offset? position,
+    Color? color,
+    double? scale,
+    double? rotation,
+    FontWeight? fontWeight,
+    TextBackgroundStyle? backgroundStyle,
+    String? fontFamily,
+    TextAlign? textAlign,
+    bool? isLink,
+    String? url,
+  }) {
+    return TextOverlay(
+      text: text ?? this.text,
+      position: position ?? this.position,
+      color: color ?? this.color,
+      scale: scale ?? this.scale,
+      rotation: rotation ?? this.rotation,
+      fontWeight: fontWeight ?? this.fontWeight,
+      backgroundStyle: backgroundStyle ?? this.backgroundStyle,
+      fontFamily: fontFamily ?? this.fontFamily,
+      textAlign: textAlign ?? this.textAlign,
+      isLink: isLink ?? this.isLink,
+      url: url ?? this.url,
+    );
+  }
+}
+// --- AKHIR SALINAN MODEL & ENUM ---
+
+// --- MODEL DRAWING (diperlukan untuk fungsi corat-coret) ---
+class DrawingPath {
+  final Path path;
+  final Paint paint;
+  DrawingPath({required this.path, required this.paint});
+}
+// --- AKHIR MODEL DRAWING ---
 
 enum StoryPreviewMode { single, separate, layout, music }
-
-enum MusicDisplayStyle { vinyl, largeCard, smallCard }
+enum MusicDisplayStyle { vinyl, largeCard, smallCard, style3, style4 }
 
 class StoryPreviewPage extends StatefulWidget {
   final List<AssetEntity>? assets;
   final Song? song;
   final StoryPreviewMode mode;
-  final Uint8List? imageBytes; // <-- TAMBAHKAN BARIS INI
+  final Uint8List? imageBytes;
 
   const StoryPreviewPage({
     super.key,
     this.assets,
     this.song,
     this.mode = StoryPreviewMode.single,
-    this.imageBytes, // <-- TAMBAHKAN BARIS INI
-  }) : assert(assets != null || song != null || imageBytes != null, // <-- UBAH BARIS INI
+    this.imageBytes,
+  }) : assert(assets != null || song != null || imageBytes != null,
   'assets, song, atau imageBytes harus disediakan');
 
   @override
@@ -51,36 +123,26 @@ class StoryPreviewPage extends StatefulWidget {
 class _StoryPreviewPageState extends State<StoryPreviewPage>
     with TickerProviderStateMixin {
   final GlobalKey _collageKey = GlobalKey();
+  final GlobalKey _repaintKey = GlobalKey(); // Kunci RepaintBoundary untuk menangkap drawing/text
   late StoryPreviewMode _mode;
   int _currentIndex = 0;
   AssetEntity? _currentAsset;
-
   User? _currentUser;
   double _scale = 1.0;
   double _opacity = 1.0;
-
   final GlobalKey _storyContainerKey = GlobalKey();
   final GlobalKey _stickerKey = GlobalKey();
-
   final AudioPlayer _audioPlayer = AudioPlayer();
   Song? _currentSong;
   late AnimationController _vinylController;
-  MusicDisplayStyle _musicStyle = MusicDisplayStyle.vinyl;
+  int _musicStyleIndex = 0;
   bool _isEditingMusic = false;
   Duration _clipStartPosition = Duration.zero;
   Duration _clipDuration = const Duration(seconds: 15);
   final Duration _totalSongDuration = const Duration(seconds: 30);
-
   StreamSubscription? _audioPositionSubscription;
-  // [ADDED] StreamSubscription untuk mengelola listener status player (playing, paused, dll).
   StreamSubscription? _playerStateSubscription;
-
-
-  Offset _stickerPosition = Offset.zero;
-
-  // [ADDED] State variable baru untuk melacak proses buffering audio.
   bool _isAudioBuffering = false;
-
   VideoPlayerController? _videoController;
   bool _isVideoLoading = true;
   List<Color> _gradientColors = [const Color(0xFF1A1A1A), Colors.black];
@@ -93,31 +155,40 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
   int _userId = 0;
   String _token = '';
 
+  Offset _stickerPosition = Offset.zero;
+  double _stickerScale = 1.0;
+  double _stickerRotation = 0.0;
+  double _baseScale = 1.0;
+  double _baseRotation = 0.0;
+
+  // --- STATE UNTUK EDITING (TEKS DAN DRAWING) ---
+  bool _isTextEditingMode = false;
+  bool _isDrawingMode = false;
+  final List<TextOverlay> _textOverlays = [];
+  TextOverlay? _activeTextOverlay;
+  final List<DrawingPath> _drawingPaths = [];
+  Path? _currentPath;
+  Color _currentDrawingColor = Colors.white;
+  double _currentStrokeWidth = 5.0;
+
+
   @override
   void initState() {
     super.initState();
-
-    // --- LOGIKA BARU YANG SUDAH AMAN ---
     if (widget.imageBytes != null) {
-      // KASUS 1: Datang dari WEB dengan gambar (imageBytes)
       _mode = StoryPreviewMode.single;
-      // _currentAsset tidak di-set karena kita akan menggunakan bytes
     } else if (widget.song != null) {
-      // KASUS 2: Datang dengan MUSIK
       _mode = StoryPreviewMode.music;
       _currentSong = widget.song;
     } else if (widget.assets != null && widget.assets!.isNotEmpty) {
-      // KASUS 3: Datang dari MOBILE dengan galeri (assets)
       _mode = widget.assets!.length > 1 ? widget.mode : StoryPreviewMode.single;
       _currentAsset = widget.assets!.first;
     }
-    // --- AKHIR LOGIKA BARU ---
 
     _vinylController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 10),
     )..repeat();
-
     _loadInitialContent();
     _loadUserData();
     _captionFocusNode.addListener(_onFocusChange);
@@ -139,51 +210,52 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
     });
   }
 
-// GANTI SELURUH FUNGSI _loadInitialContent ANDA DENGAN INI:
+  @override
+  void dispose() {
+    _vinylController.dispose();
+    _audioPlayer.dispose();
+    _audioPositionSubscription?.cancel();
+    _playerStateSubscription?.cancel();
+    _videoController?.dispose();
+    _captionController.dispose();
+    _captionFocusNode.removeListener(_onFocusChange);
+    _captionFocusNode.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadInitialContent() async {
-    // KASUS 1: Jika datang dengan imageBytes
     if (widget.imageBytes != null) {
       setState(() => _isLoading = true);
-      // Buat gradient dari bytes gambar
       await _generateGradientFromImageProvider(MemoryImage(widget.imageBytes!));
       setState(() => _isLoading = false);
-    }
-    // KASUS 2: Jika datang dengan musik saja
-    else if (_mode == StoryPreviewMode.music && _currentAsset == null) {
+    } else if (_mode == StoryPreviewMode.music && _currentAsset == null) {
       await _updateSong(_currentSong!);
-    }
-    // KASUS 3: Jika datang dengan aset dari galeri mobile
-    else {
+    } else {
       await _loadAssetAtIndex(_currentIndex);
     }
+  }
+
+  String _colorToHex(Color color) {
+    return '#${color.value.toRadixString(16).substring(2, 8).toUpperCase()}';
   }
 
   void _showMusicPicker() async {
     _audioPlayer.pause();
     _videoController?.pause();
-
     final selectedSong = await showModalBottomSheet<Song>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => const MusicPickerSheet(),
     );
-
-    // Jika tidak ada lagu dipilih, lanjutkan media sebelumnya
     if (selectedSong == null) {
       if (_currentSong != null) _audioPlayer.resume();
       _videoController?.play();
       return;
     }
-
-    // Jika lagu baru dipilih
     if (mounted) {
-      // Perbarui data lagu dan putar
       _updateSong(selectedSong);
-      // Langsung masuk ke mode edit musik
-      setState(() {
-        _isEditingMusic = true;
-      });
+      setState(() => _isEditingMusic = true);
     }
   }
 
@@ -191,7 +263,6 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
     if (_currentAsset == null) {
       await _generateGradientFromImageProvider(NetworkImage(newSong.artworkUrl));
     }
-    // [ADDED] Tampilkan loading saat lagu baru pertama kali dipilih
     setState(() => _isAudioBuffering = true);
     _playClip(newSong);
     if (mounted) setState(() => _currentSong = newSong);
@@ -204,7 +275,6 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
     } catch (e) {
       print("Error playing audio clip: $e");
       _showErrorToast("Gagal memutar pratinjau audio.");
-      // [ADDED] Sembunyikan loading jika terjadi error
       if (mounted) setState(() => _isAudioBuffering = false);
     }
   }
@@ -221,13 +291,10 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
     }
     await _videoController?.dispose();
     _videoController = null;
-
-    final thumbData = await _currentAsset!
-        .thumbnailDataWithSize(const ThumbnailSize(100, 100));
+    final thumbData = await _currentAsset!.thumbnailDataWithSize(const ThumbnailSize(100, 100));
     if (thumbData != null) {
       await _generateGradientFromImageProvider(MemoryImage(thumbData));
     }
-
     if (_currentAsset!.type == AssetType.video) {
       await _initializeVideoPlayer();
     }
@@ -236,24 +303,19 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
 
   void _onFocusChange() {
     if (mounted) {
-      setState(() {
-        _isEditingCaption = _captionFocusNode.hasFocus;
-      });
+      setState(() => _isEditingCaption = _captionFocusNode.hasFocus);
     }
   }
 
-  // Ganti fungsi _loadUserData yang ada dengan yang ini
   Future<void> _loadUserData() async {
     try {
       final token = await SecureStorage.getToken();
       if (token != null && token.isNotEmpty) {
-        // Panggil fungsi baru untuk mengambil data user lengkap
         final user = await _fetchCurrentUser(token);
         if (mounted) {
           setState(() {
             _token = token;
-            _currentUser = user; // Simpan seluruh objek User ke state
-            // userId bisa diambil dari objek User jika perlu
+            _currentUser = user;
             if (user != null) _userId = user.id ?? 0;
           });
         }
@@ -263,38 +325,22 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
     }
   }
 
-// [BARU] Tambahkan fungsi ini untuk mengambil detail user dari API
   Future<User?> _fetchCurrentUser(String token) async {
-    // Gunakan Dio yang sudah ada di proyek Anda
     final dio = Dio();
     try {
-      // Ganti URL ini dengan endpoint API Anda yang mengembalikan data user
-      final response = await dio.get(
-        'https://api-new.portalsi.com/api/user',
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Accept': 'application/json',
-          },
-        ),
-      );
-
+      final response = await dio.get('https://api-new.portalsi.com/api/user', options: Options(headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'}));
       if (response.statusCode == 200 && response.data != null) {
-        // Parse JSON response menggunakan factory dari user_model.dart
         return User.fromJson(response.data);
       }
     } on DioException catch (e) {
-      // Tangani error jika gagal mengambil data user
       print("Gagal mengambil data user: ${e.response?.data ?? e.message}");
     }
     return null;
   }
 
-  Future<void> _generateGradientFromImageProvider(
-      ImageProvider provider) async {
+  Future<void> _generateGradientFromImageProvider(ImageProvider provider) async {
     try {
-      final PaletteGenerator palette =
-      await PaletteGenerator.fromImageProvider(provider);
+      final PaletteGenerator palette = await PaletteGenerator.fromImageProvider(provider);
       final Color dominantColor = palette.dominantColor?.color ?? Colors.black;
       final Color vibrantColor = palette.vibrantColor?.color ?? dominantColor;
       if (mounted) {
@@ -302,8 +348,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
       }
     } catch (e) {
       if (mounted) {
-        setState(
-                () => _gradientColors = [const Color(0xFF1A1A1A), Colors.black]);
+        setState(() => _gradientColors = [const Color(0xFF1A1A1A), Colors.black]);
       }
     }
   }
@@ -311,21 +356,13 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
   Future<void> _initializeVideoPlayer() async {
     if (_currentAsset == null) return;
     setState(() => _isVideoLoading = true);
-
-    // --- LOGIKA KONDISIONAL UNTUK WEB DAN MOBILE ---
     if (kIsWeb) {
-      // --- BLOK UNTUK WEB ---
       try {
-        // 1. Dapatkan URL dari asset
         final String? url = await _currentAsset!.getMediaUrl();
         if (url == null) {
           throw Exception("Gagal mendapatkan URL video untuk web.");
         }
-
-        // 2. Gunakan VideoPlayerController.networkUrl untuk web
         _videoController = VideoPlayerController.networkUrl(Uri.parse(url));
-
-        // 3. Inisialisasi dan putar video
         await _videoController!.initialize();
         if (mounted) {
           _videoController!.setLooping(true);
@@ -337,9 +374,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
         if (mounted) setState(() => _isVideoLoading = false);
         _showErrorToast("Gagal memuat video.");
       }
-
     } else {
-      // --- BLOK UNTUK MOBILE (KODE LAMA ANDA YANG SUDAH BENAR UNTUK MOBILE) ---
       final File? videoFile = await _currentAsset!.file;
       if (videoFile == null) {
         if (mounted) setState(() => _isVideoLoading = false);
@@ -356,148 +391,137 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
     }
   }
 
-
   Future<void> _handleShare() async {
-    if (_isUploading) return;
-    setState(() => _isUploading = true);
-
-    // Map untuk menampung data yang akan dikirim
-    Map<String, dynamic> dataMap = {};
-
-    // Selalu sertakan caption, meskipun kosong, sesuai dengan contoh Postman
-    dataMap['caption'] = _captionController.text;
-
-    // --- BLOK UNTUK STORY DENGAN MUSIK ---
-    if (_currentSong != null) {
-      dataMap['type'] = 'music';
-      dataMap.addAll({
-        'music_track_name': _currentSong!.trackName,
-        'music_artist_name': _currentSong!.artistName,
-        'music_preview_url': _currentSong!.previewUrl,
-        'music_album_art_url': _currentSong!.artworkUrl,
-        'music_start_position_ms': _clipStartPosition.inMilliseconds,
-        'music_display_style': _musicStyle.name,
-        'music_clip_duration_ms': _clipDuration.inMilliseconds,
-      });
-
-      if (_musicStyle != MusicDisplayStyle.vinyl) {
-        // Dapatkan render box dari container dan stiker menggunakan GlobalKey
-        final containerContext = _storyContainerKey.currentContext;
-        final stickerContext = _stickerKey.currentContext;
-
-        if (containerContext != null && stickerContext != null) {
-          final RenderBox containerBox = containerContext.findRenderObject() as RenderBox;
-          final RenderBox stickerBox = stickerContext.findRenderObject() as RenderBox;
-
-          // Hitung posisi stiker relatif terhadap container
-          final stickerOffset = stickerBox.localToGlobal(
-            Offset.zero,
-            ancestor: containerBox,
-          );
-
-          // Dapatkan ukuran container
-          final containerSize = containerBox.size;
-
-          if (containerSize.width > 0 && containerSize.height > 0) {
-            // Hitung posisi dalam bentuk persentase
-            final relativeX = stickerOffset.dx / containerSize.width;
-            final relativeY = stickerOffset.dy / containerSize.height;
-
-            // Tambahkan nilai persentase ke dataMap (TANPA .toInt())
-            dataMap.addAll({
-              'music_sticker_position_x': relativeX,
-              'music_sticker_position_y': relativeY,
-            });
-          }
-        }
-      }
-
-      if (_currentAsset != null) {
-        final File? mediaFile = await _getMediaFileFromAsset(_currentAsset!);
-        if (mediaFile != null) {
-          dataMap['media'] = await MultipartFile.fromFile(mediaFile.path, filename: mediaFile.path.split('/').last);
-        }
-      }
-
-      // --- BLOK UNTUK STORY GAMBAR ATAU VIDEO (TANPA MUSIK) ---
-    } else if (_currentAsset != null) {
-      final File? mediaFile = await _getMediaFileFromAsset(_currentAsset!);
-      if (mediaFile == null) {
-        _showErrorToast('Gagal memproses file media.');
-        setState(() => _isUploading = false);
-        return;
-      }
-
-      // [SESUAI POSTMAN] Menambahkan file media ke dalam form data.
-      dataMap['media'] = await MultipartFile.fromFile(mediaFile.path, filename: mediaFile.path.split('/').last);
-
-      // [KUNCI] Logika ini sudah benar. Jika tipe aset adalah video,
-      // maka nilai 'video' akan dikirim ke API.
-      dataMap['type'] = _currentAsset!.type == AssetType.video ? 'video' : 'image';
-
-    } else {
-      _showErrorToast('Tidak ada konten untuk diunggah.');
-      setState(() => _isUploading = false);
+    final uploadProvider = Provider.of<UploadProvider>(context, listen: false);
+    if (uploadProvider.isUploading) {
+      _showErrorToast('Harap tunggu unggahan sebelumnya selesai.');
       return;
     }
 
-    // --- PROSES PENGIRIMAN DATA KE API ---
-
-    // Logging untuk debugging (ini sangat membantu)
-    print("================ UPLOAD STORY LOG ================");
-    print("Endpoint: https://api-new.portalsi.com/api/stories");
-    print("Token: Bearer $_token");
-    print("--- Form Data ---");
-    dataMap.forEach((key, value) {
-      if (value is MultipartFile) {
-        print("$key: File(name='${value.filename}', length=${value.length})");
-      } else {
-        print("$key: $value");
-      }
-    });
-    print("================================================");
-
-    final formData = FormData.fromMap(dataMap);
+    // Tampilkan loading sementara untuk persiapan
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
 
     try {
-      final dio = Dio();
-      final response = await dio.post(
-        'https://api-new.portalsi.com/api/stories',
-        data: formData,
-        options: Options(headers: {'Authorization': 'Bearer $_token', 'Accept': 'application/json'}),
+      Map<String, String> fields = {'caption': _captionController.text};
+
+      log('--- 🕵️‍♂️ Debugging _handleShare ---', name: 'StoryPreview');
+      log('Nilai _gradientColors sebelum diproses: $_gradientColors', name: 'StoryPreview');
+
+      if (_gradientColors.isNotEmpty) {
+        // 2. Ubah List<Color> menjadi List<String> (kode hex)
+        final List<String> hexPalette = _gradientColors.map(_colorToHex).toList();
+
+        // 3. Ubah list string menjadi satu JSON string
+        final String paletteJsonString = jsonEncode(hexPalette);
+
+        // 4. Tambahkan ke 'fields' yang akan dikirim ke API
+        fields['color_pallete'] = paletteJsonString;
+      }
+
+      File? finalMediaFile;
+      Uint8List? thumbnailData;
+
+      log('Final `fields` yang akan dikirim ke provider: ${jsonEncode(fields)}', name: 'StoryPreview');
+      log('------------------------------------', name: 'StoryPreview');
+
+      final bool hasOverlays = _textOverlays.isNotEmpty || _drawingPaths.isNotEmpty;
+
+      // 1. Dapatkan File Media dan Thumbnail
+      if (hasOverlays && _currentAsset != null && _currentAsset!.type == AssetType.image) {
+        final boundary = _repaintKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+        final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+        final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (byteData == null) throw Exception('Gagal konversi data gambar.');
+
+        final Uint8List pngBytes = byteData.buffer.asUint8List();
+        final tempDir = await getTemporaryDirectory();
+        finalMediaFile = await File('${tempDir.path}/${DateTime.now().millisecondsSinceEpoch}_final_story.png').create();
+        await finalMediaFile.writeAsBytes(pngBytes);
+
+        fields['type'] = 'image';
+        thumbnailData = pngBytes;
+
+      } else if (widget.imageBytes != null) { // Handle upload dari web
+        final tempDir = await getTemporaryDirectory();
+        finalMediaFile = await File('${tempDir.path}/web_image.png').writeAsBytes(widget.imageBytes!);
+        fields['type'] = 'image';
+        thumbnailData = widget.imageBytes;
+
+      } else if (_currentAsset != null) {
+        finalMediaFile = await _getMediaFileFromAsset(_currentAsset!);
+        if (finalMediaFile == null) throw Exception('Gagal memproses file media.');
+        fields['type'] = _currentAsset!.type == AssetType.video ? 'video' : 'image';
+
+        if (_currentAsset!.type == AssetType.video) {
+          thumbnailData = await VideoThumbnail.thumbnailData(
+              video: finalMediaFile.path, imageFormat: ImageFormat.JPEG, maxWidth: 128, quality: 25
+          );
+        } else {
+          thumbnailData = await finalMediaFile.readAsBytes();
+        }
+      }
+
+      // 2. Tambahkan data musik jika ada
+      if (_currentSong != null) {
+        fields['type'] = 'music';
+        fields.addAll({
+          'music_track_name': _currentSong!.trackName,
+          'music_artist_name': _currentSong!.artistName,
+          'music_preview_url': _currentSong!.previewUrl,
+          'music_album_art_url': _currentSong!.artworkUrl,
+          'music_start_position_ms': _clipStartPosition.inMilliseconds.toString(),
+          'music_display_style': MusicDisplayStyle.values[_musicStyleIndex].name,
+          'music_clip_duration_ms': _clipDuration.inMilliseconds.toString(),
+        });
+        // Jika thumbnail belum ada (mode musik murni), ambil dari artwork
+        thumbnailData ??= (await NetworkAssetBundle(Uri.parse(_currentSong!.artworkUrl)).load(_currentSong!.artworkUrl)).buffer.asUint8List();
+      }
+
+      // Validasi Akhir
+      if (thumbnailData == null) throw Exception("Gagal membuat thumbnail untuk diunggah.");
+      if (finalMediaFile == null && fields['type'] != 'music') throw Exception("Media tidak ditemukan.");
+
+      // 3. Mulai Unggahan di Latar Belakang
+      uploadProvider.startUpload(
+        type: UploadType.story,
+        fields: fields,
+        mediaFile: finalMediaFile,
+        thumbnail: thumbnailData,
       );
 
-      print("++++++++++++++ UPLOAD SUCCESS ++++++++++++++");
-      print("Status Code: ${response.statusCode}");
-      print("Response Data: ${response.data}");
-      print("++++++++++++++++++++++++++++++++++++++++++++");
+      // --- 👇 PERBAIKAN UTAMA DI SINI JUGA 👇 ---
+      // 1. Dapatkan NavigationProvider.
+      final navProvider = Provider.of<NavigationProvider>(context, listen: false);
 
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const MainScaffold()),
-              (Route<dynamic> route) => false,
-        );
-      }
-    } on DioException catch (e) {
-      print("!!!!!!!!!!!!!! UPLOAD FAILED !!!!!!!!!!!!!!");
-      if (e.response != null) {
-        print("Status Code: ${e.response?.statusCode}");
-        print("Response Data: ${e.response?.data}");
-      } else {
-        print("Error Message: ${e.message}");
-      }
-      print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+      // 2. Perintahkan untuk pindah ke tab 0 (Beranda).
+      navProvider.navigateToTab(0);
+      // --- AKHIR PERBAIKAN ---
 
-      String errorMessage = e.response?.data?['message'] ?? e.message ?? "Terjadi kesalahan";
-      _showErrorToast('Gagal mengunggah Story: $errorMessage');
-    } finally {
-      if (mounted) {
-        setState(() => _isUploading = false);
-      }
+      // 4. Tutup semua halaman dan kembali ke dashboard
+      if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+
+    } catch (e) {
+      log("❌ Gagal memulai proses unggah story: $e");
+      if (mounted) Navigator.of(context).pop(); // Tutup dialog loading
+      _showErrorToast('Gagal memulai unggahan: ${e.toString()}');
     }
   }
 
   Future<File?> _getMediaFileFromAsset(AssetEntity asset) async {
+    // --- PERBAIKAN BUG: Cek apakah ID dan relativePath sama (yang menunjukkan dummy asset) ---
+    if (asset.relativePath != null && asset.id == asset.relativePath!) {
+
+      final File croppedFile = File(asset.relativePath!);
+      if (await croppedFile.exists()) {
+        return croppedFile; // Langsung kembalikan File hasil crop dari path sementara.
+      }
+    }
+    // --- BATAS PERBAIKAN ---
+
     if (_mode == StoryPreviewMode.layout) {
       try {
         final boundary = _collageKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
@@ -513,140 +537,53 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
     return await asset.file;
   }
 
-  Future<File> _getCachedFile(String url) async {
-    final tempDir = await getTemporaryDirectory();
-    final filePath = '${tempDir.path}/${url.split('/').last}';
-    final file = File(filePath);
-    if (await file.exists()) {
-      return file;
-    } else {
-      final response = await Dio().get<List<int>>(url,
-          options: Options(responseType: ResponseType.bytes));
-      await file.writeAsBytes(response.data!);
-      return file;
-    }
-  }
-
-  Future<String?> _getAuthToken() async {
-    return _token;
-  }
-
   void _showErrorToast(String message) {
-    Fluttertoast.showToast(
-        msg: message,
-        toastLength: Toast.LENGTH_LONG,
-        gravity: ToastGravity.BOTTOM,
-        backgroundColor: Colors.red,
-        textColor: Colors.white,
-        fontSize: 16.0);
+    Fluttertoast.showToast(msg: message, toastLength: Toast.LENGTH_LONG, gravity: ToastGravity.BOTTOM, backgroundColor: Colors.red, textColor: Colors.white, fontSize: 16.0);
+  }
+
+  void _showSuccessToast(String message) {
+    Fluttertoast.showToast(msg: message, toastLength: Toast.LENGTH_LONG, gravity: ToastGravity.BOTTOM, backgroundColor: Colors.green, textColor: Colors.white, fontSize: 16.0);
   }
 
   void _showShareBottomSheet() {
-
     HapticFeedback.lightImpact();
-    setState(() {
-      _isBottomSheetVisible = true;
-    });
+    setState(() => _isBottomSheetVisible = true);
     showModalBottomSheet(
       context: context,
       barrierColor: Colors.transparent,
       isScrollControlled: true,
       backgroundColor: const Color(0xFF262626),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24.0)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24.0))),
       builder: (BuildContext bc) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setState) {
             int _groupValue = 1;
-            const String userProfileImageUrl =
-                'https://i.pravatar.cc/150?img=3';
+            const String userProfileImageUrl = 'https://i.pravatar.cc/150?img=3';
             return Padding(
               padding: const EdgeInsets.all(24.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[700],
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
+                  Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(12)))),
                   const SizedBox(height: 24),
-                  const Text('Bagikan',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold)),
+                  const Text('Bagikan', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const CircleAvatar(
-                        backgroundImage: NetworkImage(userProfileImageUrl)),
-                    title: const Text('Cerita Anda',
-                        style: TextStyle(color: Colors.white)),
-                    subtitle: Text('akan diunggah sebagai cerita Anda',
-                        style: TextStyle(color: Colors.grey[400])),
-                    trailing: Radio<int>(
-                        value: 1,
-                        groupValue: _groupValue,
-                        onChanged: (int? value) =>
-                            setState(() => _groupValue = value!),
-                        activeColor: Colors.blue),
+                    leading: const CircleAvatar(backgroundImage: NetworkImage(userProfileImageUrl)),
+                    title: const Text('Cerita Anda', style: TextStyle(color: Colors.white)),
+                    subtitle: Text('akan diunggah sebagai cerita Anda', style: TextStyle(color: Colors.grey[400])),
+                    trailing: Radio<int>(value: 1, groupValue: _groupValue, onChanged: (int? value) => setState(() => _groupValue = value!), activeColor: Colors.blue),
                     onTap: () => setState(() => _groupValue = 1),
                   ),
-                  // ListTile(
-                  //   contentPadding: EdgeInsets.zero,
-                  //   leading: const CircleAvatar(
-                  //       backgroundColor: Colors.green,
-                  //       child: Icon(Icons.star, color: Colors.white, size: 22)),
-                  //   title: const Text('Close Friends',
-                  //       style: TextStyle(color: Colors.white)),
-                  //   subtitle: Text('Add people',
-                  //       style: TextStyle(color: Colors.grey[400])),
-                  //   trailing: Radio<int>(
-                  //       value: 2,
-                  //       groupValue: _groupValue,
-                  //       onChanged: (int? value) =>
-                  //           setState(() => _groupValue = value!),
-                  //       activeColor: Colors.blue),
-                  //   onTap: () => setState(() => _groupValue = 2),
-                  // ),
-                  // ListTile(
-                  //   contentPadding: EdgeInsets.zero,
-                  //   leading: const CircleAvatar(
-                  //       backgroundColor: Color(0xFF383838),
-                  //       child: Icon(Icons.send,
-                  //           color: Colors.white,
-                  //           size: 20,
-                  //           textDirection: TextDirection.rtl)),
-                  //   title: const Text('Message',
-                  //       style: TextStyle(color: Colors.white)),
-                  //   trailing: const Icon(Icons.arrow_forward_ios,
-                  //       color: Colors.white, size: 16),
-                  //   onTap: () {},
-                  // ),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _handleShare,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                      ),
-                      child: const Text('Bagikan',
-                          style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                      child: const Text('Bagikan', style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],
@@ -655,43 +592,22 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
           },
         );
       },
-    ).whenComplete(() {
-      setState(() {
-        _isBottomSheetVisible = false;
-      });
-    });
+    ).whenComplete(() => setState(() => _isBottomSheetVisible = false));
   }
 
   Future<bool> _onWillPop() async {
-    if (_mode == StoryPreviewMode.music || _mode == StoryPreviewMode.layout) {
+    if (_mode == StoryPreviewMode.music || _mode == StoryPreviewMode.layout || _isDrawingMode || _textOverlays.isNotEmpty) {
       final result = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
           backgroundColor: const Color(0xFF2C2C2E),
-          shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Discard edits?',
-              style: TextStyle(color: Colors.white)),
-          content: const Text(
-              "If you go back now, you'll lose all the edits you've made.",
-              style: TextStyle(color: Colors.white70)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Discard edits?', style: TextStyle(color: Colors.white)),
+          content: const Text("If you go back now, you'll lose all the edits you've made.", style: TextStyle(color: Colors.white70)),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Discard',
-                  style: TextStyle(color: Colors.redAccent)),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Save draft',
-                  style: TextStyle(color: Colors.white)),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Keep editing',
-                  style: TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
+            TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Discard', style: TextStyle(color: Colors.redAccent))),
+            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Save draft', style: TextStyle(color: Colors.white))),
+            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Keep editing', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
           ],
         ),
       );
@@ -700,50 +616,279 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
     return true;
   }
 
-  @override
-  void dispose() {
-    _vinylController.dispose();
-    _audioPlayer.dispose();
-    _audioPositionSubscription?.cancel();
-    // [MODIFIED] Batalkan juga subscription untuk state player.
-    _playerStateSubscription?.cancel();
-    _videoController?.dispose();
-    _captionController.dispose();
-    _captionFocusNode.removeListener(_onFocusChange);
-    _captionFocusNode.dispose();
-    super.dispose();
+  // --- FUNGSI UNTUK CROPPING GAMBAR ---
+  Future<void> _cutCurrentImage() async {
+    if (_currentAsset == null || _currentAsset!.type != AssetType.image) {
+      _showErrorToast("Fitur crop hanya untuk gambar.");
+      return;
+    }
+
+    _audioPlayer.pause();
+    _videoController?.pause();
+    HapticFeedback.lightImpact();
+
+    try {
+      final File? originalFile = await _currentAsset!.file;
+      if (originalFile == null) {
+        _showErrorToast("Gagal mendapatkan file gambar.");
+        return;
+      }
+
+      final File? croppedFile = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => _ImageCropperPage(
+            imageFile: originalFile,
+            isBanner: false,
+            initialAspectRatio: 9/16, // Default story ratio
+          ),
+          fullscreenDialog: true,
+        ),
+      );
+
+      _audioPlayer.resume();
+      _videoController?.play();
+
+      if (croppedFile != null && mounted) {
+
+        // WORKAROUND: Buat AssetEntity DUMMY. ID = Path File untuk konsistensi deteksi.
+        final dummyAsset = AssetEntity(
+          id: croppedFile.path, // ID = Path File
+          typeInt: AssetType.image.index,
+          width: 0,
+          height: 0,
+          duration: 0,
+          relativePath: croppedFile.path, // relativePath = Path File
+        );
+
+        setState(() {
+          _currentAsset = dummyAsset;
+        });
+
+        HapticFeedback.mediumImpact();
+        _showSuccessToast("Gambar berhasil dipotong dan siap diunggah!");
+      }
+
+    } catch (e) {
+      print("Error cutting image: $e");
+      _showErrorToast("Gagal memotong gambar.");
+      _audioPlayer.resume();
+      _videoController?.play();
+    }
+  }
+  // --- BATAS FUNGSI CROPPING GAMBAR ---
+
+  // --- FUNGSI BARU UNTUK EDITING TEKS ---
+  void _showTextInputDialog() async {
+    _audioPlayer.pause();
+    _videoController?.pause();
+
+    final textController = TextEditingController();
+    final String? newText = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+            backgroundColor: Colors.grey[850],
+            title: const Text('Masukkan Teks', style: TextStyle(color: Colors.white)),
+            content: TextField(
+              controller: textController,
+              autofocus: true,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(hintText: 'Tulis sesuatu...'),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Batal')),
+              ElevatedButton(onPressed: () => Navigator.of(context).pop(textController.text), child: const Text('Selesai'))
+            ]
+        )
+    );
+
+    _audioPlayer.resume();
+    _videoController?.play();
+
+    if (newText != null && newText.isNotEmpty) {
+      setState(() {
+        // Menggunakan properti TextOverlay yang default (bold, semiTransparent)
+        final newOverlay = TextOverlay(text: newText, position: const Offset(100, 150));
+        _textOverlays.add(newOverlay);
+        _showTextOptionsSheet(newOverlay);
+        _isTextEditingMode = true;
+      });
+    }
   }
 
-  void _cycleMusicStyle() {
+  void _showTextOptionsSheet(TextOverlay overlay) {
+    _audioPlayer.pause();
+    _videoController?.pause();
+    setState(() => _activeTextOverlay = overlay);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.grey[900],
+      builder: (context) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setSheetState) {
+          return Container(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+                      _buildTextEditorColorOption(Colors.white, setSheetState),
+                      _buildTextEditorColorOption(Colors.black, setSheetState),
+                      _buildTextEditorColorOption(Colors.red, setSheetState),
+                      _buildTextEditorColorOption(Colors.blue, setSheetState),
+                      _buildTextEditorColorOption(Colors.yellow, setSheetState),
+                    ]),
+                    const Divider(color: Colors.grey, height: 24),
+                    Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+                      TextButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              final currentStyleIndex = overlay.backgroundStyle.index;
+                              final nextStyleIndex = (currentStyleIndex + 1) % TextBackgroundStyle.values.length;
+                              overlay.backgroundStyle = TextBackgroundStyle.values[nextStyleIndex];
+                            });
+                            setSheetState(() {});
+                          },
+                          icon: const Icon(Icons.format_color_text, color: Colors.white),
+                          label: const Text('Gaya', style: TextStyle(color: Colors.white))
+                      ),
+                      TextButton.icon(
+                          onPressed: () {
+                            setState(() => overlay.fontWeight = overlay.fontWeight == FontWeight.bold ? FontWeight.normal : FontWeight.bold);
+                            setSheetState(() {});
+                          },
+                          icon: const Icon(Icons.format_bold, color: Colors.white),
+                          label: const Text('Tebal', style: TextStyle(color: Colors.white))
+                      ),
+                      TextButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _textOverlays.remove(overlay);
+                              _activeTextOverlay = null;
+                            });
+                            Navigator.pop(context);
+                          },
+                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                          label: const Text('Hapus', style: TextStyle(color: Colors.red))
+                      ),
+                    ])
+                  ]
+              )
+          );
+        },
+      ),
+    ).whenComplete(() {
+      _audioPlayer.resume();
+      _videoController?.play();
+      setState(() => _activeTextOverlay = null);
+    });
+  }
+
+  Widget _buildTextEditorColorOption(Color color, StateSetter setSheetState) {
+    bool isSelected = _activeTextOverlay?.color == color;
+    return GestureDetector(
+      onTap: () {
+        setState(() => _activeTextOverlay!.color = color);
+        setSheetState(() {});
+      },
+      child: Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              border: isSelected ? Border.all(color: Colors.blue, width: 2) : null
+          )
+      ),
+    );
+  }
+
+  // --- FUNGSI BARU UNTUK DRAWING (CORAT CORET) ---
+  void _toggleDrawingMode() {
     setState(() {
-      switch (_musicStyle) {
-        case MusicDisplayStyle.vinyl: _musicStyle = MusicDisplayStyle.largeCard; break;
-        case MusicDisplayStyle.largeCard: _musicStyle = MusicDisplayStyle.smallCard; break;
-        case MusicDisplayStyle.smallCard: _musicStyle = MusicDisplayStyle.vinyl; break;
-      }
-      if (_musicStyle == MusicDisplayStyle.vinyl) {
-        _stickerPosition = Offset.zero;
+      _isDrawingMode = !_isDrawingMode;
+      if (_isDrawingMode) {
+        _audioPlayer.pause();
+        _videoController?.pause();
+      } else {
+        _audioPlayer.resume();
+        _videoController?.play();
       }
     });
   }
 
+  void _onPanStart(DragStartDetails details) {
+    if (!_isDrawingMode) return;
+    _currentPath = Path()..moveTo(details.localPosition.dx, details.localPosition.dy);
+  }
+
+  void _onPanUpdate(DragUpdateDetails details) {
+    if (!_isDrawingMode || _currentPath == null) return;
+    setState(() => _currentPath!.lineTo(details.localPosition.dx, details.localPosition.dy));
+  }
+
+  void _onPanEnd(DragEndDetails details) {
+    if (!_isDrawingMode || _currentPath == null) return;
+    setState(() {
+      _drawingPaths.add(DrawingPath(path: _currentPath!, paint: Paint()..color = _currentDrawingColor..strokeWidth = _currentStrokeWidth..style = PaintingStyle.stroke..strokeCap = StrokeCap.round));
+      _currentPath = null;
+    });
+  }
+
+  // Tombol undo di Drawing mode
+  void _undoDrawing() {
+    setState(() {
+      if(_drawingPaths.isNotEmpty) _drawingPaths.removeLast();
+    });
+  }
+
+  // Tombol warna di Drawing mode
+  void _setDrawingColor(Color color) {
+    setState(() => _currentDrawingColor = color);
+  }
+  // --- AKHIR FUNGSI BARU ---
+
+
+  MusicDisplayStyle get _currentMusicStyle => MusicDisplayStyle.values[_musicStyleIndex];
+
+  Widget _buildMusicPreview() {
+    switch (_currentMusicStyle) {
+      case MusicDisplayStyle.vinyl: return _buildVinylPreview();
+      case MusicDisplayStyle.largeCard: return _buildLargeMusicCard();
+      case MusicDisplayStyle.smallCard: return _buildSmallMusicCard();
+      default: return _buildSmallMusicCard();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Mode editing aktif jika isDrawingMode, isEditingMusic, atau _isTextEditingMode aktif
+    final bool isEditingActive = _isDrawingMode || _isEditingMusic || _isTextEditingMode;
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light.copyWith(
-        systemNavigationBarColor: Colors.black,
-        statusBarColor: Colors.transparent,
-      ),
+      value: SystemUiOverlayStyle.light.copyWith(systemNavigationBarColor: Colors.black, statusBarColor: Colors.transparent),
       child: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
+        // Hanya unfocus jika tidak di mode drawing/music/text
+        onTap: () {
+          if (!_isDrawingMode && !_isEditingMusic && !_isTextEditingMode) {
+            FocusScope.of(context).unfocus();
+          }
+        },
         child: PopScope(
           canPop: false,
           onPopInvoked: (didPop) async {
             if (didPop) return;
             if (_scale < 1.0) return;
-
             if (_isEditingMusic) {
               setState(() => _isEditingMusic = false);
+              return;
+            }
+            if (_isDrawingMode) {
+              _toggleDrawingMode(); // Keluar dari mode drawing
+              return;
+            }
+            if (_isTextEditingMode) {
+              setState(() => _isTextEditingMode = false); // Keluar dari mode teks
               return;
             }
             if (_isEditingCaption) {
@@ -761,30 +906,24 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
               fit: StackFit.expand,
               children: [
                 _buildBackground(),
-                if (_isLoading)
-                  const Center(child: CircularProgressIndicator(color: Colors.white)),
-
+                if (_isLoading) const Center(child: CircularProgressIndicator(color: Colors.white)),
                 _buildAnimatedMediaContainer(),
+                // Sembunyikan top bar saat mode editing non-music/caption aktif
+                if (!_isEditingCaption && !isEditingActive) _buildAnimatedTopBar(),
 
-                if (!_isEditingCaption)
-                  _isEditingMusic ? _buildMusicEditingTopBar() : _buildAnimatedTopBar(),
+                if (_isEditingMusic) _buildMusicEditingTopBar(),
+                if (_isEditingMusic) _buildMusicStyleSelector(),
 
-                if (!_isEditingCaption)
-                  _isEditingMusic ? _buildMusicEditorBar() : _buildBottomUI(),
+                // Tampilkan bottom UI sesuai mode
+                if (!_isEditingCaption && !isEditingActive) _buildBottomUI(),
+                if (_isDrawingMode) _buildDrawingBottomBar(),
 
                 if (_isEditingCaption) _buildCaptionEditor(),
                 if (_isUploading) _buildUploadingOverlay(),
-
-                // [ADDED] Widget overlay untuk menampilkan loading spinner saat audio buffering.
                 if (_isAudioBuffering)
                   Container(
                     color: Colors.black.withOpacity(0.5),
-                    child: const Center(
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 3.0,
-                      ),
-                    ),
+                    child: const Center(child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3.0)),
                   ),
               ],
             ),
@@ -794,133 +933,189 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
     );
   }
 
+  Widget _buildDrawingBottomBar() {
+    return Positioned(
+        bottom: 0,
+        left: 0,
+        right: 0,
+        child: SafeArea(
+            child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+                color: Colors.black.withOpacity(0.5),
+                child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      IconButton(icon: const Icon(Icons.undo, color: Colors.white), onPressed: _undoDrawing),
+                      ...[Colors.white, Colors.red, Colors.blue, Colors.yellow, Colors.green].map((color) => GestureDetector(
+                          onTap: () => _setDrawingColor(color),
+                          child: CircleAvatar(
+                              radius: 14,
+                              backgroundColor: color,
+                              child: _currentDrawingColor == color ? const Icon(Icons.check, size: 16, color: Colors.black) : null
+                          )
+                      )),
+                      ElevatedButton(onPressed: _toggleDrawingMode, child: const Text('Selesai')),
+                    ]
+                )
+            )
+        )
+    );
+  }
+
+
   Widget _buildMusicEditingTopBar() {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                _buildActionButton(Icons.grid_view_outlined,
-                    onPressed: _cycleMusicStyle),
-                _buildActionButton(Icons.color_lens_outlined),
-                _buildActionButton(Icons.discord),
-              ],
-            ),
-            ElevatedButton(
-              onPressed: () => setState(() => _isEditingMusic = false),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 12,
+      right: 16.0,
+      child: ElevatedButton(
+        onPressed: () => setState(() => _isEditingMusic = false),
+        style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+        child: const Text("Selesai", style: TextStyle(fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  Widget _buildMusicStyleSelector() {
+    final List<IconData> styleIcons = [Icons.music_note, Icons.square, Icons.waves,];
+    return Positioned(
+      bottom: 120,
+      left: 0,
+      right: 0,
+      child: SizedBox(
+        height: 70,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: styleIcons.length,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemBuilder: (context, index) {
+            final isSelected = _musicStyleIndex == index;
+            return GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                setState(() => _musicStyleIndex = index);
+              },
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                width: 50,
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.pinkAccent : Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                  border: isSelected ? Border.all(color: Colors.white, width: 2) : null,
+                ),
+                child: Icon(styleIcons[index], color: isSelected ? Colors.white : Colors.white.withOpacity(0.7), size: 24),
               ),
-              child: const Text("Done", style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _buildMusicEditorBar() {
+  void _showDurationPicker() {
+    final maxDuration = _totalSongDuration.inSeconds;
+    final List<int> durationOptions = List<int>.generate(maxDuration, (i) => i + 1);
+    final FixedExtentScrollController scrollController = FixedExtentScrollController(initialItem: _clipDuration.inSeconds - 1);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF2C2C2E),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        int selectedValue = _clipDuration.inSeconds;
+        return Container(
+          height: 350,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            children: [
+              Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(12))),
+              const SizedBox(height: 16),
+              const Text('Pilih durasi klip', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              Expanded(
+                child: ListWheelScrollView.useDelegate(
+                  controller: scrollController,
+                  itemExtent: 50,
+                  physics: const FixedExtentScrollPhysics(),
+                  onSelectedItemChanged: (index) => selectedValue = durationOptions[index],
+                  childDelegate: ListWheelChildLoopingListDelegate(
+                    children: durationOptions.map((seconds) => Center(child: Text('$seconds SECONDS', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)))).toList(),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _clipDuration = Duration(seconds: selectedValue);
+                        if (_clipStartPosition > (_totalSongDuration - _clipDuration)) {
+                          _clipStartPosition = _totalSongDuration - _clipDuration;
+                          if (_clipStartPosition.isNegative) _clipStartPosition = Duration.zero;
+                        }
+                        _isAudioBuffering = true;
+                      });
+                      if (_currentSong != null) _playClip(_currentSong!);
+                      Navigator.pop(context);
+                    },
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    child: const Text('Selesai'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMusicClipEditor() {
+    final maxSliderValue = (_totalSongDuration - _clipDuration).inMilliseconds.toDouble();
     return Positioned(
       bottom: 0,
       left: 0,
       right: 0,
       child: Container(
         padding: const EdgeInsets.only(bottom: 24, top: 16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Colors.transparent, Colors.black.withOpacity(0.9)],
-          ),
-        ),
+        decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withOpacity(0.9)])),
         child: SafeArea(
           top: false,
-          child: Column(
-            children: [
-              const Text("Edit clip", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              _buildDurationSelector(),
-              const SizedBox(height: 16),
-              _buildClipSlider(),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                GestureDetector(
+                  onTap: _showDurationPicker,
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), shape: BoxShape.circle),
+                    child: Center(child: Text(_clipDuration.inSeconds.toString(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16))),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Slider(
+                    value: _clipStartPosition.inMilliseconds.toDouble().clamp(0.0, maxSliderValue),
+                    min: 0,
+                    max: maxSliderValue < 0 ? 0 : maxSliderValue,
+                    onChanged: (val) => setState(() => _clipStartPosition = Duration(milliseconds: val.round())),
+                    onChangeEnd: (val) {
+                      if (_currentSong != null) {
+                        setState(() => _isAudioBuffering = true);
+                        _playClip(_currentSong!);
+                      }
+                    },
+                    activeColor: Colors.white,
+                    inactiveColor: Colors.white.withOpacity(0.3),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildDurationSelector() {
-    final List<int> durationOptions = [5, 10, 15];
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: durationOptions.map((seconds) {
-        final isSelected = _clipDuration.inSeconds == seconds;
-        return GestureDetector(
-          onTap: () {
-            setState(() {
-              _clipDuration = Duration(seconds: seconds);
-              if (_clipStartPosition > (_totalSongDuration - _clipDuration)) {
-                _clipStartPosition = _totalSongDuration - _clipDuration;
-                if (_clipStartPosition.isNegative) {
-                  _clipStartPosition = Duration.zero;
-                }
-              }
-              // [ADDED] Tampilkan loading juga saat durasi diubah
-              _isAudioBuffering = true;
-            });
-            if (_currentSong != null) _playClip(_currentSong!);
-          },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            margin: const EdgeInsets.symmetric(horizontal: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: isSelected ? Colors.white : Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(30),
-            ),
-            child: Text(
-              "$seconds s",
-              style: TextStyle(
-                color: isSelected ? Colors.black : Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildClipSlider() {
-    final maxSliderValue = (_totalSongDuration - _clipDuration).inMilliseconds.toDouble();
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0),
-      child: Slider(
-        value: _clipStartPosition.inMilliseconds.toDouble().clamp(0.0, maxSliderValue),
-        min: 0,
-        max: maxSliderValue < 0 ? 0 : maxSliderValue,
-        onChanged: (val) {
-          setState(() {
-            _clipStartPosition = Duration(milliseconds: val.round());
-          });
-        },
-        // [MODIFIED] onChangeEnd sekarang akan memicu tampilan loading.
-        onChangeEnd: (val) {
-          if (_currentSong != null) {
-            setState(() {
-              _isAudioBuffering = true;
-            });
-            _playClip(_currentSong!);
-          }
-        },
-        activeColor: Colors.white,
-        inactiveColor: Colors.white.withOpacity(0.3),
       ),
     );
   }
@@ -931,22 +1126,11 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
         fit: StackFit.expand,
         children: [
           Image.network(_currentSong!.artworkUrl, fit: BoxFit.cover),
-          BackdropFilter(
-            filter: ui.ImageFilter.blur(sigmaX: 20.0, sigmaY: 20.0),
-            child: Container(color: Colors.black.withOpacity(0.4)),
-          ),
+          BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: 20.0, sigmaY: 20.0), child: Container(color: Colors.black.withOpacity(0.4))),
         ],
       );
     }
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: _gradientColors,
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-      ),
-    );
+    return Container(decoration: BoxDecoration(gradient: LinearGradient(colors: _gradientColors, begin: Alignment.topCenter, end: Alignment.bottomCenter)));
   }
 
   Widget _buildBottomUI() {
@@ -957,6 +1141,9 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
   }
 
   Widget _buildAnimatedMediaContainer() {
+    // Tentukan apakah gestur untuk teks harus aktif
+    final bool isGestureActive = !_isEditingMusic && _textOverlays.isNotEmpty;
+
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 400),
       curve: Curves.easeInOutCubic,
@@ -969,39 +1156,94 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
         curve: Curves.easeInOutCubic,
         scale: _isBottomSheetVisible ? 0.75 : 1.0,
         child: Container(
-          decoration: BoxDecoration(
-            color: Colors.black,
-            borderRadius: BorderRadius.circular(24.0),
-          ),
+          decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(24.0)),
           child: ClipRRect(
-            key: _storyContainerKey, // [TERAPKAN KEY DI SINI]
+            key: _storyContainerKey,
             borderRadius: BorderRadius.circular(24.0),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                _buildMainContent(),
-                if (_currentSong != null)
-                  Center(
-                    child: Transform.translate(
-                      offset: _stickerPosition,
+            child: RepaintBoundary( // <--- BUNGKUS DENGAN REPAINTBOUNDARY BARU
+              key: _repaintKey,    // <--- PINDAHKAN KUNCI DI SINI
+              child: Stack(
+                // HAPUS key: _repaintKey dari Stack
+                fit: StackFit.expand,
+                children: [
+                  _buildMainContent(),
+
+                  // KANVAS MENGGAMBAR DAN INTERAKSI (DIURUTKAN AGAR CORE TAN MUNCUL)
+
+                  // 1. Kanvas Gambar/Jejak Core tan (CustomPaint)
+                  CustomPaint(painter: DrawingPainter(paths: _drawingPaths), child: Container()),
+                  if (_isDrawingMode && _currentPath != null) CustomPaint(painter: DrawingPainter(paths: [DrawingPath(path: _currentPath!, paint: Paint()..color = _currentDrawingColor..strokeWidth = _currentStrokeWidth..style = PaintingStyle.stroke..strokeCap = StrokeCap.round)])),
+
+                  // 2. Area Interaksi Core tan (GestureDetector) - HARUS DI ATAS SEMUANYA
+                  if (_isDrawingMode)
+                    GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onPanStart: _onPanStart,
+                        onPanUpdate: _onPanUpdate,
+                        onPanEnd: _onPanEnd,
+                        child: Container(color: Colors.transparent)
+                    ),
+
+                  // TEXT OVERLAYS
+                  ..._textOverlays.map((overlay) {
+                    return Positioned(
+                        left: overlay.position.dx,
+                        top: overlay.position.dy,
+                        child: Transform(
+                            transform: Matrix4.identity()
+                              ..scale(overlay.scale)
+                              ..rotateZ(overlay.rotation),
+                            alignment: FractionalOffset.center,
+                            child: GestureDetector(
+                                behavior: HitTestBehavior.translucent,
+                                onTap: isGestureActive ? () => _showTextOptionsSheet(overlay) : null,
+                                onScaleStart: isGestureActive ? (details) { _baseScale = overlay.scale; _baseRotation = overlay.rotation; } : null,
+                                onScaleUpdate: isGestureActive ? (details) {
+                                  setState(() {
+                                    overlay.position += details.focalPointDelta;
+                                    overlay.scale = (_baseScale * details.scale).clamp(0.5, 3.0);
+                                    overlay.rotation = _baseRotation + details.rotation;
+                                  });
+                                } : null,
+                                child: _buildTextOverlayWidget(overlay)
+                            )
+                        )
+                    );
+                  }).toList(),
+
+                  if (_currentSong != null)
+                    Center(
                       child: GestureDetector(
-                        onPanUpdate: (details) {
-                          if (_isEditingMusic &&
-                              _musicStyle != MusicDisplayStyle.vinyl) {
+                        onScaleStart: (details) {
+                          if (_isEditingMusic && _currentMusicStyle != MusicDisplayStyle.vinyl) {
+                            _baseScale = _stickerScale;
+                            _baseRotation = _stickerRotation;
+                          }
+                        },
+                        onScaleUpdate: (details) {
+                          if (_isEditingMusic && _currentMusicStyle != MusicDisplayStyle.vinyl) {
                             setState(() {
-                              _stickerPosition += details.delta;
+                              _stickerPosition += details.focalPointDelta;
+                              _stickerScale = (_baseScale * details.scale).clamp(0.5, 2.0);
+                              _stickerRotation = _baseRotation + details.rotation;
                             });
                           }
                         },
-                        // [BUNGKUS WIDGET MUSIK DENGAN KEY]
-                        child: KeyedSubtree(
-                          key: _stickerKey,
-                          child: _buildMusicPreview(),
+                        child: Transform(
+                          alignment: Alignment.center,
+                          transform: Matrix4.identity()
+                            ..translate(_stickerPosition.dx, _stickerPosition.dy)
+                            ..scale(_stickerScale)
+                            ..rotateZ(_stickerRotation),
+                          child: KeyedSubtree(
+                            key: _stickerKey,
+                            child: _buildMusicPreview(),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -1009,10 +1251,45 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
     );
   }
 
+  Widget _buildTextOverlayWidget(TextOverlay overlay) {
+    Color backgroundColor;
+    Color textColor = overlay.color;
+
+    switch (overlay.backgroundStyle) {
+      case TextBackgroundStyle.semiTransparent:
+        backgroundColor = overlay.color.withOpacity(0.4);
+        textColor = (overlay.color.computeLuminance() > 0.5) ? Colors.black : Colors.white;
+        break;
+      case TextBackgroundStyle.solid:
+        backgroundColor = overlay.color;
+        textColor = (overlay.color.computeLuminance() > 0.5) ? Colors.black : Colors.white;
+        break;
+      case TextBackgroundStyle.none:
+      default:
+        backgroundColor = Colors.transparent;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        overlay.text,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 24,
+          fontWeight: overlay.fontWeight,
+        ),
+      ),
+    );
+  }
+
   Widget _buildMainContent() {
     if (_mode == StoryPreviewMode.layout) {
-      return RepaintBoundary(
-          key: _collageKey, child: CollageLayoutView(assets: widget.assets!));
+      return RepaintBoundary(key: _collageKey, child: CollageLayoutView(assets: widget.assets!));
     }
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1020,25 +1297,11 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
           physics: const BouncingScrollPhysics(),
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [_buildMediaContent()],
-            ),
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [_buildMediaContent()]),
           ),
         );
       },
     );
-  }
-
-  Widget _buildMusicPreview() {
-    switch (_musicStyle) {
-      case MusicDisplayStyle.vinyl:
-        return _buildVinylPreview();
-      case MusicDisplayStyle.largeCard:
-        return _buildLargeMusicCard();
-      case MusicDisplayStyle.smallCard:
-        return _buildSmallMusicCard();
-    }
   }
 
   Widget _buildVinylPreview() {
@@ -1049,34 +1312,19 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
         RotationTransition(
           turns: _vinylController,
           child: Container(
-            width: 280,
-            height: 280,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              image: DecorationImage(
-                image: NetworkImage('https://i.imgur.com/HgflQqA.png'),
-              ),
-            ),
+            width: 280, height: 280,
+            decoration: const BoxDecoration(shape: BoxShape.circle, image: DecorationImage(image: NetworkImage('https://i.imgur.com/HgflQqA.png'))),
             child: Center(
               child: ClipOval(
-                child: SizedBox.fromSize(
-                  size: const Size.fromRadius(100),
-                  child: Image.network(_currentSong!.artworkUrl,
-                      fit: BoxFit.cover),
-                ),
+                child: SizedBox.fromSize(size: const Size.fromRadius(100), child: Image.network(_currentSong!.artworkUrl, fit: BoxFit.cover)),
               ),
             ),
           ),
         ),
         const SizedBox(height: 24),
-        Text(_currentSong!.trackName,
-            style: const TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold)),
+        Text(_currentSong!.trackName, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
-        Text(_currentSong!.artistName,
-            style: const TextStyle(color: Colors.white70, fontSize: 16)),
+        Text(_currentSong!.artistName, style: const TextStyle(color: Colors.white70, fontSize: 16)),
       ],
     );
   }
@@ -1084,18 +1332,11 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
   Widget _buildLargeMusicCard() {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.6),
-        borderRadius: BorderRadius.circular(12),
-      ),
+      decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(12)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.network(_currentSong!.artworkUrl,
-                width: 80, height: 80, fit: BoxFit.cover),
-          ),
+          ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(_currentSong!.artworkUrl, width: 80, height: 80, fit: BoxFit.cover)),
           const SizedBox(width: 12),
           Column(
             mainAxisSize: MainAxisSize.min,
@@ -1103,11 +1344,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
             children: [
               const Icon(Icons.equalizer, color: Colors.white),
               const SizedBox(height: 4),
-              Text(_currentSong!.trackName,
-                  style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold)),
-              Text(_currentSong!.artistName,
-                  style: const TextStyle(color: Colors.white70)),
+              Text(_currentSong!.trackName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              Text(_currentSong!.artistName, style: const TextStyle(color: Colors.white70)),
             ],
           )
         ],
@@ -1118,23 +1356,15 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
   Widget _buildSmallMusicCard() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.6),
-        borderRadius: BorderRadius.circular(30),
-      ),
+      decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(30)),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: Image.network(_currentSong!.artworkUrl,
-                width: 24, height: 24, fit: BoxFit.cover),
-          ),
+          ClipRRect(borderRadius: BorderRadius.circular(4), child: Image.network(_currentSong!.artworkUrl, width: 24, height: 24, fit: BoxFit.cover)),
           const SizedBox(width: 8),
           const Icon(Icons.equalizer, color: Colors.white, size: 18),
           const SizedBox(width: 8),
-          Text('${_currentSong!.trackName} • ${_currentSong!.artistName}',
-              style: const TextStyle(color: Colors.white)),
+          Text('${_currentSong!.trackName} • ${_currentSong!.artistName}', style: const TextStyle(color: Colors.white)),
         ],
       ),
     );
@@ -1152,6 +1382,10 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
   }
 
   Widget _buildTopBarContent() {
+    final bool isImage = _currentAsset?.type == AssetType.image;
+    final bool isSingleMediaMode = _mode != StoryPreviewMode.layout;
+    final bool isEditingNonMusic = _isDrawingMode || _isTextEditingMode;
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
@@ -1165,37 +1399,43 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildActionButton(Icons.arrow_back_ios_new,
-                      onPressed: () async {
-                        final shouldPop = await _onWillPop();
-                        if (shouldPop && mounted) {
-                          Navigator.of(context).pop();
-                        }
-                      }),
+                  _buildActionButton(Icons.arrow_back_ios_new, onPressed: () async {
+                    final shouldPop = await _onWillPop();
+                    if (shouldPop && mounted) Navigator.of(context).pop();
+                  }),
                   Row(
                     children: [
-                      // _buildActionButton(Icons.crop_rotate),
-                      // _buildActionButton(Icons.text_fields),
-                      // _buildActionButton(Icons.emoji_emotions_outlined),
-                      // _buildActionButton(Icons.auto_awesome_outlined),
+                      // Tombol Corat Coret
+                      if (isSingleMediaMode && !_isEditingMusic && !isEditingNonMusic)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                          child: _buildActionButton(Icons.brush, onPressed: _toggleDrawingMode),
+                        ),
+
+                      // Tombol Teks
+                      if (isSingleMediaMode && !_isEditingMusic && !isEditingNonMusic)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                          child: _buildActionButton(Icons.text_fields, onPressed: _showTextInputDialog),
+                        ),
+
+                      // Tombol Cut Gambar
+                      if (isSingleMediaMode && isImage && !_isEditingMusic && !isEditingNonMusic)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                          child: _buildActionButton(Icons.crop, onPressed: _cutCurrentImage),
+                        ),
+
                       if (_currentSong != null)
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 4.0),
                           child: GestureDetector(
-                            onTap: () {
-                              setState(() => _isEditingMusic = true);
-                            },
-                            child: CircleAvatar(
-                              radius: 20,
-                              backgroundImage:
-                              NetworkImage(_currentSong!.artworkUrl),
-                            ),
+                            onTap: () => setState(() => _isEditingMusic = true),
+                            child: CircleAvatar(radius: 20, backgroundImage: NetworkImage(_currentSong!.artworkUrl)),
                           ),
                         )
                       else
-                        _buildActionButton(Icons.music_note_outlined,
-                            onPressed: _showMusicPicker),
-                      // _buildActionButton(Icons.more_horiz),
+                        _buildActionButton(Icons.music_note_outlined, onPressed: _showMusicPicker),
                     ],
                   )
                 ],
@@ -1207,25 +1447,21 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
     );
   }
 
-  Widget _buildActionButton(IconData icon,
-      {VoidCallback? onPressed, double size = 22}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4.0),
-      // Gunakan Material agar efek ripple berbentuk lingkaran
-      child: Material(
-        color: Colors.transparent,
-        shape: const CircleBorder(),
-        child: InkWell(
-          onTap: onPressed ??
-                  () {
-                print('${icon.codePoint} di-klik');
-              },
-          customBorder: const CircleBorder(),
-          child: CircleAvatar(
-            radius: 20,
-            backgroundColor: Colors.black.withOpacity(0.5),
-            child: Icon(icon, color: Colors.white, size: 22),
-          ),
+  Widget _buildActionButton(IconData icon, {String? label, VoidCallback? onPressed, double size = 22}) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(radius: 20, backgroundColor: Colors.black.withOpacity(0.5), child: Icon(icon, color: Colors.white, size: size)),
+            if (label != null) ...[
+              const SizedBox(height: 6),
+              Text(label, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))
+            ]
+          ],
         ),
       ),
     );
@@ -1233,9 +1469,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
 
   Widget _buildMultiPreviewBottomBar() {
     return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
+      bottom: 0, left: 0, right: 0,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         color: Colors.black.withOpacity(0.3),
@@ -1259,23 +1493,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                           duration: const Duration(milliseconds: 200),
                           margin: const EdgeInsets.only(right: 8),
                           width: 50,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: isSelected
-                                  ? Colors.white
-                                  : Colors.transparent,
-                              width: 2.5,
-                            ),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                            child: AssetEntityImage(
-                              asset,
-                              isOriginal: false,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
+                          decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: isSelected ? Colors.white : Colors.transparent, width: 2.5)),
+                          child: ClipRRect(borderRadius: BorderRadius.circular(6), child: AssetEntityImage(asset, isOriginal: false, fit: BoxFit.cover)),
                         ),
                       );
                     },
@@ -1286,16 +1505,8 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: ElevatedButton(
                   onPressed: _showShareBottomSheet,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 12),
-                  ),
-                  child: const Text('Next >',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
+                  child: const Text('Next >', style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ),
             ],
@@ -1305,104 +1516,131 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
     );
   }
 
+  Widget _buildBottomBar() {
+    const String placeholderUrl = 'https://www.gravatar.com/avatar/?d=mp';
+    return Positioned(
+      bottom: 0, left: 0, right: 0,
+      child: Stack(
+        alignment: Alignment.bottomCenter,
+        children: [
+          Container(
+            height: 200,
+            decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withOpacity(0.8)])),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  GestureDetector(
+                    onTap: () => setState(() => _isEditingCaption = true),
+                    child: Container(
+                      color: Colors.transparent, width: double.infinity,
+                      child: Row(
+                        children: [
+                          CircleAvatar(radius: 18, backgroundImage: NetworkImage(_currentUser?.profilePictureUrl ?? placeholderUrl)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _captionController.text.isEmpty ? 'Tambahkan Caption...' : _captionController.text,
+                              style: TextStyle(color: _captionController.text.isEmpty ? Colors.white70 : Colors.white, fontSize: 16),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _buildStoryButton(
+                                label: 'Cerita Anda',
+                                onTap: _handleShare,
+                                onLongPress: _showSharingOptionsBottomSheet,
+                                iconWidget: CircleAvatar(radius: 14, backgroundImage: NetworkImage(_currentUser?.profilePictureUrl ?? placeholderUrl)),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _buildStoryButton(
+                                label: 'Teman Dekat',
+                                onTap: () {
+                                  HapticFeedback.lightImpact();
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                    content: const Text('Fitur ini akan segara hadir...'),
+                                    backgroundColor: Colors.blueAccent,
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ));
+                                },
+                                iconWidget: const CircleAvatar(radius: 14, backgroundColor: Colors.green, child: Icon(Icons.star, color: Colors.white, size: 20)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                        child: IconButton(icon: const Icon(Icons.arrow_forward_ios, color: Colors.black, size: 20), onPressed: _showShareBottomSheet),
+                      )
+                    ],
+                  )
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showSharingOptionsBottomSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: const Color(0xFF2C2C2E),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24.0)),
-      ),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24.0))),
       builder: (context) {
-        // StatefulBuilder untuk mengelola state di dalam bottom sheet
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModalState) {
-            // State untuk pilihan share
             bool shareToStory = true;
-            bool shareToFacebook = true;
-
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Handle (garis abu-abu di atas)
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[700],
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
+                  Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(12)))),
                   const SizedBox(height: 24),
-
-                  // Judul
-                  const Text(
-                    'Bagikan ini ke..',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  const Text('Bagikan ini ke..', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
-
-                  // Pilihan 1: Your Story
                   _buildShareOptionTile(
                     avatarUrl: _currentUser?.profilePictureUrl,
                     title: 'Cerita Anda',
                     subtitle: 'Unggah sebagai cerita Anda di Portal SI',
                     isSelected: shareToStory,
-                    onTap: () {
-                      setModalState(() {
-                        shareToStory = !shareToStory;
-                      });
-                    },
+                    onTap: () => setModalState(() => shareToStory = !shareToStory),
                   ),
-                  const SizedBox(height: 12),
-
-                  // Pilihan 2: Your Facebook Story
-                  // _buildShareOptionTile(
-                  //   avatarUrl: 'https://i.pravatar.cc/150?img=5', // Ganti dengan URL yang sesuai
-                  //   title: 'Your Facebook Story',
-                  //   subtitle: '${_currentUser?.fullName ?? 'Anda'} • Friends',
-                  //   isSelected: shareToFacebook,
-                  //   hasFacebookIcon: true,
-                  //   onTap: () {
-                  //     setModalState(() {
-                  //       shareToFacebook = !shareToFacebook;
-                  //     });
-                  //   },
-                  // ),
                   const SizedBox(height: 32),
-
-                  // Tombol Share
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: () {
-                        // Tutup bottom sheet, lalu jalankan fungsi share
                         Navigator.pop(context);
                         _handleShare();
                       },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: const Text(
-                        'Bagikan',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                      child: const Text('Bagikan', style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -1415,15 +1653,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
     );
   }
 
-// [BARU] Tambahkan juga method helper ini untuk membuat baris pilihan
-  Widget _buildShareOptionTile({
-    required String? avatarUrl,
-    required String title,
-    required String subtitle,
-    required bool isSelected,
-    required VoidCallback onTap,
-    bool hasFacebookIcon = false,
-  }) {
+  Widget _buildShareOptionTile({required String? avatarUrl, required String title, required String subtitle, required bool isSelected, required VoidCallback onTap, bool hasFacebookIcon = false}) {
     const String placeholderUrl = 'https://www.gravatar.com/avatar/?d=mp';
     return GestureDetector(
       onTap: onTap,
@@ -1433,25 +1663,15 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
           Stack(
             clipBehavior: Clip.none,
             children: [
-              CircleAvatar(
-                radius: 28,
-                backgroundImage: NetworkImage(avatarUrl ?? placeholderUrl),
-              ),
+              CircleAvatar(radius: 28, backgroundImage: NetworkImage(avatarUrl ?? placeholderUrl)),
               if (hasFacebookIcon)
                 Positioned(
                   bottom: -2,
                   right: -2,
                   child: Container(
                     padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF2C2C2E), // Warna latar belakang sheet
-                      shape: BoxShape.circle,
-                    ),
-                    child: const CircleAvatar(
-                      radius: 10,
-                      backgroundColor: Color(0xFF1877F2), // Warna Facebook
-                      child: Icon(Icons.facebook, color: Colors.white, size: 14),
-                    ),
+                    decoration: const BoxDecoration(color: Color(0xFF2C2C2E), shape: BoxShape.circle),
+                    child: const CircleAvatar(radius: 10, backgroundColor: Color(0xFF1877F2), child: Icon(Icons.facebook, color: Colors.white, size: 14)),
                   ),
                 ),
             ],
@@ -1471,220 +1691,29 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
           Container(
             width: 28,
             height: 28,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isSelected ? Colors.blue : Colors.transparent,
-              border: Border.all(
-                color: isSelected ? Colors.blue : Colors.grey[600]!,
-                width: 2,
-              ),
-            ),
-            child: isSelected
-                ? const Icon(Icons.check, color: Colors.white, size: 18)
-                : null,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: isSelected ? Colors.blue : Colors.transparent, border: Border.all(color: isSelected ? Colors.blue : Colors.grey[600]!, width: 2)),
+            child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 18) : null,
           ),
         ],
       ),
-    );
-  }
-
-  // Ganti seluruh method _buildBottomBar dengan yang ini
-  Widget _buildBottomBar() {
-    const String placeholderUrl = 'https://www.gravatar.com/avatar/?d=mp';
-    // Variabel userProfileImageUrl sudah tidak diperlukan di sini
-    return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
-      child: Stack(
-        alignment: Alignment.bottomCenter,
-        children: [
-          Container(
-            height: 200,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _isEditingCaption = true;
-                      });
-                    },
-                    child: Container(
-                      color: Colors.transparent,
-                      width: double.infinity,
-                      child: Row(
-                        children: [
-                          // [MODIFIKASI 1] CircleAvatar untuk "Add a caption..."
-                          CircleAvatar(
-                            radius: 18,
-                            backgroundImage: NetworkImage(
-                              _currentUser?.profilePictureUrl ?? placeholderUrl,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              _captionController.text.isEmpty
-                                  ? 'Tambahkan Caption...'
-                                  : _captionController.text,
-                              style: TextStyle(
-                                color: _captionController.text.isEmpty
-                                    ? Colors.white70
-                                    : Colors.white,
-                                fontSize: 16,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _buildStoryButton(
-                                label: 'Cerita Anda',
-                                // Aksi untuk klik sekali (langsung post)
-                                onTap: _handleShare,
-                                // Aksi untuk tekan lama (tampilkan bottom sheet)
-                                onLongPress: _showSharingOptionsBottomSheet,
-                                iconWidget: CircleAvatar(
-                                  radius: 14,
-                                  backgroundImage: NetworkImage(
-                                    _currentUser?.profilePictureUrl ?? placeholderUrl,
-                                  ),
-                                ),
-                              ),
-                            ),
-
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildStoryButton(
-                                label: 'Teman Dekat',
-                                // onTap: _showCloseFriendsPage, // Pastikan fungsi ini sudah ada
-                                onTap: () {
-                                  HapticFeedback.lightImpact();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: const Text(
-                                          'Fitur ini akan segara hadir...',
-                                        ),
-                                        backgroundColor: Colors.blueAccent,
-                                        behavior: SnackBarBehavior.floating,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                      ),
-                                  );
-                                },
-                                iconWidget: const CircleAvatar(
-                                    radius: 14,
-                                    backgroundColor: Colors.green,
-                                    child: Icon(Icons.star,
-                                        color: Colors.white, size: 20)),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.arrow_forward_ios,
-                              color: Colors.black, size: 20),
-                          onPressed: _showShareBottomSheet,
-                        ),
-                      )
-                    ],
-                  )
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showCloseFriendsPage() {
-    Navigator.of(context).push(_createSlideUpRoute());
-  }
-
-// Fungsi untuk membuat animasi slide dari bawah ke atas
-  Route _createSlideUpRoute() {
-    return PageRouteBuilder(
-      // Halaman tujuan
-      pageBuilder: (context, animation, secondaryAnimation) => const CloseFriendsPage(),
-      // Logika transisi
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        const begin = Offset(0.0, 1.0); // Mulai dari bawah layar
-        const end = Offset.zero;      // Selesai di tengah layar
-        const curve = Curves.easeInOut;
-
-        final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-        final offsetAnimation = animation.drive(tween);
-
-        return SlideTransition(
-          position: offsetAnimation,
-          child: child,
-        );
-      },
     );
   }
 
   Widget _buildCaptionEditor() {
     const String placeholderUrl = 'https://www.gravatar.com/avatar/?d=mp';
-    // Variabel userProfileImageUrl sudah tidak diperlukan di sini
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     return Positioned(
-      left: 0,
-      right: 0,
-      bottom: keyboardHeight,
+      left: 0, right: 0, bottom: keyboardHeight,
       child: Material(
         color: Colors.transparent,
         child: Padding(
           padding: const EdgeInsets.all(8.0),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.6),
-              borderRadius: BorderRadius.circular(30),
-            ),
+            decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(30)),
             child: Row(
               children: [
-                // [MODIFIKASI 3] CircleAvatar di editor caption
-                CircleAvatar(
-                  radius: 18,
-                  backgroundImage: NetworkImage(
-                    _currentUser?.profilePictureUrl ?? placeholderUrl,
-                  ),
-                ),
+                CircleAvatar(radius: 18, backgroundImage: NetworkImage(_currentUser?.profilePictureUrl ?? placeholderUrl)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: TextField(
@@ -1692,11 +1721,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                     focusNode: _captionFocusNode,
                     autofocus: true,
                     style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
-                      hintText: 'Type a caption...',
-                      hintStyle: TextStyle(color: Colors.white54),
-                      border: InputBorder.none,
-                    ),
+                    decoration: const InputDecoration(hintText: 'Type a caption...', hintStyle: TextStyle(color: Colors.white54), border: InputBorder.none),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1708,6 +1733,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                       print("Caption: ${_captionController.text}");
                       FocusScope.of(context).unfocus();
                     },
+
                   ),
                 )
               ],
@@ -1719,60 +1745,43 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
   }
 
   Widget _buildMediaContent() {
-    // PRIORITAS 1: Jika ada imageBytes dari web, tampilkan itu.
     if (widget.imageBytes != null) {
       return Image.memory(widget.imageBytes!, fit: BoxFit.fitWidth);
     }
 
-    // PRIORITAS 2: Jika tidak ada, gunakan logika AssetEntity yang sudah ada.
-    if (_currentAsset == null) return const SizedBox.shrink();
+    // Workaround untuk AssetEntity Palsu setelah crop (digunakan untuk menampilkan file yang di-crop)
+    if (_currentAsset != null && _currentAsset!.relativePath != null && _currentAsset!.id == _currentAsset!.relativePath! && _currentAsset!.type == AssetType.image) {
+      final File croppedFile = File(_currentAsset!.relativePath!);
+      return Image.file(croppedFile, fit: BoxFit.fitWidth);
+    }
 
+    if (_currentAsset == null) return const SizedBox.shrink();
     if (_currentAsset!.type == AssetType.video) {
-      if (_isVideoLoading ||
-          _videoController == null ||
-          !_videoController!.value.isInitialized) {
-        // Tampilkan thumbnail saat video loading
+      if (_isVideoLoading || _videoController == null || !_videoController!.value.isInitialized) {
         return AssetEntityImage(_currentAsset!, fit: BoxFit.fitWidth);
       }
-      return AspectRatio(
-          aspectRatio: _videoController!.value.aspectRatio,
-          child: VideoPlayer(_videoController!));
+      return AspectRatio(aspectRatio: _videoController!.value.aspectRatio, child: VideoPlayer(_videoController!));
     } else {
-      // Tampilkan gambar dari AssetEntity
-      return AssetEntityImage(_currentAsset!,
-          isOriginal: true, fit: BoxFit.fitWidth);
+      return AssetEntityImage(_currentAsset!, isOriginal: true, fit: BoxFit.fitWidth);
     }
   }
 
-  // Ganti method _buildStoryButton yang sudah ada dengan yang ini
-
-  Widget _buildStoryButton({
-    required String label,
-    required Widget iconWidget,
-    VoidCallback? onTap, // Tambahkan parameter onTap
-    VoidCallback? onLongPress,
-  }) {
+  Widget _buildStoryButton({required String label, required Widget iconWidget, VoidCallback? onTap, VoidCallback? onLongPress}) {
     return Material(
         color: Colors.black.withOpacity(0.4),
         borderRadius: BorderRadius.circular(30),
         child: InkWell(
-          // Gunakan parameter onTap, jika tidak ada, jalankan print
-            onTap: onTap ?? () {
-              print('Tombol "$label" di-klik');
-            },
+            onTap: onTap ?? () => print('Tombol "$label" di-klik'),
             onLongPress: onLongPress,
             borderRadius: BorderRadius.circular(30),
             child: Padding(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child:
-                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   iconWidget,
                   const SizedBox(width: 8),
                   Flexible(
                       child: Text(label,
-                          style: const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.bold),
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis))
                 ]))));
@@ -1787,20 +1796,113 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
           children: [
             CircularProgressIndicator(color: Colors.white),
             SizedBox(height: 16),
-            Text('Mengunggah Story...',
-                style: TextStyle(color: Colors.white, fontSize: 16)),
+            Text('Mengunggah Story...', style: TextStyle(color: Colors.white, fontSize: 16)),
           ],
         ),
       ),
     );
   }
+}
+
+// --- SALINAN KELAS _ImageCropperPage DARI edit_profile_page.dart ---
+class _ImageCropperPage extends StatelessWidget {
+  final File imageFile;
+  final bool isBanner;
+  final double initialAspectRatio;
+
+  const _ImageCropperPage({
+    required this.imageFile,
+    required this.isBanner,
+    this.initialAspectRatio = 1.0,
+  });
 
   @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    super.debugFillProperties(properties);
-    properties.add(DiagnosticsProperty<AnimationController>(
-        '_vinylController', _vinylController));
-    properties.add(DiagnosticsProperty<AnimationController>(
-        '_vinylController', _vinylController));
+  Widget build(BuildContext context) {
+    final double aspectRatio = isBanner ? 16 / 7 : initialAspectRatio;
+
+    final controller = CropController(
+      aspectRatio: aspectRatio,
+      defaultCrop: const Rect.fromLTRB(0.1, 0.1, 0.9, 0.9),
+    );
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('Sesuaikan Gambar'),
+        backgroundColor: Colors.black87,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        actions: [
+          TextButton(
+            onPressed: () async {
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+              );
+
+              try {
+                final result = await controller.croppedBitmap();
+                final data = await result.toByteData(format: ui.ImageByteFormat.png);
+
+                if (data == null) {
+                  throw Exception("Gagal mengonversi gambar yang di-crop.");
+                }
+
+                final bytes = data.buffer.asUint8List();
+                final tempDir = await getTemporaryDirectory();
+                final fileName = '${DateTime.now().millisecondsSinceEpoch}.png';
+                final File tempFile = File('${tempDir.path}/$fileName');
+                await tempFile.writeAsBytes(bytes);
+
+                if (context.mounted) Navigator.pop(context);
+                if (context.mounted) Navigator.pop(context, tempFile);
+
+              } catch (e) {
+                if (context.mounted) Navigator.pop(context);
+                if (context.mounted) Navigator.pop(context, null);
+              }
+            },
+            child: const Text('SELESAI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: _buildCropper(controller, isBanner),
+        ),
+      ),
+    );
   }
+
+  Widget _buildCropper(CropController controller, bool isBanner) {
+    final cropper = CropImage(
+      controller: controller,
+      image: Image.file(imageFile),
+      gridColor: Colors.white54,
+      scrimColor: Colors.black.withOpacity(0.7),
+      paddingSize: 20,
+      alwaysShowThirdLines: true,
+    );
+
+    if (!isBanner) {
+      return cropper;
+    }
+    return cropper;
+  }
+}
+
+// --- SALINAN KELAS UNTUK DRAWING (DARI edit_post_page.dart) ---
+class DrawingPainter extends CustomPainter {
+  final List<DrawingPath> paths;
+  DrawingPainter({required this.paths});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    for (var drawingPath in paths) { canvas.drawPath(drawingPath.path, drawingPath.paint); }
+  }
+
+  @override
+  bool shouldRepaint(covariant DrawingPainter oldDelegate) => true;
 }

@@ -1,22 +1,50 @@
 // lib/services/post_service.dart
 import 'dart:convert';
+import 'dart:developer';
 import 'dart:io';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
+import '../models/liker_model.dart';
+import '../models/paginated_response.dart';
 import '../utils/secure_storage.dart';
 import 'api_service.dart';
 
 import '../models/post_model.dart';
 
-// --- PERBAIKAN: Tambahkan kembali "extends ApiService" ---
+// Fungsi helper untuk membuat stream yang melaporkan progres unggahan
+Stream<List<int>> _createUploadStream(File file, void Function(int, int) onProgress) {
+  final fileStream = file.openRead();
+  final totalBytes = file.lengthSync();
+  int bytesSent = 0;
+
+  return fileStream.transform(
+    StreamTransformer.fromHandlers(
+      handleData: (data, sink) {
+        bytesSent += data.length;
+        onProgress(bytesSent, totalBytes);
+        sink.add(data);
+      },
+      handleError: (error, stack, sink) {
+        sink.addError(error, stack);
+      },
+      handleDone: (sink) {
+        sink.close();
+      },
+    ),
+  );
+}
+
+
 class PostService extends ApiService {
   PostService._internal();
   static final PostService _instance = PostService._internal();
   factory PostService() => _instance;
 
-  // --- SEMUA KODE CACHE LAMA DIHAPUS DARI SINI ---
-
-  Future<Post?> createPost(Map<String, String> fields, {File? mediaFile}) async {
+  Future<Post?> createPost(
+      Map<String, String> fields,
+      {File? mediaFile, Function(int sent, int total)? onProgress}
+      ) async {
     final token = await getToken();
     var request = http.MultipartRequest(
       'POST',
@@ -28,49 +56,73 @@ class PostService extends ApiService {
     request.fields.addAll(fields);
 
     if (mediaFile != null) {
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'media',
-          mediaFile.path,
-          filename: path.basename(mediaFile.path),
-        ),
-      );
+      if (onProgress != null) {
+        // Menggunakan stream kustom untuk melaporkan progres
+        final stream = _createUploadStream(mediaFile, onProgress);
+        request.files.add(
+          http.MultipartFile(
+            'media',
+            stream,
+            mediaFile.lengthSync(),
+            filename: path.basename(mediaFile.path),
+          ),
+        );
+      } else {
+        // Fallback jika tidak ada callback progress
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'media',
+            mediaFile.path,
+            filename: path.basename(mediaFile.path),
+          ),
+        );
+      }
     }
 
-    final streamedResponse = await request.send();
-    final response = await http.Response.fromStream(streamedResponse);
+    try {
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
 
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      final responseData = jsonDecode(response.body);
-      return Post.fromJson(responseData['data'] ?? responseData);
-    } else {
-      print("Gagal membuat postingan: ${response.body}");
-      return null;
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        log("✅ Respons Sukses dari Endpoint /posts:\n${response.body}");
+        final responseData = jsonDecode(response.body);
+        if (responseData['post'] is Map<String, dynamic>) {
+          return Post.fromJson(responseData['post'] as Map<String, dynamic>);
+        } else {
+          throw Exception('Format data post tidak valid dalam respons.');
+        }
+      } else {
+        // Jika koneksi ditutup (biasanya karena pembatalan), lempar error spesifik
+        if (streamedResponse.request == null) {
+          throw Exception('Upload dibatalkan oleh pengguna.');
+        }
+        throw Exception(
+            'Gagal membuat postingan. Status: ${response.statusCode}, Body: ${response.body}'
+        );
+      }
+    } on http.ClientException catch (e) {
+      // Menangkap error ketika stream dibatalkan secara paksa
+      log("Upload dibatalkan: $e");
+      throw Exception('Upload dibatalkan oleh pengguna.');
     }
   }
 
   Future<Post?> fetchPinnedPost() async {
-    // Implementasi placeholder Anda dipertahankan
     return null;
   }
 
-  Future<List<dynamic>> fetchPosts({int page = 1}) async {
-
+  Future<PaginatedFeedResponse> fetchPosts({int page = 1}) async {
     final dynamic responseData = await get('posts', queryParams: {
       'page': page.toString(),
     });
 
     if (responseData is Map<String, dynamic> && responseData['feed'] is List) {
-      return responseData['feed'] as List<dynamic>;
-    } else if (responseData is Map<String, dynamic> && responseData['data'] is List) {
-      return responseData['data'];
-    } else if (responseData is List) {
-      return responseData;
-
+      final items = responseData['feed'] as List<dynamic>;
+      final bool hasNext = responseData['next_page_url'] != null;
+      return PaginatedFeedResponse(feedItems: items, hasNextPage: hasNext);
     } else {
-      print(
-          '⚠️ Peringatan: Endpoint /posts tidak mengembalikan format list yang diharapkan. Data: $responseData');
-      return [];
+      print('⚠️ Peringatan: Format respons /posts tidak sesuai.');
+      return PaginatedFeedResponse(feedItems: [], hasNextPage: false);
     }
   }
 
@@ -84,11 +136,8 @@ class PostService extends ApiService {
     });
 
     if (response.statusCode == 200) {
-      // 1. Decode respons sebagai Map
       final Map<String, dynamic> body = json.decode(response.body);
-      // 2. Ambil list dari key 'data'
       final List<dynamic> postsJson = body['data'];
-      // 3. Ubah setiap item JSON menjadi objek Post
       return postsJson.map((json) => Post.fromJson(json)).toList();
     } else {
       throw Exception('Gagal memuat postingan explore dari API');
@@ -101,6 +150,70 @@ class PostService extends ApiService {
       return Post.fromJson(data);
     } else {
       throw Exception('Format data untuk post #$id tidak valid.');
+    }
+  }
+
+  Future<List<Liker>> getPostLikers(int postId) async {
+    try {
+      final currentUserId = await SecureStorage.getUserId();
+      final responseData = await get('posts/$postId/likes');
+
+      if (responseData is List) {
+        return responseData
+            .map((likeData) => Liker.fromJson(likeData, currentUserId ?? 0))
+            .toList();
+      }
+      return [];
+
+    } catch (e) {
+      log('❌ Gagal mengambil data likers untuk post $postId: $e');
+      return [];
+    }
+  }
+
+  Future<Map<String, dynamic>> getClipsFeed({int? startingPostId, String? nextUrl}) async {
+    assert(startingPostId != null || nextUrl != null, 'Harus menyediakan startingPostId atau nextUrl');
+
+    try {
+      dynamic responseData;
+
+      if (nextUrl != null) {
+        log("🚀 Mencoba mengambil clips dari URL LENGKAP: $nextUrl");
+        final token = await SecureStorage.getToken();
+        final response = await http.get(
+          Uri.parse(nextUrl),
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        );
+        if (response.statusCode == 200) {
+          responseData = jsonDecode(response.body);
+        } else {
+          throw Exception('Endpoint tidak ditemukan (${response.statusCode}). URL: $nextUrl');
+        }
+      }
+      else {
+        final String endpoint = 'clips/$startingPostId';
+        log("🚀 Mencoba mengambil clips dari ENDPOINT: $endpoint");
+        responseData = await get(endpoint);
+      }
+
+      log("✅ SUKSES: Respons diterima.");
+
+      if (responseData is Map<String, dynamic>) {
+        final List<dynamic> clipsJson = responseData['next_clips'] as List? ?? [];
+        final List<Post> clips = clipsJson.map((json) => Post.fromJson(json)).toList();
+
+        return {
+          'clips': clips,
+          'next_page_url': responseData['next_page_url'],
+        };
+      }
+      return {'clips': [], 'next_page_url': null};
+    } catch (e) {
+      log('❌ Gagal mengambil clips feed: $e');
+      rethrow;
     }
   }
 
