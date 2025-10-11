@@ -1,24 +1,27 @@
+// lib/components/story_circle.dart
+
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/story_model.dart';
 import '../models/user_model.dart';
 import '../pages/create_story_page.dart';
-import '../pages/my_story_view_page.dart';
-import '../pages/story_view_page.dart';
 import '../services/story_service.dart';
-import 'circular_avatar_fetcher.dart';
+import 'circular_avatar_fetcher.dart'; // Pastikan ini di-import
 
 class StoryCircle extends StatefulWidget {
   final String name;
   final bool isAddStory;
   final bool hasStory;
   final String? imageUrl;
-  final String? userProfileUrl; // <-- Parameter ini yang akan kita gunakan
+  final String? userProfileUrl;
   final User? currentUserData;
   final UserWithStories? userStoryData;
   final List<UserWithStories>? previousStoriesQueue;
   final List<UserWithStories>? nextStoriesQueue;
   final double radius;
+  final int? currentUserId;
+  final List<Color>? prefetchedColors;
+  final VoidCallback? onStoryClosed;
 
   const StoryCircle({
     Key? key,
@@ -32,6 +35,9 @@ class StoryCircle extends StatefulWidget {
     this.nextStoriesQueue,
     this.previousStoriesQueue,
     this.radius = 24.0,
+    this.currentUserId,
+    this.prefetchedColors,
+    this.onStoryClosed,
   }) : super(key: key);
 
   @override
@@ -39,15 +45,10 @@ class StoryCircle extends StatefulWidget {
 }
 
 class _StoryCircleState extends State<StoryCircle> {
-  bool _isLoading = false;
-  late bool _isViewed;
-  final StoryService _storyService = StoryService();
-
-
+  // --- initState() dan _navigateToCreateStory() tidak ada perubahan ---
   @override
   void initState() {
     super.initState();
-    _isViewed = widget.userStoryData?.isViewed ?? false;
   }
 
   Future<void> _navigateToCreateStory(User user) async {
@@ -131,88 +132,48 @@ class _StoryCircleState extends State<StoryCircle> {
     }
   }
 
-  Future<void> _navigateToViewStory(String heroTag) async {
-    if (widget.userStoryData == null || widget.userStoryData!.stories.isEmpty) return;
 
-    if (!_isViewed) {
-      setState(() {
-        _isViewed = true;
-      });
-    }
-
-    _storyService.viewStory(widget.userStoryData!.stories.first.storyId).catchError((e) {
-      print("Gagal menandai story sebagai dilihat: $e");
-      if (mounted) {
-        setState(() {
-          _isViewed = false;
-        });
-      }
-    });
-
-    setState(() { _isLoading = true; });
-
-    final firstStory = widget.userStoryData!.stories.first;
-
-    if (!firstStory.isVideo && firstStory.mediaUrl != null) {
-      await precacheImage(NetworkImage(firstStory.mediaUrl!), context);
-    }
-
-    if (!mounted) return;
-    setState(() { _isLoading = false; });
-
-    final pageToPush = widget.isAddStory
-        ? MyStoryViewPage(
-      userWithStories: widget.userStoryData!,
-      heroTag: heroTag,
-      previousStories: widget.previousStoriesQueue,
-      nextStories: widget.nextStoriesQueue,
-      userStories: const [],
-    )
-        : StoryViewPage(
-      userWithStories: widget.userStoryData!,
-      heroTag: heroTag,
-      previousStories: widget.previousStoriesQueue,
-      nextStories: widget.nextStoriesQueue,
-    );
-
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        opaque: false,
-        pageBuilder: (_, __, ___) => pageToPush,
-        transitionsBuilder: (_, animation, __, child) => FadeTransition(opacity: animation, child: child),
-      ),
-    );
-  }
-
+  // --- 👇 PERBAIKAN UTAMA ADA DI FUNGSI INI 👇 ---
   Widget _buildAddStory(BuildContext context, String heroTag) {
     final int userId = widget.currentUserData?.id ?? 0;
-    // --- 👇 PERBAIKAN UTAMA DI SINI 👇 ---
-    // Sekarang kita menggunakan widget.userProfileUrl yang sudah dikirimkan
     final String? profileUrl = widget.userProfileUrl;
     final bool hasStory = widget.hasStory;
-    final bool isViewed = widget.userStoryData?.isViewed ?? true;
+    final bool isViewed = widget.userStoryData?.isViewed ?? false; // Default ke false jika null
 
     return Stack(
       clipBehavior: Clip.none,
       alignment: Alignment.center,
       children: [
+        // 1. Avatar utama yang menampilkan border cerita (gradien/abu-abu)
         CircularAvatarFetcher(
           userId: userId,
           radius: widget.radius,
-          onTap: () {
+          // Jika punya story, onTap-nya null agar bisa membuka story viewer.
+          // Jika tidak punya, onTap akan membuka story creator.
+          onTap: hasStory
+              ? null
+              : () {
             if (widget.currentUserData != null) {
               _navigateToCreateStory(widget.currentUserData!);
             }
           },
+          onStoryClosed: widget.onStoryClosed, // Tetap teruskan untuk refresh
           imageUrl: profileUrl,
           hasStory: hasStory,
           storyViewed: isViewed,
           disableStoryBorder: false,
+          currentUserId: widget.currentUserId,
+          previousStoriesQueue: widget.previousStoriesQueue,
+          nextStoriesQueue: widget.nextStoriesQueue,
+          prefetchedColors: widget.prefetchedColors,
         ),
+
+        // 2. Tombol plus (+) yang selalu tampil
         Positioned(
           bottom: -2,
           right: -2,
           child: GestureDetector(
+            // Tombol plus ini akan selalu membuka halaman create story
             onTap: () {
               if (widget.currentUserData != null) {
                 _navigateToCreateStory(widget.currentUserData!);
@@ -248,19 +209,27 @@ class _StoryCircleState extends State<StoryCircle> {
     );
   }
 
+  // --- _buildOtherStory() tidak ada perubahan ---
   Widget _buildOtherStory() {
     final int userId = widget.userStoryData?.userId ?? 0;
 
     return CircularAvatarFetcher(
       userId: userId,
       radius: widget.radius,
+      imageUrl: widget.imageUrl,
+      hasStory: widget.userStoryData?.stories.isNotEmpty,
+      currentUserId: widget.currentUserId,
+      previousStoriesQueue: widget.previousStoriesQueue,
+      nextStoriesQueue: widget.nextStoriesQueue,
+      prefetchedColors: widget.prefetchedColors,
+      onStoryClosed: widget.onStoryClosed,
     );
   }
 
+  // --- build() tidak ada perubahan ---
   @override
   Widget build(BuildContext context) {
     final double avatarSize = widget.radius * 2 + 10;
-
     final heroTag = widget.isAddStory
         ? 'story_hero_add_story'
         : 'story_hero_${widget.userStoryData?.userId ?? widget.name}';
@@ -282,31 +251,9 @@ class _StoryCircleState extends State<StoryCircle> {
                     height: avatarSize,
                     child: widget.isAddStory
                         ? _buildAddStory(context, heroTag)
-                        : GestureDetector(
-                      onTap: _isLoading ? null : () => _navigateToViewStory(heroTag),
-                      child: _buildOtherStory(),
-                    ),
+                        : _buildOtherStory(),
                   ),
                 ),
-                if (_isLoading)
-                  Container(
-                    width: avatarSize,
-                    height: avatarSize,
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.5),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Center(
-                      child: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),

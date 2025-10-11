@@ -1,6 +1,7 @@
 // lib/widgets/single_clip_player.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:portal_si/services/video_cache_service.dart';
 import 'package:portal_si/widgets/comment_section.dart';
 import 'package:video_player/video_player.dart';
@@ -24,6 +25,8 @@ class SingleClipPlayer extends StatefulWidget {
 class _SingleClipPlayerState extends State<SingleClipPlayer>
     with AutomaticKeepAliveClientMixin {
   VideoPlayerController? _controller;
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  bool _hasMusic = false;
   bool _isInitialized = false;
 
   final LikeService _likeService = LikeService();
@@ -37,19 +40,43 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
   Duration? _sliderPosition;
   bool _wasPlayingBeforeDrag = false;
 
+  // --- SINKRONISASI LOOP: Variabel untuk menyimpan posisi terakhir video ---
+  Duration _lastPosition = Duration.zero;
+
   @override
   bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
-
     _isLiked = widget.post.isLikedByUser;
     _isBookmarked = widget.post.isBookmarked;
     _likesCount = widget.post.likesCount;
     _commentsCount = widget.post.commentsCount;
+    _hasMusic = widget.post.musicPreviewUrl != null && widget.post.musicPreviewUrl!.isNotEmpty;
+
+    // Kita tidak lagi set loop di audio player, karena akan dikontrol manual
+    // _audioPlayer.setReleaseMode(ReleaseMode.loop);
 
     _initializePlayer();
+  }
+
+  // --- SINKRONISASI LOOP: Fungsi listener untuk mendeteksi video loop ---
+  void _videoLoopListener() {
+    if (_controller == null || !_controller!.value.isInitialized || !_hasMusic) return;
+
+    final currentPosition = _controller!.value.position;
+
+    // Jika posisi saat ini lebih kecil dari posisi terakhir, artinya video telah loop
+    if (currentPosition < _lastPosition) {
+      // Perintahkan audio untuk kembali ke awal
+      _audioPlayer.seek(Duration.zero);
+      // Pastikan audio tetap bermain jika video juga bermain
+      if (_controller!.value.isPlaying) {
+        _audioPlayer.resume();
+      }
+    }
+    _lastPosition = currentPosition;
   }
 
   Future<void> _initializePlayer() async {
@@ -58,10 +85,21 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
       _controller = VideoPlayerController.file(fileInfo.file)
         ..initialize().then((_) {
           if (mounted) {
+            if (_hasMusic) {
+              _controller!.setVolume(0.0);
+              _audioPlayer.setSourceUrl(widget.post.musicPreviewUrl!);
+              // --- SINKRONISASI LOOP: Tambahkan listener di sini ---
+              _controller!.addListener(_videoLoopListener);
+            } else {
+              _controller!.setVolume(1.0);
+            }
             setState(() => _isInitialized = true);
             if (widget.isActive) {
               _controller!.play();
               _controller!.setLooping(true);
+              if (_hasMusic) {
+                _audioPlayer.resume();
+              }
             }
           }
         });
@@ -69,6 +107,16 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
     }
   }
 
+  @override
+  void dispose() {
+    // --- SINKRONISASI LOOP: Hapus listener saat widget dihancurkan ---
+    _controller?.removeListener(_videoLoopListener);
+    _controller?.dispose();
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
+  // ... (Sisa kode lain dari didUpdateWidget hingga build tidak ada perubahan) ...
   @override
   void didUpdateWidget(covariant SingleClipPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -82,15 +130,11 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
     if (widget.isActive) {
       if (!_controller!.value.isPlaying) _controller!.play();
       _controller!.setLooping(true);
+      if (_hasMusic) _audioPlayer.resume();
     } else {
       if (_controller!.value.isPlaying) _controller!.pause();
+      if (_hasMusic) _audioPlayer.pause();
     }
-  }
-
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
   }
 
   void _togglePlayPause() {
@@ -98,8 +142,10 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
     setState(() {
       if (_controller!.value.isPlaying) {
         _controller!.pause();
+        if (_hasMusic) _audioPlayer.pause();
       } else {
         _controller!.play();
+        if (_hasMusic) _audioPlayer.resume();
       }
     });
   }
@@ -128,7 +174,6 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
     });
   }
 
-  // --- PERUBAHAN DI SINI ---
   void _toggleLike() async {
     setState(() {
       _isLiked = !_isLiked;
@@ -140,10 +185,8 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
     });
 
     try {
-      // Panggil fungsi yang benar dari LikeService
       await _likeService.toggleLikeHttp(widget.post.id);
     } catch (e) {
-      // Kembalikan state jika gagal
       setState(() {
         _isLiked = !_isLiked;
         if (_isLiked) {
@@ -160,21 +203,18 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
     }
   }
 
-  // --- DAN PERUBAHAN DI SINI ---
   void _toggleBookmark() async {
     setState(() {
       _isBookmarked = !_isBookmarked;
     });
 
     try {
-      // Panggil fungsi yang benar dari BookmarkService
       if (_isBookmarked) {
         await _bookmarkService.addBookmark(widget.post.id);
       } else {
         await _bookmarkService.removeBookmark(widget.post.id);
       }
     } catch (e) {
-      // Kembalikan state jika gagal
       setState(() {
         _isBookmarked = !_isBookmarked;
       });
@@ -249,6 +289,7 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
                         _wasPlayingBeforeDrag = value.isPlaying;
                         if (_wasPlayingBeforeDrag) {
                           _controller!.pause();
+                          if (_hasMusic) _audioPlayer.pause();
                         }
                       });
                     },
@@ -260,10 +301,12 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
                     onChangeEnd: (newValue) {
                       final newPosition = Duration(milliseconds: newValue.round());
                       _controller!.seekTo(newPosition);
+                      if (_hasMusic) _audioPlayer.seek(newPosition);
                       setState(() {
                         _sliderPosition = null;
                         if (_wasPlayingBeforeDrag) {
                           _controller!.play();
+                          if (_hasMusic) _audioPlayer.resume();
                         }
                       });
                     },
@@ -323,6 +366,11 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
   }
 
   Widget _buildBottomSection() {
+    final bool hasMusic = widget.post.musicTrackName != null && widget.post.musicTrackName!.isNotEmpty;
+    final String audioText = hasMusic
+        ? '${widget.post.musicTrackName!} - ${widget.post.musicArtistName ?? 'Sounds'}'
+        : 'Original audio - ${widget.post.user.username}';
+
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Row(
@@ -357,8 +405,8 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
                       width: 150,
                       height: 20,
                       child: Marquee(
-                        text: 'Original audio - ${widget.post.user.username}',
-                        style: const TextStyle(color: Colors.white),
+                        text: audioText,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
                         scrollAxis: Axis.horizontal,
                         blankSpace: 20.0,
                         velocity: 50.0,

@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:collection/collection.dart';
 import 'package:portal_si/components/story_circle.dart';
+import '../controllers/home_controller.dart';
 import '../models/story_model.dart';
 import '../utils/user_provider.dart';
 import 'package:provider/provider.dart';
@@ -17,10 +18,8 @@ class StorySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Ambil data pengguna yang sedang login dari UserProvider
     final currentUser = Provider.of<UserProvider>(context).currentUser;
     if (currentUser == null) {
-      // Jika karena suatu alasan data user belum ada, tampilkan loading
       return const SizedBox(height: 100, child: Center(child: CircularProgressIndicator()));
     }
 
@@ -39,18 +38,13 @@ class StorySection extends StatelessWidget {
         .where((storyUser) => storyUser.userId != currentUserId)
         .toList();
 
-    // Urutkan cerita: yang belum dilihat tampil lebih dulu
     otherUsersStories.sort((a, b) {
-      if (!a.isViewed && b.isViewed) return -1; // a (belum dilihat) sebelum b (sudah dilihat)
-      if (a.isViewed && !b.isViewed) return 1;  // b sebelum a
-      return 0; // Jaga urutan asli jika status sama
+      if (!a.isViewed && b.isViewed) return -1;
+      if (a.isViewed && !b.isViewed) return 1;
+      return 0;
     });
 
-    // TINGKATKAN RADIUS DI SINI
-    const double storyCircleRadius = 40.0;
-
-    // TINGKATKAN KETINGGIAN SECTION AGAR MUAT
-    // (Avatar Full Size 74.0) + (SizedBox 6.0) + (Text Height ~14.0) + (Padding Vertikal ListView 16.0)
+    const double storyCircleRadius = 37.0;
     final double sectionHeight = storyCircleRadius * 3.5;
 
     return Container(
@@ -61,11 +55,14 @@ class StorySection extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         itemCount: otherUsersStories.length + 1,
         itemBuilder: (context, index) {
+          final VoidCallback onStoryCloseCallback = () {
+            // Panggil HomeController untuk memuat ulang semua data dashboard
+            Provider.of<HomeController>(context, listen: false).refreshDashboardData();
+          };
           if (index == 0) {
-            // Beri key konstan untuk item "Cerita Anda"
             return StoryCircle(
-              key: const ValueKey('add_story_circle'), // TAMBAHKAN KEY
-              name: 'Cerita Anda',
+              key: const ValueKey('add_story_circle'),
+              name: 'Cerita Kamu',
               isAddStory: true,
               hasStory: userHasStory,
               userProfileUrl: profileUrl,
@@ -74,6 +71,9 @@ class StorySection extends StatelessWidget {
               nextStoriesQueue: otherUsersStories,
               currentUserData: currentUser,
               radius: storyCircleRadius,
+              // --- 👇 PERUBAHAN 1: Teruskan ID pengguna saat ini 👇 ---
+              currentUserId: currentUserId,
+              onStoryClosed: onStoryCloseCallback,
             );
           }
 
@@ -83,15 +83,17 @@ class StorySection extends StatelessWidget {
               ? otherUsersStories.sublist(index)
               : <UserWithStories>[];
 
-          // Gunakan userId yang unik sebagai Key untuk setiap StoryCircle lainnya
           return StoryCircle(
-            key: ValueKey(userStoryData.userId), // TAMBAHKAN KEY UNIK
+            key: ValueKey(userStoryData.userId),
             name: userStoryData.username,
             imageUrl: userStoryData.profilePictureUrl,
             userStoryData: userStoryData,
             previousStoriesQueue: previousQueue,
             nextStoriesQueue: nextQueue,
             radius: storyCircleRadius,
+            // --- 👇 PERUBAHAN 2: Teruskan ID pengguna saat ini 👇 ---
+            currentUserId: currentUserId,
+            onStoryClosed: onStoryCloseCallback,
           );
         },
       ),

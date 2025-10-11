@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
 import '../models/liker_model.dart';
@@ -11,15 +12,39 @@ import 'api_service.dart';
 
 import '../models/post_model.dart';
 
-// --- PERBAIKAN: Tambahkan kembali "extends ApiService" ---
+// Fungsi helper untuk membuat stream yang melaporkan progres unggahan
+Stream<List<int>> _createUploadStream(File file, void Function(int, int) onProgress) {
+  final fileStream = file.openRead();
+  final totalBytes = file.lengthSync();
+  int bytesSent = 0;
+
+  return fileStream.transform(
+    StreamTransformer.fromHandlers(
+      handleData: (data, sink) {
+        bytesSent += data.length;
+        onProgress(bytesSent, totalBytes);
+        sink.add(data);
+      },
+      handleError: (error, stack, sink) {
+        sink.addError(error, stack);
+      },
+      handleDone: (sink) {
+        sink.close();
+      },
+    ),
+  );
+}
+
+
 class PostService extends ApiService {
   PostService._internal();
   static final PostService _instance = PostService._internal();
   factory PostService() => _instance;
 
-  // --- SEMUA KODE CACHE LAMA DIHAPUS DARI SINI ---
-
-  Future<Post?> createPost(Map<String, String> fields, {File? mediaFile}) async {
+  Future<Post?> createPost(
+      Map<String, String> fields,
+      {File? mediaFile, Function(int sent, int total)? onProgress}
+      ) async {
     final token = await getToken();
     var request = http.MultipartRequest(
       'POST',
@@ -31,40 +56,58 @@ class PostService extends ApiService {
     request.fields.addAll(fields);
 
     if (mediaFile != null) {
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'media',
-          mediaFile.path,
-          filename: path.basename(mediaFile.path),
-        ),
-      );
+      if (onProgress != null) {
+        // Menggunakan stream kustom untuk melaporkan progres
+        final stream = _createUploadStream(mediaFile, onProgress);
+        request.files.add(
+          http.MultipartFile(
+            'media',
+            stream,
+            mediaFile.lengthSync(),
+            filename: path.basename(mediaFile.path),
+          ),
+        );
+      } else {
+        // Fallback jika tidak ada callback progress
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'media',
+            mediaFile.path,
+            filename: path.basename(mediaFile.path),
+          ),
+        );
+      }
     }
 
-    final streamedResponse = await request.send();
-    final response = await http.Response.fromStream(streamedResponse);
+    try {
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
 
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      // --- PERUBAHAN: Tambahkan log untuk respons body ---
-      log("✅ Respons Sukses dari Endpoint /posts:\n${response.body}");
-      // --- AKHIR PERUBAHAN ---
-
-      final responseData = jsonDecode(response.body);
-      // Pastikan 'post' adalah Map sebelum dioper ke Post.fromJson
-      if (responseData['post'] is Map<String, dynamic>) {
-        return Post.fromJson(responseData['post'] as Map<String, dynamic>);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        log("✅ Respons Sukses dari Endpoint /posts:\n${response.body}");
+        final responseData = jsonDecode(response.body);
+        if (responseData['post'] is Map<String, dynamic>) {
+          return Post.fromJson(responseData['post'] as Map<String, dynamic>);
+        } else {
+          throw Exception('Format data post tidak valid dalam respons.');
+        }
       } else {
-        // Tambahkan penanganan jika 'post' tidak ada atau bukan Map
-        throw Exception('Format data post tidak valid dalam respons.');
+        // Jika koneksi ditutup (biasanya karena pembatalan), lempar error spesifik
+        if (streamedResponse.request == null) {
+          throw Exception('Upload dibatalkan oleh pengguna.');
+        }
+        throw Exception(
+            'Gagal membuat postingan. Status: ${response.statusCode}, Body: ${response.body}'
+        );
       }
-    } else {
-      throw Exception(
-          'Gagal membuat postingan. Status: ${response.statusCode}, Body: ${response.body}'
-      );
+    } on http.ClientException catch (e) {
+      // Menangkap error ketika stream dibatalkan secara paksa
+      log("Upload dibatalkan: $e");
+      throw Exception('Upload dibatalkan oleh pengguna.');
     }
   }
 
   Future<Post?> fetchPinnedPost() async {
-    // Implementasi placeholder Anda dipertahankan
     return null;
   }
 
@@ -74,16 +117,10 @@ class PostService extends ApiService {
     });
 
     if (responseData is Map<String, dynamic> && responseData['feed'] is List) {
-      // Ambil list feed seperti sebelumnya
       final items = responseData['feed'] as List<dynamic>;
-
-      // --- 👇 CEK APAKAH ADA HALAMAN BERIKUTNYA 👇 ---
       final bool hasNext = responseData['next_page_url'] != null;
-
-      // Kembalikan objek PaginatedFeedResponse
       return PaginatedFeedResponse(feedItems: items, hasNextPage: hasNext);
     } else {
-      // Jika format tidak sesuai, kembalikan data kosong dan anggap tidak ada halaman lagi
       print('⚠️ Peringatan: Format respons /posts tidak sesuai.');
       return PaginatedFeedResponse(feedItems: [], hasNextPage: false);
     }
@@ -99,11 +136,8 @@ class PostService extends ApiService {
     });
 
     if (response.statusCode == 200) {
-      // 1. Decode respons sebagai Map
       final Map<String, dynamic> body = json.decode(response.body);
-      // 2. Ambil list dari key 'data'
       final List<dynamic> postsJson = body['data'];
-      // 3. Ubah setiap item JSON menjadi objek Post
       return postsJson.map((json) => Post.fromJson(json)).toList();
     } else {
       throw Exception('Gagal memuat postingan explore dari API');
@@ -112,13 +146,6 @@ class PostService extends ApiService {
 
   Future<Post> getPostDetail(int id) async {
     final dynamic data = await get('posts/$id');
-    print('=============================================');
-    print('🔍 DEBUG: DATA MENTAH DARI API UNTUK POST ID #$id');
-    // Gunakan jsonEncode untuk format yang rapi (pretty print)
-    JsonEncoder encoder = const JsonEncoder.withIndent('  ');
-    String prettyprint = encoder.convert(data);
-    log(prettyprint); // log() lebih baik untuk string panjang
-    print('=============================================');
     if (data is Map<String, dynamic>) {
       return Post.fromJson(data);
     } else {
@@ -128,7 +155,7 @@ class PostService extends ApiService {
 
   Future<List<Liker>> getPostLikers(int postId) async {
     try {
-      final currentUserId = await SecureStorage.getUserId(); // Ambil ID pengguna saat ini
+      final currentUserId = await SecureStorage.getUserId();
       final responseData = await get('posts/$postId/likes');
 
       if (responseData is List) {
@@ -150,7 +177,6 @@ class PostService extends ApiService {
     try {
       dynamic responseData;
 
-      // Jika ada nextUrl (untuk pagination), panggil dengan http.get langsung
       if (nextUrl != null) {
         log("🚀 Mencoba mengambil clips dari URL LENGKAP: $nextUrl");
         final token = await SecureStorage.getToken();
@@ -167,7 +193,6 @@ class PostService extends ApiService {
           throw Exception('Endpoint tidak ditemukan (${response.statusCode}). URL: $nextUrl');
         }
       }
-      // Jika tidak ada nextUrl (panggilan pertama), gunakan ApiService.get
       else {
         final String endpoint = 'clips/$startingPostId';
         log("🚀 Mencoba mengambil clips dari ENDPOINT: $endpoint");

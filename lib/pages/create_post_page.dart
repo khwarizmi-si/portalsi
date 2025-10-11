@@ -1,15 +1,17 @@
-// lib/pages/create_post_page.dart
-
 import 'dart:io';
+import 'dart:math'; // Diperlukan untuk konstanta MB
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
-import 'package:video_thumbnail/video_thumbnail.dart';
+import 'package:video_compress/video_compress.dart'; // <<< IMPORT TAMBAHAN
 
+import 'drafts_page.dart';
+import './edit_clips/edit_clips_page.dart';
 import 'edit_post_page.dart';
 
 class CreatePostPage extends StatefulWidget {
@@ -73,10 +75,13 @@ class _CreatePostPageState extends State<CreatePostPage> {
   RequestType _currentRequestType = RequestType.common;
   String _selectedFilterName = 'Belakangan ini';
   final DraggableScrollableController _sheetController = DraggableScrollableController();
-  bool _isMultiSelectMode = false;
-  final List<AssetEntity> _selectedAssets = [];
-  BoxFit _singlePreviewFit = BoxFit.contain;
   VideoPlayerController? _videoController;
+
+  // LOGIKA KOMPRESI VIDEO
+  // Konstanta untuk batasan ukuran file video (8MB)
+  // 8 MB = 8 * 1024 * 1024 = 8388608 bytes
+  static const int _maxFileSizeInBytes = 8388608;
+  bool _isProcessing = false; // State untuk proses kompresi
 
   @override
   void initState() {
@@ -91,10 +96,91 @@ class _CreatePostPageState extends State<CreatePostPage> {
     super.dispose();
   }
 
+  Future<File?> _compressVideo(String path) async {
+    MediaInfo? mediaInfo;
+    try {
+      mediaInfo = await VideoCompress.compressVideo(
+        path,
+        quality: VideoQuality.MediumQuality,
+        deleteOrigin: false,
+        includeAudio: true,
+      );
+      return mediaInfo?.file;
+    } catch (e) {
+      print("Error during video compression: $e");
+      return File(path);
+    }
+  }
+
+  Future<void> _processAndNavigateToEditClips() async {
+    if (_selectedGalleryAsset == null) return;
+
+    _videoController?.pause();
+
+    final File? mediaFile = await _selectedGalleryAsset!.file;
+    if (mediaFile == null) return;
+
+    if (_selectedGalleryAsset!.type == AssetType.video) {
+      setState(() {
+        _isProcessing = true;
+      });
+
+      File fileToPass = mediaFile;
+
+      // Cek ukuran file: jika lebih dari 8 MB
+      if (mediaFile.lengthSync() > _maxFileSizeInBytes) {
+        if(mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Video terlalu besar (>8MB), sedang dikompresi...')),
+          );
+        }
+
+        final compressedFile = await _compressVideo(mediaFile.path);
+
+        if (compressedFile != null) {
+          fileToPass = compressedFile;
+          final newSizeMB = fileToPass.lengthSync() / (1024 * 1024);
+          print('Kompresi Selesai. Ukuran baru: $newSizeMB MB');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Kompresi berhasil. Ukuran baru sekitar ${newSizeMB.toStringAsFixed(2)}MB (target ~7MB).')),
+            );
+          }
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Kompresi gagal, menggunakan file asli.')),
+            );
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
+
+      if (mounted) {
+        Navigator.of(context).push(
+          _createSlideRoute(EditClipsPage(videoFile: fileToPass)),
+        );
+      }
+
+    } else {
+      // Navigasi untuk Gambar
+      if (mounted) {
+        Navigator.of(context).push(
+          _createSlideRoute(EditPostPage(mediaItems: [_selectedGalleryAsset!])),
+        );
+      }
+    }
+  }
+
   Future<void> _initVideoController(AssetEntity asset) async {
     await _videoController?.dispose();
     _videoController = null;
-    if (asset.type == AssetType.video && !_isMultiSelectMode) {
+    if (asset.type == AssetType.video) {
       final file = await asset.file;
       if (file != null && mounted) {
         _videoController = VideoPlayerController.file(file);
@@ -112,33 +198,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
     _initVideoController(asset);
     setState(() {
       _selectedGalleryAsset = asset;
-    });
-    if (_isMultiSelectMode) {
-      setState(() {
-        if (_selectedAssets.contains(asset)) {
-          _selectedAssets.remove(asset);
-        } else {
-          _selectedAssets.add(asset);
-        }
-      });
-    }
-  }
-
-  void _toggleMultiSelectMode() {
-    setState(() {
-      _isMultiSelectMode = !_isMultiSelectMode;
-      if (!_isMultiSelectMode) {
-        _selectedAssets.clear();
-        if (_selectedGalleryAsset != null) {
-          _initVideoController(_selectedGalleryAsset!);
-        }
-      } else {
-        _videoController?.dispose();
-        _videoController = null;
-        if (_selectedGalleryAsset != null && _selectedAssets.isEmpty) {
-          _selectedAssets.add(_selectedGalleryAsset!);
-        }
-      }
     });
   }
 
@@ -216,7 +275,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
         child: const Center(child: CircularProgressIndicator(color: Colors.white)),
       );
     }
-    final BoxFit fitMode = _isMultiSelectMode ? BoxFit.cover : _singlePreviewFit;
     return Container(
       color: Colors.black,
       height: MediaQuery.of(context).size.width,
@@ -227,7 +285,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
         children: [
           if (_videoController != null && _videoController!.value.isInitialized)
             FittedBox(
-              fit: fitMode,
+              fit: BoxFit.contain,
               child: SizedBox(
                 width: _videoController!.value.size.width,
                 height: _videoController!.value.size.height,
@@ -238,34 +296,11 @@ class _CreatePostPageState extends State<CreatePostPage> {
             AssetEntityImage(
               _selectedGalleryAsset!,
               isOriginal: true,
-              fit: fitMode,
+              fit: BoxFit.contain,
               loadingBuilder: (context, child, loadingProgress) {
                 if (loadingProgress == null) return child;
                 return const Center(child: CircularProgressIndicator(color: Colors.white));
               },
-            ),
-          if (!_isMultiSelectMode)
-            Positioned(
-              left: 8,
-              bottom: 8,
-              child: IconButton(
-                onPressed: () {
-                  setState(() {
-                    _singlePreviewFit = _singlePreviewFit == BoxFit.contain
-                        ? BoxFit.cover
-                        : BoxFit.contain;
-                  });
-                },
-                icon: Icon(
-                  _singlePreviewFit == BoxFit.contain
-                      ? Icons.crop_free
-                      : Icons.fullscreen,
-                ),
-                color: Colors.white,
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.black.withOpacity(0.4),
-                ),
-              ),
             ),
         ],
       ),
@@ -500,23 +535,14 @@ class _CreatePostPageState extends State<CreatePostPage> {
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
             child: TextButton(
-              onPressed: () {
-                _videoController?.pause(); // <-- PERBAIKAN BUG 1 DI SINI
-                if (_isMultiSelectMode) {
-                  if (_selectedAssets.isNotEmpty) {
-                    Navigator.of(context).push(
-                      _createSlideRoute(EditPostPage(mediaItems: _selectedAssets)),
-                    );
-                  }
-                } else {
-                  if (_selectedGalleryAsset != null) {
-                    Navigator.of(context).push(
-                      _createSlideRoute(EditPostPage(mediaItems: [_selectedGalleryAsset!])),
-                    );
-                  }
-                }
-              },
-              child: const Text('Lanjut', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 16)),
+              onPressed: _isProcessing ? null : _processAndNavigateToEditClips, // Dipanggil setelah logika kompresi
+              child: _isProcessing
+                  ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blue)
+              )
+                  : const Text('Lanjut', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 16)),
             ),
           ),
         ],
@@ -557,6 +583,21 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                 ],
                               ),
                             ),
+                            TextButton.icon(
+                              onPressed: () {
+                                HapticFeedback.mediumImpact();
+                                _videoController?.pause();
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (context) => const DraftsPage()),
+                                );
+                              },
+                              icon: const Icon(Icons.folder_copy_outlined, color: Colors.white, size: 20),
+                              label: const Text('Draf', style: TextStyle(color: Colors.white, fontSize: 16)),
+                              style: TextButton.styleFrom(
+                                backgroundColor: Colors.white.withOpacity(0.15),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                            )
                           ],
                         ),
                       ),
@@ -573,9 +614,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
                         }
                         final AssetEntity asset = _assets[index - 1];
 
-                        final bool isSelected = _selectedAssets.contains(asset);
-                        final int selectedIndex = isSelected ? _selectedAssets.indexOf(asset) + 1 : 0;
-
                         return GestureDetector(
                           key: ValueKey(asset.id),
                           onTap: () => _handleAssetTap(asset),
@@ -585,27 +623,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
                               AssetEntityImage(asset, isOriginal: false, thumbnailSize: const ThumbnailSize(200, 200), fit: BoxFit.cover),
                               if (asset.type == AssetType.video)
                                 const Positioned(bottom: 5, right: 5, child: Icon(Icons.videocam, color: Colors.white, size: 16)),
-                              if (isSelected)
-                                Container(color: Colors.black.withOpacity(0.5)),
-                              if (_selectedGalleryAsset == asset && !_isMultiSelectMode)
+                              if (_selectedGalleryAsset == asset)
                                 Container(color: Colors.white.withOpacity(0.5)),
-                              if (_isMultiSelectMode)
-                                Positioned(
-                                  top: 5,
-                                  right: 5,
-                                  child: Container(
-                                    width: 24,
-                                    height: 24,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: isSelected ? Colors.blue : Colors.white.withOpacity(0.5),
-                                      border: Border.all(color: Colors.white, width: 1.5),
-                                    ),
-                                    child: isSelected
-                                        ? Center(child: Text('$selectedIndex', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)))
-                                        : null,
-                                  ),
-                                ),
                             ],
                           ),
                         );

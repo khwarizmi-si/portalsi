@@ -1,3 +1,5 @@
+// lib/components/circular_avatar_fetcher.dart
+
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
@@ -13,10 +15,18 @@ class CircularAvatarFetcher extends StatefulWidget {
   final VoidCallback? onStoryClosed;
   final bool disableStoryBorder;
 
-  // Parameter opsional baru untuk data yang sudah ada
+  // Parameter opsional untuk data yang sudah ada
   final String? imageUrl;
   final bool? hasStory;
   final bool? storyViewed;
+
+  // Parameter untuk logika navigasi
+  final int? currentUserId;
+  final List<UserWithStories>? previousStoriesQueue;
+  final List<UserWithStories>? nextStoriesQueue;
+
+  // --- 👇 PERUBAHAN 1: Tambahkan parameter untuk menerima warna yang sudah di-prefetch 👇 ---
+  final List<Color>? prefetchedColors;
 
   const CircularAvatarFetcher({
     super.key,
@@ -25,10 +35,13 @@ class CircularAvatarFetcher extends StatefulWidget {
     this.onTap,
     this.onStoryClosed,
     this.disableStoryBorder = false,
-    // Tambahkan ke konstruktor
     this.imageUrl,
     this.hasStory,
     this.storyViewed,
+    this.currentUserId,
+    this.previousStoriesQueue,
+    this.nextStoriesQueue,
+    this.prefetchedColors, // <-- Tambahkan ke konstruktor
   });
 
   @override
@@ -42,49 +55,53 @@ class _CircularAvatarFetcherState extends State<CircularAvatarFetcher> {
   @override
   void initState() {
     super.initState();
-    // HANYA panggil API jika imageUrl TIDAK disediakan
     if (widget.imageUrl == null) {
       _avatarInfoFuture = AvatarService().getCircleAvatarInfo(widget.userId);
     }
   }
 
   Future<void> _handleTap(Map<String, dynamic> avatarData) async {
-    final bool hasStory = avatarData['has_story'] ?? false;
+    final bool hasStory = widget.hasStory ?? avatarData['has_story'] ?? false;
 
-    if (!hasStory) {
-      widget.onTap?.call();
+    if (widget.onTap != null) {
+      widget.onTap!();
       return;
     }
 
-    if (_isLoadingStory) return;
+    if (!hasStory || _isLoadingStory) return;
 
     setState(() => _isLoadingStory = true);
 
     try {
-      final userWithStories = await StoryService().getStoriesForUser(widget.userId);
-      if (!mounted) return;
+      // Dengan arsitektur baru, kita tidak perlu mengambil data di sini.
+      // Kita hanya perlu menavigasi dan mengirimkan userId.
+      final heroTag = 'story_hero_${widget.userId}';
 
       await Navigator.push(
         context,
-        MaterialPageRoute(
-          builder: (context) => StoryViewPage(
-            userWithStories: userWithStories,
-            heroTag: 'story_hero_${userWithStories.userId}',
+        PageRouteBuilder(
+          opaque: false,
+          pageBuilder: (_, __, ___) => StoryViewPage(
+            initialUserId: widget.userId,
+            heroTag: heroTag,
           ),
+          transitionsBuilder: (_, animation, __, child) =>
+              FadeTransition(opacity: animation, child: child),
         ),
       );
 
-      if(mounted) {
-        widget.onStoryClosed?.call();
-      }
+      // Panggil callback setelah halaman cerita ditutup
+      widget.onStoryClosed?.call();
 
     } catch (e) {
-      if(mounted) {
+      // Tangani error jika navigasi gagal (jarang terjadi)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal memuat story: $e')),
+          SnackBar(content: Text('Gagal membuka cerita: $e')),
         );
       }
     } finally {
+      // Pastikan loading indicator selalu hilang, baik sukses maupun gagal
       if (mounted) {
         setState(() => _isLoadingStory = false);
       }
@@ -93,7 +110,6 @@ class _CircularAvatarFetcherState extends State<CircularAvatarFetcher> {
 
   @override
   Widget build(BuildContext context) {
-    // Jika data sudah disediakan via parameter, langsung bangun UI tanpa FutureBuilder
     if (widget.imageUrl != null) {
       return _buildAvatar(
         imageUrl: widget.imageUrl,
@@ -102,18 +118,15 @@ class _CircularAvatarFetcherState extends State<CircularAvatarFetcher> {
       );
     }
 
-    // Jika tidak ada data, gunakan logika FutureBuilder yang lama sebagai fallback
     return FutureBuilder<Map<String, dynamic>>(
       future: _avatarInfoFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _buildLoadingPlaceholder();
         }
-
         if (snapshot.hasError || !snapshot.hasData) {
           return _buildErrorPlaceholder();
         }
-
         final data = snapshot.data!;
         return _buildAvatar(
           imageUrl: data['profile_picture_url'],
@@ -124,7 +137,6 @@ class _CircularAvatarFetcherState extends State<CircularAvatarFetcher> {
     );
   }
 
-  // Method builder baru untuk menghindari duplikasi kode
   Widget _buildAvatar({
     required String? imageUrl,
     required bool hasStory,
@@ -139,14 +151,15 @@ class _CircularAvatarFetcherState extends State<CircularAvatarFetcher> {
           : null,
     );
 
-    final bool canTapStory = widget.hasStory ?? hasStory;
-
     return GestureDetector(
       onTap: () {
-        if (canTapStory) {
-          _handleTap({'has_story': canTapStory});
+        if (widget.onTap != null) {
+          _handleTap({});
         } else {
-          widget.onTap?.call();
+          _handleTap({
+            'has_story': hasStory,
+            'profile_picture_url': imageUrl
+          });
         }
       },
       child: Stack(

@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:portal_si/services/websocket_service.dart';
 import 'package:portal_si/utils/secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'fcm_service.dart'; // <-- IMPORT BARU
 import 'group_service.dart';
 import 'notification_system_service.dart';
 import 'token_refresh_service.dart';
@@ -70,14 +71,12 @@ class AuthService {
             );
             break;
           case 'like.created':
-            final int? likerId = notifData['user_id'] as int?; // Ambil ID pengguna yang melakukan like
+            final int? likerId = notifData['user_id'] as int?;
 
-            // --- LOGIKA FILTER NOTIFIKASI SELF-LIKE ---
             if (likerId != null && likerId == currentUserId) {
               debugPrint("Notifikasi like diabaikan karena dilakukan oleh pengguna sendiri.");
-              break; // Keluar dari switch case, tidak membuat notifikasi
+              break;
             }
-            // ------------------------------------------
 
             final userName = notifData['user_name'] as String? ?? 'Seseorang';
             NotificationSystemService.instance.showGroupedNotification(
@@ -119,14 +118,12 @@ class AuthService {
             }
             break;
           case 'comment.created':
-            final int? commenterId = notifData['user_id'] as int?; // Ambil ID pengguna yang berkomentar
+            final int? commenterId = notifData['user_id'] as int?;
 
-            // --- LOGIKA FILTER NOTIFIKASI SELF-COMMENT ---
             if (commenterId != null && commenterId == currentUserId) {
               debugPrint("Notifikasi komentar diabaikan karena dilakukan oleh pengguna sendiri.");
-              break; // Keluar dari switch case, tidak membuat notifikasi
+              break;
             }
-            // ---------------------------------------------
 
             final userName = notifData['user_name'] as String? ?? 'Seseorang';
             final content = notifData['content'] as String? ?? '';
@@ -161,7 +158,6 @@ class AuthService {
 
     print("🎧 Listener global untuk channel '$personalChannel' dan '$announcementsChannel' telah aktif.");
   }
-
   static Future<void> notifyBackendOnline() async {
     try {
       final token = await SecureStorage.getToken();
@@ -190,23 +186,17 @@ class AuthService {
     }
   }
 
-  /// Melakukan proses login dan menyimpan token serta data pengguna.
   Future<Map<String, dynamic>> login(String email, String password) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/login'),
-
-        // 1. Header memberitahu server bahwa kita mengirim JSON
         headers: {
           'Content-Type': 'application/json; charset=UTF-8'
         },
-
-        // 2. Body harus di-encode menjadi String JSON
         body: json.encode({
           'login': email,
           'password': password
         }),
-
       ).timeout(const Duration(seconds: 10));
 
       final data = json.decode(response.body);
@@ -216,31 +206,72 @@ class AuthService {
         final user = data['user'] as Map<String, dynamic>?;
 
         if (token != null && user != null) {
-          // Simpan token, user ID, dan data user lengkap
           await SecureStorage.saveToken(token);
           await SecureStorage.saveUserId(user['user_id'].toString());
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('currentUser', json.encode(user));
-
-          // Inisialisasi WebSocket setelah login berhasil
           await initializeWebSocket(token);
-
           _tokenRefreshService.start();
+
+          // [PERUBAHAN] Kirim token FCM ke server setelah login berhasil
+          await FcmService.instance.sendTokenToServer();
 
           return {'success': true, 'message': 'Login berhasil', 'user': user};
         }
       }
-      // Tangani error dari server
       return {'success': false, 'message': data['message'] ?? 'Login gagal'};
     } catch (e) {
-      // Tangani error jaringan
       return {'success': false, 'message': 'Terjadi kesalahan jaringan: $e'};
+    }
+  }
+
+  Future<Map<String, dynamic>> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final token = await SecureStorage.getToken();
+    if (token == null) {
+      throw Exception('Otentikasi gagal. Silakan login kembali.');
+    }
+
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/account/password'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: json.encode({
+          'current_password': currentPassword,
+          'new_password': newPassword,
+        }),
+      ).timeout(const Duration(seconds: 15));
+
+      final responseBody = json.decode(response.body);
+
+      if (response.statusCode == 200) {
+        return responseBody;
+      } else {
+        final errors = responseBody['errors'] as Map<String, dynamic>?;
+        if (errors != null && errors.containsKey('current_password')) {
+          throw Exception(errors['current_password'][0]);
+        }
+        throw Exception(responseBody['message'] ?? 'Gagal mengganti password.');
+      }
+    } on TimeoutException {
+      throw Exception('Waktu permintaan habis. Silakan coba lagi.');
+    } catch (e) {
+      rethrow;
     }
   }
 
   Future<void> logout() async {
     _tokenRefreshService.stop();
     try {
+      // [PERUBAHAN] Hapus token FCM dari server sebelum proses logout lainnya
+      await FcmService.instance.deleteTokenFromServer();
+
       await AuthService.notifyBackendOffline();
       webSocketService?.disconnect();
       webSocketService = null;
@@ -271,26 +302,22 @@ class AuthService {
           'email': email,
           'password': password,
         },
-      ).timeout(const Duration(seconds: 10)); // Tambahkan timeout juga untuk register
+      ).timeout(const Duration(seconds: 10));
 
       final data = json.decode(response.body);
 
       if (response.statusCode == 201) {
         return {'success': true, 'message': data['message'] ?? 'Registrasi berhasil. Silakan cek email untuk verifikasi.'};
       } else if (response.statusCode == 422 && data['errors'] != null) {
-        // --- MODIFIKASI: Menangani error validasi 422 ---
-        // Gabungkan semua pesan error validasi menjadi satu string
         final errors = data['errors'] as Map<String, dynamic>;
         String errorMessage = '';
         errors.forEach((key, value) {
-          // Asumsi value adalah List<String>
           if (value is List) {
             errorMessage += (value.join('\n') + '\n');
           }
         });
         return {'success': false, 'message': errorMessage.trim(), 'errors': errors};
       } else {
-        // Menangani error umum (misalnya 400, 500, dll.)
         return {'success': false, 'message': data['message'] ?? 'Registrasi gagal. Coba lagi nanti.'};
       }
     } on TimeoutException {

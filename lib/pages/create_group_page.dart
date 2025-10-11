@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../controllers/create_group_controller.dart';
 import '../models/user_model.dart';
 
+// --- 👇 Widget ini sekarang bisa menjadi StatelessWidget ---
 class CreateGroupPage extends StatelessWidget {
   const CreateGroupPage({super.key});
 
@@ -31,40 +32,41 @@ class CreateGroupPage extends StatelessWidget {
               actions: [
                 TextButton(
                   onPressed: controller.isCreatingGroup ||
-                          controller.groupNameController.text.isEmpty
+                      controller.groupNameController.text.isEmpty
                       ? null
                       : () async {
-                          // Panggil method createGroup dari controller
-                          final newGroupData = await controller.createGroup();
+                    final newGroupData = await controller.createGroup();
 
-                          // Jika berhasil dan widget masih ada
-                          if (newGroupData != null && context.mounted) {
-                            // Buat objek Group dari data yang dikembalikan
-                            final newGroup = Group.fromJson(newGroupData);
+                    if (newGroupData != null && context.mounted) {
+                      final newGroup = Group.fromJson(newGroupData);
 
-                            // Tampilkan notifikasi
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text('Grup berhasil dibuat!'),
-                                  backgroundColor: Colors.green),
-                            );
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('Grup berhasil dibuat!'),
+                            backgroundColor: Colors.green),
+                      );
 
-                            // Gantikan halaman saat ini dengan halaman chat grup yang baru
-                            Navigator.of(context)
-                                .pushReplacement(MaterialPageRoute(
-                              builder: (_) =>
-                                  GroupChatRoomPage(group: newGroup),
-                            ));
-                          }
-                        },
+                      Navigator.of(context)
+                          .pushReplacement(MaterialPageRoute(
+                        builder: (_) =>
+                            GroupChatRoomPage(group: newGroup),
+                      ));
+                    } else if (controller.errorMessage != null && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                            content: Text(controller.errorMessage!),
+                            backgroundColor: Colors.red),
+                      );
+                    }
+                  },
                   child: controller.isCreatingGroup
                       ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2))
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2))
                       : const Text('Buat',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 16)),
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 16)),
                 )
               ],
             ),
@@ -74,9 +76,9 @@ class CreateGroupPage extends StatelessWidget {
                 _buildGroupHeader(context, controller),
                 Padding(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: TextField(
-                    onChanged: controller.filterFollowers,
+                    onChanged: controller.search,
                     decoration: InputDecoration(
                       hintText: 'Cari orang untuk ditambahkan...',
                       prefixIcon: const Icon(Icons.search, color: Colors.grey),
@@ -91,13 +93,14 @@ class CreateGroupPage extends StatelessWidget {
                 ),
                 Padding(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8.0),
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8.0),
                   child: Text(
                       "Pilih Anggota (${controller.selectedUsers.length})",
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, color: Colors.grey)),
                 ),
                 Expanded(
+                  // Cukup panggil _buildUserList dengan controller
                   child: _buildUserList(controller),
                 ),
               ],
@@ -108,15 +111,13 @@ class CreateGroupPage extends StatelessWidget {
     );
   }
 
-  // [PERUBAHAN TOTAL] Widget header baru untuk cover dan avatar
   Widget _buildGroupHeader(
       BuildContext context, CreateGroupController controller) {
     return Stack(
       alignment: Alignment.bottomLeft,
       children: [
-        // Area untuk Cover Image
         GestureDetector(
-          onTap: () => controller.pickImage(false), // isAvatar = false
+          onTap: () => controller.pickImage(false),
           child: Container(
             height: 150,
             width: double.infinity,
@@ -124,25 +125,24 @@ class CreateGroupPage extends StatelessWidget {
             child: controller.coverFile != null
                 ? Image.file(controller.coverFile!, fit: BoxFit.cover)
                 : const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.add_photo_alternate_outlined,
-                          color: Colors.grey),
-                      SizedBox(height: 4),
-                      Text("Tambah foto cover group",
-                          style: TextStyle(color: Colors.grey)),
-                    ],
-                  ),
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.add_photo_alternate_outlined,
+                    color: Colors.grey),
+                SizedBox(height: 4),
+                Text("Tambah foto cover group",
+                    style: TextStyle(color: Colors.grey)),
+              ],
+            ),
           ),
         ),
-        // Area untuk Avatar, Nama Grup, dan Deskripsi
         Padding(
           padding: const EdgeInsets.all(16.0),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               GestureDetector(
-                onTap: () => controller.pickImage(true), // isAvatar = true
+                onTap: () => controller.pickImage(true),
                 child: CircleAvatar(
                   radius: 40,
                   backgroundColor: Colors.white,
@@ -154,7 +154,7 @@ class CreateGroupPage extends StatelessWidget {
                         : null,
                     child: controller.avatarFile == null
                         ? const Icon(Icons.camera_alt,
-                            color: Colors.white, size: 30)
+                        color: Colors.white, size: 30)
                         : null,
                   ),
                 ),
@@ -189,19 +189,33 @@ class CreateGroupPage extends StatelessWidget {
     );
   }
 
+  // --- 👇 Method ini sekarang lebih sederhana ---
   Widget _buildUserList(CreateGroupController controller) {
-    // ... (kode ini tetap sama)
     if (controller.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
     if (controller.errorMessage != null) {
       return Center(child: Text(controller.errorMessage!));
     }
+    if (controller.mutuals.isEmpty) {
+      return const Center(child: Text("Tidak ada orang yang ditemukan."));
+    }
+
     return ListView.builder(
-      itemCount: controller.filteredFollowers.length,
+      // Hubungkan ke scrollController yang ada di dalam controller
+      controller: controller.scrollController,
+      itemCount: controller.mutuals.length + (controller.isLoadingMore ? 1 : 0),
       itemBuilder: (context, index) {
-        final user = controller.filteredFollowers[index];
-        final isSelected = controller.selectedUsers.contains(user);
+        if (index == controller.mutuals.length) {
+          return const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final user = controller.mutuals[index];
+        final isSelected = controller.selectedUsers.any((u) => u.id == user.id);
+
         return ListTile(
           leading: CircleAvatar(
             backgroundImage: user.profilePictureUrl != null

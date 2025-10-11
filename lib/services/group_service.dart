@@ -15,6 +15,55 @@ import '../utils/secure_storage.dart';
 class GroupService {
   final String _baseUrl = 'https://api-new.portalsi.com/api';
 
+  Future<Map<String, String>> _getHeaders() async {
+    final token = await SecureStorage.getToken();
+    if (token == null) throw Exception('Token tidak ditemukan');
+    return {
+      'Authorization': 'Bearer $token',
+      'Accept': 'application/json',
+    };
+  }
+
+  Future<Map<String, dynamic>> getMutuals({int page = 1}) async {
+    try {
+      final headers = await _getHeaders();
+      final uri = Uri.parse('$_baseUrl/mutuals?page=$page');
+      final response = await http.get(uri, headers: headers);
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        throw Exception('Gagal memuat daftar mutuals: ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Terjadi kesalahan: $e');
+    }
+  }
+
+  // --- 👇 PERBAIKAN: Kembalikan fungsi ini agar me-return Map ---
+  /// Mencari pengguna berdasarkan query dengan paginasi.
+  Future<Map<String, dynamic>> searchUsers({int page = 1, required String query}) async {
+    if (query.trim().isEmpty) {
+      // Jika query kosong, kita panggil getMutuals saja
+      return getMutuals(page: page);
+    }
+    try {
+      final headers = await _getHeaders();
+      // Asumsi endpoint search Anda adalah /users/search
+      final uri = Uri.parse('$_baseUrl/users/search?page=$page&username=$query&fullname=$query');
+      final response = await http.get(uri, headers: headers);
+
+      if (response.statusCode == 200) {
+        // Mengembalikan seluruh Map, karena formatnya sama dengan /mutuals
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        throw Exception('Gagal mencari pengguna: ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Terjadi kesalahan saat mencari pengguna: $e');
+    }
+  }
+
   Future<bool> updateGroup({
     required int groupId,
     required String name,
@@ -308,7 +357,7 @@ class GroupService {
     return _performPostAction('/groups/$groupId/members/$userId/unmute');
   }
 
-  Future<List<GroupMember>> getGroupMembers(int groupId) async { // <-- 2. UBAH TIPE RETURN
+  Future<Map<String, List<GroupMember>>> getGroupMembers(int groupId) async {
     final token = await SecureStorage.getToken();
     final url = Uri.parse('$_baseUrl/groups/$groupId/members');
 
@@ -318,58 +367,32 @@ class GroupService {
         'Accept': 'application/json',
       });
 
-      // ... (kode logging Anda bisa tetap di sini jika diperlukan)
-
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = json.decode(response.body);
 
-        if (responseData['data'] is List) {
-          final List<dynamic> memberListJson = responseData['data'];
-
-          // 3. LAKUKAN MAPPING DARI JSON KE OBJEK GroupMember
-          return memberListJson
-              .map((jsonItem) => GroupMember.fromJson(jsonItem as Map<String, dynamic>))
+        // Helper untuk mengubah list of JSON menjadi list of GroupMember
+        List<GroupMember> parseMemberList(List<dynamic> jsonList) {
+          return jsonList
+              .map((item) => GroupMember.fromJson(item as Map<String, dynamic>))
               .toList();
-
-        } else {
-          throw Exception("Format respons tidak valid: key 'data' bukan sebuah List.");
         }
+
+        // Parsing setiap kategori dari API
+        final meList = parseMemberList(responseData['me'] ?? []);
+        final followingList = parseMemberList(responseData['following'] ?? []);
+        final notFollowingList = parseMemberList(responseData['not_following'] ?? []);
+
+        // Kembalikan dalam bentuk Map agar mudah diakses di UI
+        return {
+          'me': meList,
+          'following': followingList,
+          'not_following': notFollowingList,
+        };
       } else {
         throw Exception('Gagal memuat anggota grup: ${response.statusCode}');
       }
     } catch (e) {
       throw Exception('Terjadi kesalahan: $e');
-    }
-  }
-
-  Future<List<dynamic>> searchUsers(String query) async {
-    // Jika query kosong, kembalikan list kosong agar tidak memanggil API
-    if (query.trim().isEmpty) {
-      return [];
-    }
-
-    final token = await SecureStorage.getToken();
-    // Endpoint sesuai dengan gambar: /users/search?username=...
-    // Kita akan menggunakan 'username' sebagai parameter pencarian utama
-    final url = Uri.parse('$_baseUrl/users/search?username=$query&full_name=$query');
-
-    try {
-      final response = await http.get(url, headers: {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/json',
-      });
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        return data;
-      } else {
-        // Jika gagal, kembalikan list kosong atau lempar error
-        print('Gagal mencari pengguna: ${response.statusCode}');
-        return [];
-      }
-    } catch (e) {
-      print('Terjadi kesalahan saat mencari pengguna: $e');
-      return [];
     }
   }
 

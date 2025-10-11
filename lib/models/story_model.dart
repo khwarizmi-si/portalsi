@@ -1,5 +1,7 @@
 // lib/models/story_model.dart
 
+import 'dart:convert';
+
 import 'user_model.dart';
 
 class StoryDetail {
@@ -18,6 +20,8 @@ class StoryDetail {
   final int? musicClipDurationMs;
   final double? musicStickerPositionX;
   final double? musicStickerPositionY;
+  final List<String>? colorPalette; // +++ ADDED: Field untuk palet warna dari API
+
   bool get isVideo => type == 'video';
   bool get isMusicStory => type == 'music';
 
@@ -37,9 +41,28 @@ class StoryDetail {
     this.musicStickerPositionX,
     this.musicStickerPositionY,
     this.musicReelsCount,
+    this.colorPalette, // +++ ADDED: Tambahkan di constructor
   });
 
   factory StoryDetail.fromJson(Map<String, dynamic> json) {
+    // --- 👇 LOGIKA BARU UNTUK MEMBACA PALET WARNA 👇 ---
+    List<String>? parsedPalette;
+    final paletteData = json['color_pallete']; // 1. Gunakan key 'color_pallete' (dengan 'e')
+
+    if (paletteData is String && paletteData.isNotEmpty) {
+      try {
+        // 2. Lakukan jsonDecode karena data dari server adalah String
+        final decodedList = jsonDecode(paletteData);
+        if (decodedList is List) {
+          parsedPalette = List<String>.from(decodedList);
+        }
+      } catch (e) {
+        // Tangani jika string tidak valid JSON, biarkan null
+        print("Gagal mem-parsing color_pallete: $e");
+      }
+    }
+    // --- 👆 BATAS LOGIKA BARU 👆 ---
+
     return StoryDetail(
       storyId: json['story_id'],
       type: json['type'],
@@ -56,6 +79,9 @@ class StoryDetail {
       musicClipDurationMs: json['music_clip_duration_ms'],
       musicStickerPositionX: json['music_sticker_position_x']?.toDouble(),
       musicStickerPositionY: json['music_sticker_position_y']?.toDouble(),
+
+      // 3. Gunakan variabel yang sudah kita proses
+      colorPalette: parsedPalette,
     );
   }
 
@@ -99,17 +125,20 @@ class UserWithStories {
 
   factory UserWithStories.fromJson(Map<String, dynamic> json) {
     var storyList = json['stories'] as List;
-    List<StoryDetail> stories = storyList.map((storyJson) => StoryDetail.fromJson(storyJson)).toList();
+    List<StoryDetail> stories =
+    storyList.map((storyJson) => StoryDetail.fromJson(storyJson)).toList();
     stories.sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
     return UserWithStories(
       userId: int.tryParse(json['user_id'].toString()) ?? 0,
-      username: json['username'],
-      profilePictureUrl: json['profile_picture_url'],
+      username: json['username'] ?? 'Pengguna',
+      profilePictureUrl: json['profile_picture_url'] ?? '',
       isVerified: json['is_verified'] ?? false,
       stories: stories,
-      // 3. PARSING DARI JSON (ASUMSI NAMA FIELD DARI API ADALAH 'is_all_viewed')
-      isViewed: json['is_all_viewed'] ?? false,
+
+      // --- 👇 PERBAIKAN UTAMA DI SINI 👇 ---
+      // Ganti 'is_all_viewed' menjadi 'is_viewed' agar cocok dengan API
+      isViewed: json['is_viewed'] ?? false,
     );
   }
 

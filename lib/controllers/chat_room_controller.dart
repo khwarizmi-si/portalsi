@@ -1,4 +1,4 @@
-// lib/controllers/chat_room_controller.dart (SUDAH DIPERBAIKI TOTAL)
+// lib/controllers/chat_room_controller.dart (FINAL DENGAN PERBAIKAN IMPORT)
 
 import 'dart:async';
 import 'dart:convert';
@@ -17,12 +17,12 @@ import '../services/message_service.dart';
 import '../utils/secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 
-// --- TAMBAHKAN IMPORT INI ---
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:typed_data'; // Untuk Uint8List
 
 class ChatRoomController extends ChangeNotifier {
   final User recipient;
+  // Asumsi ChatService adalah MessageService
   final ChatService _chatService = ChatService();
 
   List<ChatMessage> _messages = [];
@@ -35,6 +35,7 @@ class ChatRoomController extends ChangeNotifier {
 
   User? _currentUser;
   User? get currentUser => _currentUser;
+  String? debugStatus;
 
   StreamSubscription? _messageSubscription;
 
@@ -42,15 +43,14 @@ class ChatRoomController extends ChangeNotifier {
   bool get isRecipientOnline => _isRecipientOnline;
   Timer? _statusTimer;
 
-  ChatRoomController({required this.recipient}) {
-    _initialize();
-  }
+  // Hapus pemanggilan _initialize() dari sini
+  ChatRoomController({required this.recipient});
 
-  // ... (Fungsi-fungsi lain dari _initialize hingga sebelum sendMediaMessage tidak perlu diubah)
-  // ... (Silakan salin-tempel sisa fungsi Anda di sini)
-  Future<void> _initialize() async {
+  // Ubah nama dari _initialize menjadi initialize (hapus underscore)
+  Future<void> initialize() async {
     await _loadCurrentUser();
     if (_currentUser != null) {
+      // Pindahkan semua logika lain dari _initialize ke sini
       await fetchMessages();
       _markMessagesAsRead();
       _startRealtimeListeners();
@@ -104,9 +104,11 @@ class ChatRoomController extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final key = _getCacheKey();
-      messagesToSave.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      final List<ChatMessage> listToSave = List.from(messagesToSave);
+      listToSave.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
       final List<Map<String, dynamic>> messagesJson =
-      messagesToSave.map((m) => m.toJson()).toList();
+      listToSave.map((m) => m.toJson()).toList();
       await prefs.setString(key, jsonEncode(messagesJson));
     } catch (e) {
       debugPrint("Gagal menyimpan cache: $e");
@@ -150,6 +152,7 @@ class ChatRoomController extends ChangeNotifier {
     if (_currentUser != null) {
       final ids = [_currentUser!.id, recipient.id]..sort();
       final roomId = ids.join('-');
+      // Hapus komentar jika perlu unsubscribe
       // final channelName = 'private-dm.$roomId';
       // AuthService.webSocketService?.unsubscribeFromChannel(channelName);
     }
@@ -161,9 +164,6 @@ class ChatRoomController extends ChangeNotifier {
 
   Future<void> reloadConversation() async {
     debugPrint("🔄 Memuat ulang percakapan dari AppBar...");
-
-    // Cukup panggil kembali fungsi fetchMessages yang sudah ada.
-    // Fungsi ini sudah menangani state loading dan akan memperbarui UI.
     await loadMessagesAgain();
   }
 
@@ -255,7 +255,7 @@ class ChatRoomController extends ChangeNotifier {
             "Cache ditemukan untuk user ${recipient.id}. Memuat dari cache.");
         final List<dynamic> messagesJson = jsonDecode(cachedData);
         _messages = messagesJson
-            .map((json) => ChatMessage.fromJson(json))
+            .map((json) => ChatMessage.fromJson(json, _currentUser, recipient))
             .toList()
             .reversed
             .toList();
@@ -296,6 +296,28 @@ class ChatRoomController extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<void> _updateCacheWithMessage(ChatMessage newMessage) async {
+    List<ChatMessage> messagesFromCache = await _loadMessagesFromCache();
+    messagesFromCache.removeWhere((m) => m.id == newMessage.id || m.id == -newMessage.id);
+    messagesFromCache.add(newMessage);
+    await _saveMessagesToCache(messagesFromCache);
+  }
+
+  Future<List<ChatMessage>> _loadMessagesFromCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = _getCacheKey();
+      final String? cachedData = prefs.getString(key);
+      if (cachedData != null) {
+        final List<dynamic> messagesJson = jsonDecode(cachedData);
+        return messagesJson.map((json) => ChatMessage.fromJson(json, _currentUser, recipient)).toList();
+      }
+    } catch (e) {
+      debugPrint("Gagal memuat cache: $e");
+    }
+    return [];
   }
 
   Future<void> _fetchUnreadMessages() async {
@@ -347,8 +369,83 @@ class ChatRoomController extends ChangeNotifier {
     }
   }
 
+  // ===== FUNGSI BARU: Mengirim Respon Cerita =====
+  Future<void> sendStoryResponseMessage(
+      String text,
+      int storyId,
+      String? respondedMediaUrl,
+      ) async {
+    // LAPORKAN LANGKAH 1: FUNGSI DIPANGGIL
+    debugStatus = "STEP 1: sendStoryResponseMessage() dipanggil.";
+    notifyListeners();
+
+    if (text.trim().isEmpty || _currentUser == null || recipient.id == null) {
+      debugStatus = "STEP 1 GAGAL: Data tidak lengkap.";
+      notifyListeners();
+      return;
+    }
+
+    final tempId = -DateTime.now().millisecondsSinceEpoch;
+    final tempMessage = ChatMessage(
+      id: tempId,
+      text: text.trim(),
+      type: MessageType.text, // Tipe tetap text karena ada konten tulisan
+      sender: _currentUser!,
+      recipient: recipient,
+      timestamp: DateTime.now(),
+      status: MessageStatus.sending, // Status: sedang dikirim
+      isStoryResponse: true, // Flag penting!
+      storyId: storyId,
+      respondedStoryMediaUrl: respondedMediaUrl,
+    );
+
+    _messages.insert(0, tempMessage);
+    notifyListeners();
+
+    try {
+      // LAPORKAN LANGKAH 2: MEMANGGIL SERVICE
+      debugStatus = "STEP 2: Memanggil _chatService.sendStoryResponse...";
+      notifyListeners();
+
+      final sentMessage = await _chatService.sendStoryResponse(
+        receiverId: recipient.id!,
+        content: text.trim(),
+        storyId: storyId,
+        respondedMediaUrl: respondedMediaUrl,
+        currentUser: _currentUser!,
+        recipient: recipient,
+      );
+
+      // LAPORKAN LANGKAH 3: PANGGILAN SERVICE BERHASIL
+      debugStatus = "STEP 3: Panggilan service SUKSES!";
+      notifyListeners();
+
+      final index = _messages.indexWhere((m) => m.id == tempId);
+      if (index != -1) {
+        _messages[index] = sentMessage;
+      }
+      await _updateCacheWithMessage(sentMessage);
+
+    } catch (e) {
+      // LAPORKAN LANGKAH 4: TERJADI ERROR
+      debugStatus = "STEP 4: Panggilan service GAGAL! Error: $e";
+      notifyListeners();
+
+      debugPrint("Gagal mengirim respons cerita: $e");
+      final index = _messages.indexWhere((m) => m.id == tempId);
+      if (index != -1) {
+        _messages[index].status = MessageStatus.failed;
+      }
+    } finally {
+      notifyListeners();
+    }
+  }
+  // ===== BATAS FUNGSI BARU =====
+
+
   Future<void> sendMessage(String text) async {
-    if (text.trim().isEmpty || _currentUser == null) return;
+    if (text.trim().isEmpty || _currentUser == null || recipient.id == null) return;
+
     final tempId = -DateTime.now().millisecondsSinceEpoch;
     final tempMessage = ChatMessage(
       id: tempId,
@@ -359,8 +456,10 @@ class ChatRoomController extends ChangeNotifier {
       timestamp: DateTime.now(),
       status: MessageStatus.sending,
     );
+
     _messages.insert(0, tempMessage);
     notifyListeners();
+
     try {
       final sentMessage = await _chatService.sendMessage(
         receiverId: recipient.id!,
@@ -368,42 +467,42 @@ class ChatRoomController extends ChangeNotifier {
         currentUser: _currentUser!,
         recipient: recipient,
       );
-      List<ChatMessage> messagesFromCache = await _loadMessagesFromCache();
-      final index = messagesFromCache.indexWhere((m) => m.id == tempId);
+
+      final index = _messages.indexWhere((m) => m.id == tempId);
       if (index != -1) {
-        messagesFromCache[index] = sentMessage;
-      } else {
-        messagesFromCache.add(sentMessage);
+        _messages[index] = sentMessage;
       }
-      await _saveMessagesToCache(messagesFromCache);
-      _messages = messagesFromCache.reversed.toList();
+
+      await _updateCacheWithMessage(sentMessage);
+
     } catch (e) {
+      debugPrint("Gagal mengirim pesan: $e");
       final index = _messages.indexWhere((m) => m.id == tempId);
       if (index != -1) {
         _messages[index].status = MessageStatus.failed;
       }
-      debugPrint("Gagal mengirim pesan: $e");
     } finally {
       notifyListeners();
     }
   }
 
-  // ======================================================================
-  // --- PERUBAHAN UTAMA DIMULAI DARI SINI ---
-  // ======================================================================
+  Future<void> _handleIncomingMessage(ChatMessage newMessage) async {
+    List<ChatMessage> currentMessages = await _loadMessagesFromCache();
+    currentMessages.add(newMessage);
+    await _saveMessagesToCache(currentMessages);
+    _messages = currentMessages.reversed.toList();
+    notifyListeners();
+  }
 
-  /// [MODIFIKASI] Fungsi ini sekarang menjadi adaptif terhadap platform.
   Future<void> sendMediaMessage(List<AssetEntity> assets) async {
     for (final asset in assets) {
       if (kIsWeb) {
-        // --- LOGIKA UNTUK WEB ---
         final bytes = await asset.originBytes;
         final filename = await asset.titleAsync;
         if (bytes != null) {
           await _sendMediaBytes(bytes, filename);
         }
       } else {
-        // --- LOGIKA UNTUK MOBILE (YANG SUDAH ADA) ---
         final file = await asset.file;
         if (file != null) {
           await sendMediaFile(file);
@@ -412,7 +511,6 @@ class ChatRoomController extends ChangeNotifier {
     }
   }
 
-  /// [BARU] Fungsi terpusat untuk mengirim media dari data BYTES (untuk web).
   Future<void> _sendMediaBytes(Uint8List mediaBytes, String filename) async {
     if (_currentUser == null) return;
 
@@ -425,7 +523,6 @@ class ChatRoomController extends ChangeNotifier {
       recipient: recipient,
       timestamp: DateTime.now(),
       status: MessageStatus.sending,
-      // PERBAIKAN: Ganti 'localByte' menjadi 'localBytes'
       localBytes: mediaBytes,
       uploadProgress: progressNotifier,
     );
@@ -434,7 +531,6 @@ class ChatRoomController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Panggil helper upload yang menggunakan bytes
       final finalMessage = await _uploadMediaBytesAndGetResponse(mediaBytes, filename, progressNotifier);
 
       List<ChatMessage> messagesFromCache = await _loadMessagesFromCache();
@@ -458,7 +554,6 @@ class ChatRoomController extends ChangeNotifier {
     }
   }
 
-  /// [BARU] Fungsi helper untuk mengunggah BYTES dan mendapatkan response (untuk web).
   Future<ChatMessage> _uploadMediaBytesAndGetResponse(Uint8List mediaBytes, String filename, ValueNotifier<double> progressNotifier) async {
     final bearerToken = await SecureStorage.getToken();
     if (bearerToken == null) throw Exception('Bearer token not found.');
@@ -470,17 +565,14 @@ class ChatRoomController extends ChangeNotifier {
       ..fields['receiver_id'] = recipient.id.toString()
       ..fields['content'] = '';
 
-    // Perbedaan utama ada di sini: menggunakan MultipartFile.fromBytes
     request.files.add(http.MultipartFile.fromBytes(
-      'media', // Sesuaikan dengan nama field di API
+      'media',
       mediaBytes,
       filename: filename,
     ));
 
-    // Catatan: Progress tracking untuk fromBytes tidak sesederhana fromPath.
-    // Untuk saat ini, kita akan update progress menjadi selesai saat response diterima.
     final response = await request.send();
-    progressNotifier.value = 1.0; // Anggap selesai setelah request dikirim.
+    progressNotifier.value = 1.0;
 
     final responseBody = await response.stream.bytesToString();
     if (response.statusCode == 201) {
@@ -493,7 +585,6 @@ class ChatRoomController extends ChangeNotifier {
   }
 
 
-  /// Fungsi ini (untuk mobile) tidak diubah.
   Future<void> sendMediaFile(File mediaFile) async {
     if (_currentUser == null) return;
 
@@ -537,7 +628,6 @@ class ChatRoomController extends ChangeNotifier {
     }
   }
 
-  /// Fungsi ini (untuk mobile) tidak diubah.
   Future<ChatMessage> _uploadMediaAndGetResponse(File mediaFile, ValueNotifier<double> progressNotifier) async {
     final bearerToken = await SecureStorage.getToken();
     if (bearerToken == null) throw Exception('Bearer token not found.');
@@ -585,28 +675,5 @@ class ChatRoomController extends ChangeNotifier {
     } else {
       throw Exception('Gagal mengirim media: Error ${response.statusCode}');
     }
-  }
-
-  Future<List<ChatMessage>> _loadMessagesFromCache() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final key = _getCacheKey();
-      final String? cachedData = prefs.getString(key);
-      if (cachedData != null) {
-        final List<dynamic> messagesJson = jsonDecode(cachedData);
-        return messagesJson.map((json) => ChatMessage.fromJson(json)).toList();
-      }
-    } catch (e) {
-      debugPrint("Gagal memuat cache: $e");
-    }
-    return [];
-  }
-
-  Future<void> _handleIncomingMessage(ChatMessage newMessage) async {
-    List<ChatMessage> currentMessages = await _loadMessagesFromCache();
-    currentMessages.add(newMessage);
-    await _saveMessagesToCache(currentMessages);
-    _messages = currentMessages.reversed.toList();
-    notifyListeners();
   }
 }

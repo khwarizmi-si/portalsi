@@ -12,6 +12,7 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -44,8 +45,8 @@ defaultConfig {
     applicationId = "com.portal.si"
     minSdk = flutter.minSdkVersion
     targetSdk = 36
-    versionCode = 16
-    versionName = "1.3.15-earlyaccess"
+    versionCode = 20
+    versionName = "1.4.2-earlyaccess"
     multiDexEnabled = true
 }
 
@@ -73,6 +74,7 @@ defaultConfig {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation("androidx.multidex:multidex:2.0.1")
+    implementation(platform("com.google.firebase:firebase-bom:34.3.0"))
 }
 
 flutter {

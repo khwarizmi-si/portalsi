@@ -1,10 +1,8 @@
-// lib/widgets/add_members_bottom_sheet.dart (VERSI BERSIH)
+// lib/widgets/add_members_bottom_sheet.dart
 
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:portal_si/services/follow_service.dart';
 import 'package:portal_si/services/group_service.dart';
-// Asumsi Anda memiliki model User
 import 'package:portal_si/models/user_model.dart';
 
 class AddMembersBottomSheet extends StatefulWidget {
@@ -17,18 +15,22 @@ class AddMembersBottomSheet extends StatefulWidget {
 }
 
 class _AddMembersBottomSheetState extends State<AddMembersBottomSheet> {
-  final FollowService _followService = FollowService();
   final GroupService _groupService = GroupService();
 
   // STATE UNTUK PENCARIAN
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
-  List<User> _searchResults = []; // Gunakan model User untuk type safety
+  List<User> _searchResults = [];
   bool _isSearching = false;
   String _searchQuery = '';
 
-  // STATE UNTUK DAFTAR FOLLOWING
-  late Future<List<User>> _followingFuture; // Gunakan model User
+  // STATE UNTUK DAFTAR MUTUALS DENGAN PAGINATION
+  final List<User> _mutuals = [];
+  final ScrollController _scrollController = ScrollController();
+  int _currentPage = 1;
+  bool _hasNextPage = true;
+  bool _isFirstLoad = true;
+  bool _isLoadingNextPage = false;
 
   // STATE UNTUK KELOLA TOMBOL 'TAMBAH'
   final Set<int> _addedUserIds = <int>{};
@@ -37,23 +39,90 @@ class _AddMembersBottomSheetState extends State<AddMembersBottomSheet> {
   @override
   void initState() {
     super.initState();
-    // Panggil dengan parameter yang benar.
-    // Asumsi '0' akan diganti dengan ID user yang sedang login.
-    _followingFuture = _followService.getFollowing(0, forceRefresh: true);
+    _fetchInitialMutuals();
     _searchController.addListener(_onSearchChanged);
+
+    _scrollController.addListener(() {
+      // Trigger fetch more data when user scrolls to the end of the list
+      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200 &&
+          _hasNextPage &&
+          !_isLoadingNextPage) {
+        _fetchMoreMutuals();
+      }
+    });
   }
 
   @override
   void dispose() {
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _scrollController.dispose();
     _debounce?.cancel();
     super.dispose();
   }
 
-  void _onSearchChanged() {
+  Future<void> _fetchInitialMutuals() async {
     setState(() {
-      _searchQuery = _searchController.text.trim();
+      _isFirstLoad = true;
+    });
+    try {
+      final response = await _groupService.getMutuals(page: 1);
+      final List<dynamic> userListJson = response['data'] as List<dynamic>;
+      final newUsers = userListJson.map((json) => User.fromJson(json)).toList();
+
+      if (mounted) {
+        setState(() {
+          _mutuals.clear();
+          _mutuals.addAll(newUsers);
+          _currentPage = 1;
+          _hasNextPage = response['next_page_url'] != null;
+          _isFirstLoad = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isFirstLoad = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Gagal memuat daftar teman: ${e.toString()}"), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _fetchMoreMutuals() async {
+    setState(() {
+      _isLoadingNextPage = true;
+    });
+    try {
+      final response = await _groupService.getMutuals(page: _currentPage + 1);
+      final List<dynamic> userListJson = response['data'] as List<dynamic>;
+      final newUsers = userListJson.map((json) => User.fromJson(json)).toList();
+
+      if (mounted) {
+        setState(() {
+          _mutuals.addAll(newUsers);
+          _currentPage++;
+          _hasNextPage = response['next_page_url'] != null;
+          _isLoadingNextPage = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingNextPage = false;
+        });
+      }
+    }
+  }
+
+  void _onSearchChanged() {
+    final query = _searchController.text.trim();
+    if (_searchQuery == query) return;
+
+    setState(() {
+      _searchQuery = query;
     });
 
     if (_debounce?.isActive ?? false) _debounce!.cancel();
@@ -71,29 +140,39 @@ class _AddMembersBottomSheetState extends State<AddMembersBottomSheet> {
 
   Future<void> _performSearch() async {
     setState(() => _isSearching = true);
-    // Asumsi service mengembalikan List<User>
-    final results = await _followService.searchUsers(_searchQuery);
-    if (mounted) {
-      setState(() {
-        _searchResults = results;
-        _isSearching = false;
-      });
+    try {
+      final response = await _groupService.searchUsers(query: _searchQuery, page: 1);
+      final List<dynamic> userListJson = response['data'] as List<dynamic>;
+      final results = userListJson.map((json) => User.fromJson(json)).toList();
+
+      if (mounted) {
+        setState(() {
+          _searchResults = results;
+          _isSearching = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSearching = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Gagal melakukan pencarian: ${e.toString()}"), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
-  // Fungsi untuk menambahkan satu anggota
   Future<void> _addMember(User user) async {
-    // Gunakan user.id untuk mengelola state tombol
     final int? userId = user.id;
-    if (userId == null || _addingInProgressUserIds.contains(userId)) return;
+    if (userId == null || _addingInProgressUserIds.contains(userId) || _addedUserIds.contains(userId)) return;
 
     setState(() => _addingInProgressUserIds.add(userId));
 
     try {
-      // --- PERUBAHAN UTAMA: KIRIM user.username SEBAGAI IDENTIFIER ---
       final success = await _groupService.addMemberByIdentifier(
-          groupId: widget.groupId,
-          identifier: user.username // Mengirim username (String)
+        groupId: widget.groupId,
+        identifier: user.username,
       );
 
       if (success && mounted) {
@@ -129,7 +208,6 @@ class _AddMembersBottomSheetState extends State<AddMembersBottomSheet> {
       ),
       child: Column(
         children: [
-          // Header
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Text(
@@ -137,8 +215,6 @@ class _AddMembersBottomSheetState extends State<AddMembersBottomSheet> {
               style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
-
-          // Search Bar
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: TextField(
@@ -156,37 +232,37 @@ class _AddMembersBottomSheetState extends State<AddMembersBottomSheet> {
               ),
             ),
           ),
-
-          // Konten List
           Expanded(
             child: isDisplayingSearchResults
                 ? _buildSearchResults()
-                : _buildFollowingList(),
+                : _buildMutualsList(),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFollowingList() {
-    return FutureBuilder<List<User>>(
-      future: _followingFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text("Gagal memuat daftar following: ${snapshot.error}"));
-        }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(child: Text("Anda belum mengikuti siapa pun."));
-        }
+  Widget _buildMutualsList() {
+    if (_isFirstLoad) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_mutuals.isEmpty) {
+      return const Center(child: Text("Anda tidak memiliki teman mutual."));
+    }
 
-        final following = snapshot.data!;
-        return _buildUserListView(
-          users: following,
-          listTitle: "Yang Anda Ikuti",
-        );
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.all(16),
+      itemCount: _mutuals.length + (_hasNextPage ? 1 : 0),
+      itemBuilder: (context, index) {
+        if (index == _mutuals.length) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16.0),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final user = _mutuals[index];
+        return _buildUserTile(user);
       },
     );
   }
@@ -199,36 +275,26 @@ class _AddMembersBottomSheetState extends State<AddMembersBottomSheet> {
       return const Center(child: Text("Tidak ada hasil ditemukan."));
     }
 
-    return _buildUserListView(
-      users: _searchResults,
-      listTitle: "Hasil Pencarian",
-    );
-  }
-
-  Widget _buildUserListView({required List<User> users, required String listTitle}) {
-    return ListView(
+    return ListView.builder(
       padding: const EdgeInsets.all(16),
-      children: [
-        Text(
-          listTitle,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        const SizedBox(height: 12),
-        ...users.map((user) => _buildUserTile(user)).toList(),
-      ],
+      itemCount: _searchResults.length,
+      itemBuilder: (context, index) {
+        return _buildUserTile(_searchResults[index]);
+      },
     );
   }
 
   Widget _buildUserTile(User user) {
-    // Pastikan user.id tidak null
     final int userId = user.id ?? -1;
-    if (userId == -1) return const SizedBox.shrink(); // Jangan render jika ID tidak valid
+    if (userId == -1) return const SizedBox.shrink();
 
     final bool isAdded = _addedUserIds.contains(userId);
     final bool isAdding = _addingInProgressUserIds.contains(userId);
 
     return ListTile(
+      contentPadding: const EdgeInsets.symmetric(vertical: 4),
       leading: CircleAvatar(
+        radius: 24,
         backgroundImage: user.profilePictureUrl != null && user.profilePictureUrl!.isNotEmpty
             ? NetworkImage(user.profilePictureUrl!)
             : null,

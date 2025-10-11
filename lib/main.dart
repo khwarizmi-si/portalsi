@@ -1,19 +1,26 @@
 // lib/main.dart
 
-import 'dart:async'; // <-- [TAMBAHAN]
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-// --- [TAMBAHAN] Import untuk Background Service & Service lainnya ---
+// --- [TAMBAHAN] Import untuk Firebase ---
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:portal_si/services/fcm_service.dart';
+import 'firebase_options.dart';
+// --- Batas Import Firebase ---
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // <-- ADDED IMPORT
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:hive/hive.dart';
+import 'package:hive_flutter/adapters.dart';
 import 'package:portal_si/pages/video_intro_screen.dart';
 import 'package:portal_si/providers/feed_provider.dart';
 import 'package:portal_si/providers/scroll_provider.dart';
 import 'package:portal_si/providers/shake_provider.dart';
+import 'package:portal_si/providers/upload_provider.dart';
 import 'package:portal_si/services/auth_service.dart';
 import 'package:portal_si/services/message_service.dart';
 import 'package:portal_si/utils/secure_storage.dart';
-// --- Batas Import Tambahan ---
 import 'package:portal_si/pages/main_scaffold.dart';
 import 'package:portal_si/pages/splash_screen.dart';
 import 'package:portal_si/pages/update_screen.dart';
@@ -36,10 +43,10 @@ import 'pages/message_list_page.dart';
 import 'pages/story_page.dart';
 import 'managers/cache_manager.dart';
 import 'services/follow_service.dart';
-
+import 'package:intl/date_symbol_data_local.dart';
 
 // ===================================================================
-// --- [TAMBAHAN BARU] LOGIKA UNTUK BACKGROUND SERVICE ---
+// --- [TAMBAHAN BARU] LOGIKA UNTUK BACKGROUND SERVICE & FCM ---
 // ===================================================================
 
 /// Fungsi ini harus berada di level atas (di luar class).
@@ -49,7 +56,6 @@ void onStart(ServiceInstance service) async {
   WidgetsFlutterBinding.ensureInitialized();
   debugPrint('✅ Background Service Dimulai.');
 
-  // --- [WAJIB] BUNGKUS SEMUA DENGAN TRY-CATCH ---
   try {
     final token = await SecureStorage.getToken();
     if (token != null) {
@@ -69,12 +75,9 @@ void onStart(ServiceInstance service) async {
       debugPrint('❌ Background Service: Token tidak ditemukan, tidak bisa memulai WebSocket.');
     }
   } catch (e, s) {
-    // Jika terjadi error, kita akan mencetaknya di log, BUKAN membuat aplikasi crash
     debugPrint("🔥 FATAL ERROR di Background Service: $e");
     debugPrint("Stack Trace: $s");
   }
-  // --- BATAS TRY-CATCH ---
-
 
   Timer.periodic(const Duration(minutes: 1), (timer) {
     debugPrint("⚙️ Background service heartbeat... ${DateTime.now()}");
@@ -85,68 +88,65 @@ void onStart(ServiceInstance service) async {
 Future<void> initializeBackgroundService() async {
   final service = FlutterBackgroundService();
 
-  // --- [TAMBAHAN] Buat Channel Notifikasi ---
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'my_foreground_service_channel', // id
-    'Notifikasi Penting', // title
-    description: 'Dapatkan notifikasi penting dari Aplikasi.', // description
-    importance: Importance.low, // Sesuaikan importance
+    'my_foreground_service_channel',
+    'Notifikasi Penting',
+    description: 'Dapatkan notifikasi penting dari Aplikasi.',
+    importance: Importance.low,
   );
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-      FlutterLocalNotificationsPlugin();
+  FlutterLocalNotificationsPlugin();
 
   await flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
+      AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(channel);
-  // --- Batas Tambahan Channel Notifikasi ---
 
   await service.configure(
     androidConfiguration: AndroidConfiguration(
       onStart: onStart,
-      isForegroundMode: true, // Wajib oleh Android untuk menampilkan notifikasi persisten
+      isForegroundMode: true,
       autoStart: true,
-      autoStartOnBoot: true, // Kunci utama agar bisa berjalan saat ponsel dinyalakan
-      notificationChannelId: 'my_foreground_service_channel', 
+      autoStartOnBoot: true,
+      notificationChannelId: 'my_foreground_service_channel',
       initialNotificationTitle: 'Portal SI Service',
       initialNotificationContent: 'App is running in background to keep you updated.',
-      foregroundServiceNotificationId: 888, // --- [TAMBAHAN KRUSIAL DARI AI] (1 untuk FOREGROUND_SERVICE_TYPE_DATA_SYNC) ---
-      // Optional: Anda bisa menambahkan ikon notifikasi di sini jika ada
-      // notificationIcon: 'mipmap/ic_launcher', // Pastikan ikon ini ada di android/app/src/main/res/mipmap
+      foregroundServiceNotificationId: 888,
     ),
     iosConfiguration: IosConfiguration(
       autoStart: true,
       onForeground: onStart,
-      // Catatan: autoStartOnBoot tidak didukung di iOS
     ),
   );
-  // Mulai service-nya
   service.startService();
 }
-
-// ===================================================================
-// --- BATAS AKHIR LOGIKA BACKGROUND SERVICE ---
-// ===================================================================
-
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // --- [TAMBAHAN BARU] Panggil inisialisasi service di sini ---
-  // Kondisi untuk menjalankan background service hanya di Android & iOS
+  // Inisialisasi Firebase di awal
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Daftarkan handler notifikasi background FCM
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+
+  await Hive.initFlutter();
+
   if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
     await initializeBackgroundService();
+    // Inisialisasi FCM service
+    await FcmService.instance.initialize();
   } else {
-    // Opsional: Log jika service tidak diinisialisasi
-    debugPrint('ℹ️ Background Service tidak diinisialisasi pada platform ini (kIsWeb: $kIsWeb, platform: $defaultTargetPlatform).');
+    debugPrint('ℹ️ Background Service & FCM tidak diinisialisasi pada platform ini (kIsWeb: $kIsWeb, platform: $defaultTargetPlatform).');
   }
 
-  if (!kIsWeb) { // Or be more specific: !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)
+  if (!kIsWeb) {
     await NotificationSystemService.instance.initialize();
   } else {
     debugPrint('ℹ️ NotificationSystemService tidak diinisialisasi pada platform web.');
   }
+
+  await initializeDateFormatting('id_ID', null);
 
   runApp(
     MultiProvider(
@@ -157,13 +157,13 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (_) => ScrollProvider()),
         ChangeNotifierProvider(create: (_) => ShakeProvider()),
         ChangeNotifierProvider(create: (_) => FeedProvider()),
+        ChangeNotifierProvider(create: (_) => UploadProvider()),
       ],
       child: const MyApp(),
     ),
   );
 }
 
-// [DIUBAH] MyApp menjadi lebih sederhana
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
@@ -176,7 +176,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // [DIHAPUS] Logika inisialisasi dipindah ke SplashScreen
   }
 
   @override
@@ -188,7 +187,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // ... (kode ini tetap sama)
     switch (state) {
       case AppLifecycleState.resumed:
         AppLifecycleManager.isAppInForeground = true;
@@ -211,12 +209,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   void didHaveMemoryPressure() {
-    // ... (kode ini tetap sama)
     print('⚠️ Memory pressure detected - clearing cache...');
     CacheManager.onMemoryPressure();
   }
-
-  // [DIHAPUS] Fungsi _initializeAppData sudah dipindah ke SplashScreen
 
   @override
   Widget build(BuildContext context) {
@@ -231,27 +226,20 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         navigatorObservers: [
           CacheNavigationObserver(),
         ],
-        // [DIUBAH] Halaman awal aplikasi sekarang SELALU SplashScreen
         home: const SplashScreen(),
-        // home: const VideoIntroScreen(),
-        // [DIUBAH] initialRoute dihapus dan diganti 'home'
         routes: {
           '/login': (context) => const LoginPage(),
           '/register': (context) => RegisterPage(),
           '/home': (context) => const MainScaffold(),
           '/feed': (context) => FeedPage(),
-          // '/profile': (context) => ProfilePage(),
           '/story': (context) {
-            // Ambil data 'user' yang dikirim melalui argumen navigasi
             final user = ModalRoute.of(context)!.settings.arguments as User;
-
-            // Kirim data 'user' tersebut ke InstagramStoryPage
             return InstagramStoryPage(user: user);
           },
           '/notif': (context) => const NotificationPage(),
           '/message': (context) => MessageListPage(),
           '/welcome': (context) => WelcomePage(),
-          '/updater': (context) => UpdateScreenPage(onUpdateNow: () {  }, onUpdateLater: () {  },),
+          '/updater': (context) => UpdateScreenPage(onUpdateNow: () {}, onUpdateLater: () {}),
           '/other-profile': (context) {
             final args =
             ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
@@ -261,14 +249,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           },
           if (kDebugMode) '/debug_cache': (context) => const CacheDebugPage(),
         },
-        // home: DownloadAppPromptPage(playStoreUrl: 'https://ds.cs', onContinueToWeb: () {}),
         debugShowCheckedModeBanner: false,
       ),
     );
   }
 }
 
-// 🚀 Navigation observer for intelligent cache warming
 class CacheNavigationObserver extends NavigatorObserver {
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
@@ -291,7 +277,6 @@ class CacheNavigationObserver extends NavigatorObserver {
   }
 }
 
-// 🐛 Debug page for cache monitoring (debug only)
 class CacheDebugPage extends StatefulWidget {
   const CacheDebugPage({Key? key}) : super(key: key);
 
@@ -421,7 +406,6 @@ class _CacheDebugPageState extends State<CacheDebugPage> {
   }
 }
 
-// 🔧 Extension untuk easy debugging
 extension AppDebug on BuildContext {
   void showCacheDebug() {
     if (kDebugMode) {

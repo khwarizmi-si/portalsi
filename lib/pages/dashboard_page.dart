@@ -1,5 +1,6 @@
 // lib/pages/dashboard_page.dart
 import 'dart:async';
+import 'dart:math';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -26,9 +27,11 @@ import '../controllers/home_controller.dart';
 import '../models/group_model.dart';
 import '../models/user_model.dart';
 import '../providers/navigation_provider.dart';
+import '../providers/upload_provider.dart';
 import '../services/follow_service.dart';
 import '../services/group_service.dart';
 import '../services/story_service.dart';
+import '../utils/gradient_generator.dart';
 import '../utils/user_provider.dart';
 import '../models/post_model.dart';
 import '../models/announcement_model.dart';
@@ -58,6 +61,11 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
 
   final GlobalKey _announcementButtonKey = GlobalKey();
   final GlobalKey _portfolioButtonKey = GlobalKey();
+
+  // TAMBAHKAN: State untuk menyimpan hasil pre-fetch gradien
+  final Map<int, List<Color>> _prefetchedGradients = {};
+  // TAMBAHKAN: Set untuk melacak story yang sudah di-prefetch agar tidak duplikat
+  final Set<int> _processedStoryIds = {};
 
   void _showPermissionDeniedDialog() {
     showDialog(
@@ -98,9 +106,56 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<ScrollProvider>(context, listen: false).setDashboardController(_scrollController);
       Provider.of<UserProvider>(context, listen: false).fetchCurrentUser();
+
+      // --- REMOVED --- Hapus listener untuk prefetch
+      // final homeController = Provider.of<HomeController>(context, listen: false);
+      // homeController.addListener(_onHomeControllerUpdate);
+      // homeController.loadDashboardData();
+
+      // *** MODIFIED *** Panggil langsung tanpa listener
       Provider.of<HomeController>(context, listen: false).loadDashboardData();
     });
     _loadNotificationCount();
+  }
+
+
+  void _onHomeControllerUpdate() {
+    final controller = Provider.of<HomeController>(context, listen: false);
+    // Cek jika data sudah ada dan belum diproses
+    if (!controller.isLoading && controller.stories.isNotEmpty) {
+      _prefetchStoryGradients(controller.stories);
+    }
+  }
+
+  void _prefetchStoryGradients(List<UserWithStories> users) {
+    for (var user in users) {
+      // Hanya proses jika user ini belum pernah diproses sebelumnya
+      if (user.stories.isNotEmpty && !_processedStoryIds.contains(user.userId)) {
+
+        // Tandai user ini sudah diproses
+        _processedStoryIds.add(user.userId);
+
+        final firstStory = user.stories.first;
+        final imageUrl = firstStory.mediaUrl ?? firstStory.musicAlbumArtUrl;
+
+        // Panggil helper secara async
+        generateGradientColors(imageUrl).then((colors) {
+          if (mounted && colors.isNotEmpty) {
+            setState(() {
+              // Simpan hasilnya ke Map menggunakan userId sebagai kunci
+              _prefetchedGradients[user.userId] = colors;
+            });
+          }
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    // Provider.of<HomeController>(context, listen: false).removeListener(_onHomeControllerUpdate);
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Widget _buildQuickAccessItem({
@@ -308,11 +363,6 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
     }
   }
 
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
 
   void _showCommentSheet(BuildContext context, Post post) {
     showModalBottomSheet(
@@ -359,7 +409,10 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
 
   Widget _buildAppBar(BuildContext context) {
     return Container(
-      padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top - 25, bottom: 5),
+      padding: EdgeInsets.only(
+          top: max(0.0, MediaQuery.of(context).padding.top - 25),
+          bottom: 5
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
@@ -429,6 +482,109 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
     );
   }
 
+  Widget _buildUploadProgressCard(BuildContext context) {
+    return Consumer<UploadProvider>(
+      builder: (context, uploadProvider, child) {
+        if (!uploadProvider.isUploading || uploadProvider.currentTask == null) {
+          return const SliverToBoxAdapter(child: SizedBox.shrink());
+        }
+
+        final task = uploadProvider.currentTask!;
+        final progress = uploadProvider.uploadProgress;
+        final percentage = (progress * 100).toStringAsFixed(0);
+
+        // --- 👇 PERUBAHAN DI SINI 👇 ---
+        final String uploadText = task.type == UploadType.story
+            ? "Mengirim story..."
+            : "Mengirim postingan...";
+
+        return SliverToBoxAdapter(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                )
+              ],
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.memory(
+                    task.thumbnail,
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        uploadText, // <-- Gunakan teks dinamis
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: LinearProgressIndicator(
+                              value: progress,
+                              backgroundColor: Colors.grey.shade300,
+                              color: Colors.orange,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text("$percentage%", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (dialogContext) => AlertDialog(
+                        title: const Text("Batalkan Unggahan?"),
+                        content: const Text("Anda yakin ingin membatalkan proses unggah ini?"),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(dialogContext),
+                            child: const Text("Lanjutkan"),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              uploadProvider.cancelUpload();
+                              Navigator.pop(dialogContext);
+                            },
+                            child: const Text("Batalkan", style: TextStyle(color: Colors.red)),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildBody(BuildContext context) {
     return Consumer<HomeController>(
       builder: (context, controller, child) {
@@ -466,7 +622,13 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
           child: CustomScrollView(
             controller: _scrollController,
             slivers: [
-              SliverToBoxAdapter(child: StorySection(stories: controller.stories)),
+              SliverToBoxAdapter(
+                  child: StorySection(
+                    stories: controller.stories,
+                    // prefetchedGradients: _prefetchedGradients, // <-- KIRIMKAN MAP-NYA
+                  )
+              ),
+              _buildUploadProgressCard(context),
               SliverToBoxAdapter(child: _buildQuickAccessButtons()),
               SliverToBoxAdapter(child: PinnedAnnouncementsSection(announcements: controller.pinnedAnnouncements)),
               _buildPinnedPost(context, controller),
@@ -994,36 +1156,23 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
 
   Future<void> _navigateToStoryView() async {
     if (_isLoadingStory) return;
-
-    final navigator = Navigator.of(context);
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-
     setState(() => _isLoadingStory = true);
 
-    try {
-      final userWithStories = await _storyService.getStoriesForUser(widget.user['user_id']);
+    // TIDAK PERLU LAGI MENGAMBIL DATA DI SINI.
 
-      if (mounted && userWithStories.stories.isNotEmpty) {
-        navigator.push(
-          PageRouteBuilder(
-            opaque: false,
-            pageBuilder: (_, __, ___) => StoryViewPage(
-              userWithStories: userWithStories,
-              heroTag: 'story_hero_${userWithStories.userId}',
-            ),
-            transitionsBuilder: (_, animation, __, child) => FadeTransition(opacity: animation, child: child),
-          ),
-        );
-      }
-    } catch (e) {
-      scaffoldMessenger.showSnackBar(
-        SnackBar(content: Text('Gagal memuat story: $e'), backgroundColor: Colors.red),
-      );
-    } finally {
-      if(mounted) {
-        setState(() => _isLoadingStory = false);
-      }
-    }
+    await Navigator.push(
+      context,
+      PageRouteBuilder(
+        opaque: false,
+        pageBuilder: (_, __, ___) => StoryViewPage(
+          initialUserId: widget.user['user_id'], // CUKUP KIRIM USER ID
+          heroTag: 'story_hero_${widget.user['user_id']}',
+        ),
+        transitionsBuilder: (_, animation, __, child) => FadeTransition(opacity: animation, child: child),
+      ),
+    );
+
+    if (mounted) setState(() => _isLoadingStory = false);
   }
 
   @override

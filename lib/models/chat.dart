@@ -1,5 +1,6 @@
 // lib/models/chat.dart
 
+import 'dart:developer';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/cupertino.dart';
@@ -28,7 +29,13 @@ class ChatMessage {
   final String? mediaType;
   final File? localFile;
   final ValueNotifier<double>? uploadProgress;
-  final Uint8List? localBytes; // <-- TAMBAHKAN PROPERTI BARU INI
+  final Uint8List? localBytes;
+
+  // --- 👇 PROPERTI BARU UNTUK STORY RESPONSE 👇 ---
+  final bool isStoryResponse;
+  final int? storyId;
+  final String? respondedStoryMediaUrl;
+  // --- 👆 BATAS PROPERTI BARU 👆 ---
 
   ChatMessage({
     required this.id,
@@ -43,11 +50,13 @@ class ChatMessage {
     this.localFile,
     this.uploadProgress,
     this.localMediaPath,
-    this.localBytes, // <-- TAMBAHKAN DI CONSTRUCTOR JUGA
+    this.localBytes,
+    this.isStoryResponse = false,
+    this.storyId,
+    this.respondedStoryMediaUrl,
   });
 
   // Sisa dari class ChatMessage (toJson, fromJson) tidak perlu diubah.
-  // Cukup salin-tempel dari kode Anda yang sudah ada.
   Map<String, dynamic> toJson() {
     return {
       'message_id': id,
@@ -60,17 +69,30 @@ class ChatMessage {
       'is_read': status == MessageStatus.read,
       'sender_data': sender.toJson(),
       'recipient_data': recipient.toJson(),
+      // --- 👇 TAMBAHKAN KE JSON 👇 ---
+      'is_story_response': isStoryResponse,
+      'story_id': storyId,
+      'responded_media_url': respondedStoryMediaUrl,
     };
   }
 
   factory ChatMessage.fromJson(Map<String, dynamic> json,
       [User? currentUser, User? recipientUser]) {
+
+    // --- 👇 TAMBAHKAN BLOK LOGGING INI 👇 ---
+    log('--- 🕵️‍♂️ Debugging ChatMessage.fromJson ---');
+    log('Mencoba mem-parsing JSON untuk pesan ID: ${json['message_id']}');
+    final isStoryResponseValue = json['is_story_response'];
+    log('Nilai "is_story_response" dari JSON: $isStoryResponseValue (Tipe Data: ${isStoryResponseValue.runtimeType})');
+    log('Nilai "responded_story_media_url" dari JSON: ${json['responded_story_media_url']}');
+    log('-------------------------------------------');
+    // --- 👆 BATAS BLOK LOGGING 👆 ---
+
     User sender, recipient;
     if (json.containsKey('sender_data') && json.containsKey('recipient_data')) {
       sender = User.fromJson(json['sender_data']);
       recipient = User.fromJson(json['recipient_data']);
-    }
-    else if (currentUser != null && recipientUser != null) {
+    } else if (currentUser != null && recipientUser != null) {
       final bool isFromCurrentUser = json['sender_id'] == currentUser.id;
       sender = isFromCurrentUser ? currentUser : recipientUser;
       recipient = isFromCurrentUser ? recipientUser : currentUser;
@@ -93,6 +115,10 @@ class ChatMessage {
       status:
       (json['is_read'] ?? false) ? MessageStatus.read : MessageStatus.sent,
       type: type,
+      // Logika parsing di sini tidak diubah, kita hanya ingin melihat log di atas
+      isStoryResponse: isStoryResponseValue ?? false,
+      storyId: json['story_id'],
+      respondedStoryMediaUrl: json['responded_media_url'],
     );
   }
 }

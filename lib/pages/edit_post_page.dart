@@ -4,14 +4,13 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
-import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 import 'package:video_player/video_player.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:crop_image/crop_image.dart';
 
 import '../models/song_model.dart';
 import '../models/text_overlay_model.dart';
@@ -27,6 +26,9 @@ class DrawingPath {
   DrawingPath({required this.path, required this.paint});
 }
 
+// Enum untuk mengelola state aspek rasio
+enum AspectRatioPreset { ratio4_5, ratio5_4 }
+
 class EditPostPage extends StatefulWidget {
   final List<AssetEntity> mediaItems;
 
@@ -38,13 +40,14 @@ class EditPostPage extends StatefulWidget {
 
 class _EditPostPageState extends State<EditPostPage> with TickerProviderStateMixin {
   int _currentIndex = 0;
-  bool _isEditingSize = false;
+  AspectRatioPreset _currentAspectRatio = AspectRatioPreset.ratio4_5;
   final TransformationController _transformationController = TransformationController();
   late AnimationController _animationController;
   Animation<Matrix4>? _animation;
   Song? _selectedSong;
   final GlobalKey _repaintKey = GlobalKey();
   bool _isProcessing = false;
+  File? _croppedImageFile;
 
   final List<TextOverlay> _textOverlays = [];
   double _baseScale = 1.0;
@@ -105,6 +108,34 @@ class _EditPostPageState extends State<EditPostPage> with TickerProviderStateMix
     _videoController?.dispose();
     _recommendationAudioPlayer.dispose();
     super.dispose();
+  }
+
+  Future<void> _cropImage() async {
+    if (_isProcessing) return;
+    final AssetEntity currentMedia = widget.mediaItems[_currentIndex];
+    final File? originalFile = await currentMedia.file;
+    if (originalFile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gagal memuat file gambar untuk di-crop.')),
+      );
+      return;
+    }
+    final double cropAspectRatio = _currentAspectRatio == AspectRatioPreset.ratio4_5 ? 4 / 5 : 5 / 4;
+    final File? croppedFile = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => _ImageCropperPage(
+          imageFile: originalFile,
+          aspectRatio: cropAspectRatio,
+        ),
+        fullscreenDialog: true,
+      ),
+    );
+    if (croppedFile != null) {
+      setState(() {
+        _croppedImageFile = croppedFile;
+      });
+    }
   }
 
   void _toggleFilterEditor() {
@@ -317,7 +348,12 @@ class _EditPostPageState extends State<EditPostPage> with TickerProviderStateMix
 
   void _onPanUpdate(DragUpdateDetails details) {
     if (!_isDrawingMode || _currentPath == null) return;
-    setState(() => _currentPath!.lineTo(details.localPosition.dx, details.localPosition.dy));
+    setState(() {
+      // Membuat path baru dengan menyalin yang lama dan menambahkan garis baru.
+      // Ini memastikan Flutter mendeteksi perubahan dan menggambar ulang.
+      _currentPath = Path.from(_currentPath!)
+        ..lineTo(details.localPosition.dx, details.localPosition.dy);
+    });
   }
 
   void _onPanEnd(DragEndDetails details) {
@@ -383,21 +419,20 @@ class _EditPostPageState extends State<EditPostPage> with TickerProviderStateMix
     if (selectedSong != null) setState(() => _selectedSong = selectedSong);
   }
 
-  // --- FUNGSI DIPERBARUI DENGAN LOGIKA VIDEO/GAMBAR ---
   Future<void> _processAndNavigate() async {
     if (_isProcessing) return;
     setState(() => _isProcessing = true);
-
     _videoController?.pause();
     await _recommendationAudioPlayer.stop();
+
+    await Future.delayed(const Duration(milliseconds: 100));
 
     try {
       List<File> processedFiles = [];
       final AssetEntity currentMedia = widget.mediaItems[_currentIndex];
-
-      if (currentMedia.type == AssetType.video) {
-        // Jika VIDEO: Ambil file asli, abaikan editan visual
-        print("Memproses video... Editan visual (filter, teks, dll.) akan diabaikan.");
+      if (_croppedImageFile != null) {
+        processedFiles.add(_croppedImageFile!);
+      } else if (currentMedia.type == AssetType.video) {
         final originalFile = await currentMedia.file;
         if (originalFile != null) {
           processedFiles.add(originalFile);
@@ -405,8 +440,6 @@ class _EditPostPageState extends State<EditPostPage> with TickerProviderStateMix
           throw Exception("Gagal mendapatkan file video.");
         }
       } else {
-        // Jika GAMBAR: Gunakan RepaintBoundary untuk menangkap editan
-        print("Memproses gambar dengan editan...");
         final boundary = _repaintKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
         final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
         final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
@@ -416,24 +449,21 @@ class _EditPostPageState extends State<EditPostPage> with TickerProviderStateMix
         await file.writeAsBytes(pngBytes);
         processedFiles.add(file);
       }
-
       if (processedFiles.isEmpty) {
         throw Exception("Tidak ada media untuk diproses.");
       }
-
       Navigator.of(context).push(MaterialPageRoute(
         builder: (context) => SharePostPage(
           mediaFiles: processedFiles,
           selectedSong: _selectedSong,
-          // Catatan: TextOverlays tetap dikirim, namun hanya akan berguna jika backend bisa menempelkannya ke video
           textOverlays: _textOverlays,
         ),
       ));
-    } catch(e) {
+    } catch (e) {
       print("Error saat memproses media: $e");
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Gagal memproses media: $e")));
     } finally {
-      if(mounted) setState(() => _isProcessing = false);
+      if (mounted) setState(() => _isProcessing = false);
     }
   }
 
@@ -475,35 +505,133 @@ class _EditPostPageState extends State<EditPostPage> with TickerProviderStateMix
       ),
       body: Column(
         children: [
-          Expanded(child: Padding(padding: const EdgeInsets.all(16.0), child: Center(child: AspectRatio(aspectRatio: 4 / 5, child: ClipRRect(borderRadius: BorderRadius.circular(8), child: Stack(fit: StackFit.expand, children: [
-            RepaintBoundary(
-              key: _repaintKey,
-              child: Stack(fit: StackFit.expand, children: [
-                ColorFiltered(
-                  colorFilter: ColorFilter.matrix(_calculateColorMatrix()),
-                  child: Builder(builder: (context) {
-                    if (isVideo && _videoController != null && _videoController!.value.isInitialized) {
-                      return FittedBox(fit: BoxFit.cover, child: SizedBox(width: _videoController!.value.size.width, height: _videoController!.value.size.height, child: VideoPlayer(_videoController!)));
-                    }
-                    return InteractiveViewer(transformationController: _transformationController, panEnabled: _isEditingSize, scaleEnabled: _isEditingSize, onInteractionEnd: (details) { if (_transformationController.value.getMaxScaleOnAxis() < 1.0) _runAnimation(); }, child: AssetEntityImage(currentMedia, isOriginal: true, fit: BoxFit.cover));
-                  }),
+          Expanded(child: Padding(padding: const EdgeInsets.all(16.0), child: Center(child: AspectRatio(
+              aspectRatio: _currentAspectRatio == AspectRatioPreset.ratio4_5 ? 4 / 5 : 5 / 4,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: RepaintBoundary(
+                  key: _repaintKey,
+                  child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // LAPISAN 1: GAMBAR/VIDEO DASAR
+                        ColorFiltered(
+                          colorFilter: ColorFilter.matrix(_calculateColorMatrix()),
+                          child: (isVideo && _videoController != null && _videoController!.value.isInitialized)
+                              ? FittedBox(fit: BoxFit.cover, child: SizedBox(width: _videoController!.value.size.width, height: _videoController!.value.size.height, child: VideoPlayer(_videoController!)))
+                              : InteractiveViewer(
+                            transformationController: _transformationController,
+                            panEnabled: !isVideo && !_isDrawingMode,
+                            scaleEnabled: !isVideo && !_isDrawingMode,
+                            onInteractionEnd: (details) {
+                              if (_transformationController.value.getMaxScaleOnAxis() < 1.0) _runAnimation();
+                            },
+                            child: _croppedImageFile != null
+                                ? Image.file(_croppedImageFile!, fit: BoxFit.cover)
+                                : _MediaFileViewer(assetEntity: currentMedia),
+                          ),
+                        ),
+
+                        // --- 👇 PERBAIKAN UTAMA (SUSUN ULANG URUTAN) 👇 ---
+
+                        // LAPISAN 2: KANVAS UNTUK CORETAN YANG SUDAH JADI
+                        CustomPaint(painter: DrawingPainter(paths: _drawingPaths), child: Container()),
+
+                        // LAPISAN 3: KANVAS UNTUK CORETAN YANG SEDANG DIGAMBAR
+                        if (_isDrawingMode && _currentPath != null)
+                          CustomPaint(
+                              painter: DrawingPainter(paths: [
+                                DrawingPath(
+                                    path: _currentPath!,
+                                    paint: Paint()
+                                      ..color = _currentDrawingColor
+                                      ..strokeWidth = _currentStrokeWidth
+                                      ..style = PaintingStyle.stroke
+                                      ..strokeCap = StrokeCap.round)
+                              ]),
+                              child: Container()),
+
+                        // LAPISAN 4: TEKS OVERLAY (SEKARANG BERADA DI ATAS CORETAN)
+                        ..._textOverlays.map((overlay) {
+                          return Positioned(
+                              left: overlay.position.dx,
+                              top: overlay.position.dy,
+                              child: Transform(
+                                  transform: Matrix4.identity()
+                                    ..scale(overlay.scale)
+                                    ..rotateZ(overlay.rotation),
+                                  alignment: FractionalOffset.center,
+                                  child: GestureDetector(
+                                      behavior: HitTestBehavior.translucent,
+                                      onTap: () => _showTextOptionsSheet(overlay),
+                                      onScaleStart: (details) { _baseScale = overlay.scale; _baseRotation = overlay.rotation; },
+                                      onScaleUpdate: (details) {
+                                        setState(() {
+                                          overlay.position += details.focalPointDelta;
+                                          overlay.scale = (_baseScale * details.scale).clamp(0.5, 3.0);
+                                          overlay.rotation = _baseRotation + details.rotation;
+                                        });
+                                      },
+                                      child: Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: overlay.backgroundStyle == TextBackgroundStyle.none
+                                                ? Colors.transparent
+                                                : (overlay.backgroundStyle == TextBackgroundStyle.semiTransparent
+                                                ? Colors.black.withOpacity(0.5)
+                                                : overlay.color),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            overlay.text,
+                                            style: TextStyle(
+                                              fontSize: 24,
+                                              color: overlay.backgroundStyle == TextBackgroundStyle.solid
+                                                  ? _getContrastingTextColor(overlay.color)
+                                                  : overlay.color,
+                                              fontWeight: overlay.fontWeight,
+                                            ),
+                                          )
+                                      )
+                                  )
+                              )
+                          );
+                        }).toList(),
+
+                        // LAPISAN 5 (PALING ATAS): SENSOR SENTUH UNTUK MENGGAMBAR (HANYA AKTIF SAAT MODE GAMBAR)
+                        if (_isDrawingMode)
+                          GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onPanStart: _onPanStart,
+                              onPanUpdate: _onPanUpdate,
+                              onPanEnd: _onPanEnd,
+                              child: Container(color: Colors.transparent)
+                          ),
+
+                        // --- AKHIR PERBAIKAN ---
+
+                        // Tombol utilitas (tidak terpengaruh urutan di atas)
+                        if (!isVideo)
+                          Positioned(
+                              bottom: 8,
+                              left: 8,
+                              child: IconButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _currentAspectRatio =
+                                    _currentAspectRatio == AspectRatioPreset.ratio4_5
+                                        ? AspectRatioPreset.ratio5_4
+                                        : AspectRatioPreset.ratio4_5;
+                                  });
+                                },
+                                icon: const Icon(Icons.aspect_ratio, color: Colors.white),
+                                style: IconButton.styleFrom(
+                                    backgroundColor: Colors.black.withOpacity(0.4)),
+                              )),
+                      ]),
                 ),
-                CustomPaint(painter: DrawingPainter(paths: _drawingPaths), child: Container()),
-                if (_isDrawingMode && _currentPath != null) CustomPaint(painter: DrawingPainter(paths: [DrawingPath(path: _currentPath!, paint: Paint()..color = _currentDrawingColor..strokeWidth = _currentStrokeWidth..style = PaintingStyle.stroke..strokeCap = StrokeCap.round)])),
-                ..._textOverlays.map((overlay) {
-                  Widget content; BoxDecoration decoration; TextStyle style;
-                  switch (overlay.backgroundStyle) { case TextBackgroundStyle.solid: decoration = BoxDecoration(color: overlay.color, borderRadius: BorderRadius.circular(8)); style = TextStyle(color: _getContrastingTextColor(overlay.color), fontSize: 24, fontWeight: overlay.fontWeight); break; case TextBackgroundStyle.semiTransparent: decoration = BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(8)); style = TextStyle(color: overlay.color, fontSize: 24, fontWeight: overlay.fontWeight); break; case TextBackgroundStyle.none: default: decoration = const BoxDecoration(); style = TextStyle(color: overlay.color, fontSize: 24, fontWeight: overlay.fontWeight, shadows: const [Shadow(blurRadius: 3.0, color: Colors.black, offset: Offset(1.0, 1.0))]); break; }
-                  if (overlay.isLink) { content = Row(mainAxisSize: MainAxisSize.min, children: [ Icon(Icons.link, color: _getContrastingTextColor(overlay.color), size: 20), const SizedBox(width: 8), Text(overlay.text, textAlign: TextAlign.center, style: style.copyWith(fontSize: 18))]); } else { content = Text(overlay.text, textAlign: TextAlign.center, style: style); }
-                  if (_activeTextOverlay == overlay) { decoration = decoration.copyWith(border: Border.all(color: Colors.white, width: 1.5)); }
-                  return Positioned(left: overlay.position.dx, top: overlay.position.dy, child: Transform(transform: Matrix4.identity()..scale(overlay.scale)..rotateZ(overlay.rotation), alignment: FractionalOffset.center, child: Material(color: Colors.transparent, child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: decoration, child: content))));
-                }).toList(),
-              ]),
-            ),
-            if (!_isEditingSize) ...[ ..._textOverlays.map((overlay) { return Positioned(left: overlay.position.dx, top: overlay.position.dy, child: Transform(transform: Matrix4.identity()..scale(overlay.scale)..rotateZ(overlay.rotation), alignment: FractionalOffset.center, child: GestureDetector(onTap: () => _showTextOptionsSheet(overlay), onScaleStart: (details) { _baseScale = overlay.scale; _baseRotation = overlay.rotation; }, onScaleUpdate: (details) { setState(() { overlay.position += details.focalPointDelta; overlay.scale = (_baseScale * details.scale).clamp(0.5, 3.0); overlay.rotation = _baseRotation + details.rotation; }); }, child: Container(padding: const EdgeInsets.all(20), color: Colors.transparent, child: Opacity(opacity: 0, child: Text(overlay.text, style: const TextStyle(fontSize: 24))))))); }).toList()],
-            if (_isDrawingMode) GestureDetector(onPanStart: _onPanStart, onPanUpdate: _onPanUpdate, onPanEnd: _onPanEnd, child: Container(color: Colors.transparent)),
-            if (_isEditingSize) IgnorePointer(child: CustomPaint(painter: GridPainter(), child: Container())),
-            if (!isVideo) Positioned(bottom: 8, left: 8, child: IconButton(onPressed: () => setState(() => _isEditingSize = !_isEditingSize), icon: Icon(Icons.aspect_ratio, color: _isEditingSize ? Colors.blue : Colors.white), style: IconButton.styleFrom(backgroundColor: Colors.black.withOpacity(0.4)))),
-          ])))))),
+              )
+          )))),
 
           AnimatedContainer(
             duration: const Duration(milliseconds: 300),
@@ -526,6 +654,7 @@ class _EditPostPageState extends State<EditPostPage> with TickerProviderStateMix
                 _buildEditorButton(Icons.music_note, 'Audio', onTap: _openMusicPicker),
                 _buildEditorButton(Icons.text_fields, 'Teks', onTap: _showTextInputDialog),
                 _buildEditorButton(Icons.sentiment_satisfied_alt, 'Emoji', onTap: _showCustomEmojiPicker),
+                _buildEditorButton(Icons.crop, 'Pangkas', onTap: isVideo ? null : _cropImage),
                 _buildEditorButton(Icons.filter_vintage, 'Filter', onTap: isVideo ? null : _toggleFilterEditor),
                 _buildEditorButton(Icons.brush, 'Brush', onTap: _toggleDrawingMode),
                 ElevatedButton(
@@ -632,16 +761,27 @@ class _EditPostPageState extends State<EditPostPage> with TickerProviderStateMix
   }
 }
 
-class GridPainter extends CustomPainter {
+class _MediaFileViewer extends StatelessWidget {
+  final AssetEntity assetEntity;
+  const _MediaFileViewer({required this.assetEntity});
+
   @override
-  void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()..color = Colors.white.withOpacity(0.5)..strokeWidth = 1.0;
-    for (int i = 1; i < 3; i++) { double x = size.width / 3 * i; canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint); }
-    for (int i = 1; i < 3; i++) { double y = size.height / 3 * i; canvas.drawLine(Offset(0, y), Offset(size.width, y), paint); }
+  Widget build(BuildContext context) {
+    return FutureBuilder<File?>(
+      future: assetEntity.file,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: Colors.white));
+        }
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data == null) {
+          return const Center(child: Icon(Icons.error_outline, color: Colors.red, size: 48));
+        }
+        return Image.file(snapshot.data!, fit: BoxFit.cover);
+      },
+    );
   }
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
+
 
 class DrawingPainter extends CustomPainter {
   final List<DrawingPath> paths;
@@ -654,4 +794,78 @@ class DrawingPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant DrawingPainter oldDelegate) => true;
+}
+
+class _ImageCropperPage extends StatelessWidget {
+  final File imageFile;
+  final double aspectRatio;
+
+  const _ImageCropperPage({required this.imageFile, required this.aspectRatio});
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = CropController(
+      aspectRatio: aspectRatio,
+      defaultCrop: const Rect.fromLTRB(0.05, 0.05, 0.95, 0.95),
+    );
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('Sesuaikan Gambar'),
+        backgroundColor: Colors.black87,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        actions: [
+          TextButton(
+            onPressed: () async {
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+              );
+
+              try {
+                final result = await controller.croppedBitmap();
+                final data = await result.toByteData(format: ui.ImageByteFormat.png);
+
+                if (data == null) {
+                  throw Exception("Gagal mengonversi gambar yang di-crop.");
+                }
+
+                final bytes = data.buffer.asUint8List();
+                final tempDir = await getTemporaryDirectory();
+                final fileName = '${DateTime.now().millisecondsSinceEpoch}.png';
+                final File tempFile = File('${tempDir.path}/$fileName');
+                await tempFile.writeAsBytes(bytes);
+
+                if (context.mounted) Navigator.pop(context); // Tutup loading
+                if (context.mounted) Navigator.pop(context, tempFile); // Kembali dengan hasil
+
+              } catch (e) {
+                if (context.mounted) Navigator.pop(context); // Tutup loading
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Gagal memproses gambar: $e')),
+                );
+              }
+            },
+            child: const Text('SELESAI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: CropImage(
+            controller: controller,
+            image: Image.file(imageFile),
+            gridColor: Colors.white54,
+            scrimColor: Colors.black.withOpacity(0.7),
+            paddingSize: 20,
+            alwaysShowThirdLines: true,
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:page_transition/page_transition.dart';
 import 'package:portal_si/models/user_model.dart';
 import 'package:portal_si/pages/portfolio_pages.dart';
@@ -637,6 +638,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
       return const SizedBox.shrink();
     }
     final posts = _profileData!.recentPosts;
+    const int columnCount = 3; // Definisikan jumlah kolom
 
     return Container(
       margin: const EdgeInsets.only(top: 0.0, left: 0, right: 0, bottom: 20),
@@ -662,45 +664,63 @@ class _OtherProfilePageState extends State<OtherProfilePage>
       )
           : Padding(
         padding: const EdgeInsets.fromLTRB(12, 24, 12, 12),
-        child: GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
+        // Bungkus GridView dengan AnimationLimiter
+        child: AnimationLimiter(
+          child: GridView.builder(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columnCount,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+            ),
+            itemCount: _profileData!.recentPosts.length,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemBuilder: (context, index) {
+              final post = _profileData!.recentPosts[index];
+              Widget mediaDisplay;
+              if (post.isVideo) {
+                mediaDisplay =
+                    VideoThumbnailWidget(videoUrl: post.mediaUrl);
+              } else {
+                mediaDisplay =
+                    Image.network(post.mediaUrl, fit: BoxFit.cover);
+              }
+
+              // Bungkus setiap item dengan widget animasi
+              return AnimationConfiguration.staggeredGrid(
+                position: index,
+                duration: const Duration(milliseconds: 400),
+                columnCount: columnCount,
+                child: ScaleAnimation(
+                  child: FadeInAnimation(
+                    child: GestureDetector(
+                      onTap: () {
+                        final navProvider = Provider.of<NavigationProvider>(context, listen: false);
+
+                        if (post.isVideo) {
+                          final fullPostObject = Post.fromJson({
+                            'id': post.postId,
+                            'caption': post.caption,
+                            'media_url': post.mediaUrl,
+                            'is_video': post.isVideo,
+                            'created_at': post.createdAt.toIso8601String(),
+                            'user': _profileData!.toJson(),
+                          });
+                          Navigator.push(context, MaterialPageRoute(builder: (context) => ClipsViewerPage(initialClip: fullPostObject)));
+                        } else {
+                          navProvider.replaceOverlay(PostDetail(postId: post.postId));
+                        }
+                      },
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: mediaDisplay,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
-          itemCount: _profileData!.recentPosts.length,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemBuilder: (context, index) {
-            final post = _profileData!.recentPosts[index];
-            Widget mediaDisplay;
-            if (post.isVideo) {
-              mediaDisplay = VideoThumbnailWidget(videoUrl: post.mediaUrl);
-            } else {
-              mediaDisplay = Image.network(post.mediaUrl, fit: BoxFit.cover);
-            }
-
-            return GestureDetector(
-              onTap: () {
-                final navProvider = Provider.of<NavigationProvider>(context, listen: false);
-
-                if (post.isVideo) {
-                  final fullPostObject = Post.fromJson({
-                    'id': post.postId, 'caption': post.caption, 'media_url': post.mediaUrl,
-                    'is_video': post.isVideo, 'created_at': post.createdAt.toIso8601String(),
-                    'user': _profileData!.toJson(),
-                  });
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => ClipsViewerPage(initialClip: fullPostObject)));
-                } else {
-                  navProvider.replaceOverlay(PostDetail(postId: post.postId));
-                }
-              },
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: mediaDisplay,
-              ),
-            );
-          },
         ),
       ),
     );

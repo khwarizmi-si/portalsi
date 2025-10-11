@@ -1,6 +1,7 @@
 // lib/controllers/home_controller.dart
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/announcement_model.dart';
@@ -47,7 +48,7 @@ class HomeController with ChangeNotifier {
   }
 
   void _initializeServices() {
-    _likeService.connect();
+    // _likeService.connect();
     _likeUpdatesSubscription = _likeService.likeUpdates.listen((update) {
       final index = _feedItems.indexWhere((item) =>
       item is Map<String, dynamic> &&
@@ -119,7 +120,7 @@ class HomeController with ChangeNotifier {
       _isLoading = true;
     }
     _errorMessage = null;
-    _currentPage = 1; // Selalu reset ke halaman 1 saat refresh
+    _currentPage = 1;
     notifyListeners();
 
     try {
@@ -131,9 +132,15 @@ class HomeController with ChangeNotifier {
       ]);
 
       final paginatedResponse = results[0] as PaginatedFeedResponse;
-      final storiesData = results[1] as List<dynamic>;
+      final storiesData = results[1] as List<dynamic>; // <-- Data mentah cerita
       final announcementsData = results[2] as List<Announcement>;
       final pinnedPostData = results[3] as Post?;
+
+      // --- 👇 TAMBAHKAN LOG PENTING INI DI SINI 👇 ---
+      log('--- 🕵️‍♂️ MENGINTIP DATA MENTAH STORY FEED SETELAH REFRESH ---');
+      log(jsonEncode(storiesData));
+      log('----------------------------------------------------------');
+      // --- 👆 BATAS LOG 👆 ---
 
       _feedItems = paginatedResponse.feedItems;
       _hasNextPage = paginatedResponse.hasNextPage;
@@ -187,7 +194,7 @@ class HomeController with ChangeNotifier {
       _feedItems[index] = postMap;
       notifyListeners();
     }
-    _likeService.toggleLikeSocket(postId);
+    // _likeService.toggleLikeSocket(postId);
     LikeService().toggleLikeHttp(postId);
   }
 
@@ -216,7 +223,7 @@ class HomeController with ChangeNotifier {
   @override
   void dispose() {
     _likeUpdatesSubscription?.cancel();
-    _likeService.disconnect();
+    // _likeService.disconnect();
     super.dispose();
   }
 }

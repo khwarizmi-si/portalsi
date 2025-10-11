@@ -5,6 +5,7 @@ import '../widgets/accounts_center_sheet_content.dart'; // Sesuaikan dengan path
 import '../services/auth_service.dart';
 import 'account_privacy_page.dart';
 import 'bookmarks_page.dart';
+import 'change_password_page.dart';
 import 'login_history_page.dart'; // Sesuaikan dengan path Anda
 
 class SettingsPage extends StatefulWidget {
@@ -196,6 +197,16 @@ class _SettingsPageState extends State<SettingsPage> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const LoginHistoryPage()),
+              );
+            },
+          ),
+          _buildStyledMenuItem(
+            icon: Icons.password_rounded, // Atau Icons.key_outlined
+            title: 'Ubah Kata Sandi',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ChangePasswordPage()),
               );
             },
           ),

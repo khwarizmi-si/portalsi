@@ -3,18 +3,17 @@ import 'package:flutter/services.dart';
 import 'package:portal_si/models/group_member_model.dart';
 import 'package:portal_si/services/group_service.dart';
 
+import '../models/user_model.dart';
 import '../widgets/add_members_bottom_sheet.dart';
-
+import 'chat_room.dart';
 
 class GroupMembersPage extends StatefulWidget {
   final int groupId;
-  // [PERUBAHAN 1] Tambahkan properti untuk menerima status admin
   final bool isCurrentUserAdmin;
 
   const GroupMembersPage({
     super.key,
     required this.groupId,
-    // Tambahkan ke constructor
     required this.isCurrentUserAdmin,
   });
 
@@ -24,17 +23,15 @@ class GroupMembersPage extends StatefulWidget {
 
 class _GroupMembersPageState extends State<GroupMembersPage> {
   final GroupService _groupService = GroupService();
-  late Future<List<GroupMember>> _membersFuture;
-  int? _currentUserId;
+  late Future<Map<String, List<GroupMember>>> _membersFuture;
 
   @override
   void initState() {
     super.initState();
-    // Memulai proses pengambilan data saat halaman dibuka
-    _membersFuture = _groupService.getGroupMembers(widget.groupId);
+    _loadMembers();
   }
 
-  void _refreshMemberList() {
+  void _loadMembers() {
     setState(() {
       _membersFuture = _groupService.getGroupMembers(widget.groupId);
     });
@@ -53,19 +50,19 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
           break;
         case 'promote':
           success = await _groupService.promoteMember(widget.groupId, member.userId);
-          feedbackMessage = '${member.fullName} telah dijadikan admin.';
+          feedbackMessage = '${member.fullName ?? member.username} telah dijadikan admin.';
           break;
         case 'demote':
           success = await _groupService.demoteMember(widget.groupId, member.userId);
-          feedbackMessage = 'Admin ${member.fullName} telah diubah menjadi anggota.';
+          feedbackMessage = 'Admin ${member.fullName ?? member.username} telah diubah menjadi anggota.';
           break;
         case 'mute':
           success = await _groupService.muteMember(widget.groupId, member.userId);
-          feedbackMessage = '${member.fullName} telah dibisukan.';
+          feedbackMessage = '${member.fullName ?? member.username} telah dibisukan.';
           break;
         case 'unmute':
           success = await _groupService.unmuteMember(widget.groupId, member.userId);
-          feedbackMessage = 'Status bisu untuk ${member.fullName} telah dimatikan.';
+          feedbackMessage = 'Status bisu untuk ${member.fullName ?? member.username} telah dimatikan.';
           break;
       }
 
@@ -73,7 +70,7 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(feedbackMessage), backgroundColor: Colors.green),
         );
-        _refreshMemberList(); // Refresh daftar setelah aksi berhasil
+        _loadMembers();
       } else if (!success) {
         throw Exception(errorMessage);
       }
@@ -93,16 +90,12 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => {
-            HapticFeedback.lightImpact(),
-            Navigator.of(context).pop()
-          },
+          onPressed: () => Navigator.of(context).pop(),
         ),
         title: const Text('Anggota', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0.5,
         actions: [
-          // [PERUBAHAN 2] Tampilkan tombol 'Tambah Anggota' hanya jika pengguna adalah admin
           if (widget.isCurrentUserAdmin)
             IconButton(
               icon: const Icon(Icons.person_add_outlined, color: Colors.black),
@@ -114,14 +107,14 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
                   builder: (_) => AddMembersBottomSheet(groupId: widget.groupId),
                 ).then((wasMemberAdded) {
                   if (wasMemberAdded == true) {
-                    _refreshMemberList();
+                    _loadMembers();
                   }
                 });
               },
             ),
         ],
       ),
-      body: FutureBuilder<List<GroupMember>>(
+      body: FutureBuilder<Map<String, List<GroupMember>>>(
         future: _membersFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -130,26 +123,33 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
           if (snapshot.hasError) {
             return Center(child: Text('Gagal memuat anggota: ${snapshot.error}'));
           }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          if (!snapshot.hasData || snapshot.data!.values.every((list) => list.isEmpty)) {
             return const Center(child: Text('Tidak ada anggota di grup ini.'));
           }
 
-          final members = snapshot.data!;
-          final admins = members.where((m) => m.role.toLowerCase() == 'admin').toList();
-          final otherMembers = members.where((m) => m.role.toLowerCase() != 'admin').toList();
+          final me = snapshot.data!['me'] ?? [];
+          final following = snapshot.data!['following'] ?? [];
+          final notFollowing = snapshot.data!['not_following'] ?? [];
 
           return ListView(
             padding: const EdgeInsets.symmetric(vertical: 8),
             children: [
-              if (admins.isNotEmpty) ...[
-                _buildSectionHeader('Admin (${admins.length})'),
-                ...admins.map((member) => _buildMemberTile(member, isAdmin: true)),
+              if (me.isNotEmpty) ...[
+                _buildSectionHeader('Anda'),
+                ...me.map((member) => _buildMemberTile(member, isMe: true)),
+                const Divider(height: 32),
               ],
-              if (otherMembers.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                _buildSectionHeader('Anggota Lainnya (${otherMembers.length})'),
-                ...otherMembers.map((member) => _buildMemberTile(member)),
-              ]
+
+              if (following.isNotEmpty) ...[
+                _buildSectionHeader('Mengikuti (${following.length})'),
+                ...following.map((member) => _buildMemberTile(member)),
+                const Divider(height: 32),
+              ],
+
+              if (notFollowing.isNotEmpty) ...[
+                _buildSectionHeader('Lainnya (${notFollowing.length})'),
+                ...notFollowing.map((member) => _buildMemberTile(member)),
+              ],
             ],
           );
         },
@@ -161,75 +161,68 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Text(
-        title.toUpperCase(),
+        title,
         style: TextStyle(
           fontWeight: FontWeight.bold,
-          color: Colors.grey.shade600,
-          fontSize: 13,
+          color: Colors.grey.shade800,
+          fontSize: 16,
         ),
       ),
     );
   }
 
-  Widget _buildMemberTile(GroupMember member, {bool isAdmin = false}) {
-    // Jangan tampilkan menu opsi untuk diri sendiri
-    final bool isCurrentUser = member.userId == _currentUserId;
-    return ListTile(
-      leading: CircleAvatar(
-        radius: 22,
-        backgroundImage: member.profilePictureUrl != null && member.profilePictureUrl!.isNotEmpty
-            ? NetworkImage(member.profilePictureUrl!)
-            : null,
-        child: (member.profilePictureUrl == null || member.profilePictureUrl!.isEmpty)
-            ? const Icon(Icons.person, color: Colors.grey)
-            : null,
-      ),
-      title: Row(
-        children: [
-          // --- PERBAIKAN DI SINI ---
-          // Bungkus Text widget dengan Expanded agar lebarnya fleksibel
-          Expanded(
-            child: Text(
-              member.fullName ?? member.username, // Menggunakan fallback ke username
-              style: const TextStyle(fontWeight: FontWeight.w600),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              softWrap: false, // softWrap: false baik untuk memastikan tidak ada line break
-            ),
+  Widget _buildMemberTile(GroupMember member, {bool isMe = false}) {
+    Widget? trailingWidget;
+    if (!isMe) {
+      if (member.isFollowing) {
+        // --- 👇 PERUBAHAN UTAMA ADA DI SINI 👇 ---
+        trailingWidget = OutlinedButton(
+          onPressed: () {
+            // 1. Buat objek User dari data GroupMember
+            final userToChat = User(
+              id: member.userId,
+              username: member.username,
+              fullName: member.fullName,
+              profilePictureUrl: member.profilePictureUrl,
+              // isVerified tidak ada di model GroupMember, jadi kita beri nilai default
+              isVerified: false,
+            );
+
+            // 2. Navigasi ke ChatRoomPage dengan data user tersebut
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ChatRoomPage(user: userToChat),
+              ),
+            );
+          },
+          child: const Text('Message'),
+          style: OutlinedButton.styleFrom(
+            side: BorderSide(color: Colors.grey.shade400),
+            foregroundColor: Colors.black,
           ),
-          // -------------------------
-          if (member.isMuted)
-            Padding(
-              padding: const EdgeInsets.only(left: 8.0),
-              child: Icon(
-                Icons.volume_off,
-                size: 16,
-                color: Colors.grey.shade500,
-              ),
-            ),
-          if (isAdmin)
-            Container(
-              margin: const EdgeInsets.only(left: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: Colors.blue.shade200)
-              ),
-              child: const Text(
-                'Admin',
-                style: TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.bold),
-              ),
-            ),
-        ],
-      ),
-      subtitle: Text('@${member.username}'),
-      trailing: isCurrentUser || !widget.isCurrentUserAdmin
-          ? null // Sembunyikan jika itu adalah pengguna sendiri ATAU jika pengguna bukan admin
-          : PopupMenuButton<String>(
-        icon: const Icon(Icons.more_horiz, color: Colors.black54),
-        onSelected: (value) => _handleMenuSelection(value, member),
-        itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+        );
+        // --- 👆 BATAS PERUBAHAN 👆 ---
+      } else {
+        trailingWidget = ElevatedButton(
+          onPressed: () {},
+          child: const Text('Follow'),
+          style: ElevatedButton.styleFrom(
+            elevation: 0,
+            backgroundColor: Colors.blue.shade50,
+            foregroundColor: Colors.blue.shade800,
+          ),
+        );
+      }
+    }
+
+    final adminPopupMenu = widget.isCurrentUserAdmin && !isMe
+        ? PopupMenuButton<String>(
+      icon: const Icon(Icons.more_horiz, color: Colors.black54),
+      onSelected: (value) => _handleMenuSelection(value, member),
+      itemBuilder: (BuildContext context) {
+        final isAdmin = member.role.toLowerCase() == 'admin';
+        return <PopupMenuEntry<String>>[
           PopupMenuItem<String>(
             value: isAdmin ? 'demote' : 'promote',
             child: Text(isAdmin ? 'Hentikan Jadi Admin' : 'Jadikan Admin'),
@@ -243,6 +236,45 @@ class _GroupMembersPageState extends State<GroupMembersPage> {
             value: 'remove',
             child: Text('Keluarkan dari Grup', style: TextStyle(color: Colors.red)),
           ),
+        ];
+      },
+    )
+        : null;
+
+    return ListTile(
+      leading: CircleAvatar(
+        radius: 22,
+        backgroundImage: member.profilePictureUrl != null && member.profilePictureUrl!.isNotEmpty
+            ? NetworkImage(member.profilePictureUrl!)
+            : null,
+        child: (member.profilePictureUrl == null || member.profilePictureUrl!.isEmpty)
+            ? Icon(Icons.person, color: Colors.grey.shade400)
+            : null,
+      ),
+      title: Row(
+        children: [
+          Text(
+            member.fullName ?? member.username,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          if (member.role.toLowerCase() == 'admin')
+            Container(
+              margin: const EdgeInsets.only(left: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.blue.shade200)),
+              child: const Text('Admin', style: TextStyle(fontSize: 11, color: Colors.blue, fontWeight: FontWeight.bold)),
+            ),
+        ],
+      ),
+      subtitle: Text('@${member.username}'),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (trailingWidget != null) trailingWidget,
+          if (adminPopupMenu != null) adminPopupMenu,
         ],
       ),
     );

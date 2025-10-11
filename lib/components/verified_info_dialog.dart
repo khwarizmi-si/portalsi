@@ -86,7 +86,7 @@ class VerifiedInfoDialog extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Image.asset('assets/logo_sekolah.png', height: 24),
+                Image.asset('assets/logopsifull.png', height: 24),
                 const SizedBox(width: 8),
                 Text('Portal SI', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey[800])),
               ],

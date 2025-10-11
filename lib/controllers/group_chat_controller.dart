@@ -17,6 +17,8 @@ class GroupChatRoomController with ChangeNotifier {
   final Group group;
   final GroupService _groupService = GroupService();
 
+  Map<int, User> _membersMap = {};
+
   User? _currentUser;
   StreamSubscription? _eventSubscription;
 
@@ -218,13 +220,20 @@ class GroupChatRoomController with ChangeNotifier {
     return false;
   }
 
+  // file: lib/controllers/group_chat_controller.dart
+
   Future<void> fetchGroupMembers() async {
     try {
-      // 1. Ambil data dari service sebagai List<GroupMember>
-      final List<GroupMember> groupMembers = await _groupService.getGroupMembers(group.id);
+      final Map<String, List<GroupMember>> memberCategories =
+      await _groupService.getGroupMembers(group.id);
 
-      // 2. Konversi setiap item dari GroupMember menjadi User
-      _members = groupMembers.map((member) {
+      final List<GroupMember> allMembers = [
+        ...(memberCategories['me'] ?? []),
+        ...(memberCategories['following'] ?? []),
+        ...(memberCategories['not_following'] ?? []),
+      ];
+
+      _members = allMembers.map((member) {
         return User(
           id: member.userId,
           username: member.username,
@@ -232,22 +241,22 @@ class GroupChatRoomController with ChangeNotifier {
           profilePictureUrl: member.profilePictureUrl,
           isOnline: member.isOnline,
           lastSeen: member.lastSeen,
-          // Properti lain dari model User akan menggunakan nilai default
         );
-      }).toList(); // Jangan lupa .toList() untuk mengubahnya kembali menjadi List
+      }).toList();
 
-      // 3. Lakukan sorting pada List<User> yang sudah dikonversi
       _members.sort((a, b) {
         if (a.isOnline == b.isOnline) {
-          // Gunakan ?? untuk memberikan nilai default jika lastSeen null
           return (b.lastSeen ?? DateTime(0)).compareTo(a.lastSeen ?? DateTime(0));
         }
-        return a.isOnline ? -1 : 1; // Anggota online akan berada di atas
+        return a.isOnline ? -1 : 1;
       });
 
-      notifyListeners(); // Beri tahu UI bahwa data sudah diperbarui
+      // Baris ini sudah diperbaiki untuk menangani ID yang bisa null
+      _membersMap = {for (var user in _members.where((u) => u.id != null)) user.id!: user};
+
+      notifyListeners();
     } catch (e) {
-      debugPrint("Gagal mengambil anggota grup: $e");
+      debugPrint("Gagal mengambil atau memproses anggota grup: $e");
     }
   }
 

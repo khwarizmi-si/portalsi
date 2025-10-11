@@ -22,7 +22,11 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // HAPUS BARIS YANG MENYEBABKAN ERROR: maven { url 'https://jitpack.io' }
+        // DAN PASTIKAN BARIS YANG BENAR INI ADA:
         maven { url = uri("https://jitpack.io") }
+
+        // Baris ini mungkin tidak diperlukan, tapi tidak apa-apa jika ada
         maven { url = uri("https://storage.googleapis.com/download.flutter.io") }
     }
 }
@@ -30,7 +34,10 @@ dependencyResolutionManagement {
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
     id("com.android.application") version "8.6.0" apply false
+    // START: FlutterFire Configuration
+    // END: FlutterFire Configuration
     id("org.jetbrains.kotlin.android") version "2.1.0" apply false
+    id("com.google.gms.google-services") version "4.4.3" apply false
 }
 
 include(":app")

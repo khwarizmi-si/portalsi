@@ -5,6 +5,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:portal_si/pages/story_view_page.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
@@ -702,6 +703,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
 
   Widget _buildPostGrid(User user) {
     final posts = user.recentPosts;
+    const int columnCount = 3; // Definisikan jumlah kolom untuk digunakan bersama
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 25.0),
@@ -726,46 +728,60 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
       )
           : Padding(
         padding: const EdgeInsets.fromLTRB(12, 24, 12, 72),
-        child: GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(12),
-          itemCount: posts.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
+        // Bungkus GridView dengan AnimationLimiter
+        child: AnimationLimiter(
+          child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(12),
+            itemCount: posts.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columnCount, // Gunakan variabel
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+            ),
+            itemBuilder: (context, index) {
+              final SimplePost post = posts[index];
+              // Bungkus setiap item dengan widget animasi
+              return AnimationConfiguration.staggeredGrid(
+                position: index,
+                duration: const Duration(milliseconds: 400),
+                columnCount: columnCount, // Beri tahu animasi jumlah kolomnya
+                child: SlideAnimation(
+                  verticalOffset: 50.0,
+                  child: FadeInAnimation(
+                    child: PressableGridItem(
+                      key: ValueKey(post.postId),
+                      post: post,
+                      onTap: () {
+                        if (post.isVideo) {
+                          final fullPostObject = Post(
+                            id: post.postId,
+                            caption: post.caption,
+                            mediaUrl: post.mediaUrl,
+                            isVideo: post.isVideo,
+                            createdAt: post.createdAt,
+                            user: user,
+                            likesCount: 0,
+                            commentsCount: 0,
+                            isLikedByUser: false,
+                            isBookmarked: false,
+                          );
+                          Navigator.push(context, MaterialPageRoute(builder: (context) => ClipsViewerPage(initialClip: fullPostObject)));
+                        } else {
+                          final navProvider = Provider.of<NavigationProvider>(context, listen: false);
+                          navProvider.showOverlay(PostDetail(postId: post.postId));
+                        }
+                      },
+                      onLongPress: () {
+                        _showPostPopup(context, post, user);
+                      },
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
-          itemBuilder: (context, index) {
-            final SimplePost post = posts[index];
-            return PressableGridItem(
-              key: ValueKey(post.postId),
-              post: post,
-              onTap: () {
-                if (post.isVideo) {
-                  final fullPostObject = Post(
-                    id: post.postId,
-                    caption: post.caption,
-                    mediaUrl: post.mediaUrl,
-                    isVideo: post.isVideo,
-                    createdAt: post.createdAt,
-                    user: user,
-                    likesCount: 0,
-                    commentsCount: 0,
-                    isLikedByUser: false,
-                    isBookmarked: false,
-                  );
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => ClipsViewerPage(initialClip: fullPostObject)));
-                } else {
-                  final navProvider = Provider.of<NavigationProvider>(context, listen: false);
-                  navProvider.showOverlay(PostDetail(postId: post.postId));
-                }
-              },
-              onLongPress: () {
-                _showPostPopup(context, post, user);
-              },
-            );
-          },
         ),
       ),
     );
