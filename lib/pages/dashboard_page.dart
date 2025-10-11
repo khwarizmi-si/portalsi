@@ -11,6 +11,7 @@ import 'package:portal_si/pages/story_view_page.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:timeago/timeago.dart' as timeago;
+import 'package:volume_controller/volume_controller.dart'; // Import package
 
 // Halaman & Komponen UI
 import 'package:portal_si/components/post_card.dart';
@@ -31,6 +32,7 @@ import '../providers/upload_provider.dart';
 import '../services/follow_service.dart';
 import '../services/group_service.dart';
 import '../services/story_service.dart';
+import '../utils/global_audio_state.dart'; // Import GlobalAudioState
 import '../utils/gradient_generator.dart';
 import '../utils/user_provider.dart';
 import '../models/post_model.dart';
@@ -62,10 +64,13 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
   final GlobalKey _announcementButtonKey = GlobalKey();
   final GlobalKey _portfolioButtonKey = GlobalKey();
 
-  // TAMBAHKAN: State untuk menyimpan hasil pre-fetch gradien
   final Map<int, List<Color>> _prefetchedGradients = {};
-  // TAMBAHKAN: Set untuk melacak story yang sudah di-prefetch agar tidak duplikat
   final Set<int> _processedStoryIds = {};
+
+  // --- 👇 TAMBAHAN STATE BARU & PERBAIKAN 👇 ---
+
+  // StreamSubscription<VolumeState>? _volumeListener;
+  double _currentSystemVolume = 0.5;
 
   void _showPermissionDeniedDialog() {
     showDialog(
@@ -103,16 +108,29 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
       }
     });
 
+    // --- 👇 PERBAIKAN LOGIKA LISTENER VOLUME 👇 ---
+    // Gunakan StreamSubscription untuk mendengarkan perubahan volume
+    // _volumeListener = VolumeController.volumeStateStream.listen((state) {
+    //   final newVolume = state.volume;
+    //   if (newVolume > _currentSystemVolume && GlobalAudioState.instance.isMuted) {
+    //     GlobalAudioState.instance.isMuted = false;
+    //   }
+    //   _currentSystemVolume = newVolume;
+    // });
+
+    // Menggunakan API statis dan memperbaiki typo
+    // VolumeController.getVolume().then((volume) {
+    //   if (mounted) {
+    //     setState(() {
+    //       _currentSystemVolume = volume; // <-- Typo diperbaiki di sini
+    //     });
+    //   }
+    // });
+    // --- AKHIR PERBAIKAN ---
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<ScrollProvider>(context, listen: false).setDashboardController(_scrollController);
       Provider.of<UserProvider>(context, listen: false).fetchCurrentUser();
-
-      // --- REMOVED --- Hapus listener untuk prefetch
-      // final homeController = Provider.of<HomeController>(context, listen: false);
-      // homeController.addListener(_onHomeControllerUpdate);
-      // homeController.loadDashboardData();
-
-      // *** MODIFIED *** Panggil langsung tanpa listener
       Provider.of<HomeController>(context, listen: false).loadDashboardData();
     });
     _loadNotificationCount();
@@ -121,7 +139,6 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
 
   void _onHomeControllerUpdate() {
     final controller = Provider.of<HomeController>(context, listen: false);
-    // Cek jika data sudah ada dan belum diproses
     if (!controller.isLoading && controller.stories.isNotEmpty) {
       _prefetchStoryGradients(controller.stories);
     }
@@ -129,20 +146,16 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
 
   void _prefetchStoryGradients(List<UserWithStories> users) {
     for (var user in users) {
-      // Hanya proses jika user ini belum pernah diproses sebelumnya
       if (user.stories.isNotEmpty && !_processedStoryIds.contains(user.userId)) {
 
-        // Tandai user ini sudah diproses
         _processedStoryIds.add(user.userId);
 
         final firstStory = user.stories.first;
         final imageUrl = firstStory.mediaUrl ?? firstStory.musicAlbumArtUrl;
 
-        // Panggil helper secara async
         generateGradientColors(imageUrl).then((colors) {
           if (mounted && colors.isNotEmpty) {
             setState(() {
-              // Simpan hasilnya ke Map menggunakan userId sebagai kunci
               _prefetchedGradients[user.userId] = colors;
             });
           }
@@ -153,7 +166,9 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
 
   @override
   void dispose() {
-    // Provider.of<HomeController>(context, listen: false).removeListener(_onHomeControllerUpdate);
+    // --- 👇 PERBAIKAN CARA MEMATIKAN LISTENER 👇 ---
+    // Batalkan subscription stream untuk menghindari memory leak
+    // _volumeListener?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
@@ -424,7 +439,7 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
         ],
       ),
       child: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         title: const Text('Portal SI', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 26)),
         actions: [
@@ -493,7 +508,6 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
         final progress = uploadProvider.uploadProgress;
         final percentage = (progress * 100).toStringAsFixed(0);
 
-        // --- 👇 PERUBAHAN DI SINI 👇 ---
         final String uploadText = task.type == UploadType.story
             ? "Mengirim story..."
             : "Mengirim postingan...";
@@ -531,7 +545,7 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        uploadText, // <-- Gunakan teks dinamis
+                        uploadText,
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 4),
@@ -612,8 +626,6 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
 
         return RefreshIndicator(
           onRefresh: () async {
-            // --- 👇 PERBAIKAN UTAMA DI SINI 👇 ---
-            // Panggil refresh untuk HomeController DAN UserProvider secara bersamaan
             await Future.wait([
               Provider.of<HomeController>(context, listen: false).refreshDashboardData(),
               Provider.of<UserProvider>(context, listen: false).fetchCurrentUser(),
@@ -625,7 +637,6 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
               SliverToBoxAdapter(
                   child: StorySection(
                     stories: controller.stories,
-                    // prefetchedGradients: _prefetchedGradients, // <-- KIRIMKAN MAP-NYA
                   )
               ),
               _buildUploadProgressCard(context),
@@ -1158,14 +1169,12 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
     if (_isLoadingStory) return;
     setState(() => _isLoadingStory = true);
 
-    // TIDAK PERLU LAGI MENGAMBIL DATA DI SINI.
-
     await Navigator.push(
       context,
       PageRouteBuilder(
         opaque: false,
         pageBuilder: (_, __, ___) => StoryViewPage(
-          initialUserId: widget.user['user_id'], // CUKUP KIRIM USER ID
+          initialUserId: widget.user['user_id'],
           heroTag: 'story_hero_${widget.user['user_id']}',
         ),
         transitionsBuilder: (_, animation, __, child) => FadeTransition(opacity: animation, child: child),
