@@ -1,5 +1,3 @@
-// lib/pages/profile_page.dart
-
 import 'dart:developer';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -34,6 +32,23 @@ import '../services/user_service.dart';
 import '../utils/zoom_page_route.dart';
 import 'package:palette_generator/palette_generator.dart';
 
+
+// --- WIDGET BARU UNTUK SHIMMER PLACEHOLDER ---
+class ImagePlaceholder extends StatelessWidget {
+  const ImagePlaceholder({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey[300]!,
+      highlightColor: Colors.grey[100]!,
+      child: Container(
+        color: Colors.white,
+      ),
+    );
+  }
+}
+
 class PostPopupContent extends StatefulWidget {
   final SimplePost post;
   final User user;
@@ -61,8 +76,9 @@ class _PostPopupContentState extends State<PostPopupContent> {
 
   Future<void> _updateIconColor() async {
     try {
+      final imageProvider = CachedNetworkImageProvider(widget.post.mediaUrl);
       final PaletteGenerator paletteGenerator = await PaletteGenerator.fromImageProvider(
-        NetworkImage(widget.post.mediaUrl),
+        imageProvider,
         size: const Size(100, 100),
         maximumColorCount: 20,
       );
@@ -89,9 +105,17 @@ class _PostPopupContentState extends State<PostPopupContent> {
             padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 16,
-                  backgroundImage: NetworkImage(widget.user.profilePictureUrl ?? ''),
+                SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: ClipOval(
+                    child: CachedNetworkImage(
+                      imageUrl: widget.user.profilePictureUrl ?? '',
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => const ImagePlaceholder(),
+                      errorWidget: (context, url, error) => const CircleAvatar(backgroundColor: Colors.grey),
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -120,7 +144,14 @@ class _PostPopupContentState extends State<PostPopupContent> {
               borderRadius: BorderRadius.circular(16),
               child: Hero(
                 tag: 'post-hero-${widget.post.postId}',
-                child: Image.network(widget.post.mediaUrl, fit: BoxFit.contain),
+                child: CachedNetworkImage(
+                  imageUrl: widget.post.mediaUrl,
+                  fit: BoxFit.contain,
+                  placeholder: (context, url) => const AspectRatio(
+                    aspectRatio: 1,
+                    child: ImagePlaceholder(),
+                  ),
+                ),
               ),
             ),
           ),
@@ -130,16 +161,88 @@ class _PostPopupContentState extends State<PostPopupContent> {
   }
 }
 
+class TransientPostPreview extends StatelessWidget {
+  final SimplePost post;
+  final User user;
+
+  const TransientPostPreview({
+    Key? key,
+    required this.post,
+    required this.user,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    const Color textColor = Colors.white;
+
+    return Material(
+      color: Colors.transparent,
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12.0),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: ClipOval(
+                      child: CachedNetworkImage(
+                        imageUrl: user.profilePictureUrl ?? '',
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => const ImagePlaceholder(),
+                        errorWidget: (context, url, error) => const CircleAvatar(backgroundColor: Colors.grey),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    user.username,
+                    style: const TextStyle(
+                      color: textColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Hero(
+                tag: 'post-hero-${post.postId}',
+                child: CachedNetworkImage(
+                  imageUrl: post.mediaUrl,
+                  fit: BoxFit.contain,
+                  placeholder: (context, url) => const AspectRatio(
+                    aspectRatio: 1,
+                    child: ImagePlaceholder(),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class PressableGridItem extends StatefulWidget {
   final SimplePost post;
+  final User user;
   final VoidCallback onTap;
-  final VoidCallback onLongPress;
 
   const PressableGridItem({
     Key? key,
     required this.post,
+    required this.user,
     required this.onTap,
-    required this.onLongPress,
   }) : super(key: key);
 
   @override
@@ -148,20 +251,56 @@ class PressableGridItem extends StatefulWidget {
 
 class _PressableGridItemState extends State<PressableGridItem> {
   bool _isPressed = false;
+  OverlayEntry? _overlayEntry;
+
+  @override
+  void dispose() {
+    _removePreviewOverlay();
+    super.dispose();
+  }
+
+  void _showPreviewOverlay(BuildContext context) {
+    if (_overlayEntry != null) return;
+
+    final overlayState = Overlay.of(context);
+    _overlayEntry = OverlayEntry(
+      builder: (context) {
+        return Stack(
+          children: [
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Container(
+                color: Colors.black.withOpacity(0.5),
+              ),
+            ),
+            Center(
+              child: TransientPostPreview(
+                post: widget.post,
+                user: widget.user,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    overlayState?.insert(_overlayEntry!);
+  }
+
+  void _removePreviewOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
 
   void _onTapDown(TapDownDetails details) => setState(() => _isPressed = true);
   void _onTapUp(TapUpDetails details) {
     setState(() => _isPressed = false);
     widget.onTap();
   }
-  void _onTapCancel() => setState(() => _isPressed = false);
-  void _onLongPress() {
-    Future.delayed(const Duration(milliseconds: 150), () {
-      if (mounted) {
-        setState(() => _isPressed = false);
-        widget.onLongPress();
-      }
-    });
+  void _onTapCancel() {
+    if(mounted){
+      setState(() => _isPressed = false);
+    }
   }
 
   @override
@@ -173,7 +312,7 @@ class _PressableGridItemState extends State<PressableGridItem> {
       mediaDisplay = CachedNetworkImage(
         imageUrl: widget.post.mediaUrl,
         fit: BoxFit.cover,
-        placeholder: (context, url) => Container(color: Colors.grey[200]),
+        placeholder: (context, url) => const ImagePlaceholder(),
         errorWidget: (context, url, error) => Container(color: Colors.grey[300]),
       );
     }
@@ -182,7 +321,8 @@ class _PressableGridItemState extends State<PressableGridItem> {
       onTapDown: _onTapDown,
       onTapUp: _onTapUp,
       onTapCancel: _onTapCancel,
-      onLongPress: _onLongPress,
+      onLongPress: () => _showPreviewOverlay(context),
+      onLongPressUp: () => _removePreviewOverlay(),
       child: AnimatedScale(
         scale: _isPressed ? 0.95 : 1.0,
         duration: const Duration(milliseconds: 150),
@@ -312,34 +452,26 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
     }
   }
 
-  // --- 👇 PERUBAHAN UTAMA ADA DI FUNGSI INI 👇 ---
   Future<void> _handleRefresh() async {
     try {
-      // 1. Ambil UserProvider terlebih dahulu
       final userProvider = Provider.of<UserProvider>(context, listen: false);
-      // 2. Simpan role yang ada saat ini sebelum di-refresh
       final String? existingRole = userProvider.currentUser?.role;
 
-      // 3. Panggil API untuk mendapatkan data profil yang baru (yang tidak punya role)
       final User newlyFetchedUser = await _profileService.refreshProfile();
 
-      // 4. Buat objek User yang sudah dikoreksi: gabungkan data baru dengan role yang lama
       final User correctedUser = newlyFetchedUser.copyWith(role: existingRole);
 
-      // 5. Perbarui state global dengan data User yang sudah benar dan lengkap
       if (mounted) {
         await userProvider.updateCurrentUser(correctedUser);
       }
 
-      // 6. Perbarui state lokal untuk FutureBuilder di halaman ini
       setState(() {
-        _userFuture = Future.value(correctedUser); // Gunakan data yang sudah dikoreksi
+        _userFuture = Future.value(correctedUser);
         _suggestionsFuture = _profileService.fetchSuggestions();
         _avatarKey = UniqueKey();
       });
 
     } catch (e) {
-      // Tangani error jika gagal refresh
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Gagal memperbarui profil: $e'), backgroundColor: Colors.red),
@@ -471,13 +603,14 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
               children: [
                 _buildProfileAppBar(null),
                 Expanded(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text("Gagal memuat data: ${snapshot.error}"),
-                        const SizedBox(height: 16),
-                        ElevatedButton(onPressed: _handleRefresh, child: const Text("Coba Lagi")),
+                  child: RefreshIndicator(
+                    onRefresh: _handleRefresh,
+                    child: CustomScrollView(
+                      slivers: [
+                        SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: _buildErrorStateWidget(snapshot.error!),
+                        )
                       ],
                     ),
                   ),
@@ -515,6 +648,76 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildErrorStateWidget(Object error) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.wifi_off_rounded,
+            size: 80,
+            color: Colors.grey.shade400,
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            "Oops, Gagal Memuat Profil",
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "Sepertinya ada masalah saat mengambil data profil Anda. Mohon periksa koneksi internet dan coba lagi.",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.grey.shade600,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 32),
+          ElevatedButton(
+            onPressed: _handleRefresh,
+            style: ElevatedButton.styleFrom(
+              padding: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 8,
+              shadowColor: Colors.orange.withOpacity(0.4),
+            ),
+            child: Ink(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.amber.shade600, Colors.orange.shade800],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                child: const Text(
+                  'Coba Lagi',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -605,13 +808,14 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
+            SizedBox(
               height: 160,
-              decoration: BoxDecoration(
-                image: DecorationImage(
-                  image: CachedNetworkImageProvider(bannerImageUrl),
-                  fit: BoxFit.cover,
-                ),
+              width: double.infinity,
+              child: CachedNetworkImage(
+                imageUrl: bannerImageUrl,
+                fit: BoxFit.cover,
+                placeholder: (context, url) => const ImagePlaceholder(),
+                errorWidget: (context, url, error) => Container(color: Colors.grey),
               ),
             ),
             Padding(
@@ -703,7 +907,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
 
   Widget _buildPostGrid(User user) {
     final posts = user.recentPosts;
-    const int columnCount = 3; // Definisikan jumlah kolom untuk digunakan bersama
+    const int columnCount = 3;
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 25.0),
@@ -728,7 +932,6 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
       )
           : Padding(
         padding: const EdgeInsets.fromLTRB(12, 24, 12, 72),
-        // Bungkus GridView dengan AnimationLimiter
         child: AnimationLimiter(
           child: GridView.builder(
             shrinkWrap: true,
@@ -736,23 +939,23 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
             padding: const EdgeInsets.all(12),
             itemCount: posts.length,
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: columnCount, // Gunakan variabel
+              crossAxisCount: columnCount,
               crossAxisSpacing: 8,
               mainAxisSpacing: 8,
             ),
             itemBuilder: (context, index) {
               final SimplePost post = posts[index];
-              // Bungkus setiap item dengan widget animasi
               return AnimationConfiguration.staggeredGrid(
                 position: index,
                 duration: const Duration(milliseconds: 400),
-                columnCount: columnCount, // Beri tahu animasi jumlah kolomnya
+                columnCount: columnCount,
                 child: SlideAnimation(
                   verticalOffset: 50.0,
                   child: FadeInAnimation(
                     child: PressableGridItem(
                       key: ValueKey(post.postId),
                       post: post,
+                      user: user,
                       onTap: () {
                         if (post.isVideo) {
                           final fullPostObject = Post(
@@ -772,9 +975,6 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
                           final navProvider = Provider.of<NavigationProvider>(context, listen: false);
                           navProvider.showOverlay(PostDetail(postId: post.postId));
                         }
-                      },
-                      onLongPress: () {
-                        _showPostPopup(context, post, user);
                       },
                     ),
                   ),

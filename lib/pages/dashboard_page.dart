@@ -118,6 +118,88 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
     _loadNotificationCount();
   }
 
+  // Tambahkan method ini di dalam class _HomePageState
+  Widget _buildErrorStateWidget(BuildContext context, HomeController controller) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Ikon untuk representasi visual
+          Icon(
+            Icons.wifi_off_rounded,
+            size: 80,
+            color: Colors.grey.shade400,
+          ),
+          const SizedBox(height: 24),
+
+          // Judul pesan error
+          const Text(
+            "Oops, Gagal Terhubung",
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+
+          // Deskripsi yang lebih ramah
+          Text(
+            "Sepertinya ada masalah dengan koneksi internet Anda. Silakan periksa kembali dan coba lagi.",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.grey.shade600,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          // Tombol "Coba Lagi" dengan desain yang sesuai
+          ElevatedButton(
+            onPressed: () {
+              // Panggil fungsi refresh yang sudah ada
+              Provider.of<HomeController>(context, listen: false).refreshDashboardData();
+              Provider.of<UserProvider>(context, listen: false).fetchCurrentUser();
+            },
+            style: ElevatedButton.styleFrom(
+              padding: EdgeInsets.zero, // Hapus padding default
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 8, // Beri sedikit bayangan agar menonjol
+              shadowColor: Colors.orange.withOpacity(0.4),
+            ),
+            child: Ink(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.amber.shade600, Colors.orange.shade800],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                child: const Text(
+                  'Coba Lagi',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
 
   void _onHomeControllerUpdate() {
     final controller = Provider.of<HomeController>(context, listen: false);
@@ -588,12 +670,35 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
   Widget _buildBody(BuildContext context) {
     return Consumer<HomeController>(
       builder: (context, controller, child) {
+        // Kondisi loading awal, tidak berubah
         if (controller.isLoading && controller.feedItems.isEmpty) {
           return const Center(child: CircularProgressIndicator());
         }
+
+        // ✨ --- PERUBAHAN UTAMA DI SINI --- ✨
+        // Jika ada error, tampilkan widget error yang baru
         if (controller.errorMessage != null) {
-          return Center(child: Text('Error: ${controller.errorMessage}'));
+          return RefreshIndicator(
+            onRefresh: () async {
+              // Fungsi refresh yang sama dengan yang ada di body utama
+              await Future.wait([
+                Provider.of<HomeController>(context, listen: false).refreshDashboardData(),
+                Provider.of<UserProvider>(context, listen: false).fetchCurrentUser(),
+              ]);
+            },
+            // Bungkus dengan CustomScrollView agar RefreshIndicator berfungsi
+            child: CustomScrollView(
+              slivers: [
+                SliverFillRemaining(
+                  hasScrollBody: false, // Penting agar konten tetap di tengah
+                  child: _buildErrorStateWidget(context, controller),
+                )
+              ],
+            ),
+          );
         }
+
+        // Kondisi jika feed kosong, tidak berubah
         if (controller.feedItems.isEmpty && controller.pinnedPost == null && controller.pinnedAnnouncements.isEmpty) {
           return RefreshIndicator(
             onRefresh: () async {
@@ -610,10 +715,9 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
           );
         }
 
+        // Tampilan body utama jika tidak ada error, tidak berubah
         return RefreshIndicator(
           onRefresh: () async {
-            // --- 👇 PERBAIKAN UTAMA DI SINI 👇 ---
-            // Panggil refresh untuk HomeController DAN UserProvider secara bersamaan
             await Future.wait([
               Provider.of<HomeController>(context, listen: false).refreshDashboardData(),
               Provider.of<UserProvider>(context, listen: false).fetchCurrentUser(),
@@ -625,7 +729,6 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
               SliverToBoxAdapter(
                   child: StorySection(
                     stories: controller.stories,
-                    // prefetchedGradients: _prefetchedGradients, // <-- KIRIMKAN MAP-NYA
                   )
               ),
               _buildUploadProgressCard(context),
