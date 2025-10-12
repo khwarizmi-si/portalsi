@@ -1,12 +1,13 @@
 // lib/controllers/message_list_controller.dart
 
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import '../models/chat.dart';
+import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../services/message_service.dart';
 import '../services/websocket_service.dart';
+import '../utils/secure_storage.dart';
 
 class MessageListController extends ChangeNotifier {
   final ChatService _chatService = ChatService();
@@ -15,140 +16,139 @@ class MessageListController extends ChangeNotifier {
   List<Conversation> _filteredConversations = [];
   List<Conversation> get filteredConversations => _filteredConversations;
 
-  bool _isLoading = false; // Awalnya false untuk menghindari loading yang tidak perlu
+  bool _isLoading = true;
   bool get isLoading => _isLoading;
   String? _errorMessage;
-
   String? get errorMessage => _errorMessage;
 
   StreamSubscription? _eventSubscription;
+  User? _currentUser;
 
   MessageListController() {
-    fetchConversations();
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    await _loadCurrentUser();
+    await fetchConversations();
     _initializeWebSocketListener();
   }
 
-  // [TAMBAHAN] Jangan lupa untuk membatalkan subscription saat controller hancur
+  // ▼▼▼ FUNGSI YANG DIPERBAIKI ADA DI SINI ▼▼▼
+  Future<void> _loadCurrentUser() async {
+    try {
+      final userIdStr = await SecureStorage.getUserId();
+      if (userIdStr == null) {
+        throw Exception("User ID not found in storage");
+      }
+      // userId adalah variabel angka (int)
+      final userId = int.parse(userIdStr as String);
+
+      // username adalah variabel teks (String)
+      final username = await SecureStorage.getUsername();
+      if (username == null) {
+        throw Exception("Username not found in storage");
+      }
+
+      // Pastikan variabel dimasukkan ke parameter yang sesuai
+      _currentUser = User(
+        id: userId,          // BENAR: int ke parameter id
+        username: username,  // BENAR: String ke parameter username
+      );
+    } catch (e) {
+      debugPrint("Gagal memuat current user di MessageListController: $e");
+    }
+  }
+  // ▲▲▲ BATAS PERBAIKAN ▲▲▲
+
   @override
   void dispose() {
     _eventSubscription?.cancel();
     super.dispose();
   }
 
-  /// Menerapkan strategi cache-then-network.
-  /// 1. Muat data dari cache untuk tampilan instan.
-  /// 2. Ambil data baru dari API di latar belakang dan perbarui UI.
-  Future<void> fetchConversations() async {
-    // Hanya tampilkan loading indicator jika daftar benar-benar kosong di awal.
-    if (_allConversations.isEmpty) {
-      _isLoading = true;
-      notifyListeners();
-    }
+  void _initializeWebSocketListener() {
+    final wsService = AuthService.webSocketService;
+    if (wsService == null) return;
 
-    // 1. Muat dari cache terlebih dahulu untuk tampilan instan
+    _eventSubscription?.cancel();
+    _eventSubscription = wsService.eventStream.listen((AppEvent appEvent) {
+      if (appEvent.event == 'dm.new') {
+        _handleNewDirectMessage(appEvent.data);
+      } else if (appEvent.event == 'conversation.updated') {
+        // Anda bisa menambahkan logika untuk event lain di sini jika perlu
+      }
+    });
+  }
+
+  void _handleNewDirectMessage(Map<String, dynamic> data) {
+    if (_currentUser == null) return;
+
+    try {
+      final messageData = data['message'] as Map<String, dynamic>;
+      final newMessage = ChatMessage.fromJson(messageData);
+
+      final partner = (newMessage.sender.id == _currentUser!.id)
+          ? newMessage.recipient
+          : newMessage.sender;
+
+      _allConversations.removeWhere((c) => c is UserConversation && c.partner.id == partner.id);
+
+      final updatedConversation = UserConversation(
+        id: partner.id!,
+        partner: partner,
+        lastMessage: newMessage.text ?? '📎 Media',
+        timestamp: newMessage.timestamp,
+        unreadCount: (newMessage.sender.id != _currentUser!.id) ? 1 : 0,
+        isPartnerVerified: partner.isVerified,
+      );
+
+      _allConversations.add(updatedConversation);
+      _sortAndFilterConversations();
+      notifyListeners();
+
+      _chatService.updateConversationCacheWithNewMessage(newMessage);
+
+    } catch (e, s) {
+      debugPrint("Gagal memproses 'dm.new' di MessageListController: $e\n$s");
+    }
+  }
+
+  Future<void> fetchConversations() async {
+    _isLoading = true;
+    notifyListeners();
     try {
       final cachedData = await _chatService.getConversationsFromCache();
       if (cachedData != null && cachedData.isNotEmpty) {
         _allConversations = cachedData;
         _sortAndFilterConversations();
-        // Hentikan loading jika data cache berhasil dimuat
-        if (_isLoading) {
-          _isLoading = false;
-        }
+        _isLoading = false;
         notifyListeners();
       }
-    } catch (e) {
-      print("Gagal memuat cache, akan melanjutkan dengan panggilan API. Error: $e");
-    }
 
-    // 2. Selalu coba ambil data terbaru dari API di latar belakang
-    try {
       final networkData = await _chatService.getAllConversations();
       _allConversations = networkData;
-      _errorMessage = null; // Hapus pesan error jika panggilan API berhasil
       _sortAndFilterConversations();
+      _errorMessage = null;
+
     } catch (e) {
-      print("Gagal mengambil data dari API: $e");
-      // Hanya tampilkan pesan error di UI jika tidak ada data sama sekali
-      // (baik dari cache maupun API).
       if (_allConversations.isEmpty) {
         _errorMessage = "Gagal memuat pesan: ${e.toString()}";
       }
     } finally {
-      // Pastikan loading indicator selalu berhenti pada akhirnya
-      if (_isLoading) {
-        _isLoading = false;
-      }
+      _isLoading = false;
       notifyListeners();
     }
   }
 
-  void _initializeWebSocketListener() {
-    // Ambil instance WebSocketService yang sudah ada
-    final wsService = AuthService.webSocketService;
-    if (wsService == null) return; // Hentikan jika service tidak aktif
-
-    // Batalkan listener lama sebelum membuat yang baru
-    _eventSubscription?.cancel();
-
-    _eventSubscription = wsService.eventStream.listen((AppEvent appEvent) {
-      // Kita hanya peduli dengan event yang mengupdate daftar percakapan
-      if (appEvent.event == 'conversation.updated') {
-        debugPrint("🔄 Menerima update percakapan via WebSocket!");
-        // Panggil handler untuk memproses data
-        _handleConversationUpdate(appEvent.data);
-      }
-    });
-  }
-
-  /// Memproses data dari WebSocket dan memperbarui state.
-  void _handleConversationUpdate(Map<String, dynamic> data) {
-    try {
-      Conversation newOrUpdatedConversation;
-
-      // Tentukan jenis percakapan dan parse JSON-nya
-      if (data['type'] == 'user') {
-        newOrUpdatedConversation = UserConversation.fromJson(data['conversation']);
-      } else if (data['type'] == 'group') {
-        newOrUpdatedConversation = GroupConversation.fromJson(data['conversation']);
-      } else {
-        return; // Jenis tidak dikenal, abaikan.
-      }
-
-      // Hapus percakapan lama jika sudah ada di daftar
-      _allConversations.removeWhere((c) => c.id == newOrUpdatedConversation.id);
-
-      // Tambahkan percakapan yang baru/diperbarui ke daftar
-      _allConversations.add(newOrUpdatedConversation);
-
-      // Urutkan ulang daftar dan terapkan filter
-      _sortAndFilterConversations();
-
-      // Beri tahu UI untuk refresh!
-      notifyListeners();
-
-    } catch (e) {
-      debugPrint("❌ Gagal memproses update percakapan dari WebSocket: $e");
-    }
-  }
-
-  /// Helper method untuk mengurutkan dan menerapkan filter pada daftar percakapan.
-  /// Ini untuk menghindari duplikasi kode.
   void _sortAndFilterConversations() {
-    // Urutkan berdasarkan timestamp, yang terbaru di atas
     _allConversations.sort((a, b) {
-      if (a.timestamp == null && b.timestamp == null) return 0;
-      if (a.timestamp == null) return 1; // Anggap null lebih lama
-      if (b.timestamp == null) return -1;
+      if (a.timestamp == null || b.timestamp == null) return 0;
       return b.timestamp!.compareTo(a.timestamp!);
     });
-
-    // Terapkan filter yang sedang aktif (jika ada)
-    // Untuk saat ini, kita asumsikan filter kosong saat pertama kali memuat
     _filteredConversations = _allConversations;
   }
 
-  /// Memfilter daftar percakapan berdasarkan query dari search bar.
   void filterConversations(String query) {
     if (query.isEmpty) {
       _filteredConversations = _allConversations;

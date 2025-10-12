@@ -7,7 +7,8 @@ import 'package:http/http.dart' as http;
 import 'package:portal_si/services/websocket_service.dart';
 import 'package:portal_si/utils/secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'fcm_service.dart'; // <-- IMPORT BARU
+import '../utils/app_lifecycle_manager.dart';
+import 'fcm_service.dart';
 import 'group_service.dart';
 import 'notification_system_service.dart';
 import 'token_refresh_service.dart';
@@ -37,7 +38,6 @@ class AuthService {
     final wsService = AuthService.webSocketService;
     final userId = await SecureStorage.getUserId();
     final groupService = GroupService();
-
     final currentUserId = await SecureStorage.getUserId();
 
     if (wsService == null || userId == null) {
@@ -57,6 +57,36 @@ class AuthService {
         final id = DateTime.now().millisecondsSinceEpoch.remainder(100000);
 
         switch (appEvent.event) {
+          case 'dm.new':
+            if (AppLifecycleManager.isAppInForeground) {
+              debugPrint("AuthService mengabaikan event dm.new karena aplikasi di foreground.");
+              break;
+            }
+
+            final messageData = notifData['message'] as Map<String, dynamic>?;
+            if (messageData == null) break;
+
+            final senderData = messageData['sender'] as Map<String, dynamic>?;
+            if (senderData == null) break;
+
+            final int messageId = messageData['message_id'];
+            final int senderId = senderData['user_id'];
+            final String senderName = senderData['full_name'] ?? 'Pesan Baru';
+            final String? profilePicUrl = senderData['profile_picture_url'];
+            final String content = messageData['content'] ?? 'Mengirim media';
+            final String payload = jsonEncode(senderData);
+
+            NotificationSystemService.instance.showGroupedNotification(
+              id: messageId,
+              title: senderName,
+              body: content,
+              groupKey: 'dm_$senderId',
+              groupChannelId: 'dm_channel',
+              groupChannelName: 'Pesan Langsung',
+              largeIconUrl: profilePicUrl,
+              payload: payload,
+            );
+            break;
           case 'user.followed':
             final followerName = notifData['follower_name'] as String? ?? 'Seseorang';
             final followerAvatar = notifData['follower_avatar'] as String?;
@@ -158,6 +188,7 @@ class AuthService {
 
     print("🎧 Listener global untuk channel '$personalChannel' dan '$announcementsChannel' telah aktif.");
   }
+
   static Future<void> notifyBackendOnline() async {
     try {
       final token = await SecureStorage.getToken();
@@ -213,7 +244,6 @@ class AuthService {
           await initializeWebSocket(token);
           _tokenRefreshService.start();
 
-          // [PERUBAHAN] Kirim token FCM ke server setelah login berhasil
           await FcmService.instance.sendTokenToServer();
 
           return {'success': true, 'message': 'Login berhasil', 'user': user};
@@ -269,9 +299,7 @@ class AuthService {
   Future<void> logout() async {
     _tokenRefreshService.stop();
     try {
-      // [PERUBAHAN] Hapus token FCM dari server sebelum proses logout lainnya
       await FcmService.instance.deleteTokenFromServer();
-
       await AuthService.notifyBackendOffline();
       webSocketService?.disconnect();
       webSocketService = null;

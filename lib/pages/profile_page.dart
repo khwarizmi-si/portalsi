@@ -312,6 +312,16 @@ class _PressableGridItemState extends State<PressableGridItem> {
       mediaDisplay = CachedNetworkImage(
         imageUrl: widget.post.mediaUrl,
         fit: BoxFit.cover,
+        // SEMULA: Hanya Container berwarna abu-abu
+        // placeholder: (context, url) => Container(color: Colors.grey[200]),
+
+        // SESUDAH: Menggunakan Shimmer effect yang lebih menarik
+        placeholder: (context, url) => Shimmer.fromColors(
+          baseColor: Colors.grey.shade300,
+          highlightColor: Colors.grey.shade100,
+          child: Container(color: Colors.white),
+        ),
+        errorWidget: (context, url, error) => Container(color: Colors.grey[300], child: const Icon(Icons.broken_image, color: Colors.grey,)),
         placeholder: (context, url) => const ImagePlaceholder(),
         errorWidget: (context, url, error) => Container(color: Colors.grey[300]),
       );

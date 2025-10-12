@@ -79,27 +79,64 @@ class ChatMessage {
   factory ChatMessage.fromJson(Map<String, dynamic> json,
       [User? currentUser, User? recipientUser]) {
 
-    // --- 👇 TAMBAHKAN BLOK LOGGING INI 👇 ---
-    log('--- 🕵️‍♂️ Debugging ChatMessage.fromJson ---');
-    log('Mencoba mem-parsing JSON untuk pesan ID: ${json['message_id']}');
-    final isStoryResponseValue = json['is_story_response'];
-    log('Nilai "is_story_response" dari JSON: $isStoryResponseValue (Tipe Data: ${isStoryResponseValue.runtimeType})');
-    log('Nilai "responded_story_media_url" dari JSON: ${json['responded_story_media_url']}');
-    log('-------------------------------------------');
-    // --- 👆 BATAS BLOK LOGGING 👆 ---
+    // Tambahkan log untuk melihat data mentah yang masuk ke factory
+    log('--- 🕵️‍♂️ Memulai ChatMessage.fromJson ---');
+    log('Data JSON mentah: $json');
+    log('Konteks currentUser ID: ${currentUser?.id}, recipientUser ID: ${recipientUser?.id}');
 
-    User sender, recipient;
-    if (json.containsKey('sender_data') && json.containsKey('recipient_data')) {
-      sender = User.fromJson(json['sender_data']);
-      recipient = User.fromJson(json['recipient_data']);
-    } else if (currentUser != null && recipientUser != null) {
-      final bool isFromCurrentUser = json['sender_id'] == currentUser.id;
-      sender = isFromCurrentUser ? currentUser : recipientUser;
-      recipient = isFromCurrentUser ? recipientUser : currentUser;
-    } else {
-      throw ArgumentError(
-          'fromJson requires either full sender/recipient data or currentUser/recipientUser context.');
+    User? sender;
+    User? recipient;
+
+    // --- LOGIKA BARU YANG LEBIH TANGGUH ---
+
+    // Prioritas #1: Gunakan objek 'sender' yang sudah lengkap dari WebSocket.
+    // Ini adalah data paling akurat untuk pesan real-time.
+    if (json.containsKey('sender') && json['sender'] is Map) {
+      sender = User.fromJson(json['sender']);
+      log('✅ [Prioritas 1] Sender berhasil di-parse dari objek "sender" ter-nesting. ID: ${sender.id}');
     }
+    // Prioritas #2: Fallback untuk data dari cache.
+    else if (json.containsKey('sender_data') && json['sender_data'] is Map) {
+      sender = User.fromJson(json['sender_data']);
+      log('✅ [Prioritas 2] Sender berhasil di-parse dari objek "sender_data" (cache). ID: ${sender.id}');
+    }
+
+    // Menentukan Penerima (Recipient)
+    // Karena payload WebSocket tidak menyertakan data recipient, kita HARUS menggunakan konteks.
+    if (currentUser != null && recipientUser != null) {
+      // Cek apakah sender dari pesan adalah currentUser.
+      if (sender != null && sender.id == currentUser.id) {
+        // Jika ya, berarti penerimanya adalah recipientUser.
+        recipient = recipientUser;
+        log('✅ Recipient ditentukan: adalah recipientUser (ID: ${recipient.id}) karena sender adalah currentUser.');
+      } else {
+        // Jika tidak, berarti penerimanya adalah currentUser.
+        recipient = currentUser;
+        log('✅ Recipient ditentukan: adalah currentUser (ID: ${recipient.id}) karena sender BUKAN currentUser.');
+      }
+    }
+
+    // Prioritas #3 (Fallback Final): Jika sender masih belum ditemukan, gunakan logika lama.
+    // Ini untuk kompatibilitas dengan data dari API history chat yang mungkin hanya punya ID.
+    if (sender == null || recipient == null) {
+      log('⚠️ Gagal menentukan sender/recipient dengan prioritas 1 & 2. Menggunakan fallback final...');
+      if (currentUser != null && recipientUser != null) {
+        final bool isFromCurrentUser = json['sender_id'] == currentUser.id;
+        sender = isFromCurrentUser ? currentUser : recipientUser;
+        recipient = isFromCurrentUser ? recipientUser : currentUser;
+        log('✅ [Fallback Final] Sender ID: ${sender.id}, Recipient ID: ${recipient.id}');
+      } else {
+        log('❌ [FATAL] Tidak bisa membuat ChatMessage. Konteks (currentUser/recipientUser) tidak tersedia.');
+        throw ArgumentError(
+            'ChatMessage.fromJson: Gagal menentukan sender/recipient. Data JSON tidak lengkap dan tidak ada konteks (currentUser/recipientUser) yang diberikan.');
+      }
+    }
+
+    log('--- ✨ Hasil Akhir Parsing ---');
+    log('Sender Final: ${sender.fullName} (ID: ${sender.id})');
+    log('Recipient Final: ${recipient.fullName} (ID: ${recipient.id})');
+    log('------------------------------------');
+
 
     final bool hasMedia = json['media_url'] != null;
     final MessageType type = hasMedia ? MessageType.image : MessageType.text;
@@ -112,11 +149,11 @@ class ChatMessage {
       mediaUrl: json['media_url'],
       localMediaPath: json['local_media_path'],
       timestamp: DateTime.parse(json['sent_at']),
-      status:
-      (json['is_read'] ?? false) ? MessageStatus.read : MessageStatus.sent,
+      status: (json['is_read'] == true || json['is_read'] == 1)
+          ? MessageStatus.read
+          : MessageStatus.sent,
       type: type,
-      // Logika parsing di sini tidak diubah, kita hanya ingin melihat log di atas
-      isStoryResponse: isStoryResponseValue ?? false,
+      isStoryResponse: (json['is_story_response'] == true || json['is_story_response'] == 1),
       storyId: json['story_id'],
       respondedStoryMediaUrl: json['responded_media_url'],
     );
