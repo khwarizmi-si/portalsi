@@ -346,6 +346,10 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
     );
   }
 
+  // lib/pages/feed_page.dart
+
+// ... (kode Anda yang lain di atas)
+
   Widget _buildBody() {
     if (_showSearchResults) {
       return _buildSearchResults();
@@ -353,9 +357,12 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
     if (_isLoading && _posts.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
+    // --- PERUBAHAN UTAMA DIMULAI DI SINI ---
     if (_posts.isEmpty) {
-      return const Center(child: Text('Tidak ada postingan untuk ditampilkan.'));
+      // Sekarang kita memanggil widget khusus untuk tampilan feed kosong
+      return _buildEmptyFeed();
     }
+    // --- PERUBAHAN UTAMA SELESAI DI SINI ---
     return RefreshIndicator(
       onRefresh: _onRefresh,
       child: CustomScrollView(
@@ -404,6 +411,8 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
     );
   }
 
+// ... (kode Anda yang lain di bawah)
+
   Widget _buildSearchResults() {
     if (_isSearchLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -436,6 +445,110 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
       },
     );
   }
+
+  // lib/pages/feed_page.dart
+
+// ... (letakkan ini di dalam class _FeedPageState)
+
+  /// Widget yang akan ditampilkan ketika feed kosong.
+  Widget _buildEmptyFeed() {
+    return RefreshIndicator(
+      onRefresh: _onRefresh,
+      child: LayoutBuilder( // Menggunakan LayoutBuilder agar bisa scroll
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.dynamic_feed_rounded,
+                        size: 80.0,
+                        color: Colors.grey[400],
+                      ),
+                      const SizedBox(height: 24.0),
+                      const Text(
+                        "Feed Masih Kosong",
+                        style: TextStyle(
+                          fontSize: 22.0,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12.0),
+                      Text(
+                        "Sepertinya belum ada postingan untuk ditampilkan. Coba muat ulang untuk melihat konten terbaru.",
+                        style: TextStyle(
+                          fontSize: 16.0,
+                          color: Colors.grey[600],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24.0),
+                      GestureDetector(
+                        onTap: _onRefresh,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 28.0,
+                            vertical: 14.0,
+                          ),
+                          decoration: BoxDecoration(
+                            // 1. Membuat background gradien
+                            gradient: LinearGradient(
+                              colors: [Colors.amber.shade600, Colors.orange.shade800],
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                            ),
+                            // 2. Mengecilkan lengkungan sudut
+                            borderRadius: BorderRadius.circular(12.0),
+                            // 3. Menambahkan bayangan agar terlihat 'terangkat'
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFFA7C38).withOpacity(0.4),
+                                blurRadius: 10,
+                                offset: const Offset(0, 5),
+                              ),
+                            ],
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min, // Agar container menyesuaikan ukuran konten
+                            children: [
+                              Icon(
+                                Icons.refresh,
+                                color: Colors.white,
+                              ),
+                              SizedBox(width: 10.0),
+                              Text(
+                                "Muat Ulang",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+// ... (kode Anda yang lain di bawahnya)
 
   Widget _buildPostItem(Post post) {
     final heroTag = 'post_hero_${post.id}';
