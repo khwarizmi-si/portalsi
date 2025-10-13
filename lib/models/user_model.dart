@@ -7,14 +7,19 @@ class SimplePost {
   final String? caption;
   final String mediaUrl;
   final DateTime createdAt;
-  final bool isVideo; // <-- TAMBAHKAN PROPERTI INI
+  final bool isVideo;
+  final bool isLikedByUser;   // TAMBAHKAN BARIS INI
+  final bool isBookmarked;
+  // <-- TAMBAHKAN PROPERTI INI
 
   SimplePost({
     required this.postId,
     this.caption,
     required this.mediaUrl,
     required this.createdAt,
-    required this.isVideo, // <-- TAMBAHKAN DI KONSTRUKTOR
+    required this.isVideo,
+    required this.isLikedByUser, // TAMBAHKAN BARIS INI
+    required this.isBookmarked,// <-- TAMBAHKAN DI KONSTRUKTOR
   });
 
   factory SimplePost.fromJson(Map<String, dynamic> json) {
@@ -35,6 +40,8 @@ class SimplePost {
       createdAt: DateTime.parse(json['created_at']),
       // Gunakan hasil parsing yang sudah kita buat
       isVideo: parsedIsVideo,
+      isLikedByUser: json['is_liked_by_user'] ?? false,
+      isBookmarked: json['is_bookmarked'] ?? false,
     );
   }
 
@@ -46,6 +53,21 @@ class SimplePost {
       'created_at': createdAt.toIso8601String(),
       'is_video': isVideo, // <-- TAMBAHKAN KE JSON
     };
+  }
+
+  SimplePost copyWith({
+    bool? isLikedByUser,
+    bool? isBookmarked,
+  }) {
+    return SimplePost(
+      postId: this.postId,
+      caption: this.caption,
+      mediaUrl: this.mediaUrl,
+      createdAt: this.createdAt,
+      isVideo: this.isVideo,
+      isLikedByUser: isLikedByUser ?? this.isLikedByUser,
+      isBookmarked: isBookmarked ?? this.isBookmarked,
+    );
   }
 }
 
