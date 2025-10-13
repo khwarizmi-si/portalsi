@@ -33,7 +33,7 @@ class EditClipsAppBar extends StatelessWidget implements PreferredSizeWidget {
       backgroundColor: Colors.transparent,
       elevation: 0,
       leading: IconButton(
-        icon: const Icon(Icons.close, color: Colors.white),
+        icon: const Icon(Icons.close, color: Colors.black),
         onPressed: onBackButtonPressed ?? () => Navigator.of(context).pop(),
       ),
       flexibleSpace: SafeArea(
@@ -47,31 +47,31 @@ class EditClipsAppBar extends StatelessWidget implements PreferredSizeWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
+                    color: Colors.black.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.music_note, color: Colors.white, size: 16),
+                      const Icon(Icons.music_note, color: Colors.black, size: 16),
                       const SizedBox(width: 8),
                       Flexible(
                         child: selectedSong != null
                             ? Text(
                           '${selectedSong!.trackName} - ${selectedSong!.artistName}',
-                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                          style: const TextStyle(color: Colors.black, fontSize: 12),
                           overflow: TextOverflow.ellipsis,
                         )
                             : const Text(
                           'Tambahkan Musik',
-                          style: TextStyle(color: Colors.white, fontSize: 14),
+                          style: TextStyle(color: Colors.black, fontSize: 14),
                         ),
                       ),
                       if (selectedSong != null) ...[
                         const SizedBox(width: 4),
                         GestureDetector(
                           onTap: onRemoveSong,
-                          child: const Icon(Icons.close, color: Colors.white, size: 16),
+                          child: const Icon(Icons.close, color: Colors.black, size: 16),
                         ),
                       ]
                     ],
@@ -96,17 +96,17 @@ class EditClipsAppBar extends StatelessWidget implements PreferredSizeWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(recommendedSong!.trackName, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+                          Text(recommendedSong!.trackName, style: const TextStyle(color: Colors.black, fontSize: 14, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
                           Text(recommendedSong!.artistName, style: const TextStyle(color: Colors.grey, fontSize: 12), overflow: TextOverflow.ellipsis),
                         ],
                       ),
                     ),
                     IconButton(
-                      icon: Icon(isRecommendationPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill, color: Colors.white),
+                      icon: Icon(isRecommendationPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill, color: Colors.black),
                       onPressed: onToggleRecommendation,
                     ),
                     IconButton(
-                      icon: const Icon(Icons.add_circle_outline, color: Colors.white),
+                      icon: const Icon(Icons.add_circle_outline, color: Colors.black),
                       onPressed: onUseRecommendation,
                     ),
                   ],
@@ -119,8 +119,8 @@ class EditClipsAppBar extends StatelessWidget implements PreferredSizeWidget {
       centerTitle: true,
       actions: [
         PopupMenuButton<String>(
-          icon: const Icon(Icons.more_horiz, color: Colors.white),
-          color: const Color(0xFF2E2E2E),
+          icon: const Icon(Icons.more_horiz, color: Colors.black),
+          color: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
           onSelected: (String value) {
             if (value == 'save_draft') {
@@ -132,11 +132,11 @@ class EditClipsAppBar extends StatelessWidget implements PreferredSizeWidget {
               value: 'save_draft',
               child: Row(
                 children: [
-                  Icon(Icons.add_to_photos_outlined, color: Colors.white.withOpacity(0.9)),
+                  Icon(Icons.add_to_photos_outlined, color: Colors.black.withOpacity(0.9)),
                   const SizedBox(width: 12),
                   Text(
                     'Simpan di Draf',
-                    style: TextStyle(color: Colors.white.withOpacity(0.9)),
+                    style: TextStyle(color: Colors.black.withOpacity(0.9)),
                   ),
                 ],
               ),

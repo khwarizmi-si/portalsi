@@ -11,9 +11,18 @@ import 'package:provider/provider.dart';
 import '../providers/navigation_provider.dart';
 import '../services/video_cache_service.dart';
 
+import 'package:video_player/video_player.dart';
+
 class ClipsViewerPage extends StatefulWidget {
   final Post initialClip;
-  const ClipsViewerPage({super.key, required this.initialClip});
+  // --- TAMBAHAN: Properti untuk menerima controller ---
+  final VideoPlayerController? existingController;
+
+  const ClipsViewerPage({
+    super.key,
+    required this.initialClip,
+    this.existingController, // <-- Tambahkan di konstruktor
+  });
 
   @override
   State<ClipsViewerPage> createState() => _ClipsViewerPageState();
@@ -147,6 +156,7 @@ class _ClipsViewerPageState extends State<ClipsViewerPage> {
                   return SingleClipPlayer(
                     post: _clips[index],
                     isActive: videoIsActive,
+                    preInitializedController: index == 0 ? widget.existingController : null,
                   );
                 },
               ),

@@ -326,13 +326,9 @@ class _PressableGridItemState extends State<PressableGridItem> {
           highlightColor: Colors.grey.shade100,
           child: Container(color: Colors.white),
         ),
-        errorWidget: (context, url, error) => Container(
-          color: Colors.grey[300],
-          child: const Icon(Icons.broken_image, color: Colors.grey),
-        ),
-        placeholder: (context, url) => const ImagePlaceholder(),
-        errorWidget: (context, url, error) =>
-            Container(color: Colors.grey[300]),
+        errorWidget: (context, url, error) => Container(color: Colors.grey[300], child: const Icon(Icons.broken_image, color: Colors.grey,)),
+        // placeholder: (context, url) => const ImagePlaceholder(),
+        // errorWidget: (context, url, error) => Container(color: Colors.grey[300]),
       );
     }
 
