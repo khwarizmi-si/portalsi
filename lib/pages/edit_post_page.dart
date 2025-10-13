@@ -368,7 +368,7 @@ class _EditPostPageState extends State<EditPostPage> with TickerProviderStateMix
     setState(() => _activeTextOverlay = overlay);
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.grey[900],
+      backgroundColor: Colors.white,
       builder: (context) => StatefulBuilder(
         builder: (BuildContext context, StateSetter setSheetState) {
           return Container(padding: const EdgeInsets.all(16), child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -377,8 +377,8 @@ class _EditPostPageState extends State<EditPostPage> with TickerProviderStateMix
             ]),
             const Divider(color: Colors.grey, height: 24),
             Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-              TextButton.icon(onPressed: () { setState(() { final currentStyleIndex = overlay.backgroundStyle.index; final nextStyleIndex = (currentStyleIndex + 1) % TextBackgroundStyle.values.length; overlay.backgroundStyle = TextBackgroundStyle.values[nextStyleIndex]; }); setSheetState(() {}); }, icon: const Icon(Icons.format_color_text, color: Colors.white), label: const Text('Gaya', style: TextStyle(color: Colors.white))),
-              TextButton.icon(onPressed: () { setState(() => overlay.fontWeight = overlay.fontWeight == FontWeight.bold ? FontWeight.normal : FontWeight.bold); setSheetState(() {}); }, icon: const Icon(Icons.format_bold, color: Colors.white), label: const Text('Tebal', style: TextStyle(color: Colors.white))),
+              TextButton.icon(onPressed: () { setState(() { final currentStyleIndex = overlay.backgroundStyle.index; final nextStyleIndex = (currentStyleIndex + 1) % TextBackgroundStyle.values.length; overlay.backgroundStyle = TextBackgroundStyle.values[nextStyleIndex]; }); setSheetState(() {}); }, icon: const Icon(Icons.format_color_text, color: Colors.black), label: const Text('Gaya', style: TextStyle(color: Colors.black))),
+              TextButton.icon(onPressed: () { setState(() => overlay.fontWeight = overlay.fontWeight == FontWeight.bold ? FontWeight.normal : FontWeight.bold); setSheetState(() {}); }, icon: const Icon(Icons.format_bold, color: Colors.black), label: const Text('Tebal', style: TextStyle(color: Colors.black))),
               TextButton.icon(onPressed: () { setState(() { _textOverlays.remove(overlay); _activeTextOverlay = null; }); Navigator.pop(context); }, icon: const Icon(Icons.delete_outline, color: Colors.red), label: const Text('Hapus', style: TextStyle(color: Colors.red))),
             ])
           ]));
@@ -397,7 +397,7 @@ class _EditPostPageState extends State<EditPostPage> with TickerProviderStateMix
 
   Future<void> _showTextInputDialog() async {
     final textController = TextEditingController();
-    final String? newText = await showDialog<String>(context: context, builder: (context) => AlertDialog(backgroundColor: Colors.grey[850], title: const Text('Masukkan Teks', style: TextStyle(color: Colors.white)), content: TextField(controller: textController, autofocus: true, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(hintText: 'Tulis sesuatu...')), actions: [ TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Batal')), ElevatedButton(onPressed: () => Navigator.of(context).pop(textController.text), child: const Text('Selesai'))]));
+    final String? newText = await showDialog<String>(context: context, builder: (context) => AlertDialog(backgroundColor: Colors.white, title: const Text('Masukkan Teks', style: TextStyle(color: Colors.black)), content: TextField(controller: textController, autofocus: true, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(hintText: 'Tulis sesuatu...')), actions: [ TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Batal')), ElevatedButton(onPressed: () => Navigator.of(context).pop(textController.text), child: const Text('Selesai'))]));
     if (newText != null && newText.isNotEmpty) {
       setState(() { final newOverlay = TextOverlay(text: newText, position: const Offset(100, 150)); _textOverlays.add(newOverlay); _showTextOptionsSheet(newOverlay); });
     }
@@ -473,11 +473,11 @@ class _EditPostPageState extends State<EditPostPage> with TickerProviderStateMix
     final bool isVideo = currentMedia.type == AssetType.video;
 
     return Scaffold(
-      backgroundColor: Colors.grey[900],
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.of(context).pop()),
+        leading: IconButton(icon: const Icon(Icons.close, color: Colors.black), onPressed: () => Navigator.of(context).pop()),
         title: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           GestureDetector(
             onTap: _openMusicPicker,
@@ -491,181 +491,190 @@ class _EditPostPageState extends State<EditPostPage> with TickerProviderStateMix
             ),
           ),
           const SizedBox(height: 8),
-          SizedBox(height: 50, child: _isLoadingRecommendations ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))) : _singleRecommendedSong == null ? const Center(child: Text("Gagal memuat tren", style: TextStyle(color: Colors.grey, fontSize: 12))) : Padding(padding: const EdgeInsets.symmetric(horizontal: 16.0), child: Row(children: [
+          SizedBox(height: 50, child: _isLoadingRecommendations ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))) : _singleRecommendedSong == null ? const Center(child: Text("Gagal memuat tren", style: TextStyle(color: Colors.grey, fontSize: 12))) : Padding(padding: const EdgeInsets.symmetric(horizontal: 16.0), child: Row(children: [
             CircleAvatar(radius: 25, backgroundImage: NetworkImage(_singleRecommendedSong!.artworkUrl)), const SizedBox(width: 12),
             Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(_singleRecommendedSong!.trackName, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
+              Text(_singleRecommendedSong!.trackName, style: const TextStyle(color: Colors.black, fontSize: 14, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
               Text(_singleRecommendedSong!.artistName, style: const TextStyle(color: Colors.grey, fontSize: 12), overflow: TextOverflow.ellipsis),
             ])),
             IconButton(icon: _isRecommendationLoading ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Icon(_isRecommendationPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill, color: Colors.white), onPressed: _toggleRecommendationPreview),
-            IconButton(icon: const Icon(Icons.add_circle_outline, color: Colors.white), onPressed: () { setState(() { _selectedSong = _singleRecommendedSong; _recommendationAudioPlayer.stop(); _isRecommendationPlaying = false; _isRecommendationLoading = false; }); }),
+            IconButton(icon: const Icon(Icons.add_circle_outline, color: Colors.black), onPressed: () { setState(() { _selectedSong = _singleRecommendedSong; _recommendationAudioPlayer.stop(); _isRecommendationPlaying = false; _isRecommendationLoading = false; }); }),
           ]))),
         ]),
         toolbarHeight: 110,
       ),
-      body: Column(
-        children: [
-          Expanded(child: Padding(padding: const EdgeInsets.all(16.0), child: Center(child: AspectRatio(
-              aspectRatio: _currentAspectRatio == AspectRatioPreset.ratio4_5 ? 4 / 5 : 5 / 4,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: RepaintBoundary(
-                  key: _repaintKey,
-                  child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        // LAPISAN 1: GAMBAR/VIDEO DASAR
-                        ColorFiltered(
-                          colorFilter: ColorFilter.matrix(_calculateColorMatrix()),
-                          child: (isVideo && _videoController != null && _videoController!.value.isInitialized)
-                              ? FittedBox(fit: BoxFit.cover, child: SizedBox(width: _videoController!.value.size.width, height: _videoController!.value.size.height, child: VideoPlayer(_videoController!)))
-                              : InteractiveViewer(
-                            transformationController: _transformationController,
-                            panEnabled: !isVideo && !_isDrawingMode,
-                            scaleEnabled: !isVideo && !_isDrawingMode,
-                            onInteractionEnd: (details) {
-                              if (_transformationController.value.getMaxScaleOnAxis() < 1.0) _runAnimation();
-                            },
-                            child: _croppedImageFile != null
-                                ? Image.file(_croppedImageFile!, fit: BoxFit.cover)
-                                : _MediaFileViewer(assetEntity: currentMedia),
-                          ),
-                        ),
-
-                        // --- 👇 PERBAIKAN UTAMA (SUSUN ULANG URUTAN) 👇 ---
-
-                        // LAPISAN 2: KANVAS UNTUK CORETAN YANG SUDAH JADI
-                        CustomPaint(painter: DrawingPainter(paths: _drawingPaths), child: Container()),
-
-                        // LAPISAN 3: KANVAS UNTUK CORETAN YANG SEDANG DIGAMBAR
-                        if (_isDrawingMode && _currentPath != null)
-                          CustomPaint(
-                              painter: DrawingPainter(paths: [
-                                DrawingPath(
-                                    path: _currentPath!,
-                                    paint: Paint()
-                                      ..color = _currentDrawingColor
-                                      ..strokeWidth = _currentStrokeWidth
-                                      ..style = PaintingStyle.stroke
-                                      ..strokeCap = StrokeCap.round)
-                              ]),
-                              child: Container()),
-
-                        // LAPISAN 4: TEKS OVERLAY (SEKARANG BERADA DI ATAS CORETAN)
-                        ..._textOverlays.map((overlay) {
-                          return Positioned(
-                              left: overlay.position.dx,
-                              top: overlay.position.dy,
-                              child: Transform(
-                                  transform: Matrix4.identity()
-                                    ..scale(overlay.scale)
-                                    ..rotateZ(overlay.rotation),
-                                  alignment: FractionalOffset.center,
-                                  child: GestureDetector(
-                                      behavior: HitTestBehavior.translucent,
-                                      onTap: () => _showTextOptionsSheet(overlay),
-                                      onScaleStart: (details) { _baseScale = overlay.scale; _baseRotation = overlay.rotation; },
-                                      onScaleUpdate: (details) {
-                                        setState(() {
-                                          overlay.position += details.focalPointDelta;
-                                          overlay.scale = (_baseScale * details.scale).clamp(0.5, 3.0);
-                                          overlay.rotation = _baseRotation + details.rotation;
-                                        });
-                                      },
-                                      child: Container(
-                                          padding: const EdgeInsets.all(8),
-                                          decoration: BoxDecoration(
-                                            color: overlay.backgroundStyle == TextBackgroundStyle.none
-                                                ? Colors.transparent
-                                                : (overlay.backgroundStyle == TextBackgroundStyle.semiTransparent
-                                                ? Colors.black.withOpacity(0.5)
-                                                : overlay.color),
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            overlay.text,
-                                            style: TextStyle(
-                                              fontSize: 24,
-                                              color: overlay.backgroundStyle == TextBackgroundStyle.solid
-                                                  ? _getContrastingTextColor(overlay.color)
-                                                  : overlay.color,
-                                              fontWeight: overlay.fontWeight,
-                                            ),
-                                          )
-                                      )
-                                  )
-                              )
-                          );
-                        }).toList(),
-
-                        // LAPISAN 5 (PALING ATAS): SENSOR SENTUH UNTUK MENGGAMBAR (HANYA AKTIF SAAT MODE GAMBAR)
-                        if (_isDrawingMode)
-                          GestureDetector(
-                              behavior: HitTestBehavior.translucent,
-                              onPanStart: _onPanStart,
-                              onPanUpdate: _onPanUpdate,
-                              onPanEnd: _onPanEnd,
-                              child: Container(color: Colors.transparent)
-                          ),
-
-                        // --- AKHIR PERBAIKAN ---
-
-                        // Tombol utilitas (tidak terpengaruh urutan di atas)
-                        if (!isVideo)
-                          Positioned(
-                              bottom: 8,
-                              left: 8,
-                              child: IconButton(
-                                onPressed: () {
-                                  setState(() {
-                                    _currentAspectRatio =
-                                    _currentAspectRatio == AspectRatioPreset.ratio4_5
-                                        ? AspectRatioPreset.ratio5_4
-                                        : AspectRatioPreset.ratio4_5;
-                                  });
-                                },
-                                icon: const Icon(Icons.aspect_ratio, color: Colors.white),
-                                style: IconButton.styleFrom(
-                                    backgroundColor: Colors.black.withOpacity(0.4)),
-                              )),
-                      ]),
-                ),
-              )
-          )))),
-
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            height: _isFilterEditing ? 320 : 0,
-            child: _buildFilterEditor(),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFFFFDDBC), Colors.white],
+            begin: Alignment.bottomLeft,
+            end: Alignment.topRight,
           ),
+        ),
+        child: Column(
+          children: [
+            Expanded(child: Padding(padding: const EdgeInsets.all(16.0), child: Center(child: AspectRatio(
+                aspectRatio: _currentAspectRatio == AspectRatioPreset.ratio4_5 ? 4 / 5 : 5 / 4,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: RepaintBoundary(
+                    key: _repaintKey,
+                    child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          // LAPISAN 1: GAMBAR/VIDEO DASAR
+                          ColorFiltered(
+                            colorFilter: ColorFilter.matrix(_calculateColorMatrix()),
+                            child: (isVideo && _videoController != null && _videoController!.value.isInitialized)
+                                ? FittedBox(fit: BoxFit.cover, child: SizedBox(width: _videoController!.value.size.width, height: _videoController!.value.size.height, child: VideoPlayer(_videoController!)))
+                                : InteractiveViewer(
+                              transformationController: _transformationController,
+                              panEnabled: !isVideo && !_isDrawingMode,
+                              scaleEnabled: !isVideo && !_isDrawingMode,
+                              onInteractionEnd: (details) {
+                                if (_transformationController.value.getMaxScaleOnAxis() < 1.0) _runAnimation();
+                              },
+                              child: _croppedImageFile != null
+                                  ? Image.file(_croppedImageFile!, fit: BoxFit.cover)
+                                  : _MediaFileViewer(assetEntity: currentMedia),
+                            ),
+                          ),
 
-          SafeArea(
-            top: false,
-            child: _isFilterEditing ? const SizedBox.shrink() : Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: _isDrawingMode
-                  ? Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-                IconButton(icon: const Icon(Icons.undo, color: Colors.white), onPressed: () => setState(() { if(_drawingPaths.isNotEmpty) _drawingPaths.removeLast(); })),
-                ...[Colors.white, Colors.red, Colors.blue, Colors.yellow, Colors.green].map((color) => GestureDetector(onTap: () => setState(() => _currentDrawingColor = color), child: CircleAvatar(radius: 14, backgroundColor: color, child: _currentDrawingColor == color ? const Icon(Icons.check, size: 16, color: Colors.black) : null))),
-                ElevatedButton(onPressed: _toggleDrawingMode, child: const Text('Selesai')),
-              ])
-                  : Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-                _buildEditorButton(Icons.music_note, 'Audio', onTap: _openMusicPicker),
-                _buildEditorButton(Icons.text_fields, 'Teks', onTap: _showTextInputDialog),
-                _buildEditorButton(Icons.sentiment_satisfied_alt, 'Emoji', onTap: _showCustomEmojiPicker),
-                _buildEditorButton(Icons.crop, 'Pangkas', onTap: isVideo ? null : _cropImage),
-                _buildEditorButton(Icons.filter_vintage, 'Filter', onTap: isVideo ? null : _toggleFilterEditor),
-                _buildEditorButton(Icons.brush, 'Brush', onTap: _toggleDrawingMode),
-                ElevatedButton(
-                  onPressed: _isProcessing ? null : _processAndNavigate,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
-                  child: _isProcessing ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black)) : const Text('Lanjut', style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ]),
+                          // --- 👇 PERBAIKAN UTAMA (SUSUN ULANG URUTAN) 👇 ---
+
+                          // LAPISAN 2: KANVAS UNTUK CORETAN YANG SUDAH JADI
+                          CustomPaint(painter: DrawingPainter(paths: _drawingPaths), child: Container()),
+
+                          // LAPISAN 3: KANVAS UNTUK CORETAN YANG SEDANG DIGAMBAR
+                          if (_isDrawingMode && _currentPath != null)
+                            CustomPaint(
+                                painter: DrawingPainter(paths: [
+                                  DrawingPath(
+                                      path: _currentPath!,
+                                      paint: Paint()
+                                        ..color = _currentDrawingColor
+                                        ..strokeWidth = _currentStrokeWidth
+                                        ..style = PaintingStyle.stroke
+                                        ..strokeCap = StrokeCap.round)
+                                ]),
+                                child: Container()),
+
+                          // LAPISAN 4: TEKS OVERLAY (SEKARANG BERADA DI ATAS CORETAN)
+                          ..._textOverlays.map((overlay) {
+                            return Positioned(
+                                left: overlay.position.dx,
+                                top: overlay.position.dy,
+                                child: Transform(
+                                    transform: Matrix4.identity()
+                                      ..scale(overlay.scale)
+                                      ..rotateZ(overlay.rotation),
+                                    alignment: FractionalOffset.center,
+                                    child: GestureDetector(
+                                        behavior: HitTestBehavior.translucent,
+                                        onTap: () => _showTextOptionsSheet(overlay),
+                                        onScaleStart: (details) { _baseScale = overlay.scale; _baseRotation = overlay.rotation; },
+                                        onScaleUpdate: (details) {
+                                          setState(() {
+                                            overlay.position += details.focalPointDelta;
+                                            overlay.scale = (_baseScale * details.scale).clamp(0.5, 3.0);
+                                            overlay.rotation = _baseRotation + details.rotation;
+                                          });
+                                        },
+                                        child: Container(
+                                            padding: const EdgeInsets.all(8),
+                                            decoration: BoxDecoration(
+                                              color: overlay.backgroundStyle == TextBackgroundStyle.none
+                                                  ? Colors.transparent
+                                                  : (overlay.backgroundStyle == TextBackgroundStyle.semiTransparent
+                                                  ? Colors.black.withOpacity(0.5)
+                                                  : overlay.color),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              overlay.text,
+                                              style: TextStyle(
+                                                fontSize: 24,
+                                                color: overlay.backgroundStyle == TextBackgroundStyle.solid
+                                                    ? _getContrastingTextColor(overlay.color)
+                                                    : overlay.color,
+                                                fontWeight: overlay.fontWeight,
+                                              ),
+                                            )
+                                        )
+                                    )
+                                )
+                            );
+                          }).toList(),
+
+                          // LAPISAN 5 (PALING ATAS): SENSOR SENTUH UNTUK MENGGAMBAR (HANYA AKTIF SAAT MODE GAMBAR)
+                          if (_isDrawingMode)
+                            GestureDetector(
+                                behavior: HitTestBehavior.translucent,
+                                onPanStart: _onPanStart,
+                                onPanUpdate: _onPanUpdate,
+                                onPanEnd: _onPanEnd,
+                                child: Container(color: Colors.transparent)
+                            ),
+
+                          // --- AKHIR PERBAIKAN ---
+
+                          // Tombol utilitas (tidak terpengaruh urutan di atas)
+                          if (!isVideo)
+                            Positioned(
+                                bottom: 8,
+                                left: 8,
+                                child: IconButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _currentAspectRatio =
+                                      _currentAspectRatio == AspectRatioPreset.ratio4_5
+                                          ? AspectRatioPreset.ratio5_4
+                                          : AspectRatioPreset.ratio4_5;
+                                    });
+                                  },
+                                  icon: const Icon(Icons.aspect_ratio, color: Colors.white),
+                                  style: IconButton.styleFrom(
+                                      backgroundColor: Colors.black.withOpacity(0.4)),
+                                )),
+                        ]),
+                  ),
+                )
+            )))),
+
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              height: _isFilterEditing ? 320 : 0,
+              child: _buildFilterEditor(),
             ),
-          )
-        ],
+
+            SafeArea(
+              top: false,
+              child: _isFilterEditing ? const SizedBox.shrink() : Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: _isDrawingMode
+                    ? Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+                  IconButton(icon: const Icon(Icons.undo, color: Colors.white), onPressed: () => setState(() { if(_drawingPaths.isNotEmpty) _drawingPaths.removeLast(); })),
+                  ...[Colors.white, Colors.red, Colors.blue, Colors.yellow, Colors.green].map((color) => GestureDetector(onTap: () => setState(() => _currentDrawingColor = color), child: CircleAvatar(radius: 14, backgroundColor: color, child: _currentDrawingColor == color ? const Icon(Icons.check, size: 16, color: Colors.black) : null))),
+                  ElevatedButton(onPressed: _toggleDrawingMode, child: const Text('Selesai')),
+                ])
+                    : Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+                  _buildEditorButton(Icons.music_note, 'Musik', onTap: _openMusicPicker),
+                  _buildEditorButton(Icons.text_fields, 'Teks', onTap: _showTextInputDialog),
+                  _buildEditorButton(Icons.sentiment_satisfied_alt, 'Emoji', onTap: _showCustomEmojiPicker),
+                  _buildEditorButton(Icons.crop, 'Pangkas', onTap: isVideo ? null : _cropImage),
+                  _buildEditorButton(Icons.filter_vintage, 'Filter', onTap: isVideo ? null : _toggleFilterEditor),
+                  _buildEditorButton(Icons.brush, 'Brush', onTap: _toggleDrawingMode),
+                  ElevatedButton(
+                    onPressed: _isProcessing ? null : _processAndNavigate,
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
+                    child: _isProcessing ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green)) : const Text('Lanjut', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                  ),
+                ]),
+              ),
+            )
+          ],
+        ),
       ),
     );
   }
@@ -753,9 +762,9 @@ class _EditPostPageState extends State<EditPostPage> with TickerProviderStateMix
     return GestureDetector(
       onTap: onTap,
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, color: onTap == null ? Colors.grey : Colors.white),
+        Icon(icon, color: onTap == null ? Colors.grey : Colors.black),
         const SizedBox(height: 4),
-        Text(label, style: TextStyle(color: onTap == null ? Colors.grey : Colors.white, fontSize: 12)),
+        Text(label, style: TextStyle(color: onTap == null ? Colors.grey : Colors.black, fontSize: 12)),
       ]),
     );
   }
@@ -809,60 +818,69 @@ class _ImageCropperPage extends StatelessWidget {
       defaultCrop: const Rect.fromLTRB(0.05, 0.05, 0.95, 0.95),
     );
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text('Sesuaikan Gambar'),
-        backgroundColor: Colors.black87,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          TextButton(
-            onPressed: () async {
-              showDialog(
-                context: context,
-                barrierDismissible: false,
-                builder: (context) => const Center(child: CircularProgressIndicator(color: Colors.white)),
-              );
-
-              try {
-                final result = await controller.croppedBitmap();
-                final data = await result.toByteData(format: ui.ImageByteFormat.png);
-
-                if (data == null) {
-                  throw Exception("Gagal mengonversi gambar yang di-crop.");
-                }
-
-                final bytes = data.buffer.asUint8List();
-                final tempDir = await getTemporaryDirectory();
-                final fileName = '${DateTime.now().millisecondsSinceEpoch}.png';
-                final File tempFile = File('${tempDir.path}/$fileName');
-                await tempFile.writeAsBytes(bytes);
-
-                if (context.mounted) Navigator.pop(context); // Tutup loading
-                if (context.mounted) Navigator.pop(context, tempFile); // Kembali dengan hasil
-
-              } catch (e) {
-                if (context.mounted) Navigator.pop(context); // Tutup loading
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Gagal memproses gambar: $e')),
-                );
-              }
-            },
-            child: const Text('SELESAI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFFFDDBC), Colors.white],
+          begin: Alignment.bottomLeft,
+          end: Alignment.topRight,
+        ),
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: CropImage(
-            controller: controller,
-            image: Image.file(imageFile),
-            gridColor: Colors.white54,
-            scrimColor: Colors.black.withOpacity(0.7),
-            paddingSize: 20,
-            alwaysShowThirdLines: true,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text('Sesuaikan Gambar'),
+          backgroundColor: Colors.white54,
+          foregroundColor: Colors.black,
+          elevation: 0,
+          actions: [
+            TextButton(
+              onPressed: () async {
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (context) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                );
+
+                try {
+                  final result = await controller.croppedBitmap();
+                  final data = await result.toByteData(format: ui.ImageByteFormat.png);
+
+                  if (data == null) {
+                    throw Exception("Gagal mengonversi gambar yang di-crop.");
+                  }
+
+                  final bytes = data.buffer.asUint8List();
+                  final tempDir = await getTemporaryDirectory();
+                  final fileName = '${DateTime.now().millisecondsSinceEpoch}.png';
+                  final File tempFile = File('${tempDir.path}/$fileName');
+                  await tempFile.writeAsBytes(bytes);
+
+                  if (context.mounted) Navigator.pop(context); // Tutup loading
+                  if (context.mounted) Navigator.pop(context, tempFile); // Kembali dengan hasil
+
+                } catch (e) {
+                  if (context.mounted) Navigator.pop(context); // Tutup loading
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Gagal Menerapkan. Coba batalkan dan pangkas kembali')),
+                  );
+                }
+              },
+              child: const Text('Terapkan', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: CropImage(
+              controller: controller,
+              image: Image.file(imageFile),
+              gridColor: Colors.white54,
+              scrimColor: Colors.black.withOpacity(0.7),
+              paddingSize: 20,
+              alwaysShowThirdLines: true,
+            ),
           ),
         ),
       ),

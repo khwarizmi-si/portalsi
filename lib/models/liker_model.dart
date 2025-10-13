@@ -17,7 +17,8 @@ class Liker {
     required this.isCurrentUser,
   });
 
-  factory Liker.fromJson(Map<String, dynamic> json, int currentUserId) {
+  // --- PERUBAHAN: Jadikan currentUserId opsional (nullable) ---
+  factory Liker.fromJson(Map<String, dynamic> json, [int? currentUserId]) {
     final userJson = json['user'] as Map<String, dynamic>? ?? json;
 
     return Liker(
@@ -25,8 +26,8 @@ class Liker {
       username: userJson['username'] ?? 'Unknown',
       fullName: userJson['full_name'],
       profilePictureUrl: userJson['profile_picture_url'],
-      // Ambil status follow dari API, default ke false jika tidak ada
       isFollowing: json['is_following_status'] ?? false,
+      // Logika ini tetap aman, jika currentUserId null, hasilnya akan selalu false
       isCurrentUser: userJson['user_id'] == currentUserId,
     );
   }

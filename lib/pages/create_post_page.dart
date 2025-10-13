@@ -8,7 +8,7 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
-import 'package:video_compress/video_compress.dart'; // <<< IMPORT TAMBAHAN
+import 'package:video_compress/video_compress.dart';
 
 import 'drafts_page.dart';
 import './edit_clips/edit_clips_page.dart';
@@ -45,9 +45,19 @@ class _SliverHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Container(
-      color: Colors.black,
-      height: height,
+    // PENYESUAIAN: Buat latar belakang berubah dari transparan ke putih saat di-scroll.
+    // Menghitung opacity berdasarkan posisi scroll. clamp(0.0, 1.0) memastikan nilainya antara 0 dan 1.
+    final double opacity = (shrinkOffset / height).clamp(0.0, 1.0);
+    // return Container(
+    //   // Gunakan warna putih dengan opacity yang sudah dihitung.
+    //   color: Colors.white.withOpacity(opacity),
+    //   height: height,
+    //   child: Center(child: child),
+    // );
+    return Material(
+      color: Colors.white.withOpacity(opacity),
+      // Tambahkan shadow HANYA jika ada konten yang di-scroll di belakangnya.
+      elevation: overlapsContent ? 1.0 : 0.0,
       child: Center(child: child),
     );
   }
@@ -77,11 +87,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
   final DraggableScrollableController _sheetController = DraggableScrollableController();
   VideoPlayerController? _videoController;
 
-  // LOGIKA KOMPRESI VIDEO
-  // Konstanta untuk batasan ukuran file video (8MB)
-  // 8 MB = 8 * 1024 * 1024 = 8388608 bytes
   static const int _maxFileSizeInBytes = 8388608;
-  bool _isProcessing = false; // State untuk proses kompresi
+  bool _isProcessing = false;
 
   @override
   void initState() {
@@ -127,7 +134,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
       File fileToPass = mediaFile;
 
-      // Cek ukuran file: jika lebih dari 8 MB
       if (mediaFile.lengthSync() > _maxFileSizeInBytes) {
         if(mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -143,7 +149,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
           print('Kompresi Selesai. Ukuran baru: $newSizeMB MB');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Kompresi berhasil. Ukuran baru sekitar ${newSizeMB.toStringAsFixed(2)}MB (target ~7MB).')),
+              SnackBar(content: Text('Kompresi berhasil. Ukuran baru sekitar ${newSizeMB.toStringAsFixed(2)}MB.')),
             );
           }
         } else {
@@ -168,7 +174,6 @@ class _CreatePostPageState extends State<CreatePostPage> {
       }
 
     } else {
-      // Navigasi untuk Gambar
       if (mounted) {
         Navigator.of(context).push(
           _createSlideRoute(EditPostPage(mediaItems: [_selectedGalleryAsset!])),
@@ -271,12 +276,13 @@ class _CreatePostPageState extends State<CreatePostPage> {
     if (_selectedGalleryAsset == null) {
       return Container(
         height: MediaQuery.of(context).size.width,
-        color: Colors.grey[900],
-        child: const Center(child: CircularProgressIndicator(color: Colors.white)),
+        color: Colors.grey[200],
+        child: const Center(child: CircularProgressIndicator()),
       );
     }
+    // MODIFIKASI: Beri latar belakang hitam agar media terlihat kontras.
     return Container(
-      color: Colors.black,
+      color: Colors.transparent,
       height: MediaQuery.of(context).size.width,
       width: MediaQuery.of(context).size.width,
       child: Stack(
@@ -521,123 +527,144 @@ class _CreatePostPageState extends State<CreatePostPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      // MODIFIKASI: Atur warna latar belakang Scaffold menjadi putih.
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.black,
-        elevation: 0,
+        // MODIFIKASI: Latar belakang AppBar dibuat putih solid seperti di profile_page.
+        backgroundColor: Colors.white,
+        // MODIFIKASI: Tambahkan shadow tipis untuk memberikan efek terangkat.
+        elevation: 0.0,
+        shadowColor: Colors.black.withOpacity(0.1),
         leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white, size: 28),
+          // MODIFIKASI: Pastikan ikon berwarna hitam agar terlihat di latar belakang putih.
+          icon: const Icon(Icons.close, color: Colors.black, size: 28),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text('Postingan Baru', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+        title: const Text(
+            'Postingan Baru',
+            // MODIFIKASI: Pastikan teks berwarna hitam.
+            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18)
+        ),
         centerTitle: true,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
             child: TextButton(
-              onPressed: _isProcessing ? null : _processAndNavigateToEditClips, // Dipanggil setelah logika kompresi
+              onPressed: _isProcessing ? null : _processAndNavigateToEditClips,
               child: _isProcessing
                   ? const SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blue)
-              )
-                  : const Text('Lanjut', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 16)),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blue))
+                  : const Text('Lanjut', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16)),
             ),
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: NotificationListener<ScrollNotification>(
-              onNotification: (ScrollNotification scrollInfo) {
-                if (!_isLoading && scrollInfo.metrics.pixels == scrollInfo.metrics.maxScrollExtent) {
-                  _loadAssets();
-                }
-                return true;
-              },
-              child: CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: _buildSelectedMediaPreview(),
-                  ),
-                  SliverPersistentHeader(
-                    pinned: true,
-                    delegate: _SliverHeaderDelegate(
-                      height: 52,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            GestureDetector(
-                              onTap: _showAlbumSelectionBottomSheet,
-                              child: Row(
-                                children: [
-                                  Text(
-                                    _selectedFilterName,
-                                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                                  ),
-                                  const Icon(Icons.keyboard_arrow_down, color: Colors.white),
-                                ],
+      // MODIFIKASI: Hapus Container dengan gradien karena AppBar sudah tidak transparan.
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFFFFDDBC), Colors.white],
+            begin: Alignment.bottomLeft,
+            end: Alignment.topRight,
+          ),
+        ),
+        child: Column(
+          children: [
+            Expanded(
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (ScrollNotification scrollInfo) {
+                  if (!_isLoading && scrollInfo.metrics.pixels == scrollInfo.metrics.maxScrollExtent) {
+                    _loadAssets();
+                  }
+                  return true;
+                },
+                child: CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: _buildSelectedMediaPreview(),
+                    ),
+                    SliverPersistentHeader(
+                      pinned: true,
+                      delegate: _SliverHeaderDelegate(
+                        height: 52,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              GestureDetector(
+                                onTap: _showAlbumSelectionBottomSheet,
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      _selectedFilterName,
+                                      // MODIFIKASI: Ubah warna teks agar kontras.
+                                      style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold),
+                                    ),
+                                    // MODIFIKASI: Ubah warna ikon.
+                                    const Icon(Icons.keyboard_arrow_down, color: Colors.black),
+                                  ],
+                                ),
                               ),
-                            ),
-                            TextButton.icon(
-                              onPressed: () {
-                                HapticFeedback.mediumImpact();
-                                _videoController?.pause();
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(builder: (context) => const DraftsPage()),
-                                );
-                              },
-                              icon: const Icon(Icons.folder_copy_outlined, color: Colors.white, size: 20),
-                              label: const Text('Draf', style: TextStyle(color: Colors.white, fontSize: 16)),
-                              style: TextButton.styleFrom(
-                                backgroundColor: Colors.white.withOpacity(0.15),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                            )
-                          ],
+                              TextButton.icon(
+                                onPressed: () {
+                                  HapticFeedback.mediumImpact();
+                                  _videoController?.pause();
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(builder: (context) => const DraftsPage()),
+                                  );
+                                },
+                                // MODIFIKASI: Ubah warna ikon dan teks.
+                                icon: const Icon(Icons.folder_copy_outlined, color: Colors.black87, size: 20),
+                                label: const Text('Draf', style: TextStyle(color: Colors.black87, fontSize: 16)),
+                                style: TextButton.styleFrom(
+                                  backgroundColor: Colors.grey.withOpacity(0.15),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                              )
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  SliverGrid(
-                    delegate: SliverChildBuilderDelegate(
-                          (context, index) {
-                        if (index == 0) {
-                          return GestureDetector(
-                            onTap: _takePhoto,
-                            child: Container(color: Colors.grey[800], child: const Icon(Icons.camera_alt, color: Colors.white, size: 30)),
-                          );
-                        }
-                        final AssetEntity asset = _assets[index - 1];
+                    SliverGrid(
+                      delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                          if (index == 0) {
+                            return GestureDetector(
+                              onTap: _takePhoto,
+                              child: Container(color: Colors.grey[800], child: const Icon(Icons.camera_alt, color: Colors.white, size: 30)),
+                            );
+                          }
+                          final AssetEntity asset = _assets[index - 1];
 
-                        return GestureDetector(
-                          key: ValueKey(asset.id),
-                          onTap: () => _handleAssetTap(asset),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              AssetEntityImage(asset, isOriginal: false, thumbnailSize: const ThumbnailSize(200, 200), fit: BoxFit.cover),
-                              if (asset.type == AssetType.video)
-                                const Positioned(bottom: 5, right: 5, child: Icon(Icons.videocam, color: Colors.white, size: 16)),
-                              if (_selectedGalleryAsset == asset)
-                                Container(color: Colors.white.withOpacity(0.5)),
-                            ],
-                          ),
-                        );
-                      },
-                      childCount: _assets.length + 1,
+                          return GestureDetector(
+                            key: ValueKey(asset.id),
+                            onTap: () => _handleAssetTap(asset),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                AssetEntityImage(asset, isOriginal: false, thumbnailSize: const ThumbnailSize(200, 200), fit: BoxFit.cover),
+                                if (asset.type == AssetType.video)
+                                  const Positioned(bottom: 5, right: 5, child: Icon(Icons.videocam, color: Colors.white, size: 16)),
+                                if (_selectedGalleryAsset == asset)
+                                  Container(color: Colors.white.withOpacity(0.5)),
+                              ],
+                            ),
+                          );
+                        },
+                        childCount: _assets.length + 1,
+                      ),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 4, crossAxisSpacing: 1, mainAxisSpacing: 1),
                     ),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 4, crossAxisSpacing: 1, mainAxisSpacing: 1),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -89,7 +89,8 @@ class PostCard extends StatefulWidget {
   State<PostCard> createState() => _PostCardState();
 }
 
-class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
+class _PostCardState extends State<PostCard>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   VideoPlayerController? _videoController;
   Future<void>? _initializeVideoPlayerFuture;
   bool _wasPlayingBeforeHold = false;
@@ -101,6 +102,10 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
   late AnimationController _bookmarkAnimationController;
   late Animation<double> _bookmarkScaleAnimation;
   bool _musicPlaybackAllowed = false;
+  bool _showContinueWatchingOverlay = false;
+
+  bool _isAppInForeground = true;
+  bool _isWidgetVisible = false;
 
   @override
   void initState() {
@@ -108,7 +113,9 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
     _initVideoPlayer();
     _initAudioPlayer();
 
-    // Daftarkan listener ke GlobalAudioState
+    // (3) Daftarkan observer untuk lifecycle aplikasi
+    WidgetsBinding.instance.addObserver(this);
+
     GlobalAudioState.instance.addListener(_onGlobalMuteStateChanged);
 
     _bookmarkAnimationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 350));
@@ -121,6 +128,62 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
     _heartAnimationController.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
         setState(() => _isHeartVisible = false);
+      }
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _isAppInForeground = true;
+      // Putar kembali jika widget terlihat saat kembali ke aplikasi
+      _handleAudioPlaybackState();
+    } else {
+      // App di background atau tidak aktif, pause semua media
+      _isAppInForeground = false;
+      if (_audioPlayer.playing) {
+        _audioPlayer.pause();
+      }
+      if (_videoController?.value.isPlaying ?? false) {
+        _videoController?.pause();
+      }
+    }
+  }
+
+  // (3) Helper baru untuk mengelola pemutaran audio
+  void _handleAudioPlaybackState() {
+    if (_audioPlayer.audioSource == null || widget.post.isVideo) return;
+
+    if (_isAppInForeground && _isWidgetVisible) {
+      if (!_audioPlayer.playing) {
+        _audioPlayer.play();
+      }
+    } else {
+      if (_audioPlayer.playing) {
+        _audioPlayer.pause();
+      }
+    }
+  }
+
+  void _navigateToClipsViewer() {
+    // Tidak perlu pause di sini, karena controller akan terus digunakan
+    // di halaman selanjutnya. Biarkan statusnya apa adanya (playing/paused).
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ClipsViewerPage(
+          initialClip: widget.post,
+          // --- INTI PERUBAHAN: Kirim controller yang aktif ---
+          existingController: _videoController,
+        ),
+      ),
+    ).then((_) {
+      // Kode ini akan berjalan saat pengguna kembali dari ClipsViewerPage.
+      // Kita perlu memastikan video di PostCard tidak otomatis berputar
+      // jika tidak terlihat. VisibilityDetector akan menanganinya.
+      if (mounted) {
+        setState(() {}); // Memaksa refresh UI jika perlu (misal: update ikon mute)
       }
     });
   }
@@ -159,7 +222,8 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    // Hapus listener saat widget dihancurkan
+    // (3) Hapus observer
+    WidgetsBinding.instance.removeObserver(this);
     GlobalAudioState.instance.removeListener(_onGlobalMuteStateChanged);
 
     _videoController?.removeListener(_videoListener);
@@ -217,22 +281,20 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
     return VisibilityDetector(
       key: Key('post-card-${widget.post.id}'),
       onVisibilityChanged: (visibilityInfo) {
-        if (_videoController != null && _videoController!.value.isInitialized && !_videoEnded) {
-          if (visibilityInfo.visibleFraction > 0.6) {
+        final isVisible = visibilityInfo.visibleFraction > 0.6;
+        _isWidgetVisible = isVisible; // (3) Update status visibilitas widget
+
+        // Logika untuk Video Player
+        if (_videoController != null && _videoController!.value.isInitialized && !_videoEnded && !_showContinueWatchingOverlay) {
+          if (isVisible && _isAppInForeground) {
             if (!_videoController!.value.isPlaying) _videoController!.play();
           } else {
             if (_videoController!.value.isPlaying) _videoController!.pause();
           }
-        } else if (!widget.post.isVideo && _audioPlayer.audioSource != null) {
-          if (visibilityInfo.visibleFraction > 0.6) {
-            if (!_audioPlayer.playing) {
-              _audioPlayer.play();
-            }
-          } else {
-            if (_audioPlayer.playing) {
-              _audioPlayer.pause();
-            }
-          }
+        }
+        // Logika untuk Audio Player di post gambar
+        else if (!widget.post.isVideo) {
+          _handleAudioPlaybackState(); // (3) Gunakan helper baru
         }
       },
       child: Container(
@@ -321,7 +383,7 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
         children: [
           GestureDetector(
             onDoubleTap: _onDoubleTap,
-            onTap: widget.post.isVideo ? _toggleMute : () => _openImageZoom(context),
+            onTap: widget.post.isVideo ? _navigateToClipsViewer : () => _openImageZoom(context),
             child: mediaContent,
           ),
           if (widget.post.isVideo && !hasMusic)
@@ -352,7 +414,11 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
             ),
           if (_isHeartVisible)
             ScaleTransition(scale: _heartAnimation, child: const Icon(Icons.favorite, color: Colors.white, size: 80, shadows: [Shadow(color: Colors.black38, blurRadius: 12)])),
-          if (_videoEnded) _buildReplayOverlay(),
+          if (_showContinueWatchingOverlay)
+            _buildContinueWatchingOverlay(),
+
+          if (_videoEnded && !_showContinueWatchingOverlay) // Pastikan hanya satu overlay yang tampil
+            _buildReplayOverlay(),
         ],
       ),
     );
@@ -360,7 +426,10 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
 
   void _initVideoPlayer() {
     if (widget.post.isVideo && widget.post.mediaUrl != null && widget.post.mediaUrl!.isNotEmpty) {
+      // --- PERUBAHAN: Reset state overlay saat inisialisasi ---
       _videoEnded = false;
+      _showContinueWatchingOverlay = false;
+
       _musicPlaybackAllowed = false;
       _videoController = VideoPlayerController.networkUrl(Uri.parse(widget.post.mediaUrl!));
 
@@ -379,15 +448,34 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
   }
 
   void _videoListener() {
-    if (_videoController == null || !_videoController!.value.isInitialized) return;
+    if (_videoController == null || !_videoController!.value.isInitialized || !mounted) return;
 
-    final bool isFinished = _videoController!.value.position >= _videoController!.value.duration;
-    if (isFinished && !_videoEnded) {
-      if (mounted) {
-        setState(() => _videoEnded = true);
-        if (_audioPlayer.playing) _audioPlayer.pause();
-      }
+    final position = _videoController!.value.position;
+    final totalDuration = _videoController!.value.duration;
+
+    // --- (1) PERBAIKAN UTAMA: Logika untuk memotong video ---
+    final feedDurationLimit = const Duration(seconds: 25);
+    // Cek durasi langsung dari controller untuk keandalan
+    final bool isLongVideo = totalDuration > feedDurationLimit;
+
+    if (isLongVideo && position >= feedDurationLimit && !_showContinueWatchingOverlay) {
+      _videoController!.pause();
+      if (_audioPlayer.playing) _audioPlayer.pause();
+      setState(() {
+        _showContinueWatchingOverlay = true;
+      });
+      return;
     }
+    // --- AKHIR PERBAIKAN ---
+
+    // --- (2) PERBAIKAN: Video di-pause saat selesai ---
+    final bool isFinished = position >= totalDuration;
+    if (isFinished && !_videoEnded) {
+      _videoController!.pause(); // <-- TAMBAHAN PENTING
+      if (_audioPlayer.playing) _audioPlayer.pause();
+      setState(() => _videoEnded = true);
+    }
+    // --- AKHIR PERBAIKAN ---
 
     if (_musicPlaybackAllowed && _audioPlayer.audioSource != null) {
       if (_videoController!.value.isPlaying && !_audioPlayer.playing) {
@@ -407,6 +495,8 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
     if (_videoController == null) return;
     setState(() {
       _videoEnded = false;
+      // --- PERUBAHAN: Reset juga state overlay saat replay ---
+      _showContinueWatchingOverlay = false;
       _musicPlaybackAllowed = true;
     });
 
@@ -416,6 +506,36 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
     if (_audioPlayer.audioSource != null) {
       _audioPlayer.seek(Duration.zero);
     }
+  }
+
+  // --- TAMBAHAN: Widget baru untuk overlay "Lanjutkan Menonton" ---
+  Widget _buildContinueWatchingOverlay() {
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withOpacity(0.6),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const Text(
+              'Lanjutkan menonton',
+              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            TextButton.icon(
+              icon: const Icon(Icons.movie_filter_outlined, color: Colors.black, size: 20),
+              label: const Text('Buka Clips', style: TextStyle(color: Colors.black)),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.white.withOpacity(0.8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+              onPressed: _navigateToClipsViewer,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildReplayOverlay() {
