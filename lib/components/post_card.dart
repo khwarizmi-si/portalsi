@@ -92,29 +92,24 @@ class PostCard extends StatefulWidget {
 class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
   VideoPlayerController? _videoController;
   Future<void>? _initializeVideoPlayerFuture;
-  bool _isVideoMuted = true;
   bool _wasPlayingBeforeHold = false;
   bool _videoEnded = false;
   late final AudioPlayer _audioPlayer;
-  bool _isMusicMuted = false;
   late AnimationController _heartAnimationController;
   late Animation<double> _heartAnimation;
   bool _isHeartVisible = false;
   late AnimationController _bookmarkAnimationController;
   late Animation<double> _bookmarkScaleAnimation;
-
-  // --- 👇 TAMBAHAN STATE BARU 👇 ---
-  // Penanda apakah musik boleh diputar (setelah replay pertama kali).
   bool _musicPlaybackAllowed = false;
-
 
   @override
   void initState() {
     super.initState();
     _initVideoPlayer();
     _initAudioPlayer();
-    _isVideoMuted = GlobalAudioState.isMuted;
-    _isMusicMuted = GlobalAudioState.isMuted;
+
+    // Daftarkan listener ke GlobalAudioState
+    GlobalAudioState.instance.addListener(_onGlobalMuteStateChanged);
 
     _bookmarkAnimationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 350));
     _bookmarkScaleAnimation = Tween<double>(begin: 1.0, end: 1.4).animate(CurvedAnimation(parent: _bookmarkAnimationController, curve: Curves.elasticOut));
@@ -130,6 +125,23 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
     });
   }
 
+  void _onGlobalMuteStateChanged() {
+    final isMuted = GlobalAudioState.instance.isMuted;
+
+    // Terapkan status mute ke semua player
+    _audioPlayer.setVolume(isMuted ? 0.0 : 1.0);
+
+    final bool hasMusic = widget.post.musicPreviewUrl != null && widget.post.musicPreviewUrl!.isNotEmpty;
+    if (_videoController != null && !hasMusic) {
+      _videoController!.setVolume(isMuted ? 0.0 : 1.0);
+    }
+
+    // Panggil setState agar UI (seperti ikon mute) ikut diperbarui
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   Future<void> _initAudioPlayer() async {
     _audioPlayer = AudioPlayer();
     final musicUrl = widget.post.musicPreviewUrl;
@@ -137,6 +149,8 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
       try {
         await _audioPlayer.setUrl(musicUrl);
         await _audioPlayer.setLoopMode(LoopMode.one);
+        // Atur volume awal berdasarkan state global saat ini
+        _audioPlayer.setVolume(GlobalAudioState.instance.isMuted ? 0.0 : 1.0);
       } catch (e) {
         print("Error loading audio source: $e");
       }
@@ -145,6 +159,9 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    // Hapus listener saat widget dihancurkan
+    GlobalAudioState.instance.removeListener(_onGlobalMuteStateChanged);
+
     _videoController?.removeListener(_videoListener);
     _videoController?.dispose();
     _audioPlayer.dispose();
@@ -156,20 +173,11 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
   @override
   void didUpdateWidget(PostCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    // Cek apakah PostCard ini sekarang menampilkan post yang berbeda
     if (widget.post.id != oldWidget.post.id) {
-      // 1. Hentikan dan buang controller video yang lama untuk mencegah memory leak
       _videoController?.removeListener(_videoListener);
       _videoController?.dispose();
-      _videoController = null; // Penting untuk di-set null
-
-      // 2. Buang juga audio player lama
+      _videoController = null;
       _audioPlayer.dispose();
-
-      // 3. Inisialisasi ulang semuanya untuk postingan yang baru.
-      //    Fungsi _initVideoPlayer() sudah otomatis mengatur _videoEnded = false,
-      //    sehingga state-nya akan di-reset dengan benar.
       _initVideoPlayer();
       _initAudioPlayer();
     }
@@ -209,24 +217,18 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
     return VisibilityDetector(
       key: Key('post-card-${widget.post.id}'),
       onVisibilityChanged: (visibilityInfo) {
-        // Logika untuk Video Player (TETAP SAMA)
         if (_videoController != null && _videoController!.value.isInitialized && !_videoEnded) {
           if (visibilityInfo.visibleFraction > 0.6) {
             if (!_videoController!.value.isPlaying) _videoController!.play();
           } else {
             if (_videoController!.value.isPlaying) _videoController!.pause();
           }
-        }
-        // --- 👇 TAMBAHAN LOGIKA UNTUK POSTINGAN GAMBAR 👇 ---
-        else if (!widget.post.isVideo && _audioPlayer.audioSource != null) {
-          // Jika postingan adalah gambar dan memiliki musik
+        } else if (!widget.post.isVideo && _audioPlayer.audioSource != null) {
           if (visibilityInfo.visibleFraction > 0.6) {
-            // Jika terlihat di layar, putar musik
             if (!_audioPlayer.playing) {
               _audioPlayer.play();
             }
           } else {
-            // Jika tidak terlihat, jeda musik
             if (_audioPlayer.playing) {
               _audioPlayer.pause();
             }
@@ -250,7 +252,6 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
     );
   }
 
-  //...(Sisa kode dari _buildMusicInfo sampai _buildMediaWidget tidak berubah)...
   Widget _buildMusicInfo() {
     final musicTrackName = widget.post.musicTrackName;
     if (musicTrackName == null || musicTrackName.isEmpty) {
@@ -320,52 +321,42 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
         children: [
           GestureDetector(
             onDoubleTap: _onDoubleTap,
-            onTap: widget.post.isVideo ? _toggleMute : () => _openImageZoom(context), // Ubah ke _toggleMute
+            onTap: widget.post.isVideo ? _toggleMute : () => _openImageZoom(context),
             child: mediaContent,
           ),
-
-          // Tombol Mute Video (jika ada)
-          if (widget.post.isVideo && !hasMusic) // Logika ini sudah benar dari sebelumnya
+          if (widget.post.isVideo && !hasMusic)
             Positioned(
               bottom: 8,
               right: 8,
               child: GestureDetector(
-                onTap: _toggleMute, // <-- Gunakan fungsi baru
+                onTap: _toggleMute,
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), shape: BoxShape.circle),
-                  // Baca state global untuk ikon
-                  child: Icon(GlobalAudioState.isMuted ? Icons.volume_off : Icons.volume_up, color: Colors.white, size: 18),
+                  child: Icon(GlobalAudioState.instance.isMuted ? Icons.volume_off : Icons.volume_up, color: Colors.white, size: 18),
                 ),
               ),
             ),
-
-          // Tombol Mute Musik (jika ada)
-          if (hasMusic) // di-refactor agar lebih rapi
+          if (hasMusic)
             Positioned(
               bottom: 8,
               left: 8,
               child: GestureDetector(
-                onTap: _toggleMute, // <-- Gunakan fungsi baru
+                onTap: _toggleMute,
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), shape: BoxShape.circle),
-                  // Baca state global untuk ikon
-                  child: Icon(GlobalAudioState.isMuted ? Icons.music_off_outlined : Icons.music_note_outlined, color: Colors.white, size: 18),
+                  child: Icon(GlobalAudioState.instance.isMuted ? Icons.music_off_outlined : Icons.music_note_outlined, color: Colors.white, size: 18),
                 ),
               ),
             ),
-
           if (_isHeartVisible)
             ScaleTransition(scale: _heartAnimation, child: const Icon(Icons.favorite, color: Colors.white, size: 80, shadows: [Shadow(color: Colors.black38, blurRadius: 12)])),
-
           if (_videoEnded) _buildReplayOverlay(),
         ],
       ),
     );
   }
-
-  // post_card.dart -> _initVideoPlayer()
 
   void _initVideoPlayer() {
     if (widget.post.isVideo && widget.post.mediaUrl != null && widget.post.mediaUrl!.isNotEmpty) {
@@ -373,15 +364,9 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
       _musicPlaybackAllowed = false;
       _videoController = VideoPlayerController.networkUrl(Uri.parse(widget.post.mediaUrl!));
 
-      // Inisialisasi dimulai di sini...
       _initializeVideoPlayerFuture = _videoController!.initialize().then((_) {
-        // --- ✅ LOGIKA VOLUME DIPINDAHKAN KE SINI ✅ ---
-        // Tempat ini dijamin hanya akan berjalan SETELAH video siap.
         final bool hasMusic = widget.post.musicPreviewUrl != null && widget.post.musicPreviewUrl!.isNotEmpty;
-
-        // Atur volume berdasarkan state global.
-        // Jika ada musik, paksa volume 0. Jika tidak, ikuti state global.
-        _videoController!.setVolume(hasMusic ? 0.0 : (GlobalAudioState.isMuted ? 0.0 : 1.0));
+        _videoController!.setVolume(hasMusic ? 0.0 : (GlobalAudioState.instance.isMuted ? 0.0 : 1.0));
 
         if (mounted) {
           setState(() {});
@@ -390,79 +375,49 @@ class _PostCardState extends State<PostCard> with TickerProviderStateMixin {
 
       _videoController!.setLooping(false);
       _videoController!.addListener(_videoListener);
-
-      // --- ❌ BARIS SET VOLUME DIHAPUS DARI SINI ❌ ---
     }
   }
 
-  // --- 👇 PERUBAHAN UTAMA: LOGIKA LISTENER DIPERBARUI TOTAL 👇 ---
   void _videoListener() {
     if (_videoController == null || !_videoController!.value.isInitialized) return;
 
-    // 1. Logika untuk menampilkan overlay "Putar Lagi" saat video berakhir
     final bool isFinished = _videoController!.value.position >= _videoController!.value.duration;
     if (isFinished && !_videoEnded) {
       if (mounted) {
         setState(() => _videoEnded = true);
-        // Hentikan musik saat video berakhir
         if (_audioPlayer.playing) _audioPlayer.pause();
       }
     }
 
-    // 2. Logika untuk sinkronisasi musik HANYA JIKA diizinkan
     if (_musicPlaybackAllowed && _audioPlayer.audioSource != null) {
-      // Jika video sedang bermain tapi audio tidak, putar audio
       if (_videoController!.value.isPlaying && !_audioPlayer.playing) {
         _audioPlayer.play();
-      }
-      // Jika video dijeda tapi audio masih bermain, jeda audio
-      else if (!_videoController!.value.isPlaying && _audioPlayer.playing) {
+      } else if (!_videoController!.value.isPlaying && _audioPlayer.playing) {
         _audioPlayer.pause();
       }
     }
   }
 
   void _toggleMute() {
-    // 1. Balikkan nilai state global
-    GlobalAudioState.isMuted = !GlobalAudioState.isMuted;
-
-    // 2. Perbarui state lokal di widget ini agar UI-nya berubah
-    setState(() {
-      _isVideoMuted = GlobalAudioState.isMuted;
-      _isMusicMuted = GlobalAudioState.isMuted;
-    });
-
-    // 3. Terapkan volume ke player yang relevan
-    _audioPlayer.setVolume(_isMusicMuted ? 0.0 : 1.0);
-
-    final bool hasMusic = widget.post.musicPreviewUrl != null && widget.post.musicPreviewUrl!.isNotEmpty;
-    if (_videoController != null && !hasMusic) {
-      // Hanya atur volume video jika tidak ada musik yang menimpanya
-      _videoController!.setVolume(_isVideoMuted ? 0.0 : 1.0);
-    }
+    // Logika hanya membalik nilai di state global. Listener akan menangani sisanya.
+    GlobalAudioState.instance.isMuted = !GlobalAudioState.instance.isMuted;
   }
 
-  // --- 👇 PERUBAHAN UTAMA: FUNGSI REPLAY DIPERBARUI 👇 ---
   void _replayVideo() {
     if (_videoController == null) return;
     setState(() {
       _videoEnded = false;
-      // Izinkan musik untuk diputar mulai dari sekarang
       _musicPlaybackAllowed = true;
     });
 
-    // Putar ulang video dari awal
     _videoController!.seekTo(Duration.zero);
     _videoController!.play();
 
-    // Jika ada musik, putar juga dari awal
     if (_audioPlayer.audioSource != null) {
       _audioPlayer.seek(Duration.zero);
-      // _audioPlayer.play(); // Dihapus, karena listener akan menanganinya
     }
   }
 
-  //...(Sisa kode dari _buildReplayOverlay sampai akhir tidak berubah)...
   Widget _buildReplayOverlay() {
     return Positioned.fill(
       child: Container(

@@ -720,7 +720,6 @@ class _ChatAppBar extends StatelessWidget {
       padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
       decoration: const BoxDecoration(
         color: Color(0xFFFFEDB3),
-        // border: Border(bottom: BorderSide(color: Colors.grey.shade300, width: 1)),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 10.0),
@@ -771,16 +770,26 @@ class _ChatAppBar extends StatelessWidget {
               icon: const Icon(Icons.more_vert, color: kSubtleTextColor),
               color: kLightSurfaceColor,
               onSelected: (String value) {
+                // --- 👇 PERUBAHAN LOGIKA SELEKSI DI SINI 👇 ---
+                final controller = Provider.of<ChatRoomController>(context, listen: false);
                 if (value == 'reload') {
-                  Provider.of<ChatRoomController>(context, listen: false)
-                      .reloadConversation();
+                  controller.reloadConversation();
+                } else if (value == 'reconnect_ws') {
+                  controller.reconnectWebSocket();
                 }
+                // --- 👆 BATAS PERUBAHAN 👆 ---
               },
               itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
                 const PopupMenuItem<String>(
                   value: 'reload',
                   child: Text('Muat ulang percakapan', style: TextStyle(color: kTextColor)),
                 ),
+                // --- 👇 ITEM MENU BARU DITAMBAHKAN DI SINI 👇 ---
+                const PopupMenuItem<String>(
+                  value: 'reconnect_ws',
+                  child: Text('Hubungkan ulang WebSocket', style: TextStyle(color: kTextColor)),
+                ),
+                // --- 👆 BATAS ITEM MENU BARU 👆 ---
               ],
             ),
           ],

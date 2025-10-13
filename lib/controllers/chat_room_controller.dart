@@ -1,4 +1,4 @@
-// lib/controllers/chat_room_controller.dart (FINAL DENGAN PERBAIKAN IMPORT)
+// lib/controllers/chat_room_controller.dart
 
 import 'dart:async';
 import 'dart:convert';
@@ -16,13 +16,11 @@ import '../models/user_model.dart';
 import '../services/message_service.dart';
 import '../utils/secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
-
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:typed_data'; // Untuk Uint8List
+import 'dart:typed_data';
 
 class ChatRoomController extends ChangeNotifier {
   final User recipient;
-  // Asumsi ChatService adalah MessageService
   final ChatService _chatService = ChatService();
 
   List<ChatMessage> _messages = [];
@@ -43,14 +41,11 @@ class ChatRoomController extends ChangeNotifier {
   bool get isRecipientOnline => _isRecipientOnline;
   Timer? _statusTimer;
 
-  // Hapus pemanggilan _initialize() dari sini
   ChatRoomController({required this.recipient});
 
-  // Ubah nama dari _initialize menjadi initialize (hapus underscore)
   Future<void> initialize() async {
     await _loadCurrentUser();
     if (_currentUser != null) {
-      // Pindahkan semua logika lain dari _initialize ke sini
       await fetchMessages();
       _markMessagesAsRead();
       _startRealtimeListeners();
@@ -65,13 +60,64 @@ class ChatRoomController extends ChangeNotifier {
     }
   }
 
+  void _startRealtimeListeners() {
+    if (_currentUser == null || AuthService.webSocketService == null) {
+      debugPrint("❌ Listener real-time GAGAL dimulai: currentUser atau WebSocketService null.");
+      return;
+    }
+
+    final ids = [_currentUser!.id, recipient.id]..sort();
+    final expectedChannelName = 'private-dm.${ids.join('-')}';
+
+    _messageSubscription?.cancel();
+
+    _messageSubscription = AuthService.webSocketService!.eventStream.listen((AppEvent appEvent) {
+
+      // --- 👇 TAMBAHKAN BLOK DIAGNOSTIK INI 👇 ---
+      // Cetak setiap event yang diterima oleh listener ini, SEBELUM difilter.
+      debugPrint("--- 🕵️‍♂️ Controller Menerima Event ---");
+      debugPrint(" -> Event yang diterima: '${appEvent.event}'");
+      debugPrint(" -> Channel yang diterima: '${appEvent.channel}'");
+      debugPrint(" -> Channel yang DIHARAPKAN: '$expectedChannelName'");
+      debugPrint("------------------------------------");
+      // --- 👆 BATAS BLOK DIAGNOSTIK 👆 ---
+
+      if (appEvent.channel != expectedChannelName || appEvent.event != 'dm.new') {
+        return;
+      }
+
+      debugPrint("✅✅✅ [SUKSES] ChatRoomController menerima event dm.new di channel yang tepat!");
+
+      try {
+        final messageData = appEvent.data['message'] as Map<String, dynamic>?;
+        if (messageData == null) return;
+
+        final int senderId = messageData['sender_id'];
+        final int messageId = messageData['message_id'];
+
+        if (_messages.any((m) => m.id == messageId) || senderId == _currentUser!.id) {
+          debugPrint("Pesan (ID: $messageId) diabaikan (duplikat atau gema).");
+          return;
+        }
+
+        final newMessage = ChatMessage.fromJson(messageData, _currentUser!, recipient);
+        _handleIncomingMessage(newMessage);
+        _markMessagesAsRead();
+
+      } catch (e, s) {
+        debugPrint("🔥 Error saat memproses dm.new di ChatRoomController: $e\n$s");
+      }
+    });
+
+    debugPrint("🎧 ChatRoomController sekarang mendengarkan event langsung di channel '$expectedChannelName'.");
+  }
+
   Future<void> _checkOnlineStatus() async {
     if (recipient.id == null) return;
     try {
       final token = await SecureStorage.getToken();
       if (token == null) return;
-      final url = Uri.parse(
-          'https://api-new.portalsi.com/api/websocket/online-status/${recipient.id}');
+      final url = Uri.parse('https://api-new.portalsi.com/api/websocket/online-status/${recipient.id}');
       final response = await http.get(
         url,
         headers: {
@@ -107,8 +153,7 @@ class ChatRoomController extends ChangeNotifier {
       final List<ChatMessage> listToSave = List.from(messagesToSave);
       listToSave.sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
-      final List<Map<String, dynamic>> messagesJson =
-      listToSave.map((m) => m.toJson()).toList();
+      final List<Map<String, dynamic>> messagesJson = listToSave.map((m) => m.toJson()).toList();
       await prefs.setString(key, jsonEncode(messagesJson));
     } catch (e) {
       debugPrint("Gagal menyimpan cache: $e");
@@ -125,8 +170,7 @@ class ChatRoomController extends ChangeNotifier {
       if (token == null) {
         throw Exception("Authentication token not found.");
       }
-      final url = Uri.parse(
-          'https://api-new.portalsi.com/api/messages/user/${recipient.id}/read');
+      final url = Uri.parse('https://api-new.portalsi.com/api/messages/user/${recipient.id}/read');
       final response = await http.patch(
         url,
         headers: {
@@ -135,11 +179,9 @@ class ChatRoomController extends ChangeNotifier {
         },
       );
       if (response.statusCode == 200) {
-        debugPrint(
-            "Successfully marked messages from user ${recipient.id} as read.");
+        debugPrint("Successfully marked messages from user ${recipient.id} as read.");
       } else {
-        debugPrint(
-            "Failed to mark messages as read. Status: ${response.statusCode}, Body: ${response.body}");
+        debugPrint("Failed to mark messages as read. Status: ${response.statusCode}, Body: ${response.body}");
       }
     } catch (e) {
       debugPrint("An error occurred while marking messages as read: $e");
@@ -149,57 +191,54 @@ class ChatRoomController extends ChangeNotifier {
   @override
   void dispose() {
     debugPrint("ChatRoomController disposed. Unsubscribing from channels.");
-    if (_currentUser != null) {
-      final ids = [_currentUser!.id, recipient.id]..sort();
-      final roomId = ids.join('-');
-      // Hapus komentar jika perlu unsubscribe
-      // final channelName = 'private-dm.$roomId';
-      // AuthService.webSocketService?.unsubscribeFromChannel(channelName);
-    }
     _messageSubscription?.cancel();
     _statusTimer?.cancel();
     super.dispose();
   }
-
 
   Future<void> reloadConversation() async {
     debugPrint("🔄 Memuat ulang percakapan dari AppBar...");
     await loadMessagesAgain();
   }
 
+  // --- 👇 LOGIKA FUNGSI INI SEKARANG LEBIH PINTAR 👇 ---
+  Future<void> reconnectWebSocket() async {
+    debugPrint("📡 Meminta koneksi ulang WebSocket dari controller...");
 
-  void _startRealtimeListeners() {
-    if (_currentUser == null) return;
+    // Cek jika service-nya null
     if (AuthService.webSocketService == null) {
-      debugPrint("WebSocketService belum siap.");
-      return;
-    }
-    final ids = [_currentUser!.id, recipient.id]..sort();
-    final roomId = ids.join('-');
-    final channelName = 'private-dm.$roomId';
-    AuthService.webSocketService!.subscribeToChannel(channelName);
-    _messageSubscription = AuthService.webSocketService!.eventStream.listen(
-          (AppEvent appEvent) async {
-        if (appEvent.channel == channelName && appEvent.event == 'dm.new') {
-          try {
-            final messageData = appEvent.data['message'];
-            final newMessage = ChatMessage.fromJson(messageData, _currentUser!, recipient);
-            final isMessageExist = _messages.any((m) => m.id == newMessage.id);
-            if (!isMessageExist && newMessage.sender.id != _currentUser!.id) {
-              await _handleIncomingMessage(newMessage);
-              _chatService.updateConversationCacheWithNewMessage(newMessage);
-              _markMessagesAsRead();
-            }
-          } catch (e, s) {
-            debugPrint("Error parsing pesan dari event 'dm.new': $e");
-            debugPrint("Stack trace: $s");
-          }
+      debugPrint("⚠️ WebSocketService is null. Mencoba inisialisasi ulang...");
+      try {
+        // Ambil token dari penyimpanan aman
+        final token = await SecureStorage.getToken();
+        if (token != null) {
+          // Panggil fungsi inisialisasi global dari AuthService
+          await AuthService.initializeWebSocket(token);
+          debugPrint("✅ Inisialisasi ulang WebSocket berhasil.");
+        } else {
+          debugPrint("❌ Gagal inisialisasi ulang: Token tidak ditemukan.");
+          return;
         }
-      },
-      onError: (error) {
-        debugPrint("Error on event stream: $error");
-      },
-    );
+      } catch (e) {
+        debugPrint("❌ Error saat inisialisasi ulang WebSocket: $e");
+        return;
+      }
+    }
+
+    // Setelah diinisialisasi (atau jika memang sudah ada), jalankan reconnect
+    if (AuthService.webSocketService != null) {
+      await AuthService.webSocketService!.reconnect();
+      _startRealtimeListeners(); // Pasang ulang listener ke koneksi baru
+    } else {
+      debugPrint("❌ Gagal total, koneksi ulang tidak bisa dilakukan.");
+    }
+  }
+  // --- 👆 BATAS FUNGSI BARU 👆 ---
+
+  Future<void> _handleIncomingMessage(ChatMessage newMessage) async {
+    _messages.insert(0, newMessage);
+    notifyListeners();
+    await _saveMessagesToCache(_messages);
   }
 
   Future<void> _downloadAndSaveMedia(ChatMessage message) async {
@@ -251,8 +290,7 @@ class ChatRoomController extends ChangeNotifier {
       final key = _getCacheKey();
       final String? cachedData = prefs.getString(key);
       if (cachedData != null) {
-        debugPrint(
-            "Cache ditemukan untuk user ${recipient.id}. Memuat dari cache.");
+        debugPrint("Cache ditemukan untuk user ${recipient.id}. Memuat dari cache.");
         final List<dynamic> messagesJson = jsonDecode(cachedData);
         _messages = messagesJson
             .map((json) => ChatMessage.fromJson(json, _currentUser, recipient))
@@ -265,8 +303,7 @@ class ChatRoomController extends ChangeNotifier {
         _processMediaMessages();
       } else {
         debugPrint("Cache tidak ditemukan. Mengambil data lengkap dari API.");
-        _messages =
-        await _chatService.getConversation(_currentUser!, recipient);
+        _messages = await _chatService.getConversation(_currentUser!, recipient);
         _messages = _messages.reversed.toList();
         await _saveMessagesToCache(_messages);
       }
@@ -285,8 +322,7 @@ class ChatRoomController extends ChangeNotifier {
     notifyListeners();
     try {
       debugPrint("Mengambil Ulang dari API.");
-      _messages =
-      await _chatService.getConversation(_currentUser!, recipient);
+      _messages = await _chatService.getConversation(_currentUser!, recipient);
       _messages = _messages.reversed.toList();
       await _saveMessagesToCache(_messages);
     } catch (e) {
@@ -325,8 +361,7 @@ class ChatRoomController extends ChangeNotifier {
     try {
       final token = await SecureStorage.getToken();
       if (token == null) throw Exception("Token tidak ditemukan.");
-      final url = Uri.parse(
-          'https://api-new.portalsi.com/api/messages/conversation-from/${recipient.id}');
+      final url = Uri.parse('https://api-new.portalsi.com/api/messages/conversation-from/${recipient.id}');
       final response = await http.get(url, headers: {
         'Authorization': 'Bearer $token',
         'Accept': 'application/json',
@@ -343,10 +378,8 @@ class ChatRoomController extends ChangeNotifier {
               newMessage.status != MessageStatus.read;
         }).toList();
         if (newUnreadMessages.isNotEmpty) {
-          debugPrint(
-              "${newUnreadMessages.length} pesan baru ditemukan dan ditambahkan.");
-          _messages.insertAll(
-              0, newUnreadMessages);
+          debugPrint("${newUnreadMessages.length} pesan baru ditemukan dan ditambahkan.");
+          _messages.insertAll(0, newUnreadMessages);
           await _saveMessagesToCache(_messages);
           notifyListeners();
           _processMediaMessages();
@@ -369,13 +402,11 @@ class ChatRoomController extends ChangeNotifier {
     }
   }
 
-  // ===== FUNGSI BARU: Mengirim Respon Cerita =====
   Future<void> sendStoryResponseMessage(
       String text,
       int storyId,
       String? respondedMediaUrl,
       ) async {
-    // LAPORKAN LANGKAH 1: FUNGSI DIPANGGIL
     debugStatus = "STEP 1: sendStoryResponseMessage() dipanggil.";
     notifyListeners();
 
@@ -389,12 +420,12 @@ class ChatRoomController extends ChangeNotifier {
     final tempMessage = ChatMessage(
       id: tempId,
       text: text.trim(),
-      type: MessageType.text, // Tipe tetap text karena ada konten tulisan
+      type: MessageType.text,
       sender: _currentUser!,
       recipient: recipient,
       timestamp: DateTime.now(),
-      status: MessageStatus.sending, // Status: sedang dikirim
-      isStoryResponse: true, // Flag penting!
+      status: MessageStatus.sending,
+      isStoryResponse: true,
       storyId: storyId,
       respondedStoryMediaUrl: respondedMediaUrl,
     );
@@ -403,7 +434,6 @@ class ChatRoomController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // LAPORKAN LANGKAH 2: MEMANGGIL SERVICE
       debugStatus = "STEP 2: Memanggil _chatService.sendStoryResponse...";
       notifyListeners();
 
@@ -416,7 +446,6 @@ class ChatRoomController extends ChangeNotifier {
         recipient: recipient,
       );
 
-      // LAPORKAN LANGKAH 3: PANGGILAN SERVICE BERHASIL
       debugStatus = "STEP 3: Panggilan service SUKSES!";
       notifyListeners();
 
@@ -427,7 +456,6 @@ class ChatRoomController extends ChangeNotifier {
       await _updateCacheWithMessage(sentMessage);
 
     } catch (e) {
-      // LAPORKAN LANGKAH 4: TERJADI ERROR
       debugStatus = "STEP 4: Panggilan service GAGAL! Error: $e";
       notifyListeners();
 
@@ -440,8 +468,6 @@ class ChatRoomController extends ChangeNotifier {
       notifyListeners();
     }
   }
-  // ===== BATAS FUNGSI BARU =====
-
 
   Future<void> sendMessage(String text) async {
     if (text.trim().isEmpty || _currentUser == null || recipient.id == null) return;
@@ -484,14 +510,6 @@ class ChatRoomController extends ChangeNotifier {
     } finally {
       notifyListeners();
     }
-  }
-
-  Future<void> _handleIncomingMessage(ChatMessage newMessage) async {
-    List<ChatMessage> currentMessages = await _loadMessagesFromCache();
-    currentMessages.add(newMessage);
-    await _saveMessagesToCache(currentMessages);
-    _messages = currentMessages.reversed.toList();
-    notifyListeners();
   }
 
   Future<void> sendMediaMessage(List<AssetEntity> assets) async {
@@ -583,7 +601,6 @@ class ChatRoomController extends ChangeNotifier {
       throw Exception('Gagal mengirim media: Error ${response.statusCode}');
     }
   }
-
 
   Future<void> sendMediaFile(File mediaFile) async {
     if (_currentUser == null) return;

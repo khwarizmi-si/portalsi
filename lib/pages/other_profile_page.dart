@@ -1,6 +1,6 @@
 // lib/pages/other_profile_page.dart
 
-import 'package:cached_network_image/cached_network_image.dart'; // <-- IMPORT BARU
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
@@ -135,6 +135,19 @@ class _OtherProfilePageState extends State<OtherProfilePage>
   void dispose() {
     _animationController.dispose();
     super.dispose();
+  }
+
+  Widget _buildGridItemSkeleton() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey.shade300,
+      highlightColor: Colors.grey.shade100,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
   }
 
   void _showAvatarPopup(BuildContext context) {
@@ -650,18 +663,46 @@ class _OtherProfilePageState extends State<OtherProfilePage>
           )
         ],
       ),
-      child: AnimationLimiter(
-        child: GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columnCount,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-          ),
-          itemCount: posts.length,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemBuilder: (context, index) {
-            final post = posts[index];
+      child: (posts.isEmpty)
+          ? Container(
+        height: 300,
+        alignment: Alignment.center,
+        child: const Text('Belum ada postingan'),
+      )
+          : Padding(
+        padding: const EdgeInsets.fromLTRB(12, 24, 12, 12),
+        // Bungkus GridView dengan AnimationLimiter
+        child: AnimationLimiter(
+          child: GridView.builder(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columnCount,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+            ),
+            itemCount: _profileData!.recentPosts.length,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemBuilder: (context, index) {
+              final post = _profileData!.recentPosts[index];
+              Widget mediaDisplay;
+              if (post.isVideo) {
+                // Catatan: Sama seperti sebelumnya, VideoThumbnailWidget mungkin
+                // perlu penyesuaian untuk menampilkan placeholder.
+                mediaDisplay =
+                    VideoThumbnailWidget(videoUrl: post.mediaUrl);
+              } else {
+                // SEMULA: Menggunakan Image.network biasa
+                // mediaDisplay =
+                //     Image.network(post.mediaUrl, fit: BoxFit.cover);
+
+                // SESUDAH: Menggunakan CachedNetworkImage dengan placeholder
+                mediaDisplay = CachedNetworkImage(
+                  imageUrl: post.mediaUrl,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => _buildGridItemSkeleton(),
+                  errorWidget: (context, url, error) => const Icon(Icons.error),
+                );
+              }
 
             return AnimationConfiguration.staggeredGrid(
               position: index,
