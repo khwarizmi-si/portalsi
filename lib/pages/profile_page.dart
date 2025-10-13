@@ -1,23 +1,29 @@
+// lib/pages/profile_page.dart
+
 import 'dart:developer';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
-import 'package:portal_si/pages/story_view_page.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
-import '../components/video_thumbnail_widget.dart';
+
 import '../app_state.dart';
 import '../components/circular_avatar_fetcher.dart';
+import '../components/pressable_grid_item.dart'; // <-- IMPORT UTAMA DI SINI
 import '../components/verified_badge.dart';
-// --- IMPORT TAMBAHAN YANG DIBUTUHKAN ---
-import '../utils/user_provider.dart';
+import '../models/post_model.dart';
+import '../models/user_model.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/scroll_provider.dart';
-import '../services/follow_service.dart';
+import '../services/post_service.dart';
+import '../services/user_service.dart'; // Ganti dari user_service jika perlu
 import '../services/story_service.dart';
+import '../services/follow_service.dart';
 import '../utils/navigation_helper.dart';
+import '../utils/user_provider.dart';
+import '../utils/zoom_page_route.dart';
 import 'clips_viewer_page.dart';
 import 'create_story_page.dart';
 import 'edit_profile_page.dart';
@@ -25,365 +31,9 @@ import 'followers_following_page.dart';
 import 'post_detail.dart';
 import 'settings_page.dart';
 import 'share_profile_page.dart';
-import '../models/user_model.dart';
-import '../models/post_model.dart';
-import '../services/post_service.dart';
-import '../services/user_service.dart';
-import '../utils/zoom_page_route.dart';
-import 'package:palette_generator/palette_generator.dart';
 
-
-// --- WIDGET BARU UNTUK SHIMMER PLACEHOLDER ---
-class ImagePlaceholder extends StatelessWidget {
-  const ImagePlaceholder({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Shimmer.fromColors(
-      baseColor: Colors.grey[300]!,
-      highlightColor: Colors.grey[100]!,
-      child: Container(
-        color: Colors.white,
-      ),
-    );
-  }
-}
-
-class PostPopupContent extends StatefulWidget {
-  final SimplePost post;
-  final User user;
-  final Function(SimplePost) onDelete;
-
-  const PostPopupContent({
-    Key? key,
-    required this.post,
-    required this.user,
-    required this.onDelete,
-  }) : super(key: key);
-
-  @override
-  State<PostPopupContent> createState() => _PostPopupContentState();
-}
-
-class _PostPopupContentState extends State<PostPopupContent> {
-  Color _iconColor = Colors.white;
-
-  @override
-  void initState() {
-    super.initState();
-    _updateIconColor();
-  }
-
-  Future<void> _updateIconColor() async {
-    try {
-      final imageProvider = CachedNetworkImageProvider(widget.post.mediaUrl);
-      final PaletteGenerator paletteGenerator = await PaletteGenerator.fromImageProvider(
-        imageProvider,
-        size: const Size(100, 100),
-        maximumColorCount: 20,
-      );
-      final Color dominantColor = paletteGenerator.dominantColor?.color ?? Colors.black;
-      final double luminance = dominantColor.computeLuminance();
-      if (mounted) {
-        setState(() {
-          _iconColor = luminance > 0.4 ? Colors.black87 : Colors.white;
-        });
-      }
-    } catch (e) {
-      print("Error saat menganalisis warna gambar: $e");
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: ClipOval(
-                    child: CachedNetworkImage(
-                      imageUrl: widget.user.profilePictureUrl ?? '',
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => const ImagePlaceholder(),
-                      errorWidget: (context, url, error) => const CircleAvatar(backgroundColor: Colors.grey),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  widget.user.username,
-                  style: TextStyle(color: _iconColor, fontWeight: FontWeight.bold, fontSize: 14),
-                ),
-                const Spacer(),
-                PopupMenuButton<String>(
-                  icon: Icon(Icons.more_horiz, color: _iconColor),
-                  onSelected: (String value) {
-                    Navigator.of(context).pop();
-                    if (value == 'delete') {
-                      widget.onDelete(widget.post);
-                    }
-                  },
-                  itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                    const PopupMenuItem<String>(value: 'delete', child: Text('Hapus Postingan')),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 0.0),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Hero(
-                tag: 'post-hero-${widget.post.postId}',
-                child: CachedNetworkImage(
-                  imageUrl: widget.post.mediaUrl,
-                  fit: BoxFit.contain,
-                  placeholder: (context, url) => const AspectRatio(
-                    aspectRatio: 1,
-                    child: ImagePlaceholder(),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class TransientPostPreview extends StatelessWidget {
-  final SimplePost post;
-  final User user;
-
-  const TransientPostPreview({
-    Key? key,
-    required this.post,
-    required this.user,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    const Color textColor = Colors.white;
-
-    return Material(
-      color: Colors.transparent,
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12.0),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: ClipOval(
-                      child: CachedNetworkImage(
-                        imageUrl: user.profilePictureUrl ?? '',
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => const ImagePlaceholder(),
-                        errorWidget: (context, url, error) => const CircleAvatar(backgroundColor: Colors.grey),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    user.username,
-                    style: const TextStyle(
-                      color: textColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Hero(
-                tag: 'post-hero-${post.postId}',
-                child: CachedNetworkImage(
-                  imageUrl: post.mediaUrl,
-                  fit: BoxFit.contain,
-                  placeholder: (context, url) => const AspectRatio(
-                    aspectRatio: 1,
-                    child: ImagePlaceholder(),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class PressableGridItem extends StatefulWidget {
-  final SimplePost post;
-  final User user;
-  final VoidCallback onTap;
-
-  const PressableGridItem({
-    Key? key,
-    required this.post,
-    required this.user,
-    required this.onTap,
-  }) : super(key: key);
-
-  @override
-  State<PressableGridItem> createState() => _PressableGridItemState();
-}
-
-class _PressableGridItemState extends State<PressableGridItem> {
-  bool _isPressed = false;
-  OverlayEntry? _overlayEntry;
-
-  @override
-  void dispose() {
-    _removePreviewOverlay();
-    super.dispose();
-  }
-
-  void _showPreviewOverlay(BuildContext context) {
-    if (_overlayEntry != null) return;
-
-    final overlayState = Overlay.of(context);
-    _overlayEntry = OverlayEntry(
-      builder: (context) {
-        return Stack(
-          children: [
-            BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-              child: Container(
-                color: Colors.black.withOpacity(0.5),
-              ),
-            ),
-            Center(
-              child: TransientPostPreview(
-                post: widget.post,
-                user: widget.user,
-              ),
-            ),
-          ],
-        );
-      },
-    );
-
-    overlayState?.insert(_overlayEntry!);
-  }
-
-  void _removePreviewOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-  }
-
-  void _onTapDown(TapDownDetails details) => setState(() => _isPressed = true);
-  void _onTapUp(TapUpDetails details) {
-    setState(() => _isPressed = false);
-    widget.onTap();
-  }
-  void _onTapCancel() {
-    if(mounted){
-      setState(() => _isPressed = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    Widget mediaDisplay;
-    if (widget.post.isVideo) {
-      mediaDisplay = VideoThumbnailWidget(videoUrl: widget.post.mediaUrl);
-    } else {
-      mediaDisplay = CachedNetworkImage(
-        imageUrl: widget.post.mediaUrl,
-        fit: BoxFit.cover,
-        placeholder: (context, url) => const ImagePlaceholder(),
-        errorWidget: (context, url, error) => Container(color: Colors.grey[300]),
-      );
-    }
-
-    return GestureDetector(
-      onTapDown: _onTapDown,
-      onTapUp: _onTapUp,
-      onTapCancel: _onTapCancel,
-      onLongPress: () => _showPreviewOverlay(context),
-      onLongPressUp: () => _removePreviewOverlay(),
-      child: AnimatedScale(
-        scale: _isPressed ? 0.95 : 1.0,
-        duration: const Duration(milliseconds: 150),
-        curve: Curves.easeInOut,
-        child: Container(
-          clipBehavior: Clip.antiAlias,
-          decoration: ShapeDecoration(
-            shape: ContinuousRectangleBorder(
-              borderRadius: BorderRadius.circular(40.0),
-            ),
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (widget.post.isVideo)
-                mediaDisplay
-              else
-                Hero(
-                  tag: 'post-hero-${widget.post.postId}',
-                  child: mediaDisplay,
-                ),
-              if (widget.post.isVideo)
-                const Positioned(
-                  top: 8.0,
-                  right: 8.0,
-                  child: Icon(
-                    Icons.video_camera_back_rounded,
-                    color: Colors.white,
-                    size: 22.0,
-                    shadows: [Shadow(color: Colors.black87, blurRadius: 8)],
-                  ),
-                )
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class HeroDialogRoute<T> extends PageRoute<T> {
-  HeroDialogRoute({required this.builder}) : super();
-  final WidgetBuilder builder;
-  @override bool get opaque => false;
-  @override bool get barrierDismissible => true;
-  @override Duration get transitionDuration => const Duration(milliseconds: 350);
-  @override bool get maintainState => true;
-  @override Color get barrierColor => Colors.black.withOpacity(0.6);
-  @override String get barrierLabel => 'Popup';
-  @override
-  Widget buildPage(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation) {
-    return builder(context);
-  }
-  @override
-  Widget buildTransitions(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation, Widget child) {
-    return FadeTransition(
-      opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
-      child: child,
-    );
-  }
-}
+// Definisi ImagePlaceholder sekarang ada di pressable_grid_item.dart
+// Definisi PostPopupContent, TransientPostPreview, PressableGridItem, HeroDialogRoute dihapus dari sini karena tidak dipakai atau sudah dipindah
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({Key? key}) : super(key: key);
@@ -497,61 +147,8 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
     Navigator.of(context).push(ZoomPageRoute(page: const SettingsPage(), buttonKey: _menuKey));
   }
 
-  void _showPostPopup(BuildContext context, SimplePost post, User user) {
-    Navigator.of(context).push(HeroDialogRoute(
-      builder: (context) {
-        return BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-          child: Center(
-            child: PostPopupContent(
-              post: post,
-              user: user,
-              onDelete: (deletedPost) => _handleDeletePost(deletedPost.postId),
-            ),
-          ),
-        );
-      },
-    ));
-  }
-
-  Future<void> _handleDeletePost(int postId) async {
-    final bool? confirmDelete = await showDialog(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('Konfirmasi'),
-          content: const Text('Anda yakin ingin menghapus postingan ini?'),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Batal'),
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-            ),
-            TextButton(
-              child: const Text('Hapus', style: TextStyle(color: Colors.red)),
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-            ),
-          ],
-        );
-      },
-    );
-    if (confirmDelete == true) {
-      try {
-        await PostService().deletePost(postId);
-        await _handleRefresh();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Postingan berhasil dihapus.'), backgroundColor: Colors.green),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Gagal menghapus postingan: $e'), backgroundColor: Colors.red),
-          );
-        }
-      }
-    }
-  }
+  // Metode _showPostPopup dan PostPopupContent tidak lagi digunakan di sini
+  // karena fungsionalitasnya sudah digantikan oleh overlay di PressableGridItem
 
   void _navigateToFollowersFollowing(User user, int initialTab) async {
     if (user.id == null) return;
@@ -967,8 +564,8 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
                             user: user,
                             likesCount: 0,
                             commentsCount: 0,
-                            isLikedByUser: false,
-                            isBookmarked: false,
+                            isLikedByUser: post.isLikedByUser,
+                            isBookmarked: post.isBookmarked,
                           );
                           Navigator.push(context, MaterialPageRoute(builder: (context) => ClipsViewerPage(initialClip: fullPostObject)));
                         } else {
@@ -1168,43 +765,66 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
   bool _isLoadingStory = false;
 
   final FollowService _followService = FollowService();
-  final StoryService _storyService = StoryService();
 
+  @override
+  void initState() {
+    super.initState();
+    // Inisialisasi status follow jika ada
+    _isFollowed = widget.user['is_following'] ?? false;
+  }
   Future<void> _toggleFollowStatus() async {
     setState(() => _isLoading = true);
 
-    bool success;
-    if (_isFollowed) {
-      success = await _followService.unfollowUser(widget.user['user_id']);
-    } else {
-      success = await _followService.followUser(widget.user['user_id']);
+    // Dapatkan ID pengguna dari map
+    final userId = widget.user['user_id'];
+    if (userId == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
     }
 
-    if (!mounted) return;
-
-    if (success) {
-      setState(() {
-        _isFollowed = !_isFollowed;
-      });
-
+    try {
+      bool success;
       if (_isFollowed) {
-        setState(() => _showShimmer = true);
-        Future.delayed(const Duration(milliseconds: 1500), () {
-          if (mounted) {
-            setState(() => _showShimmer = false);
-          }
-        });
+        success = await _followService.unfollowUser(userId);
+      } else {
+        success = await _followService.followUser(userId);
       }
-    } else {
-      final action = _isFollowed ? "berhenti mengikuti" : "mengikuti";
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Gagal $action ${widget.user['username']}'),
-          backgroundColor: Colors.red.shade600,
-        ),
-      );
+
+      if (success && mounted) {
+        setState(() {
+          _isFollowed = !_isFollowed;
+        });
+
+        if (_isFollowed) {
+          setState(() => _showShimmer = true);
+          Future.delayed(const Duration(milliseconds: 1500), () {
+            if (mounted) {
+              setState(() => _showShimmer = false);
+            }
+          });
+        }
+      } else if (mounted) {
+        final action = _isFollowed ? "berhenti mengikuti" : "mengikuti";
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal $action ${widget.user['username']}'),
+            backgroundColor: Colors.red.shade600,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        final action = _isFollowed ? "berhenti mengikuti" : "mengikuti";
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saat $action: $e'),
+            backgroundColor: Colors.red.shade600,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-    setState(() => _isLoading = false);
   }
 
   @override
@@ -1275,7 +895,7 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
                         ),
                       ),
                       if (isVerified)
-                        SizedBox(width: 2,),
+                        const SizedBox(width: 2,),
                       if (isVerified)
                         const VerifiedBadge(size: 14),
                     ],

@@ -15,12 +15,17 @@ import './edit_clips/edit_clips_page.dart';
 import 'edit_post_page.dart';
 
 class CreatePostPage extends StatefulWidget {
-  const CreatePostPage({Key? key}) : super(key: key);
+  // --- 👇 PERUBAHAN 1: Tambahkan parameter ini 👇 ---
+  final bool isClips;
+
+  const CreatePostPage({
+    Key? key,
+    this.isClips = false, // Beri nilai default false
+  }) : super(key: key);
 
   @override
-  State<CreatePostPage> createState() => _CreatePostPageState();
+  _CreatePostPageState createState() => _CreatePostPageState();
 }
-
 Route _createSlideRoute(Widget page) {
   return PageRouteBuilder(
     pageBuilder: (context, animation, secondaryAnimation) => page,
@@ -42,6 +47,8 @@ class _SliverHeaderDelegate extends SliverPersistentHeaderDelegate {
   final double height;
 
   _SliverHeaderDelegate({required this.child, required this.height});
+
+
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
@@ -520,6 +527,10 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
   @override
   Widget build(BuildContext context) {
+
+    final String pageTitle = widget.isClips ? 'Buat Clips Baru' : 'Buat Postingan Baru';
+
+
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
