@@ -1,8 +1,10 @@
 // lib/components/bottom_navigation.dart
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // <-- IMPORT BARU
 import '../models/user_model.dart';
 import '../pages/create_announcement_page.dart';
 import '../pages/create_post_page.dart';
@@ -10,11 +12,190 @@ import '../pages/create_story_page.dart';
 import '../providers/scroll_provider.dart';
 import '../utils/user_provider.dart';
 
-// Class baru untuk popup menu
 class _FabMenuPopup extends StatelessWidget {
   final UserProvider userProvider;
 
   const _FabMenuPopup({required this.userProvider});
+
+  /// Menampilkan dialog kustom "Surat Izin Kreasi Clips".
+  void _showClipsPermissionDialog(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    final bool dontShowAgain = prefs.getBool('dont_show_clips_permission') ?? false;
+
+    // Langsung navigasi jika pengguna sudah memilih "jangan tampilkan lagi"
+    if (dontShowAgain) {
+      Navigator.of(context).pop(); // Tutup menu
+      Navigator.push(context, MaterialPageRoute(builder: (context) => const CreatePostPage(isClips: true)));
+      return;
+    }
+
+    bool checkboxValue = false;
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.5),
+      builder: (dialogContext) {
+        bool isDialogVisible = false;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            // Timer untuk memicu animasi masuk
+            Timer(const Duration(milliseconds: 50), () {
+              if (context.mounted) {
+                setDialogState(() => isDialogVisible = true);
+              }
+            });
+
+            return Stack(
+              alignment: Alignment.center,
+              children: [
+                // Backdrop dengan efek blur
+                AnimatedOpacity(
+                  duration: const Duration(milliseconds: 300),
+                  opacity: isDialogVisible ? 1.0 : 0.0,
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                    child: Container(color: Colors.transparent),
+                  ),
+                ),
+                // Dialog dengan animasi scale
+                AnimatedScale(
+                  duration: const Duration(milliseconds: 400),
+                  curve: Curves.elasticOut,
+                  scale: isDialogVisible ? 1.0 : 0.85,
+                  child: Dialog(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Header dengan ikon dan gradien ungu
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF03B293), Color(0xFF116C63)],
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.purple.withOpacity(0.3),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 5),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(Icons.movie_filter_rounded, color: Colors.white, size: 40),
+                          ),
+                          const SizedBox(height: 20),
+                          // Judul dialog
+                          const Text(
+                            'Surat Izin Kreasi Clips',
+                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
+                          ),
+                          const SizedBox(height: 16),
+                          // Konten yang lebih detail
+                          RichText(
+                            textAlign: TextAlign.center,
+                            text: TextSpan(
+                              style: TextStyle(
+                                fontSize: 15.5,
+                                color: Colors.grey.shade700,
+                                height: 1.5,
+                              ),
+                              children: <TextSpan>[
+                                const TextSpan(text: 'Dengan melanjutkan, Anda mengizinkan video yang diunggah untuk dipublikasikan sebagai "Clips" di platform kami. Hal ini mencakup:\n\n'),
+                                const TextSpan(text: '• Tampilan format vertikal.\n', style: TextStyle(fontWeight: FontWeight.bold)),
+                                const TextSpan(text: '• Potensi untuk ditemukan oleh pengguna lain.\n\n', style: TextStyle(fontWeight: FontWeight.bold)),
+                                const TextSpan(text: 'Pastikan konten Anda orisinal dan mematuhi seluruh pedoman komunitas yang berlaku.'),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          // Opsi "Jangan tampilkan lagi"
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Checkbox(
+                                value: checkboxValue,
+                                onChanged: (value) {
+                                  setDialogState(() => checkboxValue = value!);
+                                },
+                                activeColor: Colors.teal,
+                              ),
+                              GestureDetector(
+                                  onTap: () => setDialogState(() => checkboxValue = !checkboxValue),
+                                  child: const Text('Saya mengerti, jangan tampilkan lagi')
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          // Tombol Aksi
+                          Row(
+                            children: [
+                              // Tombol "Tolak"
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: () {
+                                    Navigator.of(dialogContext).pop();
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    side: BorderSide(color: Colors.grey.shade300),
+                                  ),
+                                  child: Text('Tolak', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              // Tombol "Mengerti" / "Setuju"
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: () async {
+                                    if (checkboxValue) {
+                                      await prefs.setBool('dont_show_clips_permission', true);
+                                    }
+                                    Navigator.of(dialogContext).pop();
+                                    Navigator.of(context).pop();
+                                    Navigator.push(context, MaterialPageRoute(builder: (context) => const CreatePostPage(isClips: true)));
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    elevation: 0,
+                                  ),
+                                  child: Ink(
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [Color(0xFF03B293), Color(0xFF116C63)],
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      alignment: Alignment.center,
+                                      child: const Text('Setuju & Lanjutkan', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,39 +208,16 @@ class _FabMenuPopup extends StatelessWidget {
         icon: Icons.grid_on,
         text: 'Buat Postingan',
         onTap: () {
-          Navigator.pop(context); // Tutup popup
-          Navigator.push(context, MaterialPageRoute(builder: (context) => CreatePostPage()));
+          Navigator.pop(context);
+          Navigator.push(context, MaterialPageRoute(builder: (context) => const CreatePostPage()));
         },
       ),
       _buildMenuItem(
         context,
         icon: Icons.video_collection_outlined,
         text: 'Upload Clips',
-        // --- 👇 PERBAIKAN UTAMA ADA DI SINI 👇 ---
         onTap: () {
-          // JANGAN tutup menu utama dulu. Langsung tampilkan dialog.
-          showDialog(
-            context: context,
-            builder: (dialogContext) => AlertDialog(
-              backgroundColor: Colors.grey[850],
-              title: const Text('Informasi Clips', style: TextStyle(color: Colors.white)),
-              content: const Text('Setiap postingan video yang Anda unggah akan menjadi Clips.', style: TextStyle(color: Colors.grey)),
-              actions: [
-                TextButton(
-                  child: const Text('Mengerti'),
-                  onPressed: () {
-                    // Urutan yang benar:
-                    // 1. Tutup dialog ini.
-                    Navigator.of(dialogContext).pop();
-                    // 2. Tutup menu utama (yang ada di belakang dialog).
-                    Navigator.of(context).pop();
-                    // 3. Buka halaman CreatePostPage.
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const CreatePostPage()));
-                  },
-                ),
-              ],
-            ),
-          );
+          _showClipsPermissionDialog(context);
         },
       ),
       _buildMenuItem(
@@ -67,7 +225,7 @@ class _FabMenuPopup extends StatelessWidget {
         icon: Icons.add_circle_outline,
         text: 'Upload Cerita Anda',
         onTap: () {
-          Navigator.pop(context); // Tutup popup
+          Navigator.pop(context);
           if (currentUser != null) {
             Navigator.push(context, MaterialPageRoute(builder: (context) => CreateStoryPage(
               currentUser: currentUser,
@@ -86,7 +244,7 @@ class _FabMenuPopup extends StatelessWidget {
           icon: Icons.campaign_outlined,
           text: 'Buat Pengumuman',
           onTap: () {
-            Navigator.pop(context); // Tutup popup
+            Navigator.pop(context);
             Navigator.push(context, MaterialPageRoute(builder: (context) => const CreateAnnouncementPage()));
           },
         ),
@@ -124,7 +282,6 @@ class _FabMenuPopup extends StatelessWidget {
   }
 }
 
-// Route kustom untuk animasi popup
 class _FabPopupRoute<T> extends PopupRoute<T> {
   final WidgetBuilder builder;
   final GlobalKey fabKey;
@@ -182,7 +339,6 @@ class _FabPopupRoute<T> extends PopupRoute<T> {
     );
   }
 }
-
 
 class CustomBottomNavigation extends StatefulWidget {
   final int selectedIndex;
@@ -272,19 +428,16 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation> with Ti
   }
 
   Future<bool> _onWillPop() async {
-    // Jika sedang tidak di index 0 (Home), biarkan navigasi kembali/pop berjalan normal
-    // Kecuali jika Anda memiliki PopScope di halaman individual
     if (widget.selectedIndex != 0) {
-      return true; // Izinkan pop jika tidak di halaman Home
+      return true;
     }
 
-    // Jika di halaman Home (index 0)
     final now = DateTime.now();
     final isExitConfirmed = _lastPressedAt != null &&
         now.difference(_lastPressedAt!) < const Duration(seconds: 2);
 
     if (isExitConfirmed) {
-      return true; // Keluar
+      return true;
     } else {
       _lastPressedAt = now;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -293,7 +446,7 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation> with Ti
           duration: Duration(seconds: 2),
         ),
       );
-      return false; // Tahan navigasi back
+      return false;
     }
   }
 
@@ -341,14 +494,11 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation> with Ti
         width: 60,
         height: 60,
         decoration: BoxDecoration(
-          // --- PERUBAHAN UTAMA ADA DI SINI ---
-          // Hapus 'color: fabColor,'
           gradient: LinearGradient(
             colors: [Colors.amber.shade600, Colors.orange.shade800],
             begin: Alignment.topRight,
             end: Alignment.bottomLeft,
           ),
-          // --- AKHIR PERUBAHAN UTAMA ---
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
@@ -362,8 +512,7 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation> with Ti
             turns: _fabRotationAnimation,
             child: const Icon(
                 Icons.add,
-                // Ubah warna ikon menjadi putih agar kontras dengan gradien
-                color: Colors.white, // <-- Direkomendasikan
+                color: Colors.white,
                 size: 30
             ),
           ),
@@ -379,14 +528,10 @@ class _CustomBottomNavigationState extends State<CustomBottomNavigation> with Ti
         child: InkWell(
           borderRadius: BorderRadius.circular(30),
           onTap: () {
-            // Cek apakah ikon yang diketuk adalah Beranda (index 0)
-            // dan apakah tab yang aktif saat ini juga Beranda.
             if (index == 0 && widget.selectedIndex == 0) {
-              // Jika ya, panggil method untuk scroll ke atas.
               HapticFeedback.lightImpact();
               Provider.of<ScrollProvider>(context, listen: false).scrollToTop();
             } else {
-              // Jika tidak, jalankan fungsi pindah tab seperti biasa.
               HapticFeedback.mediumImpact();
               _playAnimationForIndex(index);
               widget.onTap(index);

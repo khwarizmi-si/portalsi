@@ -1,6 +1,7 @@
 // lib/pages/dashboard_page.dart
 import 'dart:async';
 import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -75,17 +76,155 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
   void _showPermissionDeniedDialog() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text("Akses Ditolak"),
-        content: const Text("Hanya Parents dan Teacher yang dapat mengakses fitur ini. Anda tidak memiliki izin untuk mengakses fitur ini."),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text("OK"),
-          ),
-        ],
-      ),
+      barrierColor: Colors.black.withOpacity(0.5),
+      builder: (context) {
+        bool isDialogVisible = false;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Timer(const Duration(milliseconds: 50), () {
+              if (mounted) {
+                setDialogState(() {
+                  isDialogVisible = true;
+                });
+              }
+            });
+
+            return WillPopScope(
+              onWillPop: () async => false,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  AnimatedOpacity(
+                    duration: const Duration(milliseconds: 300),
+                    opacity: isDialogVisible ? 1.0 : 0.0,
+                    child: BackdropFilter(
+                      filter: ui.ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                      child: Container(color: Colors.transparent),
+                    ),
+                  ),
+                  AnimatedScale(
+                    duration: const Duration(milliseconds: 400),
+                    curve: Curves.elasticOut,
+                    scale: isDialogVisible ? 1.0 : 0.8,
+                    child: Dialog(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                      elevation: 0,
+                      backgroundColor: Colors.white,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // --- PERUBAHAN WARNA & IKON ---
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  colors: [Colors.red.shade400, Colors.redAccent.shade700],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.indigo.withOpacity(0.3),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 5),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(Icons.policy_rounded, color: Colors.white, size: 40),
+                            ),
+                            const SizedBox(height: 20),
+                            const Text(
+                              "Akses Terbatas",
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            // --- PERUBAHAN ISI KONTEN ---
+                            RichText(
+                              textAlign: TextAlign.center,
+                              text: TextSpan(
+                                style: TextStyle(
+                                  fontSize: 15.5,
+                                  color: Colors.grey.shade700,
+                                  height: 1.5,
+                                ),
+                                children: <TextSpan>[
+                                  const TextSpan(text: 'Fitur ini hanya tersedia untuk peran '),
+                                  TextSpan(
+                                    text: 'Teacher',
+                                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade700),
+                                  ),
+                                  const TextSpan(text: ' dan '),
+                                  TextSpan(
+                                    text: 'Parent',
+                                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade700),
+                                  ),
+                                  const TextSpan(text: ' untuk menjaga privasi dan memastikan komunikasi yang terstruktur.'),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Jika Anda merasa ada kesalahan pada peran akun Anda, silakan hubungi administrator.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey.shade500,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            ElevatedButton(
+                              onPressed: () {
+                                setDialogState(() => isDialogVisible = false);
+                                Timer(const Duration(milliseconds: 200), () {
+                                  if (mounted) Navigator.of(context).pop();
+                                });
+                              },
+                              style: ElevatedButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                elevation: 0,
+                              ),
+                              child: Ink(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [Colors.amber.shade600, Colors.orange.shade800],
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  alignment: Alignment.center,
+                                  child: const Text(
+                                    'Saya Mengerti',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 

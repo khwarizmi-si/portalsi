@@ -1,23 +1,29 @@
+// lib/pages/profile_page.dart
+
 import 'dart:developer';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
-import 'package:portal_si/pages/story_view_page.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
-import '../components/video_thumbnail_widget.dart';
+
 import '../app_state.dart';
 import '../components/circular_avatar_fetcher.dart';
+import '../components/pressable_grid_item.dart'; // <-- IMPORT UTAMA DI SINI
 import '../components/verified_badge.dart';
-// --- IMPORT TAMBAHAN YANG DIBUTUHKAN ---
-import '../utils/user_provider.dart';
+import '../models/post_model.dart';
+import '../models/user_model.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/scroll_provider.dart';
-import '../services/follow_service.dart';
+import '../services/post_service.dart';
+import '../services/user_service.dart'; // Ganti dari user_service jika perlu
 import '../services/story_service.dart';
+import '../services/follow_service.dart';
 import '../utils/navigation_helper.dart';
+import '../utils/user_provider.dart';
+import '../utils/zoom_page_route.dart';
 import 'clips_viewer_page.dart';
 import 'create_story_page.dart';
 import 'edit_profile_page.dart';
@@ -25,13 +31,6 @@ import 'followers_following_page.dart';
 import 'post_detail.dart';
 import 'settings_page.dart';
 import 'share_profile_page.dart';
-import '../models/user_model.dart';
-import '../models/post_model.dart';
-import '../services/post_service.dart';
-import '../services/user_service.dart';
-import '../utils/zoom_page_route.dart';
-import 'package:palette_generator/palette_generator.dart';
-
 
 // --- WIDGET BARU UNTUK SHIMMER PLACEHOLDER ---
 class ImagePlaceholder extends StatelessWidget {
@@ -42,9 +41,7 @@ class ImagePlaceholder extends StatelessWidget {
     return Shimmer.fromColors(
       baseColor: Colors.grey[300]!,
       highlightColor: Colors.grey[100]!,
-      child: Container(
-        color: Colors.white,
-      ),
+      child: Container(color: Colors.white),
     );
   }
 }
@@ -77,12 +74,14 @@ class _PostPopupContentState extends State<PostPopupContent> {
   Future<void> _updateIconColor() async {
     try {
       final imageProvider = CachedNetworkImageProvider(widget.post.mediaUrl);
-      final PaletteGenerator paletteGenerator = await PaletteGenerator.fromImageProvider(
-        imageProvider,
-        size: const Size(100, 100),
-        maximumColorCount: 20,
-      );
-      final Color dominantColor = paletteGenerator.dominantColor?.color ?? Colors.black;
+      final PaletteGenerator paletteGenerator =
+          await PaletteGenerator.fromImageProvider(
+            imageProvider,
+            size: const Size(100, 100),
+            maximumColorCount: 20,
+          );
+      final Color dominantColor =
+          paletteGenerator.dominantColor?.color ?? Colors.black;
       final double luminance = dominantColor.computeLuminance();
       if (mounted) {
         setState(() {
@@ -102,7 +101,10 @@ class _PostPopupContentState extends State<PostPopupContent> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 8.0,
+              vertical: 12.0,
+            ),
             child: Row(
               children: [
                 SizedBox(
@@ -113,14 +115,19 @@ class _PostPopupContentState extends State<PostPopupContent> {
                       imageUrl: widget.user.profilePictureUrl ?? '',
                       fit: BoxFit.cover,
                       placeholder: (context, url) => const ImagePlaceholder(),
-                      errorWidget: (context, url, error) => const CircleAvatar(backgroundColor: Colors.grey),
+                      errorWidget: (context, url, error) =>
+                          const CircleAvatar(backgroundColor: Colors.grey),
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Text(
                   widget.user.username,
-                  style: TextStyle(color: _iconColor, fontWeight: FontWeight.bold, fontSize: 14),
+                  style: TextStyle(
+                    color: _iconColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                 ),
                 const Spacer(),
                 PopupMenuButton<String>(
@@ -131,9 +138,13 @@ class _PostPopupContentState extends State<PostPopupContent> {
                       widget.onDelete(widget.post);
                     }
                   },
-                  itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                    const PopupMenuItem<String>(value: 'delete', child: Text('Hapus Postingan')),
-                  ],
+                  itemBuilder: (BuildContext context) =>
+                      <PopupMenuEntry<String>>[
+                        const PopupMenuItem<String>(
+                          value: 'delete',
+                          child: Text('Hapus Postingan'),
+                        ),
+                      ],
                 ),
               ],
             ),
@@ -165,11 +176,8 @@ class TransientPostPreview extends StatelessWidget {
   final SimplePost post;
   final User user;
 
-  const TransientPostPreview({
-    Key? key,
-    required this.post,
-    required this.user,
-  }) : super(key: key);
+  const TransientPostPreview({Key? key, required this.post, required this.user})
+    : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -195,7 +203,8 @@ class TransientPostPreview extends StatelessWidget {
                         imageUrl: user.profilePictureUrl ?? '',
                         fit: BoxFit.cover,
                         placeholder: (context, url) => const ImagePlaceholder(),
-                        errorWidget: (context, url, error) => const CircleAvatar(backgroundColor: Colors.grey),
+                        errorWidget: (context, url, error) =>
+                            const CircleAvatar(backgroundColor: Colors.grey),
                       ),
                     ),
                   ),
@@ -269,15 +278,10 @@ class _PressableGridItemState extends State<PressableGridItem> {
           children: [
             BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-              child: Container(
-                color: Colors.black.withOpacity(0.5),
-              ),
+              child: Container(color: Colors.black.withOpacity(0.5)),
             ),
             Center(
-              child: TransientPostPreview(
-                post: widget.post,
-                user: widget.user,
-              ),
+              child: TransientPostPreview(post: widget.post, user: widget.user),
             ),
           ],
         );
@@ -297,8 +301,9 @@ class _PressableGridItemState extends State<PressableGridItem> {
     setState(() => _isPressed = false);
     widget.onTap();
   }
+
   void _onTapCancel() {
-    if(mounted){
+    if (mounted) {
       setState(() => _isPressed = false);
     }
   }
@@ -364,7 +369,7 @@ class _PressableGridItemState extends State<PressableGridItem> {
                     size: 22.0,
                     shadows: [Shadow(color: Colors.black87, blurRadius: 8)],
                   ),
-                )
+                ),
             ],
           ),
         ),
@@ -376,18 +381,34 @@ class _PressableGridItemState extends State<PressableGridItem> {
 class HeroDialogRoute<T> extends PageRoute<T> {
   HeroDialogRoute({required this.builder}) : super();
   final WidgetBuilder builder;
-  @override bool get opaque => false;
-  @override bool get barrierDismissible => true;
-  @override Duration get transitionDuration => const Duration(milliseconds: 350);
-  @override bool get maintainState => true;
-  @override Color get barrierColor => Colors.black.withOpacity(0.6);
-  @override String get barrierLabel => 'Popup';
   @override
-  Widget buildPage(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation) {
+  bool get opaque => false;
+  @override
+  bool get barrierDismissible => true;
+  @override
+  Duration get transitionDuration => const Duration(milliseconds: 350);
+  @override
+  bool get maintainState => true;
+  @override
+  Color get barrierColor => Colors.black.withOpacity(0.6);
+  @override
+  String get barrierLabel => 'Popup';
+  @override
+  Widget buildPage(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+  ) {
     return builder(context);
   }
+
   @override
-  Widget buildTransitions(BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation, Widget child) {
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
     return FadeTransition(
       opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
       child: child,
@@ -401,7 +422,8 @@ class ProfilePage extends StatefulWidget {
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClientMixin {
+class _ProfilePageState extends State<ProfilePage>
+    with AutomaticKeepAliveClientMixin {
   final ProfileService _profileService = ProfileService();
   late Future<User> _userFuture;
   late Future<List<dynamic>> _suggestionsFuture;
@@ -417,13 +439,15 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
     _loadData();
     _scrollController = ScrollController();
     _scrollController.addListener(() {
-      final scrollProvider = Provider.of<ScrollProvider>(context, listen: false);
+      final scrollProvider = Provider.of<ScrollProvider>(
+        context,
+        listen: false,
+      );
       final direction = _scrollController.position.userScrollDirection;
 
       if (direction == ScrollDirection.reverse) {
         scrollProvider.setScrolled(true);
-      }
-      else if (direction == ScrollDirection.forward) {
+      } else if (direction == ScrollDirection.forward) {
         scrollProvider.setScrolled(false);
       }
     });
@@ -447,11 +471,12 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
     final result = await Navigator.push(
       context,
       PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => CreateStoryPage(
-          currentUser: user,
-          heroTag: heroTag,
-          initialImageUrl: user.profilePictureUrl,
-        ),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            CreateStoryPage(
+              currentUser: user,
+              heroTag: heroTag,
+              initialImageUrl: user.profilePictureUrl,
+            ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
         },
@@ -480,11 +505,13 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
         _suggestionsFuture = _profileService.fetchSuggestions();
         _avatarKey = UniqueKey();
       });
-
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal memperbarui profil: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Gagal memperbarui profil: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
         setState(() {
           _userFuture = Future.error(e);
@@ -496,7 +523,9 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
   Future<void> _navigateToEditProfile(User currentUser) async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => EditProfilePage(initialProfile: currentUser)),
+      MaterialPageRoute(
+        builder: (context) => EditProfilePage(initialProfile: currentUser),
+      ),
     );
     if (result == true && mounted) {
       await _handleRefresh();
@@ -504,64 +533,13 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
   }
 
   void _navigateToSettings() {
-    Navigator.of(context).push(ZoomPageRoute(page: const SettingsPage(), buttonKey: _menuKey));
+    Navigator.of(
+      context,
+    ).push(ZoomPageRoute(page: const SettingsPage(), buttonKey: _menuKey));
   }
 
-  void _showPostPopup(BuildContext context, SimplePost post, User user) {
-    Navigator.of(context).push(HeroDialogRoute(
-      builder: (context) {
-        return BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-          child: Center(
-            child: PostPopupContent(
-              post: post,
-              user: user,
-              onDelete: (deletedPost) => _handleDeletePost(deletedPost.postId),
-            ),
-          ),
-        );
-      },
-    ));
-  }
-
-  Future<void> _handleDeletePost(int postId) async {
-    final bool? confirmDelete = await showDialog(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text('Konfirmasi'),
-          content: const Text('Anda yakin ingin menghapus postingan ini?'),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Batal'),
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-            ),
-            TextButton(
-              child: const Text('Hapus', style: TextStyle(color: Colors.red)),
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-            ),
-          ],
-        );
-      },
-    );
-    if (confirmDelete == true) {
-      try {
-        await PostService().deletePost(postId);
-        await _handleRefresh();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Postingan berhasil dihapus.'), backgroundColor: Colors.green),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Gagal menghapus postingan: $e'), backgroundColor: Colors.red),
-          );
-        }
-      }
-    }
-  }
+  // Metode _showPostPopup dan PostPopupContent tidak lagi digunakan di sini
+  // karena fungsionalitasnya sudah digantikan oleh overlay di PressableGridItem
 
   void _navigateToFollowersFollowing(User user, int initialTab) async {
     if (user.id == null) return;
@@ -579,16 +557,12 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
 
     if (result != null && mounted) {
       final userToNavigate = User.fromJson(result);
-      NavigationHelper.navigateToProfile(
-        context,
-        userToNavigate,
-      );
+      NavigationHelper.navigateToProfile(context, userToNavigate);
     }
   }
 
   @override
   bool get wantKeepAlive => true;
-
 
   @override
   Widget build(BuildContext context) {
@@ -600,11 +574,14 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
       body: FutureBuilder<User>(
         future: _userFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              !snapshot.hasData) {
             return Column(
               children: [
                 _buildProfileAppBar(null),
-                const Expanded(child: Center(child: CircularProgressIndicator())),
+                const Expanded(
+                  child: Center(child: CircularProgressIndicator()),
+                ),
               ],
             );
           }
@@ -620,7 +597,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
                         SliverFillRemaining(
                           hasScrollBody: false,
                           child: _buildErrorStateWidget(snapshot.error!),
-                        )
+                        ),
                       ],
                     ),
                   ),
@@ -632,7 +609,9 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
             return Column(
               children: [
                 _buildProfileAppBar(null),
-                const Expanded(child: Center(child: Text("Data pengguna tidak ditemukan."))),
+                const Expanded(
+                  child: Center(child: Text("Data pengguna tidak ditemukan.")),
+                ),
               ],
             );
           }
@@ -669,11 +648,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(
-            Icons.wifi_off_rounded,
-            size: 80,
-            color: Colors.grey.shade400,
-          ),
+          Icon(Icons.wifi_off_rounded, size: 80, color: Colors.grey.shade400),
           const SizedBox(height: 24),
           const Text(
             "Oops, Gagal Memuat Profil",
@@ -715,7 +690,10 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 40,
+                  vertical: 14,
+                ),
                 child: const Text(
                   'Coba Lagi',
                   style: TextStyle(
@@ -772,7 +750,7 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
             color: Colors.black.withOpacity(0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
-          )
+          ),
         ],
       ),
       child: Padding(
@@ -785,11 +763,14 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
                 children: [
                   Text(
                     user?.username ?? 'Profil',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 20,
+                      color: Colors.black,
+                    ),
                   ),
-                  const SizedBox(width: 5,),
-                  if (user?.isVerified ?? false)
-                    const VerifiedBadge(size: 18),
+                  const SizedBox(width: 5),
+                  if (user?.isVerified ?? false) const VerifiedBadge(size: 18),
                 ],
               ),
             ),
@@ -806,8 +787,10 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
 
   Widget _buildProfileHeader(User user) {
     const double avatarRadius = 45;
-    const String placeholderBanner = 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=2070&auto=format&fit=crop';
-    final String bannerImageUrl = (user.bannerUrl != null && user.bannerUrl!.isNotEmpty)
+    const String placeholderBanner =
+        'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=2070&auto=format&fit=crop';
+    final String bannerImageUrl =
+        (user.bannerUrl != null && user.bannerUrl!.isNotEmpty)
         ? user.bannerUrl!
         : placeholderBanner;
 
@@ -825,7 +808,8 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
                 imageUrl: bannerImageUrl,
                 fit: BoxFit.cover,
                 placeholder: (context, url) => const ImagePlaceholder(),
-                errorWidget: (context, url, error) => Container(color: Colors.grey),
+                errorWidget: (context, url, error) =>
+                    Container(color: Colors.grey),
               ),
             ),
             Padding(
@@ -849,24 +833,28 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
           left: 16,
           right: 16,
           child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                _buildAvatarWithStoryAddButton(user, avatarRadius, heroAvatarTag),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 0.0),
-                    child: _buildStats(user),
-                  ),
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _buildAvatarWithStoryAddButton(user, avatarRadius, heroAvatarTag),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 0.0),
+                  child: _buildStats(user),
                 ),
-              ]
+              ),
+            ],
           ),
         ),
       ],
     );
   }
 
-  Widget _buildAvatarWithStoryAddButton(User user, double radius, String heroTag) {
+  Widget _buildAvatarWithStoryAddButton(
+    User user,
+    double radius,
+    String heroTag,
+  ) {
     return Hero(
       tag: heroTag,
       child: Material(
@@ -931,69 +919,82 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
             spreadRadius: 2,
             blurRadius: 15,
             offset: const Offset(0, -5),
-          )
+          ),
         ],
       ),
       child: (posts.isEmpty)
           ? Container(
-        height: 300,
-        alignment: Alignment.center,
-        child: const Text('Belum ada postingan'),
-      )
+              height: 300,
+              alignment: Alignment.center,
+              child: const Text('Belum ada postingan'),
+            )
           : Padding(
-        padding: const EdgeInsets.fromLTRB(12, 24, 12, 72),
-        child: AnimationLimiter(
-          child: GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(12),
-            itemCount: posts.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: columnCount,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-            ),
-            itemBuilder: (context, index) {
-              final SimplePost post = posts[index];
-              return AnimationConfiguration.staggeredGrid(
-                position: index,
-                duration: const Duration(milliseconds: 400),
-                columnCount: columnCount,
-                child: SlideAnimation(
-                  verticalOffset: 50.0,
-                  child: FadeInAnimation(
-                    child: PressableGridItem(
-                      key: ValueKey(post.postId),
-                      post: post,
-                      user: user,
-                      onTap: () {
-                        if (post.isVideo) {
-                          final fullPostObject = Post(
-                            id: post.postId,
-                            caption: post.caption,
-                            mediaUrl: post.mediaUrl,
-                            isVideo: post.isVideo,
-                            createdAt: post.createdAt,
-                            user: user,
-                            likesCount: 0,
-                            commentsCount: 0,
-                            isLikedByUser: false,
-                            isBookmarked: false,
-                          );
-                          Navigator.push(context, MaterialPageRoute(builder: (context) => ClipsViewerPage(initialClip: fullPostObject)));
-                        } else {
-                          final navProvider = Provider.of<NavigationProvider>(context, listen: false);
-                          navProvider.showOverlay(PostDetail(postId: post.postId));
-                        }
-                      },
-                    ),
+              padding: const EdgeInsets.fromLTRB(12, 24, 12, 72),
+              child: AnimationLimiter(
+                child: GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(12),
+                  itemCount: posts.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: columnCount,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
                   ),
+                  itemBuilder: (context, index) {
+                    final SimplePost post = posts[index];
+                    return AnimationConfiguration.staggeredGrid(
+                      position: index,
+                      duration: const Duration(milliseconds: 400),
+                      columnCount: columnCount,
+                      child: SlideAnimation(
+                        verticalOffset: 50.0,
+                        child: FadeInAnimation(
+                          child: PressableGridItem(
+                            key: ValueKey(post.postId),
+                            post: post,
+                            user: user,
+                            onTap: () {
+                              if (post.isVideo) {
+                                final fullPostObject = Post(
+                                  id: post.postId,
+                                  caption: post.caption,
+                                  mediaUrl: post.mediaUrl,
+                                  isVideo: post.isVideo,
+                                  createdAt: post.createdAt,
+                                  user: user,
+                                  likesCount: 0,
+                                  commentsCount: 0,
+                                  isLikedByUser: post.isLikedByUser,
+                                  isBookmarked: post.isBookmarked,
+                                );
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ClipsViewerPage(
+                                      initialClip: fullPostObject,
+                                    ),
+                                  ),
+                                );
+                              } else {
+                                final navProvider =
+                                    Provider.of<NavigationProvider>(
+                                      context,
+                                      listen: false,
+                                    );
+                                navProvider.showOverlay(
+                                  PostDetail(postId: post.postId),
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
-          ),
-        ),
-      ),
+              ),
+            ),
     );
   }
 
@@ -1028,16 +1029,28 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
   }
 
   Widget _buildBio(User user) {
-    final bioItems = user.bio?.split('\n').where((line) => line.isNotEmpty).toList() ?? [];
+    final bioItems =
+        user.bio?.split('\n').where((line) => line.isNotEmpty).toList() ?? [];
     if (bioItems.isEmpty) {
       return const Text("Tidak ada bio", style: TextStyle(color: Colors.grey));
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: bioItems.map((item) => Padding(
-        padding: const EdgeInsets.only(bottom: 2.0),
-        child: Text(item, style: TextStyle(fontSize: 14, color: Colors.grey[800], height: 1.4)),
-      )).toList(),
+      children: bioItems
+          .map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 2.0),
+              child: Text(
+                item,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[800],
+                  height: 1.4,
+                ),
+              ),
+            ),
+          )
+          .toList(),
     );
   }
 
@@ -1051,10 +1064,15 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
               backgroundColor: const Color(0xFFF0F0F0),
               foregroundColor: Colors.black,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),
-            child: const Text('Edit Profil', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Edit Profil',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ),
         const SizedBox(width: 12),
@@ -1064,7 +1082,8 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
               Navigator.of(context).push(
                 MaterialPageRoute(
                   fullscreenDialog: true,
-                  builder: (context) => ShareProfilePage(username: user.username),
+                  builder: (context) =>
+                      ShareProfilePage(username: user.username),
                 ),
               );
             },
@@ -1072,10 +1091,15 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
               backgroundColor: const Color(0xFFF0F0F0),
               foregroundColor: Colors.black,
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),
-            child: const Text('Bagikan Profile', style: TextStyle(fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Bagikan Profile',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ),
         const SizedBox(width: 12),
@@ -1089,12 +1113,18 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
             backgroundColor: const Color(0xFFF0F0F0),
             foregroundColor: Colors.black,
             elevation: 0,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             padding: const EdgeInsets.all(12),
           ),
           child: Icon(
-            _showSuggestions ? Icons.person_add_disabled_outlined : Icons.person_add_alt_1_outlined,
-            semanticLabel: _showSuggestions ? 'Sembunyikan Saran' : 'Tampilkan Saran',
+            _showSuggestions
+                ? Icons.person_add_disabled_outlined
+                : Icons.person_add_alt_1_outlined,
+            semanticLabel: _showSuggestions
+                ? 'Sembunyikan Saran'
+                : 'Tampilkan Saran',
           ),
         ),
       ],
@@ -1105,8 +1135,10 @@ class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClient
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(count, style: const TextStyle(fontSize: 16, fontWeight:
-        FontWeight.bold)),
+        Text(
+          count,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 2),
         Text(label, style: TextStyle(fontSize: 13, color: Colors.grey[600])),
       ],
@@ -1178,43 +1210,67 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
   bool _isLoadingStory = false;
 
   final FollowService _followService = FollowService();
-  final StoryService _storyService = StoryService();
+
+  @override
+  void initState() {
+    super.initState();
+    // Inisialisasi status follow jika ada
+    _isFollowed = widget.user['is_following'] ?? false;
+  }
 
   Future<void> _toggleFollowStatus() async {
     setState(() => _isLoading = true);
 
-    bool success;
-    if (_isFollowed) {
-      success = await _followService.unfollowUser(widget.user['user_id']);
-    } else {
-      success = await _followService.followUser(widget.user['user_id']);
+    // Dapatkan ID pengguna dari map
+    final userId = widget.user['user_id'];
+    if (userId == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
     }
 
-    if (!mounted) return;
-
-    if (success) {
-      setState(() {
-        _isFollowed = !_isFollowed;
-      });
-
+    try {
+      bool success;
       if (_isFollowed) {
-        setState(() => _showShimmer = true);
-        Future.delayed(const Duration(milliseconds: 1500), () {
-          if (mounted) {
-            setState(() => _showShimmer = false);
-          }
-        });
+        success = await _followService.unfollowUser(userId);
+      } else {
+        success = await _followService.followUser(userId);
       }
-    } else {
-      final action = _isFollowed ? "berhenti mengikuti" : "mengikuti";
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Gagal $action ${widget.user['username']}'),
-          backgroundColor: Colors.red.shade600,
-        ),
-      );
+
+      if (success && mounted) {
+        setState(() {
+          _isFollowed = !_isFollowed;
+        });
+
+        if (_isFollowed) {
+          setState(() => _showShimmer = true);
+          Future.delayed(const Duration(milliseconds: 1500), () {
+            if (mounted) {
+              setState(() => _showShimmer = false);
+            }
+          });
+        }
+      } else if (mounted) {
+        final action = _isFollowed ? "berhenti mengikuti" : "mengikuti";
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal $action ${widget.user['username']}'),
+            backgroundColor: Colors.red.shade600,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        final action = _isFollowed ? "berhenti mengikuti" : "mengikuti";
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saat $action: $e'),
+            backgroundColor: Colors.red.shade600,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-    setState(() => _isLoading = false);
   }
 
   @override
@@ -1222,7 +1278,9 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
     final username = widget.user['username'] ?? 'No Username';
     final fullName = widget.user['full_name'] ?? 'No Name';
     final bool isFollowBack = widget.user['is_follow_back'] ?? false;
-    final String buttonText = _isFollowed ? 'Mengikuti' : (isFollowBack ? 'Ikuti Balik' : 'Ikuti');
+    final String buttonText = _isFollowed
+        ? 'Mengikuti'
+        : (isFollowBack ? 'Ikuti Balik' : 'Ikuti');
     final bool isVerified = widget.user['is_verified'] ?? false;
 
     return Padding(
@@ -1284,22 +1342,30 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (isVerified)
-                        SizedBox(width: 2,),
-                      if (isVerified)
-                        const VerifiedBadge(size: 14),
+                      if (isVerified) const SizedBox(width: 2),
+                      if (isVerified) const VerifiedBadge(size: 14),
                     ],
                   ),
                   const SizedBox(height: 2),
-                  Text(fullName, style: TextStyle(fontSize: 12, color: Colors.grey.shade600), overflow: TextOverflow.ellipsis),
+                  Text(
+                    fullName,
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   const Spacer(),
                   ElevatedButton(
                     onPressed: _isLoading ? null : _toggleFollowStatus,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _isFollowed ? Colors.grey.shade300 : Colors.transparent,
-                      shadowColor: _isFollowed ? Colors.black.withOpacity(0.2) : Colors.transparent,
+                      backgroundColor: _isFollowed
+                          ? Colors.grey.shade300
+                          : Colors.transparent,
+                      shadowColor: _isFollowed
+                          ? Colors.black.withOpacity(0.2)
+                          : Colors.transparent,
                       padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       elevation: _isFollowed ? 0 : 2,
                     ),
                     child: Ink(
@@ -1307,37 +1373,44 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
                         gradient: _isFollowed
                             ? null
                             : LinearGradient(
-                          colors: [
-                            Colors.amber.shade600,
-                            Colors.orange.shade800,
-                          ],
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                        ),
+                                colors: [
+                                  Colors.amber.shade600,
+                                  Colors.orange.shade800,
+                                ],
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight,
+                              ),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Container(
-                        constraints: const BoxConstraints(minWidth: 88, minHeight: 36),
+                        constraints: const BoxConstraints(
+                          minWidth: 88,
+                          minHeight: 36,
+                        ),
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         alignment: Alignment.center,
                         child: _isLoading
                             ? SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 3.5,
-                            color: _isFollowed ? Colors.black54 : Colors.white,
-                          ),
-                        )
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 3.5,
+                                  color: _isFollowed
+                                      ? Colors.black54
+                                      : Colors.white,
+                                ),
+                              )
                             : Text(
-                          buttonText,
-                          style: TextStyle(
-                            color: _isFollowed ? Colors.black54 : Colors.white,
-                          ),
-                        ),
+                                buttonText,
+                                style: TextStyle(
+                                  color: _isFollowed
+                                      ? Colors.black54
+                                      : Colors.white,
+                                ),
+                              ),
                       ),
                     ),
-                  )
+                  ),
                 ],
               ),
             ),
