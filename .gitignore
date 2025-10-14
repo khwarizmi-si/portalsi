@@ -46,3 +46,4 @@ app.*.map.json
 # Tambahkan ini di akhir file .gitignore
 /android/key.properties
 /android/app/my-release-key.jks
+lib/generated

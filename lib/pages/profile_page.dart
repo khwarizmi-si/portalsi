@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:palette_generator/palette_generator.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 
@@ -13,6 +14,7 @@ import '../app_state.dart';
 import '../components/circular_avatar_fetcher.dart';
 import '../components/pressable_grid_item.dart'; // <-- IMPORT UTAMA DI SINI
 import '../components/verified_badge.dart';
+import '../components/video_thumbnail_widget.dart';
 import '../models/post_model.dart';
 import '../models/user_model.dart';
 import '../providers/navigation_provider.dart';

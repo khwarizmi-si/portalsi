@@ -700,8 +700,9 @@ class _OtherProfilePageState extends State<OtherProfilePage>
           ),
         ),
       ),
+    ),
     );
-  }
+    }
 }
 
 class ProfilePageSkeleton extends StatelessWidget {

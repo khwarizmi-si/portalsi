@@ -452,43 +452,52 @@ class _CreateStoryPageState extends State<CreateStoryPage> {
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: const SystemUiOverlayStyle(
-          systemNavigationBarColor: Color(0xFF1A1A1A),
+          systemNavigationBarColor: Colors.white,
           systemNavigationBarIconBrightness: Brightness.light,
-          statusBarColor: Color(0xFF1A1A1A),
+          statusBarColor: Colors.black,
           statusBarIconBrightness: Brightness.light,
         ),
-        child: Scaffold(
-          backgroundColor: const Color(0xFF1A1A1A),
-          appBar: AppBar(
-            backgroundColor: const Color(0xFF1A1A1A),
-            elevation: 0,
-            leading: IconButton(
-              icon: Icon(_isMultiSelectMode ? Icons.arrow_back_ios_new : Icons.close, color: Colors.white, size: 24),
-              onPressed: () {
-                if (_isMultiSelectMode) {
-                  if (_multiSelectStep == MultiSelectStep.layoutChoice) {
-                    setState(() => _multiSelectStep = MultiSelectStep.selecting);
-                  } else {
-                    _cancelMultiSelect();
-                  }
-                } else {
-                  Navigator.of(context).pop();
-                }
-              },
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFFFDDBC), Colors.white],
+              begin: Alignment.bottomLeft,
+              end: Alignment.topRight,
             ),
-            title: Text(
-              _isMultiSelectMode ? '${_selectedAssets.length} Dipilih' : 'Buat Cerita Anda',
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
-            ),
-            centerTitle: true,
           ),
-          // --- MODIFIKASI UTAMA: TAMPILAN BODY BERBEDA UNTUK WEB DAN MOBILE ---
-          body: _isLoading
-              ? const Center(child: CircularProgressIndicator(color: Colors.white))
-              : kIsWeb
-              ? _buildWebView() // Tampilkan UI Web
-              : _buildMobileView(), // Tampilkan UI Mobile
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            appBar: AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              leading: IconButton(
+                icon: Icon(_isMultiSelectMode ? Icons.arrow_back_ios_new : Icons.close, color: Colors.black, size: 24),
+                onPressed: () {
+                  if (_isMultiSelectMode) {
+                    if (_multiSelectStep == MultiSelectStep.layoutChoice) {
+                      setState(() => _multiSelectStep = MultiSelectStep.selecting);
+                    } else {
+                      _cancelMultiSelect();
+                    }
+                  } else {
+                    Navigator.of(context).pop();
+                  }
+                },
+              ),
+              title: Text(
+                _isMultiSelectMode ? '${_selectedAssets.length} Dipilih' : 'Buat Cerita Anda',
+                style: const TextStyle(
+                    color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              centerTitle: true,
+            ),
+            // --- MODIFIKASI UTAMA: TAMPILAN BODY BERBEDA UNTUK WEB DAN MOBILE ---
+            body: _isLoading
+                ? const Center(child: CircularProgressIndicator(color: Colors.black))
+                : kIsWeb
+                ? _buildWebView() // Tampilkan UI Web
+                : _buildMobileView(), // Tampilkan UI Mobile
+          ),
         ),
       ),
     );
@@ -506,7 +515,7 @@ class _CreateStoryPageState extends State<CreateStoryPage> {
               const SizedBox(height: 24),
               const Text(
                 'Buat Cerita Baru',
-                style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                style: TextStyle(color: Colors.black, fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(
@@ -613,7 +622,7 @@ class _CreateStoryPageState extends State<CreateStoryPage> {
       child: Row(
         children: [
           PopupMenuButton<AssetPathEntity>(
-            color: const Color(0xFF2C2C2E),
+            color: Colors.white,
             onSelected: (AssetPathEntity selectedAlbum) {
               setState(() {
                 _selectedAlbum = selectedAlbum;
@@ -628,8 +637,8 @@ class _CreateStoryPageState extends State<CreateStoryPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        album.name.isEmpty ? "Unknown" : album.name,
-                        style: const TextStyle(color: Colors.white),
+                        album.name.isEmpty ? "Tidak Diketahui" : album.name,
+                        style: const TextStyle(color: Colors.black),
                       ),
                       if (_selectedAlbum != null && _selectedAlbum!.id == album.id)
                         const Icon(Icons.check, color: Colors.white, size: 20),
@@ -644,15 +653,15 @@ class _CreateStoryPageState extends State<CreateStoryPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    _selectedAlbum?.name ?? 'Recents',
+                    _selectedAlbum?.name ?? 'Terbaru',
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: Colors.black,
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(width: 4),
-                  const Icon(Icons.keyboard_arrow_down, color: Colors.white),
+                  const Icon(Icons.keyboard_arrow_down, color: Colors.black),
                 ],
               ),
             ),
@@ -752,15 +761,27 @@ class _CreateStoryPageState extends State<CreateStoryPage> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: Colors.grey[850],
-            borderRadius: BorderRadius.circular(12),
+            gradient: LinearGradient(
+              colors: [Color(0xFFFFFEDB), Colors.white],
+              begin: Alignment.bottomLeft,
+              end: Alignment.topRight,
+            ),
+            borderRadius: BorderRadius.circular(16.0),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.1),
+                spreadRadius: 1,
+                blurRadius: 5,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: Colors.white, size: 28),
+              Icon(icon, color: Colors.black, size: 28),
               const SizedBox(height: 8),
-              Text(label, style: const TextStyle(color: Colors.white)),
+              Text(label, style: const TextStyle(color: Colors.black)),
             ],
           ),
         ),

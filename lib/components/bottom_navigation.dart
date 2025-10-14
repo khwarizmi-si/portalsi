@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // <-- IMPORT BARU
 import '../models/user_model.dart';
 import '../pages/create_announcement_page.dart';
+import '../pages/create_clips_page.dart';
 import '../pages/create_post_page.dart';
 import '../pages/create_story_page.dart';
 import '../providers/scroll_provider.dart';
@@ -17,181 +18,126 @@ class _FabMenuPopup extends StatelessWidget {
 
   const _FabMenuPopup({required this.userProvider});
 
-  /// Menampilkan dialog kustom "Surat Izin Kreasi Clips".
   void _showClipsPermissionDialog(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
     final bool dontShowAgain = prefs.getBool('dont_show_clips_permission') ?? false;
 
-    // Langsung navigasi jika pengguna sudah memilih "jangan tampilkan lagi"
-    if (dontShowAgain) {
-      Navigator.of(context).pop(); // Tutup menu
+    // Fungsi navigasi agar tidak duplikat kode
+    void navigateToCreatePost() {
+      Navigator.of(context).pop(); // Tutup menu asal
       Navigator.push(context, MaterialPageRoute(builder: (context) => const CreatePostPage(isClips: true)));
+    }
+
+    void navigateToCreateClips() {
+      Navigator.of(context).pop(); // Tutup menu asal
+      Navigator.push(context, MaterialPageRoute(builder: (context) => const CreateClipsPage()));
+    }
+
+    if (dontShowAgain) {
+      navigateToCreatePost();
       return;
     }
 
-    bool checkboxValue = false;
     showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.5),
+      barrierDismissible: false,
       builder: (dialogContext) {
-        bool isDialogVisible = false;
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            // Timer untuk memicu animasi masuk
-            Timer(const Duration(milliseconds: 50), () {
-              if (context.mounted) {
-                setDialogState(() => isDialogVisible = true);
-              }
-            });
-
-            return Stack(
-              alignment: Alignment.center,
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFFFFF0E9), Colors.white],
+                begin: Alignment.bottomLeft,
+                end: Alignment.topRight,
+              ),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // Backdrop dengan efek blur
-                AnimatedOpacity(
-                  duration: const Duration(milliseconds: 300),
-                  opacity: isDialogVisible ? 1.0 : 0.0,
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                    child: Container(color: Colors.transparent),
-                  ),
-                ),
-                // Dialog dengan animasi scale
-                AnimatedScale(
-                  duration: const Duration(milliseconds: 400),
-                  curve: Curves.elasticOut,
-                  scale: isDialogVisible ? 1.0 : 0.85,
-                  child: Dialog(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                    child: Container(
-                      padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Header dengan ikon dan gradien ungu
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF03B293), Color(0xFF116C63)],
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.purple.withOpacity(0.3),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 5),
-                                ),
-                              ],
-                            ),
-                            child: const Icon(Icons.movie_filter_rounded, color: Colors.white, size: 40),
-                          ),
-                          const SizedBox(height: 20),
-                          // Judul dialog
-                          const Text(
-                            'Surat Izin Kreasi Clips',
-                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
-                          ),
-                          const SizedBox(height: 16),
-                          // Konten yang lebih detail
-                          RichText(
-                            textAlign: TextAlign.center,
-                            text: TextSpan(
-                              style: TextStyle(
-                                fontSize: 15.5,
-                                color: Colors.grey.shade700,
-                                height: 1.5,
-                              ),
-                              children: <TextSpan>[
-                                const TextSpan(text: 'Dengan melanjutkan, Anda mengizinkan video yang diunggah untuk dipublikasikan sebagai "Clips" di platform kami. Hal ini mencakup:\n\n'),
-                                const TextSpan(text: '• Tampilan format vertikal.\n', style: TextStyle(fontWeight: FontWeight.bold)),
-                                const TextSpan(text: '• Potensi untuk ditemukan oleh pengguna lain.\n\n', style: TextStyle(fontWeight: FontWeight.bold)),
-                                const TextSpan(text: 'Pastikan konten Anda orisinal dan mematuhi seluruh pedoman komunitas yang berlaku.'),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          // Opsi "Jangan tampilkan lagi"
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Checkbox(
-                                value: checkboxValue,
-                                onChanged: (value) {
-                                  setDialogState(() => checkboxValue = value!);
-                                },
-                                activeColor: Colors.teal,
-                              ),
-                              GestureDetector(
-                                  onTap: () => setDialogState(() => checkboxValue = !checkboxValue),
-                                  child: const Text('Saya mengerti, jangan tampilkan lagi')
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-                          // Tombol Aksi
-                          Row(
-                            children: [
-                              // Tombol "Tolak"
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () {
-                                    Navigator.of(dialogContext).pop();
-                                  },
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    side: BorderSide(color: Colors.grey.shade300),
-                                  ),
-                                  child: Text('Tolak', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              // Tombol "Mengerti" / "Setuju"
-                              Expanded(
-                                child: ElevatedButton(
-                                  onPressed: () async {
-                                    if (checkboxValue) {
-                                      await prefs.setBool('dont_show_clips_permission', true);
-                                    }
-                                    Navigator.of(dialogContext).pop();
-                                    Navigator.of(context).pop();
-                                    Navigator.push(context, MaterialPageRoute(builder: (context) => const CreatePostPage(isClips: true)));
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    padding: EdgeInsets.zero,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    elevation: 0,
-                                  ),
-                                  child: Ink(
-                                    decoration: BoxDecoration(
-                                      gradient: const LinearGradient(
-                                        colors: [Color(0xFF03B293), Color(0xFF116C63)],
-                                      ),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 14),
-                                      alignment: Alignment.center,
-                                      child: const Text('Setuju & Lanjutkan', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF03B293), Color(0xFF116C63)],
                     ),
                   ),
+                  child: const Icon(Icons.movie_filter_rounded, color: Colors.white, size: 40),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Kreasi Clips',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Memperkenalkan postingan Clips. Postingan video yang Anda Unggah akan menjadi postingan Clips. Anda dapat mengakses Clips Anda dan seluruh pengguna lainnya di halaman feed atau beranda Portal SI.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 15.5,
+                    color: Colors.grey.shade700,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // PERUBAHAN: Mengganti layout tombol menjadi Column
+                Column(
+                  // crossAxisAlignment.stretch membuat widget di dalamnya (seperti ElevatedButton)
+                  // meregang selebar mungkin secara horizontal.
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Tombol utama untuk melanjutkan
+                    ElevatedButton(
+                      // --- 👇 PERUBAHAN: Panggil fungsi yang benar 👇 ---
+                      onPressed: () {
+                        Navigator.of(dialogContext).pop();
+                        navigateToCreateClips();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
+                      ),
+                      child: Ink(
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF03B293), Color(0xFF116C63)],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          alignment: Alignment.center,
+                          child: const Text('Lanjutkan', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 8), // Jarak antar tombol
+
+                    // Tombol teks untuk opsi "jangan tampilkan lagi"
+                    TextButton(
+                      onPressed: () async {
+                        // Simpan preferensi terlebih dahulu
+                        await prefs.setBool('dont_show_clips_permission', true);
+                        // Baru lakukan navigasi
+                        Navigator.of(dialogContext).pop();
+                        navigateToCreatePost();
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.grey.shade600, // Warna teks
+                      ),
+                      child: const Text('Jangan tampilkan lagi'),
+                    ),
+                  ],
                 ),
               ],
-            );
-          },
+            ),
+          ),
         );
       },
     );

@@ -546,13 +546,14 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
   }
 
   void _showShareBottomSheet() {
+    const String placeholderUrl = 'https://www.gravatar.com/avatar/?d=mp';
     HapticFeedback.lightImpact();
     setState(() => _isBottomSheetVisible = true);
     showModalBottomSheet(
       context: context,
       barrierColor: Colors.transparent,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF262626),
+      backgroundColor: const Color(0xFFFFFFFF),
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24.0))),
       builder: (BuildContext bc) {
         return StatefulBuilder(
@@ -567,12 +568,12 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                 children: [
                   Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(12)))),
                   const SizedBox(height: 24),
-                  const Text('Bagikan', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                  const Text('Bagikan', style: TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
                   ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const CircleAvatar(backgroundImage: NetworkImage(userProfileImageUrl)),
-                    title: const Text('Cerita Anda', style: TextStyle(color: Colors.white)),
+                    leading: CircleAvatar(radius: 18, backgroundImage: NetworkImage(_currentUser?.profilePictureUrl ?? placeholderUrl)),
+                    title: const Text('Cerita Anda', style: TextStyle(color: Colors.black)),
                     subtitle: Text('akan diunggah sebagai cerita Anda', style: TextStyle(color: Colors.grey[400])),
                     trailing: Radio<int>(value: 1, groupValue: _groupValue, onChanged: (int? value) => setState(() => _groupValue = value!), activeColor: Colors.blue),
                     onTap: () => setState(() => _groupValue = 1),
@@ -582,7 +583,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _handleShare,
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                       child: const Text('Bagikan', style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ),
@@ -866,7 +867,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
     final bool isEditingActive = _isDrawingMode || _isEditingMusic || _isTextEditingMode;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light.copyWith(systemNavigationBarColor: Colors.black, statusBarColor: Colors.transparent),
+      value: SystemUiOverlayStyle.light.copyWith(systemNavigationBarColor: Colors.transparent, statusBarColor: Colors.transparent),
       child: GestureDetector(
         // Hanya unfocus jika tidak di mode drawing/music/text
         onTap: () {
@@ -1395,7 +1396,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
             filter: ui.ImageFilter.blur(sigmaX: 15, sigmaY: 15),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-              color: Colors.black.withOpacity(0.25),
+              color: Colors.white.withOpacity(0.5),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -1608,7 +1609,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF2C2C2E),
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24.0))),
       builder: (context) {
         return StatefulBuilder(
@@ -1622,7 +1623,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                 children: [
                   Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey[700], borderRadius: BorderRadius.circular(12)))),
                   const SizedBox(height: 24),
-                  const Text('Bagikan ini ke..', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                  const Text('Bagikan ini ke..', style: TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 16),
                   _buildShareOptionTile(
                     avatarUrl: _currentUser?.profilePictureUrl,
@@ -1639,7 +1640,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                         Navigator.pop(context);
                         _handleShare();
                       },
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                       child: const Text('Bagikan', style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ),
@@ -1681,7 +1682,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                Text(title, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
                 const SizedBox(height: 2),
                 Text(subtitle, style: TextStyle(color: Colors.grey[400], fontSize: 14)),
               ],
@@ -1710,7 +1711,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
           padding: const EdgeInsets.all(8.0),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-            decoration: BoxDecoration(color: Colors.black.withOpacity(0.6), borderRadius: BorderRadius.circular(30)),
+            decoration: BoxDecoration(color: Colors.white.withOpacity(0.6), borderRadius: BorderRadius.circular(30)),
             child: Row(
               children: [
                 CircleAvatar(radius: 18, backgroundImage: NetworkImage(_currentUser?.profilePictureUrl ?? placeholderUrl)),
@@ -1720,13 +1721,13 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
                     controller: _captionController,
                     focusNode: _captionFocusNode,
                     autofocus: true,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(hintText: 'Type a caption...', hintStyle: TextStyle(color: Colors.white54), border: InputBorder.none),
+                    style: const TextStyle(color: Colors.black),
+                    decoration: const InputDecoration(hintText: 'Tambahkan Caption...', hintStyle: TextStyle(color: Colors.black54), border: InputBorder.none),
                   ),
                 ),
                 const SizedBox(width: 8),
                 CircleAvatar(
-                  backgroundColor: Colors.blue,
+                  backgroundColor: Colors.green,
                   child: IconButton(
                     icon: const Icon(Icons.arrow_upward, color: Colors.white),
                     onPressed: () {
@@ -1768,7 +1769,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
 
   Widget _buildStoryButton({required String label, required Widget iconWidget, VoidCallback? onTap, VoidCallback? onLongPress}) {
     return Material(
-        color: Colors.black.withOpacity(0.4),
+        color: Colors.white.withOpacity(0.5),
         borderRadius: BorderRadius.circular(30),
         child: InkWell(
             onTap: onTap ?? () => print('Tombol "$label" di-klik'),
@@ -1825,52 +1826,61 @@ class _ImageCropperPage extends StatelessWidget {
       defaultCrop: const Rect.fromLTRB(0.1, 0.1, 0.9, 0.9),
     );
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text('Sesuaikan Gambar'),
-        backgroundColor: Colors.black87,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          TextButton(
-            onPressed: () async {
-              showDialog(
-                context: context,
-                barrierDismissible: false,
-                builder: (context) => const Center(child: CircularProgressIndicator(color: Colors.white)),
-              );
-
-              try {
-                final result = await controller.croppedBitmap();
-                final data = await result.toByteData(format: ui.ImageByteFormat.png);
-
-                if (data == null) {
-                  throw Exception("Gagal mengonversi gambar yang di-crop.");
-                }
-
-                final bytes = data.buffer.asUint8List();
-                final tempDir = await getTemporaryDirectory();
-                final fileName = '${DateTime.now().millisecondsSinceEpoch}.png';
-                final File tempFile = File('${tempDir.path}/$fileName');
-                await tempFile.writeAsBytes(bytes);
-
-                if (context.mounted) Navigator.pop(context);
-                if (context.mounted) Navigator.pop(context, tempFile);
-
-              } catch (e) {
-                if (context.mounted) Navigator.pop(context);
-                if (context.mounted) Navigator.pop(context, null);
-              }
-            },
-            child: const Text('SELESAI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFFFDDBC), Colors.white],
+          begin: Alignment.bottomLeft,
+          end: Alignment.topRight,
+        ),
       ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: _buildCropper(controller, isBanner),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text('Sesuaikan Gambar'),
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          elevation: 0,
+          actions: [
+            TextButton(
+              onPressed: () async {
+                showDialog(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (context) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                );
+
+                try {
+                  final result = await controller.croppedBitmap();
+                  final data = await result.toByteData(format: ui.ImageByteFormat.png);
+
+                  if (data == null) {
+                    throw Exception("Gagal mengonversi gambar yang di-crop.");
+                  }
+
+                  final bytes = data.buffer.asUint8List();
+                  final tempDir = await getTemporaryDirectory();
+                  final fileName = '${DateTime.now().millisecondsSinceEpoch}.png';
+                  final File tempFile = File('${tempDir.path}/$fileName');
+                  await tempFile.writeAsBytes(bytes);
+
+                  if (context.mounted) Navigator.pop(context);
+                  if (context.mounted) Navigator.pop(context, tempFile);
+
+                } catch (e) {
+                  if (context.mounted) Navigator.pop(context);
+                  if (context.mounted) Navigator.pop(context, null);
+                }
+              },
+              child: const Text('Terapkan', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: _buildCropper(controller, isBanner),
+          ),
         ),
       ),
     );
