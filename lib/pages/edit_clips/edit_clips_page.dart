@@ -414,7 +414,7 @@ class _EditClipsPageState extends State<EditClipsPage> {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: const Color(0xFF2E2E2E),
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20.0)),
       ),
@@ -427,7 +427,7 @@ class _EditClipsPageState extends State<EditClipsPage> {
             children: [
               const Text(
                 'Simpan di Draf?',
-                style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                style: TextStyle(color: Colors.black, fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -445,14 +445,14 @@ class _EditClipsPageState extends State<EditClipsPage> {
               ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Simpan di Draf', style: TextStyle(color: Colors.white, fontSize: 18)),
+                title: const Text('Simpan di Draf', style: TextStyle(color: Colors.black, fontSize: 18)),
                 onTap: () {
                   _saveDraft();
                 },
               ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Lanjutkan mengedit', style: TextStyle(color: Colors.white, fontSize: 18)),
+                title: const Text('Lanjutkan mengedit', style: TextStyle(color: Colors.black, fontSize: 18)),
                 onTap: () {
                   Navigator.of(context).pop();
                 },
@@ -471,47 +471,56 @@ class _EditClipsPageState extends State<EditClipsPage> {
         _handleExitAttempt();
         return false;
       },
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        appBar: EditClipsAppBar(
-          selectedSong: _selectedSong,
-          recommendedSong: _singleRecommendedSong,
-          isRecommendationLoading: _isLoadingRecommendations,
-          isRecommendationPlaying: _isRecommendationPlaying,
-          onMusicTap: _onMusicButtonTap,
-          onRemoveSong: _onRemoveSong,
-          onToggleRecommendation: _toggleRecommendationPreview,
-          onUseRecommendation: _useRecommendedSong,
-          onSaveDraft: _saveDraft,
-          onBackButtonPressed: _handleExitAttempt,
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFFFFDDBC), Colors.white],
+            begin: Alignment.bottomLeft,
+            end: Alignment.topRight,
+          ),
         ),
-        body: SafeArea(
-          child: _isLoading || _videoController == null
-              ? const Center(child: CircularProgressIndicator(color: Colors.white))
-              : Stack(
-            fit: StackFit.expand,
-            alignment: Alignment.center,
-            children: [
-              VideoPreview(
-                controller: _videoController!,
-                textOverlays: _textOverlays,
-                stickerOverlays: _stickerOverlays,
-                activeOverlay: _activeOverlay,
-                effectName: _selectedEffectName,
-                onOverlayTap: _handleOverlayTap,
-                onBackgroundTap: () => setState(() => _activeOverlay = null),
-                onScaleStart: _handleOverlayScaleStart,
-                onScaleUpdate: _handleOverlayScaleUpdate,
-              ),
-              EditClipsToolbar(
-                isProcessing: _isProcessing,
-                onTextTap: _onTextButtonTap,
-                onEmojiTap: _onEmojiButtonTap,
-                onStickerTap: _onStickerButtonTap,
-                onEffectsTap: _onEffectsButtonTap,
-                onNextTap: _onNextButtonTap,
-              ),
-            ],
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: EditClipsAppBar(
+            selectedSong: _selectedSong,
+            recommendedSong: _singleRecommendedSong,
+            isRecommendationLoading: _isLoadingRecommendations,
+            isRecommendationPlaying: _isRecommendationPlaying,
+            onMusicTap: _onMusicButtonTap,
+            onRemoveSong: _onRemoveSong,
+            onToggleRecommendation: _toggleRecommendationPreview,
+            onUseRecommendation: _useRecommendedSong,
+            onSaveDraft: _saveDraft,
+            onBackButtonPressed: _handleExitAttempt,
+          ),
+          body: SafeArea(
+            child: _isLoading || _videoController == null
+                ? const Center(child: CircularProgressIndicator(color: Colors.white))
+                : Stack(
+              fit: StackFit.expand,
+              alignment: Alignment.center,
+              children: [
+                VideoPreview(
+                  controller: _videoController!,
+                  textOverlays: _textOverlays,
+                  stickerOverlays: _stickerOverlays,
+                  activeOverlay: _activeOverlay,
+                  effectName: _selectedEffectName,
+                  onOverlayTap: _handleOverlayTap,
+                  onBackgroundTap: () => setState(() => _activeOverlay = null),
+                  onScaleStart: _handleOverlayScaleStart,
+                  onScaleUpdate: _handleOverlayScaleUpdate,
+                ),
+                EditClipsToolbar(
+                  isProcessing: _isProcessing,
+                  onTextTap: _onTextButtonTap,
+                  onEmojiTap: _onEmojiButtonTap,
+                  onStickerTap: _onStickerButtonTap,
+                  onEffectsTap: _onEffectsButtonTap,
+                  onNextTap: _onNextButtonTap,
+                ),
+              ],
+            ),
           ),
         ),
       ),

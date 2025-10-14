@@ -2,46 +2,62 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:portal_si/models/post_model.dart';
+import 'package:portal_si/services/follow_service.dart'; // <-- 1. TAMBAHAN: Impor FollowService
 import 'package:portal_si/services/video_cache_service.dart';
 import 'package:portal_si/widgets/comment_section.dart';
 import 'package:video_player/video_player.dart';
-import 'package:portal_si/models/post_model.dart';
 import 'package:portal_si/components/circular_avatar_fetcher.dart';
 import 'package:portal_si/components/verified_badge.dart';
 import 'package:marquee/marquee.dart';
 import '../services/like_service.dart';
 import '../services/bookmark_service.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+
+import '../utils/secure_storage.dart';
 
 class SingleClipPlayer extends StatefulWidget {
   final Post post;
   final bool isActive;
+  final VideoPlayerController? preInitializedController;
 
-  const SingleClipPlayer({super.key, required this.post, required this.isActive});
+  const SingleClipPlayer({
+    super.key,
+    required this.post,
+    required this.isActive,
+    this.preInitializedController,
+  });
 
   @override
   State<SingleClipPlayer> createState() => _SingleClipPlayerState();
 }
 
 class _SingleClipPlayerState extends State<SingleClipPlayer>
-    with AutomaticKeepAliveClientMixin {
+    with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
   VideoPlayerController? _controller;
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _hasMusic = false;
   bool _isInitialized = false;
 
+  // --- 2. TAMBAHAN: Inisialisasi service dan state management ---
   final LikeService _likeService = LikeService();
   final BookmarkService _bookmarkService = BookmarkService();
+  final FollowService _followService = FollowService(); // Buat instance FollowService
 
+  int? _currentUserId; // State untuk menyimpan ID user yang sedang login
   late bool _isLiked;
   late bool _isBookmarked;
   late int _likesCount;
   late int _commentsCount;
+  late bool _isFollowing; // State untuk status follow
 
   Duration? _sliderPosition;
   bool _wasPlayingBeforeDrag = false;
-
-  // --- SINKRONISASI LOOP: Variabel untuk menyimpan posisi terakhir video ---
   Duration _lastPosition = Duration.zero;
+
+  late AnimationController _pauseIconAnimationController;
+  late Animation<double> _pauseIconAnimation;
+  bool _showPauseIcon = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -53,34 +69,74 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
     _isBookmarked = widget.post.isBookmarked;
     _likesCount = widget.post.likesCount;
     _commentsCount = widget.post.commentsCount;
-    _hasMusic = widget.post.musicPreviewUrl != null && widget.post.musicPreviewUrl!.isNotEmpty;
+    _hasMusic = widget.post.musicPreviewUrl != null &&
+        widget.post.musicPreviewUrl!.isNotEmpty;
 
-    // Kita tidak lagi set loop di audio player, karena akan dikontrol manual
-    // _audioPlayer.setReleaseMode(ReleaseMode.loop);
+    // --- 3. PERUBAHAN: Panggil fungsi untuk memuat data awal ---
+    _isFollowing = false; // Nilai default sementara
+    _loadInitialData(); // Memuat ID user dan status follow
 
-    _initializePlayer();
+    _pauseIconAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+      reverseDuration: const Duration(milliseconds: 400),
+    );
+
+    _pauseIconAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+        CurvedAnimation(
+            parent: _pauseIconAnimationController, curve: Curves.easeInOut));
+
+    if (widget.preInitializedController != null) {
+      _setupExistingController();
+    } else {
+      _initializeNewController();
+    }
   }
 
-  // --- SINKRONISASI LOOP: Fungsi listener untuk mendeteksi video loop ---
-  void _videoLoopListener() {
-    if (_controller == null || !_controller!.value.isInitialized || !_hasMusic) return;
+  // --- 4. TAMBAHAN: Fungsi untuk mengambil data awal (current user ID & status follow) ---
+  Future<void> _loadInitialData() async {
+    // Ambil ID pengguna yang saat ini login dari secure storage
+    final id = await SecureStorage.getUserId();
+    // Cek status follow awal terhadap pembuat post
+    final initialFollowStatus = await _followService.isFollowing(widget.post.user.username);
 
-    final currentPosition = _controller!.value.position;
+    // Pastikan widget masih ada di tree sebelum update state
+    if (mounted) {
+      setState(() {
+        _currentUserId = id;
+        _isFollowing = initialFollowStatus;
+      });
+    }
+  }
 
-    // Jika posisi saat ini lebih kecil dari posisi terakhir, artinya video telah loop
-    if (currentPosition < _lastPosition) {
-      // Perintahkan audio untuk kembali ke awal
-      _audioPlayer.seek(Duration.zero);
-      // Pastikan audio tetap bermain jika video juga bermain
+
+  void _setupExistingController() {
+    _controller = widget.preInitializedController!;
+    setState(() => _isInitialized = true);
+
+    if (_hasMusic) {
+      _audioPlayer.setSourceUrl(widget.post.musicPreviewUrl!);
+      _controller!.addListener(_videoLoopListener);
+    }
+
+    if (widget.isActive) {
+      _controller!.setLooping(true);
       if (_controller!.value.isPlaying) {
-        _audioPlayer.resume();
+        if (_hasMusic) {
+          _audioPlayer.resume();
+        }
+      } else {
+        _controller!.play();
+        if (_hasMusic) {
+          _audioPlayer.resume();
+        }
       }
     }
-    _lastPosition = currentPosition;
   }
 
-  Future<void> _initializePlayer() async {
-    final fileInfo = await VideoCacheService().getSingleFile(widget.post.mediaUrl!);
+  Future<void> _initializeNewController() async {
+    final fileInfo =
+    await VideoCacheService().getSingleFile(widget.post.mediaUrl!);
     if (mounted) {
       _controller = VideoPlayerController.file(fileInfo.file)
         ..initialize().then((_) {
@@ -88,7 +144,6 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
             if (_hasMusic) {
               _controller!.setVolume(0.0);
               _audioPlayer.setSourceUrl(widget.post.musicPreviewUrl!);
-              // --- SINKRONISASI LOOP: Tambahkan listener di sini ---
               _controller!.addListener(_videoLoopListener);
             } else {
               _controller!.setVolume(1.0);
@@ -103,20 +158,35 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
             }
           }
         });
-      setState(() {});
     }
+  }
+
+  void _videoLoopListener() {
+    if (_controller == null || !_controller!.value.isInitialized || !_hasMusic)
+      return;
+
+    final currentPosition = _controller!.value.position;
+
+    if (currentPosition < _lastPosition) {
+      _audioPlayer.seek(Duration.zero);
+      if (_controller!.value.isPlaying) {
+        _audioPlayer.resume();
+      }
+    }
+    _lastPosition = currentPosition;
   }
 
   @override
   void dispose() {
-    // --- SINKRONISASI LOOP: Hapus listener saat widget dihancurkan ---
     _controller?.removeListener(_videoLoopListener);
-    _controller?.dispose();
+    if (widget.preInitializedController == null) {
+      _controller?.dispose();
+    }
     _audioPlayer.dispose();
+    _pauseIconAnimationController.dispose();
     super.dispose();
   }
 
-  // ... (Sisa kode lain dari didUpdateWidget hingga build tidak ada perubahan) ...
   @override
   void didUpdateWidget(covariant SingleClipPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -143,9 +213,27 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
       if (_controller!.value.isPlaying) {
         _controller!.pause();
         if (_hasMusic) _audioPlayer.pause();
+
+        setState(() => _showPauseIcon = true);
+        _pauseIconAnimationController.forward().then((_) {
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (mounted) {
+              _pauseIconAnimationController.reverse().then((_) {
+                if (mounted) {
+                  setState(() => _showPauseIcon = false);
+                }
+              });
+            }
+          });
+        });
       } else {
         _controller!.play();
         if (_hasMusic) _audioPlayer.resume();
+
+        if (_showPauseIcon) {
+          _pauseIconAnimationController.reverse();
+          setState(() => _showPauseIcon = false);
+        }
       }
     });
   }
@@ -226,6 +314,51 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
     }
   }
 
+  // --- 5. PERUBAHAN: Implementasi penuh fungsi follow/unfollow ---
+  void _toggleFollow() async {
+    final bool originalFollowStatus = _isFollowing;
+
+    // Optimistic UI update
+    setState(() {
+      _isFollowing = !_isFollowing;
+    });
+
+    try {
+      bool success;
+      // Gunakan user ID jika tersedia, jika tidak, gunakan username sebagai fallback
+      final userIdentifier = widget.post.user.id ?? widget.post.user.username;
+
+      if (_isFollowing) {
+        // Jika state baru adalah 'mengikuti', panggil service follow
+        success = await _followService.followUser(userIdentifier);
+      } else {
+        // Jika state baru adalah 'tidak mengikuti', panggil service unfollow
+        success = await _followService.unfollowUser(userIdentifier);
+      }
+
+      // Jika aksi dari API gagal, kembalikan state ke semula
+      if (!success && mounted) {
+        setState(() {
+          _isFollowing = originalFollowStatus;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Aksi gagal, coba lagi.')),
+        );
+      }
+    } catch (e) {
+      // Jika terjadi error, kembalikan juga state ke semula
+      if (mounted) {
+        setState(() {
+          _isFollowing = originalFollowStatus;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Terjadi kesalahan: $e')),
+        );
+      }
+    }
+  }
+
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -233,7 +366,8 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
     if (_controller == null) {
       return Container(
         color: Colors.black,
-        child: const Center(child: CircularProgressIndicator(color: Colors.white)),
+        child:
+        const Center(child: CircularProgressIndicator(color: Colors.white)),
       );
     }
 
@@ -255,23 +389,39 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
               else
                 Container(
                   color: Colors.black,
-                  child: const Center(child: CircularProgressIndicator(color: Colors.white)),
+                  child: const Center(
+                      child: CircularProgressIndicator(color: Colors.white)),
                 ),
-
               _buildOverlayUI(),
-
               if (value.isBuffering)
                 const CircularProgressIndicator(color: Colors.white),
-
+              if (_showPauseIcon)
+                FadeTransition(
+                  opacity: _pauseIconAnimation,
+                  child: ScaleTransition(
+                    scale: _pauseIconAnimation,
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child:
+                      const Icon(Icons.pause, color: Colors.white, size: 40),
+                    ),
+                  ),
+                ),
               Positioned(
-                bottom: 85.0,
+                bottom: 85.0 + 10.0,
                 left: 0,
                 right: 0,
                 child: SliderTheme(
                   data: SliderTheme.of(context).copyWith(
                     trackHeight: 2.5,
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6.0),
-                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 12.0),
+                    thumbShape:
+                    const RoundSliderThumbShape(enabledThumbRadius: 6.0),
+                    overlayShape:
+                    const RoundSliderOverlayShape(overlayRadius: 12.0),
                     activeTrackColor: Colors.white,
                     inactiveTrackColor: Colors.white.withOpacity(0.3),
                     thumbColor: Colors.white,
@@ -295,11 +445,13 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
                     },
                     onChanged: (newValue) {
                       setState(() {
-                        _sliderPosition = Duration(milliseconds: newValue.round());
+                        _sliderPosition =
+                            Duration(milliseconds: newValue.round());
                       });
                     },
                     onChangeEnd: (newValue) {
-                      final newPosition = Duration(milliseconds: newValue.round());
+                      final newPosition =
+                      Duration(milliseconds: newValue.round());
                       _controller!.seekTo(newPosition);
                       if (_hasMusic) _audioPlayer.seek(newPosition);
                       setState(() {
@@ -337,7 +489,7 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.only(bottom: 90.0),
+          padding: const EdgeInsets.only(bottom: 90.0 + 10.0),
           child: Column(
             children: [
               _buildTopBar(),
@@ -359,20 +511,25 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
             icon: const Icon(Icons.arrow_back, color: Colors.white),
             onPressed: () => Navigator.of(context).pop(),
           ),
-          const Text('Clips', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text('Clips',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold)),
         ],
       ),
     );
   }
 
   Widget _buildBottomSection() {
-    final bool hasMusic = widget.post.musicTrackName != null && widget.post.musicTrackName!.isNotEmpty;
+    final bool hasMusic = widget.post.musicTrackName != null &&
+        widget.post.musicTrackName!.isNotEmpty;
     final String audioText = hasMusic
         ? '${widget.post.musicTrackName!} - ${widget.post.musicArtistName ?? 'Sounds'}'
         : 'Original audio - ${widget.post.user.username}';
 
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.only(left: 12.0, right: 12.0, bottom: 25.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
@@ -382,35 +539,82 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    CircularAvatarFetcher(radius: 18, userId: widget.post.user.id ?? 0),
+                    CircularAvatarFetcher(
+                      radius: 12,
+                      userId: widget.post.user.id ?? 0,
+                    ),
                     const SizedBox(width: 8),
-                    Text(widget.post.user.username, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    Text(
+                      widget.post.user.username,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16),
+                    ),
                     if (widget.post.user.isVerified) ...[
                       const SizedBox(width: 4),
                       const VerifiedBadge(size: 14),
                     ],
+                    // --- 6. PERUBAHAN: Kondisi untuk menampilkan tombol follow ---
+                    // Tampilkan hanya jika _currentUserId sudah terisi DAN ID pembuat post tidak sama dengan _currentUserId
+                    if (_currentUserId != null && widget.post.user.id != _currentUserId)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8.0),
+                        child: GestureDetector(
+                          onTap: _toggleFollow, // Panggil fungsi yang sudah diimplementasikan
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _isFollowing
+                                  ? Colors.white.withOpacity(0.3)
+                                  : Color(0xFFFF9100),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              _isFollowing ? 'Mengikuti' : 'Ikuti',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
-                if (widget.post.caption != null && widget.post.caption!.isNotEmpty) ...[
+                if (widget.post.caption != null &&
+                    widget.post.caption!.isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  Text(widget.post.caption!, style: const TextStyle(color: Colors.white)),
+                  Text(
+                    widget.post.caption!,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ],
                 const SizedBox(height: 8),
                 Row(
                   children: [
                     const Icon(Icons.music_note, color: Colors.white, size: 16),
                     const SizedBox(width: 4),
-                    SizedBox(
-                      width: 150,
-                      height: 20,
-                      child: Marquee(
-                        text: audioText,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
-                        scrollAxis: Axis.horizontal,
-                        blankSpace: 20.0,
-                        velocity: 50.0,
-                        pauseAfterRound: const Duration(seconds: 1),
+                    Expanded(
+                      child: SizedBox(
+                        height: 20,
+                        child: Marquee(
+                          text: audioText,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 13),
+                          scrollAxis: Axis.horizontal,
+                          blankSpace: 20.0,
+                          velocity: 50.0,
+                          pauseAfterRound: const Duration(seconds: 1),
+                        ),
                       ),
                     ),
                   ],
@@ -421,26 +625,53 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildActionButton(
-                icon: _isLiked ? Icons.favorite : Icons.favorite_border,
-                label: '$_likesCount',
-                onTap: _toggleLike,
-                iconColor: _isLiked ? Colors.red : Colors.white,
-              ),
-              const SizedBox(height: 16),
+              _buildLikeButton(),
+              const SizedBox(height: 12),
               _buildActionButton(
                 icon: Icons.comment,
                 label: '$_commentsCount',
                 onTap: () => _showCommentSheet(context),
+                size: 32,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               _buildActionButton(
                 icon: _isBookmarked ? Icons.bookmark : Icons.bookmark_border,
                 onTap: _toggleBookmark,
                 iconColor: _isBookmarked ? Colors.orangeAccent : Colors.white,
+                size: 32,
               ),
-              const SizedBox(height: 16),
-              _buildActionButton(icon: Icons.share),
+              const SizedBox(height: 12),
+              _buildActionButton(icon: Icons.share, size: 32),
+              const SizedBox(height: 24),
+              GestureDetector(
+                onTap: () {
+                  // ScaffoldMessenger.of(context).showSnackBar(
+                  //     const SnackBar(content: Text('Thumbnail video diklik!')));
+                },
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade800,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white, width: 1),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(7),
+                    child: widget.post.mediaUrl != null && widget.post.isVideo
+                        ? CachedNetworkImage(
+                      imageUrl: widget.post.mediaUrl!,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => const Center(
+                          child: Icon(Icons.videocam_outlined, color: Colors.white, size: 24)),
+                      errorWidget: (context, url, error) => const Center(
+                          child: Icon(Icons.broken_image, color: Colors.white, size: 24)),
+                    )
+                        : const Center(
+                        child: Icon(Icons.image, color: Colors.white, size: 24)),
+                  ),
+                ),
+              ),
             ],
           ),
         ],
@@ -448,16 +679,75 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
     );
   }
 
-  Widget _buildActionButton({required IconData icon, String? label, VoidCallback? onTap, Color? iconColor}) {
+  Widget _buildLikeButton() {
+    final likers = widget.post.recentLikers;
+    final displayedLikers = likers.take(3).toList().reversed.toList();
+
+    return GestureDetector(
+      onTap: _toggleLike,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        children: [
+          if (displayedLikers.isNotEmpty)
+            SizedBox(
+              height: 28,
+              width: 50,
+              child: Stack(
+                alignment: Alignment.center,
+                children: List.generate(displayedLikers.length, (index) {
+                  final liker = displayedLikers[index];
+                  return Positioned(
+                    left: (index * 15.0),
+                    child: CircleAvatar(
+                      radius: 12,
+                      backgroundColor: Colors.white,
+                      child: CircleAvatar(
+                        radius: 10,
+                        backgroundColor: Colors.grey.shade800,
+                        backgroundImage: liker.profilePictureUrl != null
+                            ? NetworkImage(liker.profilePictureUrl!)
+                            : null,
+                        child: liker.profilePictureUrl == null
+                            ? const Icon(Icons.person,
+                            size: 12, color: Colors.white)
+                            : null,
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          Icon(
+            _isLiked ? Icons.favorite : Icons.favorite_border,
+            color: _isLiked ? Colors.red : Colors.white,
+            size: 32,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '$_likesCount',
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton(
+      {required IconData icon,
+        String? label,
+        VoidCallback? onTap,
+        Color? iconColor,
+        double size = 32}) {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Column(
         children: [
-          Icon(icon, color: iconColor ?? Colors.white, size: 32),
+          Icon(icon, color: iconColor ?? Colors.white, size: size),
           if (label != null) ...[
             const SizedBox(height: 4),
-            Text(label, style: const TextStyle(color: Colors.white)),
+            Text(label,
+                style: const TextStyle(color: Colors.white, fontSize: 12)),
           ],
         ],
       ),

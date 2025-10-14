@@ -42,7 +42,7 @@ class EditClipsToolbar extends StatelessWidget {
                 ElevatedButton(
                   onPressed: isProcessing ? null : onNextTap,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isProcessing ? Colors.grey : Colors.blue,
+                    backgroundColor: isProcessing ? Colors.grey : Colors.green,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),

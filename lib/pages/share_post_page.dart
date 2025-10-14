@@ -416,147 +416,156 @@ class _SharePostPageState extends State<SharePostPage> {
       builder: (context, uploadProvider, child) {
         final isUploading = uploadProvider.isUploading;
         return Scaffold(
-          backgroundColor: const Color(0xFF121212),
+          backgroundColor: Colors.transparent,
           appBar: AppBar(
-            backgroundColor: const Color(0xFF121212),
+            backgroundColor: Colors.white,
             elevation: 0,
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              icon: const Icon(Icons.arrow_back, color: Colors.black),
               onPressed: () => Navigator.of(context).pop(),
             ),
-            title: const Text('Postingan Baru', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            title: const Text('Upload Postingan', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           ),
-          body: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              width: 80, height: 80 * (5 / 4),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: widget.mediaFiles.isNotEmpty
-                                    ? _MediaThumbnailPreview(file: widget.mediaFiles.first)
-                                    : Container(color: Colors.grey.shade800),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: TextField(
-                                controller: _captionController,
-                                maxLines: 5,
-                                style: const TextStyle(color: Colors.white),
-                                decoration: const InputDecoration(
-                                  hintText: 'Tambahkan Caption...',
-                                  hintStyle: TextStyle(color: Colors.grey),
-                                  border: InputBorder.none,
+          body: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFFFFDDBC), Colors.white],
+                begin: Alignment.bottomLeft,
+                end: Alignment.topRight,
+              ),
+            ),
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(
+                                width: 80, height: 80 * (5 / 4),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: widget.mediaFiles.isNotEmpty
+                                      ? _MediaThumbnailPreview(file: widget.mediaFiles.first)
+                                      : Container(color: Colors.grey.shade800),
                                 ),
                               ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextField(
+                                  controller: _captionController,
+                                  maxLines: 5,
+                                  style: const TextStyle(color: Colors.black),
+                                  decoration: const InputDecoration(
+                                    hintText: 'Tambahkan Caption...',
+                                    hintStyle: TextStyle(color: Colors.grey),
+                                    border: InputBorder.none,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const _Divider(),
+                        if (widget.selectedSong != null)
+                          ListTile(
+                            leading: ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: Image.network(widget.selectedSong!.artworkUrl, width: 40, height: 40),
                             ),
-                          ],
-                        ),
-                      ),
-                      const _Divider(),
-                      if (widget.selectedSong != null)
+                            title: Text(widget.selectedSong!.trackName, style: const TextStyle(color: Colors.black)),
+                            subtitle: Text(widget.selectedSong!.artistName, style: const TextStyle(color: Colors.grey)),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.close, color: Colors.white),
+                              onPressed: () {},
+                            ),
+                          ),
+                        if (widget.selectedSong != null) const _Divider(),
+                        _ActionTile(icon: Icons.people_outline, title: 'Tag Orang', onTap: () {
+                          HapticFeedback.lightImpact();
+                          showDialog(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                backgroundColor: Colors.white,
+                                title: const Text('Tag Pengguna', style: TextStyle(color: Colors.black)),
+                                content: const Text('Untuk mention seseorang, sertakan simbol "@" diikuti dengan username mereka di dalam caption Anda.', style: TextStyle(color: Colors.grey)),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Mengerti'))
+                                ],
+                              )
+                          );
+                        }),
                         ListTile(
-                          leading: ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: Image.network(widget.selectedSong!.artworkUrl, width: 40, height: 40),
-                          ),
-                          title: Text(widget.selectedSong!.trackName, style: const TextStyle(color: Colors.white)),
-                          subtitle: Text(widget.selectedSong!.artistName, style: const TextStyle(color: Colors.grey)),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.close, color: Colors.white),
-                            onPressed: () {},
-                          ),
-                        ),
-                      if (widget.selectedSong != null) const _Divider(),
-                      _ActionTile(icon: Icons.people_outline, title: 'Tag Orang', onTap: () {
-                        HapticFeedback.lightImpact();
-                        showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              backgroundColor: Colors.grey[850],
-                              title: const Text('Tag Pengguna', style: TextStyle(color: Colors.white)),
-                              content: const Text('Untuk mention seseorang, sertakan simbol "@" diikuti dengan username mereka di dalam caption Anda.', style: TextStyle(color: Colors.grey)),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Mengerti'))
-                              ],
-                            )
-                        );
-                      }),
-                      ListTile(
-                        leading: _isFetchingLocation
-                            ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                            : Icon(
-                          _locationController.text.isEmpty
-                              ? Icons.location_on_outlined
-                              : Icons.location_on,
-                          color: _locationController.text.isEmpty
-                              ? Colors.white
-                              : Colors.blue,
-                        ),
-                        title: Text(
-                          _locationController.text.isEmpty
-                              ? 'Tambahkan Lokasi'
-                              : _locationController.text,
-                          style: TextStyle(
+                          leading: _isFetchingLocation
+                              ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                              : Icon(
+                            _locationController.text.isEmpty
+                                ? Icons.location_on_outlined
+                                : Icons.location_on,
                             color: _locationController.text.isEmpty
-                                ? Colors.white
+                                ? Colors.black
                                 : Colors.blue,
-                            overflow: TextOverflow.ellipsis,
                           ),
+                          title: Text(
+                            _locationController.text.isEmpty
+                                ? 'Tambahkan Lokasi'
+                                : _locationController.text,
+                            style: TextStyle(
+                              color: _locationController.text.isEmpty
+                                  ? Colors.black
+                                  : Colors.blue,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          trailing: _locationController.text.isEmpty
+                              ? const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 14)
+                              : IconButton(
+                            icon: const Icon(Icons.close, color: Colors.grey, size: 18),
+                            onPressed: () {
+                              setState(() => _locationController.clear());
+                            },
+                          ),
+                          onTap: _isFetchingLocation ? null : _showLocationOptions,
                         ),
-                        trailing: _locationController.text.isEmpty
-                            ? const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 14)
-                            : IconButton(
-                          icon: const Icon(Icons.close, color: Colors.grey, size: 18),
-                          onPressed: () {
-                            setState(() => _locationController.clear());
-                          },
-                        ),
-                        onTap: _isFetchingLocation ? null : _showLocationOptions,
-                      ),
-                      const _Divider(),
-                    ],
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: isUploading ? null : _handleSharePost,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue, foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    child: isUploading
-                        ? const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-                        SizedBox(width: 12),
-                        Text('Memproses...'),
+                        const _Divider(),
                       ],
-                    )
-                        : const Text('Bagikan', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
                   ),
                 ),
-              ),
-            ],
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: isUploading ? null : _handleSharePost,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green, foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: isUploading
+                          ? const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                          SizedBox(width: 12),
+                          Text('Memproses...'),
+                        ],
+                      )
+                          : const Text('Bagikan', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -568,7 +577,7 @@ class _Divider extends StatelessWidget {
   const _Divider();
   @override
   Widget build(BuildContext context) {
-    return Divider(color: Colors.grey.shade800, height: 1);
+    return Divider(color: Colors.grey.shade500, height: 1);
   }
 }
 
@@ -582,8 +591,8 @@ class _ActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(icon, color: Colors.white),
-      title: Text(title, style: const TextStyle(color: Colors.white)),
+      leading: Icon(icon, color: Colors.black),
+      title: Text(title, style: const TextStyle(color: Colors.black)),
       trailing: const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 14),
       onTap: onTap,
     );
@@ -706,7 +715,7 @@ class _LocationSearchSheetState extends State<_LocationSearchSheet> {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color: Color(0xFF1A1A1A),
+        color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Padding(
@@ -723,7 +732,7 @@ class _LocationSearchSheetState extends State<_LocationSearchSheet> {
             const Text(
               'Pilih Lokasi',
               style: TextStyle(
-                color: Colors.white,
+                color: Colors.black,
                 fontWeight: FontWeight.bold,
                 fontSize: 18,
               ),
@@ -732,13 +741,13 @@ class _LocationSearchSheetState extends State<_LocationSearchSheet> {
             TextField(
               controller: _searchController,
               autofocus: true,
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: Colors.black),
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.search, color: Colors.grey),
                 hintText: 'Cari nama tempat, kota, atau alamat...',
                 hintStyle: const TextStyle(color: Colors.grey),
                 filled: true,
-                fillColor: Colors.grey.shade800,
+                fillColor: Colors.grey.shade300,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -751,7 +760,7 @@ class _LocationSearchSheetState extends State<_LocationSearchSheet> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.my_location, color: Colors.blue),
-              title: const Text('Gunakan Lokasi Saat Ini', style: TextStyle(color: Colors.white)),
+              title: const Text('Gunakan Lokasi Saat Ini', style: TextStyle(color: Colors.black)),
               onTap: () {
                 // Mengirim nilai khusus untuk ditangani oleh halaman utama
                 Navigator.pop(context, '__USE_CURRENT_LOCATION__');
@@ -760,7 +769,7 @@ class _LocationSearchSheetState extends State<_LocationSearchSheet> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.map_outlined, color: Colors.green),
-              title: const Text('Pilih dari Peta', style: TextStyle(color: Colors.white)),
+              title: const Text('Pilih dari Peta', style: TextStyle(color: Colors.black)),
               onTap: () {
                 // Mengirim nilai khusus untuk membuka pemilih peta
                 Navigator.pop(context, '__PICK_FROM_MAP__');

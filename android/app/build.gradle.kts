@@ -45,8 +45,8 @@ defaultConfig {
     applicationId = "com.portal.si"
     minSdk = flutter.minSdkVersion
     targetSdk = 36
-    versionCode = 20
-    versionName = "1.4.2-earlyaccess"
+    versionCode = 21
+    versionName = "1.4.12"
     multiDexEnabled = true
 }
 

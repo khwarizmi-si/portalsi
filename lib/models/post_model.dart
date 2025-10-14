@@ -1,4 +1,7 @@
+// lib/models/post_model.dart
+
 import 'comment_model.dart';
+import 'liker_model.dart';
 import 'user_model.dart';
 
 class Post {
@@ -13,7 +16,10 @@ class Post {
   final int? mediaHeight;
   final List<Comment> comments;
 
-  // Properti untuk data musik (SUDAH ADA)
+  // --- TAMBAHAN: Properti untuk durasi video ---
+  final double? videoDuration;
+
+  // Properti untuk data musik
   final String? musicTrackName;
   final String? musicArtistName;
   final String? musicPreviewUrl;
@@ -23,6 +29,7 @@ class Post {
   int commentsCount;
   bool isLikedByUser;
   bool isBookmarked;
+  final List<Liker> recentLikers;
 
   Post({
     required this.id,
@@ -39,11 +46,12 @@ class Post {
     this.mediaHeight,
     required this.isBookmarked,
     this.comments = const [],
-    // Tambahkan properti musik di konstruktor (SUDAH ADA)
+    this.recentLikers = const [],
     this.musicTrackName,
     this.musicArtistName,
     this.musicPreviewUrl,
     this.musicAlbumArtUrl,
+    this.videoDuration, // <-- Tambahkan di konstruktor
   });
 
   double get aspectRatio {
@@ -58,6 +66,12 @@ class Post {
     List<Comment> commentList =
     commentsFromJson.map((c) => Comment.fromJson(c)).toList();
 
+
+    var likersFromJson = json['recent_likers'] as List? ?? [];
+    // Kita panggil Liker.fromJson tanpa currentUserId, yang sekarang sudah aman
+    List<Liker> likerList =
+    likersFromJson.map((l) => Liker.fromJson(l)).toList();
+
     final postData = json['post'] is Map<String, dynamic> ? json['post'] : json;
 
     final User postUser;
@@ -70,30 +84,37 @@ class Post {
       );
     }
 
+    // --- PERUBAHAN: Parsing durasi video ---
+    double? parsedDuration;
+    if (postData['video_duration'] != null) {
+      parsedDuration = double.tryParse(postData['video_duration'].toString());
+    }
+
     return Post(
       id: int.tryParse(postData['post_id']?.toString() ?? postData['id']?.toString() ?? '0') ?? 0,
-      caption: postData['caption'], // Perubahan: Hapus ?? '' agar bisa null
+      caption: postData['caption'],
       mediaUrl: postData['media_url'],
       isVideo: postData['is_video'] == 1 || postData['is_video'].toString() == '1',
       createdAt: DateTime.parse(postData['created_at']),
       likesCount: postData['likes_count'] ?? 0,
       commentsCount: postData['comments_count'] ?? 0,
       isLikedByUser: postData['is_liked'] ?? false,
-      location: postData['location'], // Perubahan: Hapus ?? '' agar bisa null
+      location: postData['location'],
       isBookmarked: postData['is_bookmarked'] ?? false,
       user: postUser,
       mediaWidth: postData['media_width'],
       mediaHeight: postData['media_height'],
       comments: commentList,
-      // --- 👇 PASTIKAN BAGIAN INI ADA 👇 ---
+      recentLikers: likerList,
       musicTrackName: postData['music_track_name'],
       musicArtistName: postData['music_artist_name'],
       musicPreviewUrl: postData['music_preview_url'],
       musicAlbumArtUrl: postData['music_album_art_url'],
+      videoDuration: parsedDuration, // <-- Gunakan nilai yang sudah diparsing
     );
   }
 
-  // ... sisa kode lainnya tidak berubah ...
+  // ... sisa kode lainnya tidak berubah (toJson, copyWith) ...
   Map<String, dynamic> toJson() {
     return {
       'post_id': id,
@@ -107,6 +128,7 @@ class Post {
       'user': user.toJson(),
       'media_width': mediaWidth,
       'media_height': mediaHeight,
+      'video_duration': videoDuration, // <-- Tambahkan ke JSON
     };
   }
   Post copyWith({
@@ -123,6 +145,7 @@ class Post {
     int? mediaWidth,
     int? mediaHeight,
     List<Comment>? comments,
+    double? videoDuration, // <-- Tambahkan di copyWith
   }) {
     return Post(
       id: id ?? this.id,
@@ -138,6 +161,7 @@ class Post {
       mediaWidth: mediaWidth ?? this.mediaWidth,
       mediaHeight: mediaHeight ?? this.mediaHeight,
       comments: comments ?? this.comments,
+      videoDuration: videoDuration ?? this.videoDuration, // <-- Tambahkan di copyWith
     );
   }
 }
