@@ -920,7 +920,7 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
               SliverToBoxAdapter(
                 child: controller.isFetchingMore
                     ? const Padding(
-                  padding: EdgeInsets.all(16.0),
+                  padding: EdgeInsets.only(left: 16.0, right: 16.0, bottom: 120.0, top: 16.0),
                   child: Center(child: CircularProgressIndicator()),
                 )
                     : const SizedBox.shrink(),

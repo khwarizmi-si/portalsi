@@ -738,8 +738,9 @@ class _OtherProfilePageState extends State<OtherProfilePage>
           },
         ),
       ),
+    ),
     );
-  }
+    }
 }
 
 

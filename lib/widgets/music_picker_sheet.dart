@@ -201,8 +201,8 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
 
   Widget _buildLoadingSkeleton() {
     return Shimmer.fromColors(
-      baseColor: Colors.grey[850]!,
-      highlightColor: Colors.grey[800]!,
+      baseColor: Colors.grey[200]!,
+      highlightColor: Colors.grey[200]!,
       child: ListView.builder(
         itemCount: 10,
         itemBuilder: (context, index) => ListTile(
@@ -237,7 +237,7 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
       builder: (_, scrollController) {
         return Container(
           decoration: const BoxDecoration(
-            color: Color(0xFF1C1C1E),
+            color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
           ),
           child: Stack(
@@ -258,17 +258,17 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
                     child: TextField(
                       controller: _searchController,
                       decoration: InputDecoration(
-                        hintText: 'Cari musik',
-                        hintStyle: TextStyle(color: Colors.grey[400]),
-                        prefixIcon: Icon(Icons.search, color: Colors.grey[400]),
+                        hintText: 'Cari musik..',
+                        hintStyle: TextStyle(color: Colors.grey[500]),
+                        prefixIcon: Icon(Icons.search, color: Colors.grey[500]),
                         filled: true,
-                        fillColor: Colors.grey[850],
+                        fillColor: Colors.grey[300],
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide.none,
                         ),
                       ),
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: Colors.black),
                     ),
                   ),
                   SizedBox(
@@ -281,9 +281,9 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
                           label: const Text('Untuk Anda'),
                           selected: _activeFilter == MusicFilter.trending,
                           onSelected: (_) => _handleFilterChange(MusicFilter.trending),
-                          backgroundColor: Colors.grey[800],
-                          selectedColor: Colors.white,
-                          labelStyle: TextStyle(color: _activeFilter == MusicFilter.trending ? Colors.black : Colors.white),
+                          backgroundColor: Colors.white,
+                          selectedColor: Colors.grey[600],
+                          labelStyle: TextStyle(color: _activeFilter == MusicFilter.trending ? Colors.white : Colors.grey[400]),
                           showCheckmark: false,
                         ),
                         const SizedBox(width: 8),
@@ -291,9 +291,9 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
                           label: const Text('Tersimpan'),
                           selected: _activeFilter == MusicFilter.saved,
                           onSelected: (_) => _handleFilterChange(MusicFilter.saved),
-                          backgroundColor: Colors.grey[800],
-                          selectedColor: Colors.white,
-                          labelStyle: TextStyle(color: _activeFilter == MusicFilter.saved ? Colors.black : Colors.white),
+                          backgroundColor: Colors.white,
+                          selectedColor: Colors.grey[600],
+                          labelStyle: TextStyle(color: _activeFilter == MusicFilter.saved ? Colors.white : Colors.grey[400]),
                           showCheckmark: false,
                         ),
                       ],
@@ -324,13 +324,13 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
                                 Container(
                                     width: 50, height: 50,
                                     decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), borderRadius: BorderRadius.circular(4.0)),
-                                    child: const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)))
+                                    child: const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black)))
                                 )
                               else if (!isPlaying)
                                 Container(
                                     width: 50, height: 50,
                                     decoration: BoxDecoration(color: Colors.black.withOpacity(0.2), borderRadius: BorderRadius.circular(4.0)),
-                                    child: const Icon(Icons.play_arrow, color: Colors.white)
+                                    child: const Icon(Icons.play_arrow, color: Colors.black)
                                 )
                             ],
                           ),
@@ -343,7 +343,7 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
                               Expanded(
                                 child: Text(
                                   song.trackName,
-                                  style: TextStyle(color: isPlaying ? Colors.blueAccent : Colors.white, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: isPlaying ? Colors.blueAccent : Colors.black, fontWeight: FontWeight.bold),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
@@ -356,7 +356,7 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
                           trailing: IconButton(
                             icon: Icon(
                               isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                              color: isBookmarked ? Colors.blueAccent : Colors.white,
+                              color: isBookmarked ? Colors.blueAccent : Colors.grey[400],
                             ),
                             onPressed: () => _toggleBookmark(song),
                           ),
@@ -375,7 +375,7 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF121212),
+                      color: const Color(0xD1121212),
                       border: Border(top: BorderSide(color: Colors.grey[800]!, width: 0.5)),
                     ),
                     child: SafeArea(
@@ -412,14 +412,14 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
                           ElevatedButton(
                             onPressed: _selectSongAndClose,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white,
-                              foregroundColor: Colors.black,
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               padding: const EdgeInsets.symmetric(horizontal: 20),
                             ),
-                            child: const Text('Selesai', style: TextStyle(fontWeight: FontWeight.bold)),
+                            child: const Text('Tambahkan', style: TextStyle(fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),

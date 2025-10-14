@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:video_player/video_player.dart';
 import 'package:video_compress/video_compress.dart';
 
+import 'camera_page.dart';
 import 'drafts_page.dart';
 import './edit_clips/edit_clips_page.dart';
 import 'edit_post_page.dart';
@@ -645,7 +646,12 @@ class _CreatePostPageState extends State<CreatePostPage> {
                             (context, index) {
                           if (index == 0) {
                             return GestureDetector(
-                              onTap: _takePhoto,
+                              onTap: () {
+                                // Aksi untuk membuka halaman kamera
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (context) => const CameraPage()), // Navigasi ke CameraPage
+                                );
+                              },
                               child: Container(color: Colors.grey[800], child: const Icon(Icons.camera_alt, color: Colors.white, size: 30)),
                             );
                           }
