@@ -52,6 +52,9 @@ class _BookmarksPageState extends State<BookmarksPage> {
           // _buildFilterChips(),
           Expanded(
             child: RefreshIndicator(
+              color: Colors.orange,
+              // Mengatur warna latar belakang lingkaran
+              backgroundColor: Colors.orange.shade50,
               onRefresh: () async => _loadBookmarks(),
               child: FutureBuilder<List<Post>>(
                 future: _bookmarksFuture,

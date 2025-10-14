@@ -364,6 +364,9 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
     }
     // --- PERUBAHAN UTAMA SELESAI DI SINI ---
     return RefreshIndicator(
+      color: Colors.orange,
+      // Mengatur warna latar belakang lingkaran
+      backgroundColor: Colors.orange.shade50,
       onRefresh: _onRefresh,
       child: CustomScrollView(
         controller: _scrollController,
@@ -453,6 +456,9 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
   /// Widget yang akan ditampilkan ketika feed kosong.
   Widget _buildEmptyFeed() {
     return RefreshIndicator(
+      color: Colors.orange,
+      // Mengatur warna latar belakang lingkaran
+      backgroundColor: Colors.orange.shade50,
       onRefresh: _onRefresh,
       child: LayoutBuilder( // Menggunakan LayoutBuilder agar bisa scroll
         builder: (context, constraints) {

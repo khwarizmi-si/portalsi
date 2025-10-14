@@ -52,6 +52,7 @@ class _StoryCircleState extends State<StoryCircle> {
   }
 
   Future<void> _navigateToCreateStory(User user) async {
+    // Cek status izin awal
     var cameraStatus = await Permission.camera.status;
     var photoStatus = await Permission.photos.status;
     var microphoneStatus = await Permission.microphone.status;
@@ -75,50 +76,123 @@ class _StoryCircleState extends State<StoryCircle> {
       );
     }
 
+    // Jika semua izin sudah diberikan, langsung lanjutkan
     if (cameraStatus.isGranted && photoStatus.isGranted && microphoneStatus.isGranted) {
       proceedToCreateStory();
       return;
     }
 
+    // Tampilkan dialog izin yang sudah diperbaiki
     bool? wantsToProceed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Butuh Izin Anda'),
-          content: const Text('Untuk membuat Story, kami butuh izin untuk mengakses Kamera, Galeri Foto, dan Mikrofon Anda. Izinkan akses?'),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Nanti Saja'),
-              onPressed: () => Navigator.of(dialogContext).pop(false),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          // 👇 PERUBAHAN DI SINI: Icon dengan latar gradien
+          icon: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              // Gradien untuk latar belakang ikon
+              gradient: const LinearGradient(
+                colors: [Color(0xFF03B293), Color(0xFF116C63)],
+              ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.teal.withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ],
             ),
-            TextButton(
-              child: const Text('Izinkan', style: TextStyle(fontWeight: FontWeight.bold)),
-              onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Icon(Icons.shield_outlined, color: Colors.white, size: 40), // Ubah warna ikon menjadi putih
+          ),
+          title: Text(
+            'Izin untuk Membuat Story',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Untuk memberikan pengalaman terbaik, kami memerlukan akses ke:',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.black54),
+              ),
+              const SizedBox(height: 20),
+              _buildPermissionRow(Icons.camera_alt_outlined, 'Kamera', 'Untuk merekam foto & video.'),
+              _buildPermissionRow(Icons.photo_library_outlined, 'Galeri Foto', 'Untuk memilih dari media yang ada.'),
+              _buildPermissionRow(Icons.mic_none_outlined, 'Mikrofon', 'Untuk merekam suara di video.'),
+            ],
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+          actions: <Widget>[
+            // Aksi dalam bentuk Column agar rapi di layar kecil
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 👇 PERUBAHAN DI SINI: Tombol dengan gradien
+                Ink( // Gunakan Ink untuk membungkus Container dengan gradien
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF03B293), Color(0xFF116C63)],
+                    ),
+                  ),
+                  child: InkWell( // InkWell untuk efek tap dan onPressed
+                    onTap: () => Navigator.of(dialogContext).pop(true),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      alignment: Alignment.center,
+                      child: const Text(
+                        'Lanjutkan & Izinkan',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white, // Teks tombol juga putih
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  child: Text('Nanti Saja', style: TextStyle(color: Colors.grey.shade700)),
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                ),
+              ],
             ),
           ],
         );
       },
     );
 
+    // Jika pengguna tidak mau melanjutkan, hentikan fungsi
     if (wantsToProceed != true) {
       return;
     }
 
+    // Minta izin
     await [
       Permission.camera,
       Permission.photos,
       Permission.microphone,
     ].request();
 
+    // Cek status izin setelah permintaan
     var newCameraStatus = await Permission.camera.status;
     var newPhotoStatus = await Permission.photos.status;
     var newMicrophoneStatus = await Permission.microphone.status;
 
+    // Jika semua izin diberikan, lanjutkan ke halaman create story
     if (newCameraStatus.isGranted && newPhotoStatus.isGranted && newMicrophoneStatus.isGranted) {
       proceedToCreateStory();
     } else {
+      // Jika ada izin yang ditolak, tampilkan snackbar
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -130,6 +204,28 @@ class _StoryCircleState extends State<StoryCircle> {
         ),
       );
     }
+  }
+
+  // 👇 TAMBAHKAN FUNGSI HELPER INI DI DALAM CLASS _StoryCircleState 👇
+  Widget _buildPermissionRow(IconData icon, String title, String subtitle) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.teal.shade400, size: 28),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
 

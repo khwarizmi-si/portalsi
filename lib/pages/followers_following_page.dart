@@ -259,6 +259,9 @@ class _FollowersFollowingPageState extends State<FollowersFollowingPage>
       return _buildEmptyState(isFollowersTab);
     }
     return RefreshIndicator(
+      color: Colors.orange,
+      // Mengatur warna latar belakang lingkaran
+      backgroundColor: Colors.orange.shade50,
       onRefresh: _refreshData,
       child: ListView.separated(
         padding: const EdgeInsets.all(16),

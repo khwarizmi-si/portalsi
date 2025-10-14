@@ -5,25 +5,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:page_transition/page_transition.dart';
-import 'package:portal_si/models/user_model.dart';
-import 'package:portal_si/pages/portfolio_pages.dart';
-import 'package:portal_si/pages/post_detail.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
+
 import '../app_state.dart';
 import '../components/circular_avatar_fetcher.dart';
-import '../components/pressable_grid_item.dart'; // <-- IMPORT KOMPONEN BARU KITA
+import '../components/pressable_grid_item.dart';
 import '../components/verified_badge.dart';
-import '../components/video_thumbnail_widget.dart';
 import '../models/post_model.dart';
+import '../models/user_model.dart';
 import '../providers/navigation_provider.dart';
-import '../services/user_service.dart';
 import '../services/follow_service.dart';
+import '../services/user_service.dart';
 import '../utils/navigation_helper.dart';
 import 'chat_room.dart';
 import 'clips_viewer_page.dart';
 import 'followers_following_page.dart';
 import 'fullscreen_image_viewer.dart';
+import 'portfolio_pages.dart';
+import 'post_detail.dart';
 
 // --- WIDGET BIO ---
 class _ExpandableBio extends StatefulWidget {
@@ -137,19 +137,6 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     super.dispose();
   }
 
-  Widget _buildGridItemSkeleton() {
-    return Shimmer.fromColors(
-      baseColor: Colors.grey.shade300,
-      highlightColor: Colors.grey.shade100,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-    );
-  }
-
   void _showAvatarPopup(BuildContext context) {
     if (_profileData == null || _profileData!.profilePictureUrl == null) return;
 
@@ -195,17 +182,16 @@ class _OtherProfilePageState extends State<OtherProfilePage>
                     ),
                   );
                 },
-                child: Container(
+                child: SizedBox(
                   width: 300,
                   height: 300,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
-                  ),
                   child: CachedNetworkImage(
                     imageUrl: _profileData!.profilePictureUrl!,
                     fit: BoxFit.cover,
-                    placeholder: (context, url) => const ImagePlaceholder(),
+                    placeholder: (context, url) =>
+                    const Center(child: CircularProgressIndicator()),
+                    errorWidget: (context, url, error) =>
+                        Container(color: Colors.grey[200]),
                   ),
                 ),
               ),
@@ -273,13 +259,13 @@ class _OtherProfilePageState extends State<OtherProfilePage>
         });
       }
     } catch (e) {
-      final originalFollowersCount = _profileData!.followersCount;
-      final originalFollowingState = _isFollowing;
-      setState(() {
-        _isFollowing = originalFollowingState;
-        _profileData =
-            _profileData!.copyWith(followersCount: originalFollowersCount);
-      });
+      // Revert on error
+      if (mounted) {
+        setState(() {
+          // Re-fetch to be safe or revert manually
+          _loadAllData();
+        });
+      }
     } finally {
       if (mounted) setState(() => _isFollowActionLoading = false);
     }
@@ -401,6 +387,9 @@ class _OtherProfilePageState extends State<OtherProfilePage>
               _buildOtherProfileAppBar(_profileData),
               Expanded(
                 child: RefreshIndicator(
+                  color: Colors.orange,
+                  // Mengatur warna latar belakang lingkaran
+                  backgroundColor: Colors.orange.shade50,
                   onRefresh: _loadAllData,
                   child: SingleChildScrollView(
                     child: Column(
@@ -443,7 +432,9 @@ class _OtherProfilePageState extends State<OtherProfilePage>
       child: CachedNetworkImage(
         imageUrl: imageUrl,
         fit: BoxFit.cover,
-        placeholder: (context, url) => const ImagePlaceholder(),
+        placeholder: (context, url) =>
+            Shimmer.fromColors(baseColor: Colors.grey.shade300, highlightColor: Colors.grey.shade100, child: Container(color: Colors.white)),
+        errorWidget: (context, url, error) => Container(color: Colors.grey[300]),
       ),
     );
   }
@@ -591,7 +582,6 @@ class _OtherProfilePageState extends State<OtherProfilePage>
                   onPressed: () {
                     if (_profileData != null) {
                       Navigator.push(context, PageTransition(type: PageTransitionType.rightToLeft, child: PortfolioPage(user: _profileData!)));
-
                       HapticFeedback.lightImpact();
                     }
                   },
@@ -634,11 +624,11 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     );
   }
 
-  // --- 👇 METHOD INI TELAH DIMODIFIKASI TOTAL 👇 ---
+  // --- 👇 PERBAIKAN UTAMA DI SINI 👇 ---
   Widget _buildPostGrid() {
     if (_profileData == null || _profileData!.recentPosts.isEmpty) {
       return Container(
-        height: 300,
+        padding: const EdgeInsets.only(top: 80),
         alignment: Alignment.center,
         child: const Text('Belum ada postingan'),
       );
@@ -648,30 +638,17 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     const int columnCount = 3;
 
     return Container(
-      margin: const EdgeInsets.only(top: 0.0),
-      padding: const EdgeInsets.fromLTRB(12, 24, 12, 80),
-      constraints: const BoxConstraints(minHeight: 500),
-      decoration: BoxDecoration(
+      margin: const EdgeInsets.only(top: 24.0),
+      padding: const EdgeInsets.only(bottom: 80.0),
+      decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24.0),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
-            spreadRadius: 2,
-            blurRadius: 15,
-            offset: const Offset(0, -5),
-          )
-        ],
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24.0),
+          topRight: Radius.circular(24.0),
+        ),
       ),
-      child: (posts.isEmpty)
-          ? Container(
-        height: 300,
-        alignment: Alignment.center,
-        child: const Text('Belum ada postingan'),
-      )
-          : Padding(
+      child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 24, 12, 12),
-        // Bungkus GridView dengan AnimationLimiter
         child: AnimationLimiter(
           child: GridView.builder(
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -679,69 +656,53 @@ class _OtherProfilePageState extends State<OtherProfilePage>
               crossAxisSpacing: 8,
               mainAxisSpacing: 8,
             ),
-            itemCount: _profileData!.recentPosts.length,
+            itemCount: posts.length,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemBuilder: (context, index) {
-              final post = _profileData!.recentPosts[index];
-              Widget mediaDisplay;
-              if (post.isVideo) {
-                // Catatan: Sama seperti sebelumnya, VideoThumbnailWidget mungkin
-                // perlu penyesuaian untuk menampilkan placeholder.
-                mediaDisplay =
-                    VideoThumbnailWidget(videoUrl: post.mediaUrl);
-              } else {
-                // SEMULA: Menggunakan Image.network biasa
-                // mediaDisplay =
-                //     Image.network(post.mediaUrl, fit: BoxFit.cover);
+              final post = posts[index];
 
-                // SESUDAH: Menggunakan CachedNetworkImage dengan placeholder
-                mediaDisplay = CachedNetworkImage(
-                  imageUrl: post.mediaUrl,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => _buildGridItemSkeleton(),
-                  errorWidget: (context, url, error) => const Icon(Icons.error),
-                );
-              }
+              return AnimationConfiguration.staggeredGrid(
+                position: index,
+                duration: const Duration(milliseconds: 400),
+                columnCount: columnCount,
+                child: ScaleAnimation(
+                  child: FadeInAnimation(
+                    child: PressableGridItem(
+                      key: ValueKey(post.postId),
+                      post: post,
+                      user: _profileData!,
+                      onTap: () {
+                        final navProvider = Provider.of<NavigationProvider>(context, listen: false);
 
-            return AnimationConfiguration.staggeredGrid(
-              position: index,
-              duration: const Duration(milliseconds: 400),
-              columnCount: columnCount,
-              child: ScaleAnimation(
-                child: FadeInAnimation(
-                  child: PressableGridItem(
-                    key: ValueKey(post.postId),
-                    post: post,
-                    user: _profileData!, // Menggunakan data profil yang sedang dilihat
-                    onTap: () {
-                      final navProvider = Provider.of<NavigationProvider>(context, listen: false);
-
-                      if (post.isVideo) {
-                        final fullPostObject = Post.fromJson({
-                          'id': post.postId,
-                          'caption': post.caption,
-                          'media_url': post.mediaUrl,
-                          'is_video': post.isVideo,
-                          'created_at': post.createdAt.toIso8601String(),
-                          'user': _profileData!.toJson(),
-                        });
-                        Navigator.push(context, MaterialPageRoute(builder: (context) => ClipsViewerPage(initialClip: fullPostObject)));
-                      } else {
-                        navProvider.replaceOverlay(PostDetail(postId: post.postId));
-                      }
-                    },
+                        if (post.isVideo) {
+                          final fullPostObject = Post.fromJson({
+                            'id': post.postId,
+                            'caption': post.caption,
+                            'media_url': post.mediaUrl,
+                            'is_video': post.isVideo,
+                            'created_at': post.createdAt.toIso8601String(),
+                            'user': _profileData!.toJson(),
+                            // Pastikan API mengirim data ini atau beri nilai default
+                            'is_liked_by_user': post.isLikedByUser,
+                            'is_bookmarked': post.isBookmarked,
+                          });
+                          Navigator.push(context, MaterialPageRoute(builder: (context) => ClipsViewerPage(initialClip: fullPostObject)));
+                        } else {
+                          navProvider.replaceOverlay(PostDetail(postId: post.postId));
+                        }
+                      },
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
   }
 }
-
 
 class ProfilePageSkeleton extends StatelessWidget {
   const ProfilePageSkeleton({super.key});

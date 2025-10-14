@@ -127,6 +127,9 @@ class MessageListPage extends StatelessWidget {
                             TextStyle(fontSize: 16, color: Colors.grey)));
                   }
                   return RefreshIndicator(
+                    color: Colors.orange,
+                    // Mengatur warna latar belakang lingkaran
+                    backgroundColor: Colors.orange.shade50,
                     onRefresh: () => controller.fetchConversations(),
                     child: ListView.builder(
                       padding: const EdgeInsets.only(bottom: 100),

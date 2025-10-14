@@ -118,6 +118,9 @@ class _NotificationList extends StatelessWidget {
     ];
 
     return RefreshIndicator(
+      color: Colors.orange,
+      // Mengatur warna latar belakang lingkaran
+      backgroundColor: Colors.orange.shade50,
       onRefresh: () => controller.refreshNotifications(),
       child: ListView(
         controller: scrollController,

@@ -82,6 +82,9 @@ class _PortfolioPageState extends State<PortfolioPage> {
         ],
       ),
       body: RefreshIndicator(
+        color: Colors.orange,
+        // Mengatur warna latar belakang lingkaran
+        backgroundColor: Colors.orange.shade50,
         onRefresh: () async => _loadPortfolios(),
         child: FutureBuilder<List<Portfolio>>(
           future: _portfoliosFuture,

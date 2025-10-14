@@ -127,7 +127,7 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.indigo.withOpacity(0.3),
+                                    color: Colors.red.withOpacity(0.3),
                                     blurRadius: 12,
                                     offset: const Offset(0, 5),
                                   ),
@@ -832,6 +832,9 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
         // Jika ada error, tampilkan widget error yang baru
         if (controller.errorMessage != null) {
           return RefreshIndicator(
+            color: Colors.orange,
+            // Mengatur warna latar belakang lingkaran
+            backgroundColor: Colors.orange.shade50,
             onRefresh: () async {
               // Fungsi refresh yang sama dengan yang ada di body utama
               await Future.wait([
@@ -854,6 +857,9 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
         // Kondisi jika feed kosong, tidak berubah
         if (controller.feedItems.isEmpty && controller.pinnedPost == null && controller.pinnedAnnouncements.isEmpty) {
           return RefreshIndicator(
+            color: Colors.orange,
+            // Mengatur warna latar belakang lingkaran
+            backgroundColor: Colors.orange.shade50,
             onRefresh: () async {
               await Future.wait([
                 Provider.of<HomeController>(context, listen: false).refreshDashboardData(),
@@ -870,6 +876,9 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
 
         // Tampilan body utama jika tidak ada error, tidak berubah
         return RefreshIndicator(
+          color: Colors.orange,
+          // Mengatur warna latar belakang lingkaran
+          backgroundColor: Colors.orange.shade50,
           onRefresh: () async {
             await Future.wait([
               Provider.of<HomeController>(context, listen: false).refreshDashboardData(),

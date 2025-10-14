@@ -424,6 +424,9 @@ class _RankingPageState extends State<RankingPage> with SingleTickerProviderStat
           final remaining = students.skip(3).toList();
 
           return RefreshIndicator(
+            color: Colors.orange,
+            // Mengatur warna latar belakang lingkaran
+            backgroundColor: Colors.orange.shade50,
             onRefresh: () async => _reloadData(),
             child: ListView(
               children: [

@@ -32,393 +32,8 @@ import 'post_detail.dart';
 import 'settings_page.dart';
 import 'share_profile_page.dart';
 
-// --- WIDGET BARU UNTUK SHIMMER PLACEHOLDER ---
-class ImagePlaceholder extends StatelessWidget {
-  const ImagePlaceholder({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Shimmer.fromColors(
-      baseColor: Colors.grey[300]!,
-      highlightColor: Colors.grey[100]!,
-      child: Container(color: Colors.white),
-    );
-  }
-}
-
-class PostPopupContent extends StatefulWidget {
-  final SimplePost post;
-  final User user;
-  final Function(SimplePost) onDelete;
-
-  const PostPopupContent({
-    Key? key,
-    required this.post,
-    required this.user,
-    required this.onDelete,
-  }) : super(key: key);
-
-  @override
-  State<PostPopupContent> createState() => _PostPopupContentState();
-}
-
-class _PostPopupContentState extends State<PostPopupContent> {
-  Color _iconColor = Colors.white;
-
-  @override
-  void initState() {
-    super.initState();
-    _updateIconColor();
-  }
-
-  Future<void> _updateIconColor() async {
-    try {
-      final imageProvider = CachedNetworkImageProvider(widget.post.mediaUrl);
-      final PaletteGenerator paletteGenerator =
-          await PaletteGenerator.fromImageProvider(
-            imageProvider,
-            size: const Size(100, 100),
-            maximumColorCount: 20,
-          );
-      final Color dominantColor =
-          paletteGenerator.dominantColor?.color ?? Colors.black;
-      final double luminance = dominantColor.computeLuminance();
-      if (mounted) {
-        setState(() {
-          _iconColor = luminance > 0.4 ? Colors.black87 : Colors.white;
-        });
-      }
-    } catch (e) {
-      print("Error saat menganalisis warna gambar: $e");
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 8.0,
-              vertical: 12.0,
-            ),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: ClipOval(
-                    child: CachedNetworkImage(
-                      imageUrl: widget.user.profilePictureUrl ?? '',
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => const ImagePlaceholder(),
-                      errorWidget: (context, url, error) =>
-                          const CircleAvatar(backgroundColor: Colors.grey),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  widget.user.username,
-                  style: TextStyle(
-                    color: _iconColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-                const Spacer(),
-                PopupMenuButton<String>(
-                  icon: Icon(Icons.more_horiz, color: _iconColor),
-                  onSelected: (String value) {
-                    Navigator.of(context).pop();
-                    if (value == 'delete') {
-                      widget.onDelete(widget.post);
-                    }
-                  },
-                  itemBuilder: (BuildContext context) =>
-                      <PopupMenuEntry<String>>[
-                        const PopupMenuItem<String>(
-                          value: 'delete',
-                          child: Text('Hapus Postingan'),
-                        ),
-                      ],
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 0.0),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Hero(
-                tag: 'post-hero-${widget.post.postId}',
-                child: CachedNetworkImage(
-                  imageUrl: widget.post.mediaUrl,
-                  fit: BoxFit.contain,
-                  placeholder: (context, url) => const AspectRatio(
-                    aspectRatio: 1,
-                    child: ImagePlaceholder(),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class TransientPostPreview extends StatelessWidget {
-  final SimplePost post;
-  final User user;
-
-  const TransientPostPreview({Key? key, required this.post, required this.user})
-    : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    const Color textColor = Colors.white;
-
-    return Material(
-      color: Colors.transparent,
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12.0),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: ClipOval(
-                      child: CachedNetworkImage(
-                        imageUrl: user.profilePictureUrl ?? '',
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => const ImagePlaceholder(),
-                        errorWidget: (context, url, error) =>
-                            const CircleAvatar(backgroundColor: Colors.grey),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    user.username,
-                    style: const TextStyle(
-                      color: textColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Hero(
-                tag: 'post-hero-${post.postId}',
-                child: CachedNetworkImage(
-                  imageUrl: post.mediaUrl,
-                  fit: BoxFit.contain,
-                  placeholder: (context, url) => const AspectRatio(
-                    aspectRatio: 1,
-                    child: ImagePlaceholder(),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class PressableGridItem extends StatefulWidget {
-  final SimplePost post;
-  final User user;
-  final VoidCallback onTap;
-
-  const PressableGridItem({
-    Key? key,
-    required this.post,
-    required this.user,
-    required this.onTap,
-  }) : super(key: key);
-
-  @override
-  State<PressableGridItem> createState() => _PressableGridItemState();
-}
-
-class _PressableGridItemState extends State<PressableGridItem> {
-  bool _isPressed = false;
-  OverlayEntry? _overlayEntry;
-
-  @override
-  void dispose() {
-    _removePreviewOverlay();
-    super.dispose();
-  }
-
-  void _showPreviewOverlay(BuildContext context) {
-    if (_overlayEntry != null) return;
-
-    final overlayState = Overlay.of(context);
-    _overlayEntry = OverlayEntry(
-      builder: (context) {
-        return Stack(
-          children: [
-            BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-              child: Container(color: Colors.black.withOpacity(0.5)),
-            ),
-            Center(
-              child: TransientPostPreview(post: widget.post, user: widget.user),
-            ),
-          ],
-        );
-      },
-    );
-
-    overlayState?.insert(_overlayEntry!);
-  }
-
-  void _removePreviewOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-  }
-
-  void _onTapDown(TapDownDetails details) => setState(() => _isPressed = true);
-  void _onTapUp(TapUpDetails details) {
-    setState(() => _isPressed = false);
-    widget.onTap();
-  }
-
-  void _onTapCancel() {
-    if (mounted) {
-      setState(() => _isPressed = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    Widget mediaDisplay;
-    if (widget.post.isVideo) {
-      mediaDisplay = VideoThumbnailWidget(videoUrl: widget.post.mediaUrl);
-    } else {
-      mediaDisplay = CachedNetworkImage(
-        imageUrl: widget.post.mediaUrl,
-        fit: BoxFit.cover,
-        // SEMULA: Hanya Container berwarna abu-abu
-        // placeholder: (context, url) => Container(color: Colors.grey[200]),
-
-        // SESUDAH: Menggunakan Shimmer effect yang lebih menarik
-        placeholder: (context, url) => Shimmer.fromColors(
-          baseColor: Colors.grey.shade300,
-          highlightColor: Colors.grey.shade100,
-          child: Container(color: Colors.white),
-        ),
-        errorWidget: (context, url, error) => Container(
-          color: Colors.grey[300],
-          child: const Icon(Icons.broken_image, color: Colors.grey),
-        ),
-        placeholder: (context, url) => const ImagePlaceholder(),
-        errorWidget: (context, url, error) =>
-            Container(color: Colors.grey[300]),
-      );
-    }
-
-    return GestureDetector(
-      onTapDown: _onTapDown,
-      onTapUp: _onTapUp,
-      onTapCancel: _onTapCancel,
-      onLongPress: () => _showPreviewOverlay(context),
-      onLongPressUp: () => _removePreviewOverlay(),
-      child: AnimatedScale(
-        scale: _isPressed ? 0.95 : 1.0,
-        duration: const Duration(milliseconds: 150),
-        curve: Curves.easeInOut,
-        child: Container(
-          clipBehavior: Clip.antiAlias,
-          decoration: ShapeDecoration(
-            shape: ContinuousRectangleBorder(
-              borderRadius: BorderRadius.circular(40.0),
-            ),
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (widget.post.isVideo)
-                mediaDisplay
-              else
-                Hero(
-                  tag: 'post-hero-${widget.post.postId}',
-                  child: mediaDisplay,
-                ),
-              if (widget.post.isVideo)
-                const Positioned(
-                  top: 8.0,
-                  right: 8.0,
-                  child: Icon(
-                    Icons.video_camera_back_rounded,
-                    color: Colors.white,
-                    size: 22.0,
-                    shadows: [Shadow(color: Colors.black87, blurRadius: 8)],
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class HeroDialogRoute<T> extends PageRoute<T> {
-  HeroDialogRoute({required this.builder}) : super();
-  final WidgetBuilder builder;
-  @override
-  bool get opaque => false;
-  @override
-  bool get barrierDismissible => true;
-  @override
-  Duration get transitionDuration => const Duration(milliseconds: 350);
-  @override
-  bool get maintainState => true;
-  @override
-  Color get barrierColor => Colors.black.withOpacity(0.6);
-  @override
-  String get barrierLabel => 'Popup';
-  @override
-  Widget buildPage(
-    BuildContext context,
-    Animation<double> animation,
-    Animation<double> secondaryAnimation,
-  ) {
-    return builder(context);
-  }
-
-  @override
-  Widget buildTransitions(
-    BuildContext context,
-    Animation<double> animation,
-    Animation<double> secondaryAnimation,
-    Widget child,
-  ) {
-    return FadeTransition(
-      opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
-      child: child,
-    );
-  }
-}
+// Definisi ImagePlaceholder sekarang ada di pressable_grid_item.dart
+// Definisi PostPopupContent, TransientPostPreview, PressableGridItem, HeroDialogRoute dihapus dari sini karena tidak dipakai atau sudah dipindah
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({Key? key}) : super(key: key);
@@ -426,8 +41,7 @@ class ProfilePage extends StatefulWidget {
   State<ProfilePage> createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage>
-    with AutomaticKeepAliveClientMixin {
+class _ProfilePageState extends State<ProfilePage> with AutomaticKeepAliveClientMixin {
   final ProfileService _profileService = ProfileService();
   late Future<User> _userFuture;
   late Future<List<dynamic>> _suggestionsFuture;
@@ -443,15 +57,13 @@ class _ProfilePageState extends State<ProfilePage>
     _loadData();
     _scrollController = ScrollController();
     _scrollController.addListener(() {
-      final scrollProvider = Provider.of<ScrollProvider>(
-        context,
-        listen: false,
-      );
+      final scrollProvider = Provider.of<ScrollProvider>(context, listen: false);
       final direction = _scrollController.position.userScrollDirection;
 
       if (direction == ScrollDirection.reverse) {
         scrollProvider.setScrolled(true);
-      } else if (direction == ScrollDirection.forward) {
+      }
+      else if (direction == ScrollDirection.forward) {
         scrollProvider.setScrolled(false);
       }
     });
@@ -475,12 +87,11 @@ class _ProfilePageState extends State<ProfilePage>
     final result = await Navigator.push(
       context,
       PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            CreateStoryPage(
-              currentUser: user,
-              heroTag: heroTag,
-              initialImageUrl: user.profilePictureUrl,
-            ),
+        pageBuilder: (context, animation, secondaryAnimation) => CreateStoryPage(
+          currentUser: user,
+          heroTag: heroTag,
+          initialImageUrl: user.profilePictureUrl,
+        ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
         },
@@ -509,13 +120,11 @@ class _ProfilePageState extends State<ProfilePage>
         _suggestionsFuture = _profileService.fetchSuggestions();
         _avatarKey = UniqueKey();
       });
+
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal memperbarui profil: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Gagal memperbarui profil: $e'), backgroundColor: Colors.red),
         );
         setState(() {
           _userFuture = Future.error(e);
@@ -527,9 +136,7 @@ class _ProfilePageState extends State<ProfilePage>
   Future<void> _navigateToEditProfile(User currentUser) async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => EditProfilePage(initialProfile: currentUser),
-      ),
+      MaterialPageRoute(builder: (context) => EditProfilePage(initialProfile: currentUser)),
     );
     if (result == true && mounted) {
       await _handleRefresh();
@@ -537,9 +144,7 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   void _navigateToSettings() {
-    Navigator.of(
-      context,
-    ).push(ZoomPageRoute(page: const SettingsPage(), buttonKey: _menuKey));
+    Navigator.of(context).push(ZoomPageRoute(page: const SettingsPage(), buttonKey: _menuKey));
   }
 
   // Metode _showPostPopup dan PostPopupContent tidak lagi digunakan di sini
@@ -561,12 +166,16 @@ class _ProfilePageState extends State<ProfilePage>
 
     if (result != null && mounted) {
       final userToNavigate = User.fromJson(result);
-      NavigationHelper.navigateToProfile(context, userToNavigate);
+      NavigationHelper.navigateToProfile(
+        context,
+        userToNavigate,
+      );
     }
   }
 
   @override
   bool get wantKeepAlive => true;
+
 
   @override
   Widget build(BuildContext context) {
@@ -578,14 +187,11 @@ class _ProfilePageState extends State<ProfilePage>
       body: FutureBuilder<User>(
         future: _userFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting &&
-              !snapshot.hasData) {
+          if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
             return Column(
               children: [
                 _buildProfileAppBar(null),
-                const Expanded(
-                  child: Center(child: CircularProgressIndicator()),
-                ),
+                const Expanded(child: Center(child: CircularProgressIndicator())),
               ],
             );
           }
@@ -595,13 +201,16 @@ class _ProfilePageState extends State<ProfilePage>
                 _buildProfileAppBar(null),
                 Expanded(
                   child: RefreshIndicator(
+                    color: Colors.orange,
+                    // Mengatur warna latar belakang lingkaran
+                    backgroundColor: Colors.orange.shade50,
                     onRefresh: _handleRefresh,
                     child: CustomScrollView(
                       slivers: [
                         SliverFillRemaining(
                           hasScrollBody: false,
                           child: _buildErrorStateWidget(snapshot.error!),
-                        ),
+                        )
                       ],
                     ),
                   ),
@@ -613,9 +222,7 @@ class _ProfilePageState extends State<ProfilePage>
             return Column(
               children: [
                 _buildProfileAppBar(null),
-                const Expanded(
-                  child: Center(child: Text("Data pengguna tidak ditemukan.")),
-                ),
+                const Expanded(child: Center(child: Text("Data pengguna tidak ditemukan."))),
               ],
             );
           }
@@ -626,6 +233,9 @@ class _ProfilePageState extends State<ProfilePage>
               _buildProfileAppBar(user),
               Expanded(
                 child: RefreshIndicator(
+                  color: Colors.orange,
+                  // Mengatur warna latar belakang lingkaran
+                  backgroundColor: Colors.orange.shade50,
                   onRefresh: _handleRefresh,
                   child: ListView(
                     controller: _scrollController,
@@ -652,7 +262,11 @@ class _ProfilePageState extends State<ProfilePage>
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(Icons.wifi_off_rounded, size: 80, color: Colors.grey.shade400),
+          Icon(
+            Icons.wifi_off_rounded,
+            size: 80,
+            color: Colors.grey.shade400,
+          ),
           const SizedBox(height: 24),
           const Text(
             "Oops, Gagal Memuat Profil",
@@ -694,10 +308,7 @@ class _ProfilePageState extends State<ProfilePage>
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 40,
-                  vertical: 14,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
                 child: const Text(
                   'Coba Lagi',
                   style: TextStyle(
@@ -754,7 +365,7 @@ class _ProfilePageState extends State<ProfilePage>
             color: Colors.black.withOpacity(0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
-          ),
+          )
         ],
       ),
       child: Padding(
@@ -767,14 +378,11 @@ class _ProfilePageState extends State<ProfilePage>
                 children: [
                   Text(
                     user?.username ?? 'Profil',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 20,
-                      color: Colors.black,
-                    ),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black),
                   ),
-                  const SizedBox(width: 5),
-                  if (user?.isVerified ?? false) const VerifiedBadge(size: 18),
+                  const SizedBox(width: 5,),
+                  if (user?.isVerified ?? false)
+                    const VerifiedBadge(size: 18),
                 ],
               ),
             ),
@@ -791,10 +399,8 @@ class _ProfilePageState extends State<ProfilePage>
 
   Widget _buildProfileHeader(User user) {
     const double avatarRadius = 45;
-    const String placeholderBanner =
-        'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=2070&auto=format&fit=crop';
-    final String bannerImageUrl =
-        (user.bannerUrl != null && user.bannerUrl!.isNotEmpty)
+    const String placeholderBanner = 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=2070&auto=format&fit=crop';
+    final String bannerImageUrl = (user.bannerUrl != null && user.bannerUrl!.isNotEmpty)
         ? user.bannerUrl!
         : placeholderBanner;
 
@@ -812,8 +418,7 @@ class _ProfilePageState extends State<ProfilePage>
                 imageUrl: bannerImageUrl,
                 fit: BoxFit.cover,
                 placeholder: (context, url) => const ImagePlaceholder(),
-                errorWidget: (context, url, error) =>
-                    Container(color: Colors.grey),
+                errorWidget: (context, url, error) => Container(color: Colors.grey),
               ),
             ),
             Padding(
@@ -837,28 +442,24 @@ class _ProfilePageState extends State<ProfilePage>
           left: 16,
           right: 16,
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              _buildAvatarWithStoryAddButton(user, avatarRadius, heroAvatarTag),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 0.0),
-                  child: _buildStats(user),
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                _buildAvatarWithStoryAddButton(user, avatarRadius, heroAvatarTag),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 0.0),
+                    child: _buildStats(user),
+                  ),
                 ),
-              ),
-            ],
+              ]
           ),
         ),
       ],
     );
   }
 
-  Widget _buildAvatarWithStoryAddButton(
-    User user,
-    double radius,
-    String heroTag,
-  ) {
+  Widget _buildAvatarWithStoryAddButton(User user, double radius, String heroTag) {
     return Hero(
       tag: heroTag,
       child: Material(
@@ -923,82 +524,69 @@ class _ProfilePageState extends State<ProfilePage>
             spreadRadius: 2,
             blurRadius: 15,
             offset: const Offset(0, -5),
-          ),
+          )
         ],
       ),
       child: (posts.isEmpty)
           ? Container(
-              height: 300,
-              alignment: Alignment.center,
-              child: const Text('Belum ada postingan'),
-            )
+        height: 300,
+        alignment: Alignment.center,
+        child: const Text('Belum ada postingan'),
+      )
           : Padding(
-              padding: const EdgeInsets.fromLTRB(12, 24, 12, 72),
-              child: AnimationLimiter(
-                child: GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(12),
-                  itemCount: posts.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: columnCount,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                  ),
-                  itemBuilder: (context, index) {
-                    final SimplePost post = posts[index];
-                    return AnimationConfiguration.staggeredGrid(
-                      position: index,
-                      duration: const Duration(milliseconds: 400),
-                      columnCount: columnCount,
-                      child: SlideAnimation(
-                        verticalOffset: 50.0,
-                        child: FadeInAnimation(
-                          child: PressableGridItem(
-                            key: ValueKey(post.postId),
-                            post: post,
-                            user: user,
-                            onTap: () {
-                              if (post.isVideo) {
-                                final fullPostObject = Post(
-                                  id: post.postId,
-                                  caption: post.caption,
-                                  mediaUrl: post.mediaUrl,
-                                  isVideo: post.isVideo,
-                                  createdAt: post.createdAt,
-                                  user: user,
-                                  likesCount: 0,
-                                  commentsCount: 0,
-                                  isLikedByUser: post.isLikedByUser,
-                                  isBookmarked: post.isBookmarked,
-                                );
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => ClipsViewerPage(
-                                      initialClip: fullPostObject,
-                                    ),
-                                  ),
-                                );
-                              } else {
-                                final navProvider =
-                                    Provider.of<NavigationProvider>(
-                                      context,
-                                      listen: false,
-                                    );
-                                navProvider.showOverlay(
-                                  PostDetail(postId: post.postId),
-                                );
-                              }
-                            },
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
+        padding: const EdgeInsets.fromLTRB(12, 24, 12, 72),
+        child: AnimationLimiter(
+          child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(12),
+            itemCount: posts.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columnCount,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
             ),
+            itemBuilder: (context, index) {
+              final SimplePost post = posts[index];
+              return AnimationConfiguration.staggeredGrid(
+                position: index,
+                duration: const Duration(milliseconds: 400),
+                columnCount: columnCount,
+                child: SlideAnimation(
+                  verticalOffset: 50.0,
+                  child: FadeInAnimation(
+                    child: PressableGridItem(
+                      key: ValueKey(post.postId),
+                      post: post,
+                      user: user,
+                      onTap: () {
+                        if (post.isVideo) {
+                          final fullPostObject = Post(
+                            id: post.postId,
+                            caption: post.caption,
+                            mediaUrl: post.mediaUrl,
+                            isVideo: post.isVideo,
+                            createdAt: post.createdAt,
+                            user: user,
+                            likesCount: 0,
+                            commentsCount: 0,
+                            isLikedByUser: post.isLikedByUser,
+                            isBookmarked: post.isBookmarked,
+                          );
+                          Navigator.push(context, MaterialPageRoute(builder: (context) => ClipsViewerPage(initialClip: fullPostObject)));
+                        } else {
+                          final navProvider = Provider.of<NavigationProvider>(context, listen: false);
+                          navProvider.showOverlay(PostDetail(postId: post.postId));
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
     );
   }
 
@@ -1033,28 +621,16 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   Widget _buildBio(User user) {
-    final bioItems =
-        user.bio?.split('\n').where((line) => line.isNotEmpty).toList() ?? [];
+    final bioItems = user.bio?.split('\n').where((line) => line.isNotEmpty).toList() ?? [];
     if (bioItems.isEmpty) {
       return const Text("Tidak ada bio", style: TextStyle(color: Colors.grey));
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: bioItems
-          .map(
-            (item) => Padding(
-              padding: const EdgeInsets.only(bottom: 2.0),
-              child: Text(
-                item,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[800],
-                  height: 1.4,
-                ),
-              ),
-            ),
-          )
-          .toList(),
+      children: bioItems.map((item) => Padding(
+        padding: const EdgeInsets.only(bottom: 2.0),
+        child: Text(item, style: TextStyle(fontSize: 14, color: Colors.grey[800], height: 1.4)),
+      )).toList(),
     );
   }
 
@@ -1068,15 +644,10 @@ class _ProfilePageState extends State<ProfilePage>
               backgroundColor: const Color(0xFFF0F0F0),
               foregroundColor: Colors.black,
               elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),
-            child: const Text(
-              'Edit Profil',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+            child: const Text('Edit Profil', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ),
         const SizedBox(width: 12),
@@ -1086,8 +657,7 @@ class _ProfilePageState extends State<ProfilePage>
               Navigator.of(context).push(
                 MaterialPageRoute(
                   fullscreenDialog: true,
-                  builder: (context) =>
-                      ShareProfilePage(username: user.username),
+                  builder: (context) => ShareProfilePage(username: user.username),
                 ),
               );
             },
@@ -1095,15 +665,10 @@ class _ProfilePageState extends State<ProfilePage>
               backgroundColor: const Color(0xFFF0F0F0),
               foregroundColor: Colors.black,
               elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),
-            child: const Text(
-              'Bagikan Profile',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+            child: const Text('Bagikan Profile', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ),
         const SizedBox(width: 12),
@@ -1117,18 +682,12 @@ class _ProfilePageState extends State<ProfilePage>
             backgroundColor: const Color(0xFFF0F0F0),
             foregroundColor: Colors.black,
             elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             padding: const EdgeInsets.all(12),
           ),
           child: Icon(
-            _showSuggestions
-                ? Icons.person_add_disabled_outlined
-                : Icons.person_add_alt_1_outlined,
-            semanticLabel: _showSuggestions
-                ? 'Sembunyikan Saran'
-                : 'Tampilkan Saran',
+            _showSuggestions ? Icons.person_add_disabled_outlined : Icons.person_add_alt_1_outlined,
+            semanticLabel: _showSuggestions ? 'Sembunyikan Saran' : 'Tampilkan Saran',
           ),
         ),
       ],
@@ -1139,10 +698,8 @@ class _ProfilePageState extends State<ProfilePage>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          count,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
+        Text(count, style: const TextStyle(fontSize: 16, fontWeight:
+        FontWeight.bold)),
         const SizedBox(height: 2),
         Text(label, style: TextStyle(fontSize: 13, color: Colors.grey[600])),
       ],
@@ -1221,7 +778,6 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
     // Inisialisasi status follow jika ada
     _isFollowed = widget.user['is_following'] ?? false;
   }
-
   Future<void> _toggleFollowStatus() async {
     setState(() => _isLoading = true);
 
@@ -1282,9 +838,7 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
     final username = widget.user['username'] ?? 'No Username';
     final fullName = widget.user['full_name'] ?? 'No Name';
     final bool isFollowBack = widget.user['is_follow_back'] ?? false;
-    final String buttonText = _isFollowed
-        ? 'Mengikuti'
-        : (isFollowBack ? 'Ikuti Balik' : 'Ikuti');
+    final String buttonText = _isFollowed ? 'Mengikuti' : (isFollowBack ? 'Ikuti Balik' : 'Ikuti');
     final bool isVerified = widget.user['is_verified'] ?? false;
 
     return Padding(
@@ -1346,30 +900,22 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (isVerified) const SizedBox(width: 2),
-                      if (isVerified) const VerifiedBadge(size: 14),
+                      if (isVerified)
+                        const SizedBox(width: 2,),
+                      if (isVerified)
+                        const VerifiedBadge(size: 14),
                     ],
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    fullName,
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  Text(fullName, style: TextStyle(fontSize: 12, color: Colors.grey.shade600), overflow: TextOverflow.ellipsis),
                   const Spacer(),
                   ElevatedButton(
                     onPressed: _isLoading ? null : _toggleFollowStatus,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _isFollowed
-                          ? Colors.grey.shade300
-                          : Colors.transparent,
-                      shadowColor: _isFollowed
-                          ? Colors.black.withOpacity(0.2)
-                          : Colors.transparent,
+                      backgroundColor: _isFollowed ? Colors.grey.shade300 : Colors.transparent,
+                      shadowColor: _isFollowed ? Colors.black.withOpacity(0.2) : Colors.transparent,
                       padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       elevation: _isFollowed ? 0 : 2,
                     ),
                     child: Ink(
@@ -1377,44 +923,37 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
                         gradient: _isFollowed
                             ? null
                             : LinearGradient(
-                                colors: [
-                                  Colors.amber.shade600,
-                                  Colors.orange.shade800,
-                                ],
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight,
-                              ),
+                          colors: [
+                            Colors.amber.shade600,
+                            Colors.orange.shade800,
+                          ],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Container(
-                        constraints: const BoxConstraints(
-                          minWidth: 88,
-                          minHeight: 36,
-                        ),
+                        constraints: const BoxConstraints(minWidth: 88, minHeight: 36),
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         alignment: Alignment.center,
                         child: _isLoading
                             ? SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 3.5,
-                                  color: _isFollowed
-                                      ? Colors.black54
-                                      : Colors.white,
-                                ),
-                              )
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3.5,
+                            color: _isFollowed ? Colors.black54 : Colors.white,
+                          ),
+                        )
                             : Text(
-                                buttonText,
-                                style: TextStyle(
-                                  color: _isFollowed
-                                      ? Colors.black54
-                                      : Colors.white,
-                                ),
-                              ),
+                          buttonText,
+                          style: TextStyle(
+                            color: _isFollowed ? Colors.black54 : Colors.white,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                  )
                 ],
               ),
             ),

@@ -219,9 +219,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       child: MaterialApp(
         title: 'Portal SI',
         theme: ThemeData(
-          primarySwatch: Colors.blue,
+          primarySwatch: Colors.orange,
           fontFamily: 'AlanSans',
           visualDensity: VisualDensity.adaptivePlatformDensity,
+          // Mendefinisikan tema khusus untuk ProgressIndicator
+          progressIndicatorTheme: const ProgressIndicatorThemeData(
+            color: Colors.orange, // Semua indikator akan berwarna oranye
+          ),
         ),
         navigatorObservers: [
           CacheNavigationObserver(),
