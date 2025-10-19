@@ -340,10 +340,12 @@ class _FadeSlideUpRoute extends PageRouteBuilder {
 }
 
 // === WIDGET POPUP MENU YANG DIPERBARUI ===
+// GANTI KESELURUHAN WIDGET _AttachmentPopupMenu DENGAN YANG INI
 class _AttachmentPopupMenu extends StatelessWidget {
   const _AttachmentPopupMenu({super.key});
 
   Future<void> _pickAndSendImagesForWeb(BuildContext context) async {
+    // ... (Logika fungsi ini tidak perlu diubah, biarkan seperti aslinya)
     final chatController = context.read<ChatRoomController>();
 
     FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -374,21 +376,22 @@ class _AttachmentPopupMenu extends StatelessWidget {
     }
   }
 
+  // Ganti isi dari method build() ini
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: Container(
         width: 250,
-        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        padding: const EdgeInsets.all(8.0), // Padding di container utama
         decoration: BoxDecoration(
           color: kLightSurfaceColor,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20), // Radius lebih besar
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.1),
-              blurRadius: 15,
-              offset: const Offset(0, 4),
+              blurRadius: 20,
+              offset: const Offset(0, 5),
             )
           ],
         ),
@@ -400,7 +403,7 @@ class _AttachmentPopupMenu extends StatelessWidget {
               context,
               icon: Icons.camera_alt_rounded,
               text: 'Kamera',
-              iconBackgroundColor: Colors.pink,
+              iconColor: Colors.pinkAccent, // <- Ganti ke iconColor
               onTap: () {
                 final navigator = Navigator.of(context);
                 final chatController = context.read<ChatRoomController>();
@@ -415,11 +418,13 @@ class _AttachmentPopupMenu extends StatelessWidget {
                 );
               },
             ),
+            // --- 👇 TAMBAHKAN DIVIDER DI SINI 👇 ---
+            Divider(height: 1, thickness: 1, color: Colors.grey.shade200, indent: 70, endIndent: 16),
             _buildPopupMenuItem(
               context,
               icon: Icons.image_rounded,
               text: 'Galeri',
-              iconBackgroundColor: Colors.purple,
+              iconColor: Colors.purpleAccent, // <- Ganti ke iconColor
               onTap: () {
                 final navigator = Navigator.of(context);
                 final chatController = context.read<ChatRoomController>();
@@ -441,13 +446,16 @@ class _AttachmentPopupMenu extends StatelessWidget {
                 }
               },
             ),
+            // --- 👇 TAMBAHKAN DIVIDER DI SINI 👇 ---
+            Divider(height: 1, thickness: 1, color: Colors.grey.shade200, indent: 70, endIndent: 16),
             _buildPopupMenuItem(
               context,
               icon: Icons.insert_drive_file_rounded,
               text: 'Dokumen',
-              iconBackgroundColor: Colors.orange,
+              iconColor: Colors.orangeAccent, // <- Ganti ke iconColor
               onTap: () {
                 Navigator.pop(context);
+                // TODO: Tambahkan logika untuk pilih dokumen
               },
             ),
           ],
@@ -456,28 +464,34 @@ class _AttachmentPopupMenu extends StatelessWidget {
     );
   }
 
+  // PASTE FUNGSI HELPER YANG BARU DI SINI
   Widget _buildPopupMenuItem(BuildContext context,
       {required IconData icon,
         required String text,
         required VoidCallback onTap,
-        required Color iconBackgroundColor}) {
+        required Color iconColor}) {
     return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(12.0),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
         child: Row(
           children: [
             Container(
-              width: 38,
-              height: 38,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                color: iconBackgroundColor,
+                color: Colors.grey.shade100,
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: Colors.white, size: 20),
+              child: Icon(icon, color: iconColor, size: 22),
             ),
             const SizedBox(width: 16),
-            Text(text, style: const TextStyle(color: kTextColor, fontSize: 16, fontWeight: FontWeight.w500)),
+            Text(text,
+                style: const TextStyle(
+                    color: kTextColor,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500)),
           ],
         ),
       ),
@@ -710,6 +724,7 @@ class _ChatRoomPageState extends State<ChatRoomPage> {
   }
 }
 
+// GANTI KESELURUHAN WIDGET INI
 class _ChatAppBar extends StatelessWidget {
   final User user;
   const _ChatAppBar({required this.user});
@@ -769,28 +784,43 @@ class _ChatAppBar extends StatelessWidget {
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert, color: kSubtleTextColor),
               color: kLightSurfaceColor,
+              // --- 👇 TAMBAHKAN INI UNTUK SUDUT MEMBULAT 👇 ---
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16.0),
+              ),
+              // --- 👆 BATAS PENAMBAHAN 👆 ---
               onSelected: (String value) {
-                // --- 👇 PERUBAHAN LOGIKA SELEKSI DI SINI 👇 ---
                 final controller = Provider.of<ChatRoomController>(context, listen: false);
                 if (value == 'reload') {
                   controller.reloadConversation();
                 } else if (value == 'reconnect_ws') {
                   controller.reconnectWebSocket();
                 }
-                // --- 👆 BATAS PERUBAHAN 👆 ---
               },
+              // --- 👇 MODIFIKASI BAGIAN itemBuilder DI BAWAH INI 👇 ---
               itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                const PopupMenuItem<String>(
+                PopupMenuItem<String>(
                   value: 'reload',
-                  child: Text('Muat ulang percakapan', style: TextStyle(color: kTextColor)),
+                  child: Row(
+                    children: [
+                      Icon(Icons.refresh_rounded, color: Colors.blueAccent.shade400),
+                      const SizedBox(width: 12),
+                      const Text('Muat ulang percakapan', style: TextStyle(color: kTextColor)),
+                    ],
+                  ),
                 ),
-                // --- 👇 ITEM MENU BARU DITAMBAHKAN DI SINI 👇 ---
-                const PopupMenuItem<String>(
+                PopupMenuItem<String>(
                   value: 'reconnect_ws',
-                  child: Text('Hubungkan ulang WebSocket', style: TextStyle(color: kTextColor)),
+                  child: Row(
+                    children: [
+                      Icon(Icons.link_rounded, color: Colors.green.shade600),
+                      const SizedBox(width: 12),
+                      const Text('Hubungkan ulang WebSocket', style: TextStyle(color: kTextColor)),
+                    ],
+                  ),
                 ),
-                // --- 👆 BATAS ITEM MENU BARU 👆 ---
               ],
+              // --- 👆 BATAS MODIFIKASI 👆 ---
             ),
           ],
         ),

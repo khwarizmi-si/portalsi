@@ -66,22 +66,40 @@ class MessageListPage extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             // Tombol bawah dengan ukuran kustom 65x65
-            SizedBox(
-              width: 65,
-              height: 65,
+            // Bungkus dengan Container untuk membuat background gradien
+            Container(
+              decoration: BoxDecoration(
+                // 1. Definisikan gradien oranye
+                gradient: LinearGradient(
+                  colors: [Colors.amber.shade600, Colors.orange.shade800],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                // 2. Pastikan bentuknya lingkaran, sama seperti FAB
+                borderRadius: BorderRadius.circular(16), // Atur tingkat ketumpulan sudut
+                // 3. Tambahkan bayangan (shadow) secara manual
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.orange.withOpacity(0.4),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
               child: FloatingActionButton(
                 heroTag: 'fab_new_group',
                 onPressed: () {
-                  Navigator.push(context,
-                      MaterialPageRoute(builder: (_) => const CreateGroupPage()));
+                  Navigator.push(
+                      context, MaterialPageRoute(builder: (_) => const CreateGroupPage()));
                 },
-                backgroundColor: const Color(0xFFE0AD05),
-                elevation: 4.0,
+                // 4. Buat background FAB menjadi transparan agar gradien terlihat
+                backgroundColor: Colors.transparent,
+                // 5. Non-aktifkan elevation bawaan karena sudah di-handle oleh Container
+                elevation: 0.0,
                 tooltip: 'Buat Grup Baru',
                 child: const Icon(Icons.group_add_outlined, color: Colors.white, size: 26),
               ),
-
-            ),
+            )
           ],
         ),
         body: Column(

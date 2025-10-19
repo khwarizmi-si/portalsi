@@ -9,7 +9,6 @@ import 'package:shimmer/shimmer.dart';
 import '../models/song_model.dart';
 import '../services/music_service.dart';
 
-// --- ENUM DIPERBARUI: Menambahkan status untuk Search ---
 enum MusicFilter { trending, saved, search }
 
 class MusicPickerSheet extends StatefulWidget {
@@ -113,28 +112,29 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() {
+        _isLoading = false;
+        _songs = []; // Pastikan daftar kosong jika ada error
+      });
     }
   }
 
-  // --- LOGIKA DIPERBARUI: Saat search kosong, kembali ke lagu tren ---
   void _onSearchChanged() {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(const Duration(milliseconds: 500), () {
       if(_searchController.text.trim().isEmpty) {
-        _handleFilterChange(MusicFilter.trending); // Jika search kosong, kembali ke daftar tren
+        _handleFilterChange(MusicFilter.trending);
       } else {
         _fetchSongs(_searchController.text);
       }
     });
   }
 
-  // --- LOGIKA DIPERBARUI: Saat mencari, ubah status filter menjadi 'search' ---
   Future<void> _fetchSongs(String term) async {
     if (term.isEmpty) return;
     setState(() {
       _isLoading = true;
-      _activeFilter = MusicFilter.search; // Set filter ke search agar chip tidak aktif
+      _activeFilter = MusicFilter.search;
     });
     try {
       final songs = await _musicService.searchSongs(term);
@@ -145,12 +145,15 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() {
+        _isLoading = false;
+        _songs = []; // Pastikan daftar kosong jika ada error
+      });
     }
   }
 
   void _handleFilterChange(MusicFilter filter) {
-    if (filter == MusicFilter.search) return; // Jangan lakukan apa-apa jika filter adalah search
+    if (filter == MusicFilter.search) return;
 
     _searchController.clear();
     _audioPlayer.stop();
@@ -167,11 +170,33 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
     }
   }
 
+  // --- 👇 FUNGSI BARU: Logika untuk menangani refresh ---
+  void _handleRefresh() {
+    _audioPlayer.stop();
+    setState(() => _currentlyPlayingSong = null);
+
+    switch (_activeFilter) {
+      case MusicFilter.trending:
+        _fetchInitialSongs();
+        break;
+      case MusicFilter.saved:
+        _loadBookmarks().then((_) => _fetchBookmarkedSongs());
+        break;
+      case MusicFilter.search:
+        if (_searchController.text.trim().isNotEmpty) {
+          _fetchSongs(_searchController.text.trim());
+        } else {
+          _fetchInitialSongs();
+        }
+        break;
+    }
+  }
+
   Future<void> _playPreview(Song song) async {
     if (_currentlyPlayingSong?.previewUrl == song.previewUrl) {
       await _audioPlayer.stop();
+      setState(() => _currentlyPlayingSong = null);
     } else {
-      await _audioPlayer.stop();
       setState(() {
         _isAudioLoading = true;
         _loadingUrl = song.previewUrl;
@@ -201,8 +226,8 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
 
   Widget _buildLoadingSkeleton() {
     return Shimmer.fromColors(
-      baseColor: Colors.grey[200]!,
-      highlightColor: Colors.grey[200]!,
+      baseColor: Colors.grey.shade200,
+      highlightColor: Colors.grey.shade100,
       child: ListView.builder(
         itemCount: 10,
         itemBuilder: (context, index) => ListTile(
@@ -216,13 +241,130 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
           ),
           title: Container(
             height: 16,
+            width: 200,
             color: Colors.white,
+            margin: const EdgeInsets.only(right: 50),
           ),
           subtitle: Container(
             height: 12,
-            margin: const EdgeInsets.only(top: 4),
+            width: 150,
+            margin: const EdgeInsets.only(top: 4, right: 100),
             color: Colors.white,
           ),
+        ),
+      ),
+    );
+  }
+
+  // --- 👇 WIDGET BARU: Tampilan futuristik saat daftar lagu kosong ---
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 5.0, end: 25.0),
+              duration: const Duration(milliseconds: 1500),
+              curve: Curves.easeOutQuint,
+              builder: (context, blurRadius, child) {
+                return Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.tealAccent,
+                        Colors.teal
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.teal.withOpacity(0.4),
+                        blurRadius: blurRadius,
+                        spreadRadius: blurRadius / 10,
+                      ),
+                      BoxShadow(
+                        color: Colors.purple.withOpacity(0.2),
+                        blurRadius: blurRadius / 2,
+                      ),
+                    ],
+                  ),
+                  child: child,
+                );
+              },
+              child: const Icon(
+                Icons.wifi_tethering_error_rounded,
+                color: Colors.white,
+                size: 50,
+              ),
+            ),
+            const SizedBox(height: 32),
+            const Text(
+              'Gagal Memuat',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF333333),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Terjadi masalah saat memuat musik. Periksa koneksi Anda dan coba lagi.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey.shade600,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 40),
+            ElevatedButton(
+              onPressed: _handleRefresh,
+              style: ElevatedButton.styleFrom(
+                padding: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                elevation: 8,
+                shadowColor: Colors.teal.withOpacity(0.5),
+              ),
+              child: Ink(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.tealAccent,
+                      Colors.teal
+                    ],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 40),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.refresh_rounded, color: Colors.white),
+                      SizedBox(width: 12),
+                      Text(
+                        'Coba Lagi',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -249,7 +391,7 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
                     height: 5,
                     margin: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
-                      color: Colors.grey[700],
+                      color: Colors.grey[300],
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
@@ -258,11 +400,11 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
                     child: TextField(
                       controller: _searchController,
                       decoration: InputDecoration(
-                        hintText: 'Cari musik..',
-                        hintStyle: TextStyle(color: Colors.grey[500]),
-                        prefixIcon: Icon(Icons.search, color: Colors.grey[500]),
+                        hintText: 'Cari musik atau artis...',
+                        hintStyle: TextStyle(color: Colors.grey.shade500),
+                        prefixIcon: Icon(Icons.search, color: Colors.grey.shade500),
                         filled: true,
-                        fillColor: Colors.grey[300],
+                        fillColor: Colors.grey.shade100,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide.none,
@@ -281,27 +423,32 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
                           label: const Text('Untuk Anda'),
                           selected: _activeFilter == MusicFilter.trending,
                           onSelected: (_) => _handleFilterChange(MusicFilter.trending),
-                          backgroundColor: Colors.white,
-                          selectedColor: Colors.grey[600],
-                          labelStyle: TextStyle(color: _activeFilter == MusicFilter.trending ? Colors.white : Colors.grey[400]),
+                          backgroundColor: Colors.grey.shade100,
+                          selectedColor: Colors.grey.shade800,
+                          labelStyle: TextStyle(color: _activeFilter == MusicFilter.trending ? Colors.white : Colors.grey.shade600, fontWeight: FontWeight.bold),
                           showCheckmark: false,
+                          shape: StadiumBorder(side: BorderSide(color: Colors.grey.shade200)),
                         ),
                         const SizedBox(width: 8),
                         FilterChip(
                           label: const Text('Tersimpan'),
                           selected: _activeFilter == MusicFilter.saved,
                           onSelected: (_) => _handleFilterChange(MusicFilter.saved),
-                          backgroundColor: Colors.white,
-                          selectedColor: Colors.grey[600],
-                          labelStyle: TextStyle(color: _activeFilter == MusicFilter.saved ? Colors.white : Colors.grey[400]),
+                          backgroundColor: Colors.grey.shade100,
+                          selectedColor: Colors.grey.shade800,
+                          labelStyle: TextStyle(color: _activeFilter == MusicFilter.saved ? Colors.white : Colors.grey.shade600, fontWeight: FontWeight.bold),
                           showCheckmark: false,
+                          shape: StadiumBorder(side: BorderSide(color: Colors.grey.shade200)),
                         ),
                       ],
                     ),
                   ),
                   Expanded(
+                    // --- 👇 LOGIKA UTAMA DIPERBARUI DI SINI ---
                     child: _isLoading
                         ? _buildLoadingSkeleton()
+                        : _songs.isEmpty
+                        ? _buildEmptyState() // Tampilkan state kosong jika tidak ada lagu
                         : ListView.builder(
                       controller: scrollController,
                       padding: EdgeInsets.only(bottom: _currentlyPlayingSong != null ? 80 : 0),
@@ -313,50 +460,51 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
                         final isBookmarked = _bookmarkedSongs.any((s) => s.trackId == song.trackId);
 
                         return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
                           leading: Stack(
                             alignment: Alignment.center,
                             children: [
                               ClipRRect(
-                                borderRadius: BorderRadius.circular(4.0),
+                                borderRadius: BorderRadius.circular(8.0),
                                 child: Image.network(song.artworkUrl, width: 50, height: 50, fit: BoxFit.cover),
                               ),
                               if(isLoadingThisSong)
                                 Container(
                                     width: 50, height: 50,
-                                    decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), borderRadius: BorderRadius.circular(4.0)),
-                                    child: const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black)))
+                                    decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), borderRadius: BorderRadius.circular(8.0)),
+                                    child: const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)))
                                 )
                               else if (!isPlaying)
                                 Container(
                                     width: 50, height: 50,
-                                    decoration: BoxDecoration(color: Colors.black.withOpacity(0.2), borderRadius: BorderRadius.circular(4.0)),
-                                    child: const Icon(Icons.play_arrow, color: Colors.black)
+                                    decoration: BoxDecoration(color: Colors.black.withOpacity(0.3), borderRadius: BorderRadius.circular(8.0)),
+                                    child: const Icon(Icons.play_arrow, color: Colors.white)
                                 )
                             ],
                           ),
                           title: Row(
                             children: [
                               if(isPlaying && !isLoadingThisSong)
-                                Icon(Icons.equalizer, color: Colors.blueAccent, size: 20),
+                                Icon(Icons.equalizer_rounded, color: Colors.blueAccent, size: 18),
                               if(isPlaying && !isLoadingThisSong)
-                                const SizedBox(width: 8),
+                                const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
                                   song.trackName,
-                                  style: TextStyle(color: isPlaying ? Colors.blueAccent : Colors.black, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: isPlaying ? Colors.blueAccent : Colors.black87, fontWeight: FontWeight.bold),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],
                           ),
                           subtitle: Text(
-                              '↗ ${song.artistName} • ${song.duration}',
-                              style: TextStyle(color: Colors.grey[400])
+                              '${song.artistName} • ${song.duration}',
+                              style: TextStyle(color: Colors.grey.shade500)
                           ),
                           trailing: IconButton(
                             icon: Icon(
-                              isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                              color: isBookmarked ? Colors.blueAccent : Colors.grey[400],
+                              isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
+                              color: isBookmarked ? Colors.blueAccent : Colors.grey.shade400,
                             ),
                             onPressed: () => _toggleBookmark(song),
                           ),
@@ -375,7 +523,7 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: const Color(0xD1121212),
+                      color: const Color(0xFF1D1D1D),
                       border: Border(top: BorderSide(color: Colors.grey[800]!, width: 0.5)),
                     ),
                     child: SafeArea(
@@ -406,20 +554,21 @@ class _MusicPickerSheetState extends State<MusicPickerSheet> {
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.pause_circle_filled, color: Colors.white, size: 32),
+                            icon: const Icon(Icons.pause_circle_filled_rounded, color: Colors.white, size: 32),
                             onPressed: () => _playPreview(_currentlyPlayingSong!),
                           ),
-                          ElevatedButton(
+                          ElevatedButton.icon(
                             onPressed: _selectSongAndClose,
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text('Pilih', style: TextStyle(fontWeight: FontWeight.bold)),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
+                              backgroundColor: Colors.blueAccent,
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
                             ),
-                            child: const Text('Tambahkan', style: TextStyle(fontWeight: FontWeight.bold)),
                           ),
                         ],
                       ),

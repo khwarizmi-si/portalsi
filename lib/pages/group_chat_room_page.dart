@@ -30,7 +30,7 @@ class GroupChatRoomPage extends StatelessWidget {
     );
   }
 }
-
+// GANTI KESELURUHAN WIDGET INI
 class _GroupChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   final Group group;
 
@@ -63,11 +63,8 @@ class _GroupChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                   icon: const Icon(Icons.arrow_back, color: Colors.black87),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
-
-                // [PERUBAHAN 1] Bungkus avatar dengan GestureDetector
                 GestureDetector(
                   onTap: () {
-                    // Navigasi ke halaman anggota grup
                     Navigator.push(
                       context,
                       SlideRightRoute(page: GroupMembersPage(groupId: group.id, isCurrentUserAdmin: controller.isCurrentUserAdmin,)),
@@ -100,24 +97,20 @@ class _GroupChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-
-                // [PERUBAHAN 2] Bungkus nama grup dengan Expanded dan GestureDetector
                 Expanded(
                   child: GestureDetector(
                     onTap: () {
-                      // Navigasi ke halaman info grup
                       Navigator.push(
                         context,
                         SlideRightRoute(
                           page: GroupInfoPage(
                             group: group,
-                            controller: controller, //This line has been changed
+                            controller: controller,
                             isCurrentUserAdmin: controller.isCurrentUserAdmin,
                           ),
                         ),
                       );
                     },
-                    // Beri warna transparan agar area klik mencakup seluruh area
                     child: Container(
                       color: Colors.transparent,
                       child: Column(
@@ -144,9 +137,15 @@ class _GroupChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                   ),
                 ),
 
-                // Tombol menu titik tiga (tidak ada perubahan)
+                // --- 👇 MODIFIKASI DIMULAI DARI SINI 👇 ---
                 PopupMenuButton<String>(
                   icon: Icon(Icons.more_horiz, color: Colors.black.withOpacity(0.7)),
+
+                  // Tambahkan shape untuk membulatkan sudut
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16.0),
+                  ),
+                  color: Colors.white,
                   onSelected: (value) {
                     if (value == 'reload') {
                       controller.reloadMessages();
@@ -161,21 +160,32 @@ class _GroupChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                       );
                     }
                   },
+                  // Ubah itemBuilder untuk menambahkan ikon
                   itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                    const PopupMenuItem<String>(value: 'reload', child: Text('Muat ulang percakapan')),
-                  //   const PopupMenuDivider(),
-                  //   const PopupMenuItem<String>(
-                  //     value: 'clear_cache',
-                  //     child: Row(
-                  //       children: [
-                  //         Icon(Icons.delete_sweep_outlined, color: Colors.red),
-                  //         SizedBox(width: 12),
-                  //         Text('Hapus Cache (Debug)'),
-                  //       ],
-                  //     ),
-                  //   ),
+                    PopupMenuItem<String>(
+                      value: 'reload',
+                      child: Row(
+                        children: [
+                          Icon(Icons.refresh_rounded, color: Colors.blueAccent.shade400),
+                          const SizedBox(width: 12),
+                          const Text('Muat ulang percakapan'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    PopupMenuItem<String>(
+                      value: 'clear_cache',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_sweep_outlined, color: Colors.red.shade400),
+                          const SizedBox(width: 12),
+                          const Text('Hapus Cache (Debug)'),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
+                // --- 👆 BATAS MODIFIKASI 👆 ---
               ],
             ),
           ),

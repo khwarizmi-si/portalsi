@@ -165,8 +165,11 @@ class FeedController extends ChangeNotifier {
 
     try {
       // --- PERBAIKAN DI SINI ---
-      // Panggil metode HTTP dari LikeService
-      await LikeService().toggleLikeHttp(post.id);
+      await LikeService().toggleLikeHttp(
+        post.id,
+        isCurrentlyLiked: originalLiked,
+        currentLikesCount: originalCount,
+      );
     } catch (e) {
       // Jika gagal, kembalikan ke state semula
       post.isLikedByUser = originalLiked;

@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
+import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -355,7 +356,7 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
       return _buildSearchResults();
     }
     if (_isLoading && _posts.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return _buildSkeletonLoader();
     }
     // --- PERUBAHAN UTAMA DIMULAI DI SINI ---
     if (_posts.isEmpty) {
@@ -609,6 +610,55 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
             ],
           ),
         ),
+      ),
+    );
+  }
+  Widget _buildSkeletonLoader() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey[300]!,
+      highlightColor: Colors.grey[100]!,
+      child: CustomScrollView(
+        physics: const NeverScrollableScrollPhysics(), // Non-aktifkan scroll saat loading
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.only(left: 8.0, right: 8.0, bottom: 104.0, top: 8.0),
+            sliver: SliverGrid(
+              gridDelegate: SliverQuiltedGridDelegate(
+                crossAxisCount: 3,
+                mainAxisSpacing: 8.0,
+                crossAxisSpacing: 8.0,
+                // Gunakan pattern yang sama persis dengan konten asli Anda
+                pattern: const [
+                  QuiltedGridTile(1, 1),
+                  QuiltedGridTile(1, 1),
+                  QuiltedGridTile(2, 1),
+                  QuiltedGridTile(1, 1),
+                  QuiltedGridTile(1, 1),
+                  QuiltedGridTile(2, 1),
+                  QuiltedGridTile(1, 1),
+                  QuiltedGridTile(1, 1),
+                  QuiltedGridTile(1, 1),
+                  QuiltedGridTile(1, 1),
+                ],
+              ),
+              delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                  // Ini adalah placeholder untuk setiap item grid
+                  return Card(
+                    clipBehavior: Clip.antiAlias,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0, // Tidak perlu shadow untuk skeleton
+                    child: Container(
+                      color: Colors.white, // Warna ini akan ditimpa oleh shimmer
+                    ),
+                  );
+                },
+                // Bangun sekitar 10-20 item untuk mengisi layar awal
+                childCount: 20,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

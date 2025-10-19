@@ -1,18 +1,18 @@
 // lib/pages/profile_page.dart
 
 import 'dart:developer';
-import 'dart:ui';
+// import 'dart:ui'; // <-- DIHAPUS
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
-import 'package:palette_generator/palette_generator.dart';
+// import 'package:palette_generator/palette_generator.dart'; // <-- DIHAPUS
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 
 import '../app_state.dart';
 import '../components/circular_avatar_fetcher.dart';
-import '../components/pressable_grid_item.dart'; // <-- IMPORT UTAMA DI SINI
+import '../components/pressable_grid_item.dart'; // <-- IMPORT UTAMA DI SINI (Sekarang akan digunakan)
 import '../components/verified_badge.dart';
 import '../components/video_thumbnail_widget.dart';
 import '../models/post_model.dart';
@@ -48,375 +48,13 @@ class ImagePlaceholder extends StatelessWidget {
   }
 }
 
-class PostPopupContent extends StatefulWidget {
-  final SimplePost post;
-  final User user;
-  final Function(SimplePost) onDelete;
+// KELAS PostPopupContent DIHAPUS
+// KELAS _PostPopupContentState DIHAPUS
+// KELAS TransientPostPreview DIHAPUS
+// KELAS PressableGridItem (StatefulWidget) DIHAPUS
+// KELAS _PressableGridItemState DIHAPUS
+// KELAS HeroDialogRoute DIHAPUS
 
-  const PostPopupContent({
-    Key? key,
-    required this.post,
-    required this.user,
-    required this.onDelete,
-  }) : super(key: key);
-
-  @override
-  State<PostPopupContent> createState() => _PostPopupContentState();
-}
-
-class _PostPopupContentState extends State<PostPopupContent> {
-  Color _iconColor = Colors.white;
-
-  @override
-  void initState() {
-    super.initState();
-    _updateIconColor();
-  }
-
-  Future<void> _updateIconColor() async {
-    try {
-      final imageProvider = CachedNetworkImageProvider(widget.post.mediaUrl);
-      final PaletteGenerator paletteGenerator =
-          await PaletteGenerator.fromImageProvider(
-            imageProvider,
-            size: const Size(100, 100),
-            maximumColorCount: 20,
-          );
-      final Color dominantColor =
-          paletteGenerator.dominantColor?.color ?? Colors.black;
-      final double luminance = dominantColor.computeLuminance();
-      if (mounted) {
-        setState(() {
-          _iconColor = luminance > 0.4 ? Colors.black87 : Colors.white;
-        });
-      }
-    } catch (e) {
-      print("Error saat menganalisis warna gambar: $e");
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 8.0,
-              vertical: 12.0,
-            ),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: ClipOval(
-                    child: CachedNetworkImage(
-                      imageUrl: widget.user.profilePictureUrl ?? '',
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => const ImagePlaceholder(),
-                      errorWidget: (context, url, error) =>
-                          const CircleAvatar(backgroundColor: Colors.grey),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  widget.user.username,
-                  style: TextStyle(
-                    color: _iconColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-                const Spacer(),
-                PopupMenuButton<String>(
-                  icon: Icon(Icons.more_horiz, color: _iconColor),
-                  onSelected: (String value) {
-                    Navigator.of(context).pop();
-                    if (value == 'delete') {
-                      widget.onDelete(widget.post);
-                    }
-                  },
-                  itemBuilder: (BuildContext context) =>
-                      <PopupMenuEntry<String>>[
-                        const PopupMenuItem<String>(
-                          value: 'delete',
-                          child: Text('Hapus Postingan'),
-                        ),
-                      ],
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 0.0),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Hero(
-                tag: 'post-hero-${widget.post.postId}',
-                child: CachedNetworkImage(
-                  imageUrl: widget.post.mediaUrl,
-                  fit: BoxFit.contain,
-                  placeholder: (context, url) => const AspectRatio(
-                    aspectRatio: 1,
-                    child: ImagePlaceholder(),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class TransientPostPreview extends StatelessWidget {
-  final SimplePost post;
-  final User user;
-
-  const TransientPostPreview({Key? key, required this.post, required this.user})
-    : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    const Color textColor = Colors.white;
-
-    return Material(
-      color: Colors.transparent,
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12.0),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: ClipOval(
-                      child: CachedNetworkImage(
-                        imageUrl: user.profilePictureUrl ?? '',
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => const ImagePlaceholder(),
-                        errorWidget: (context, url, error) =>
-                            const CircleAvatar(backgroundColor: Colors.grey),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    user.username,
-                    style: const TextStyle(
-                      color: textColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Hero(
-                tag: 'post-hero-${post.postId}',
-                child: CachedNetworkImage(
-                  imageUrl: post.mediaUrl,
-                  fit: BoxFit.contain,
-                  placeholder: (context, url) => const AspectRatio(
-                    aspectRatio: 1,
-                    child: ImagePlaceholder(),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class PressableGridItem extends StatefulWidget {
-  final SimplePost post;
-  final User user;
-  final VoidCallback onTap;
-
-  const PressableGridItem({
-    Key? key,
-    required this.post,
-    required this.user,
-    required this.onTap,
-  }) : super(key: key);
-
-  @override
-  State<PressableGridItem> createState() => _PressableGridItemState();
-}
-
-class _PressableGridItemState extends State<PressableGridItem> {
-  bool _isPressed = false;
-  OverlayEntry? _overlayEntry;
-
-  @override
-  void dispose() {
-    _removePreviewOverlay();
-    super.dispose();
-  }
-
-  void _showPreviewOverlay(BuildContext context) {
-    if (_overlayEntry != null) return;
-
-    final overlayState = Overlay.of(context);
-    _overlayEntry = OverlayEntry(
-      builder: (context) {
-        return Stack(
-          children: [
-            BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-              child: Container(color: Colors.black.withOpacity(0.5)),
-            ),
-            Center(
-              child: TransientPostPreview(post: widget.post, user: widget.user),
-            ),
-          ],
-        );
-      },
-    );
-
-    overlayState?.insert(_overlayEntry!);
-  }
-
-  void _removePreviewOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-  }
-
-  void _onTapDown(TapDownDetails details) => setState(() => _isPressed = true);
-  void _onTapUp(TapUpDetails details) {
-    setState(() => _isPressed = false);
-    widget.onTap();
-  }
-
-  void _onTapCancel() {
-    if (mounted) {
-      setState(() => _isPressed = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    Widget mediaDisplay;
-    if (widget.post.isVideo) {
-      mediaDisplay = VideoThumbnailWidget(videoUrl: widget.post.mediaUrl);
-    } else {
-      mediaDisplay = CachedNetworkImage(
-        imageUrl: widget.post.mediaUrl,
-        fit: BoxFit.cover,
-        // SEMULA: Hanya Container berwarna abu-abu
-        // placeholder: (context, url) => Container(color: Colors.grey[200]),
-
-        // SESUDAH: Menggunakan Shimmer effect yang lebih menarik
-        placeholder: (context, url) => Shimmer.fromColors(
-          baseColor: Colors.grey.shade300,
-          highlightColor: Colors.grey.shade100,
-          child: Container(color: Colors.white),
-        ),
-        errorWidget: (context, url, error) => Container(color: Colors.grey[300], child: const Icon(Icons.broken_image, color: Colors.grey,)),
-        // placeholder: (context, url) => const ImagePlaceholder(),
-        // errorWidget: (context, url, error) => Container(color: Colors.grey[300]),
-      );
-    }
-
-    return GestureDetector(
-      onTapDown: _onTapDown,
-      onTapUp: _onTapUp,
-      onTapCancel: _onTapCancel,
-      onLongPress: () => _showPreviewOverlay(context),
-      onLongPressUp: () => _removePreviewOverlay(),
-      child: AnimatedScale(
-        scale: _isPressed ? 0.95 : 1.0,
-        duration: const Duration(milliseconds: 150),
-        curve: Curves.easeInOut,
-        child: Container(
-          clipBehavior: Clip.antiAlias,
-          decoration: ShapeDecoration(
-            shape: ContinuousRectangleBorder(
-              borderRadius: BorderRadius.circular(40.0),
-            ),
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (widget.post.isVideo)
-                mediaDisplay
-              else
-                Hero(
-                  tag: 'post-hero-${widget.post.postId}',
-                  child: mediaDisplay,
-                ),
-              if (widget.post.isVideo)
-                const Positioned(
-                  top: 8.0,
-                  right: 8.0,
-                  child: Icon(
-                    Icons.video_camera_back_rounded,
-                    color: Colors.white,
-                    size: 22.0,
-                    shadows: [Shadow(color: Colors.black87, blurRadius: 8)],
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class HeroDialogRoute<T> extends PageRoute<T> {
-  HeroDialogRoute({required this.builder}) : super();
-  final WidgetBuilder builder;
-  @override
-  bool get opaque => false;
-  @override
-  bool get barrierDismissible => true;
-  @override
-  Duration get transitionDuration => const Duration(milliseconds: 350);
-  @override
-  bool get maintainState => true;
-  @override
-  Color get barrierColor => Colors.black.withOpacity(0.6);
-  @override
-  String get barrierLabel => 'Popup';
-  @override
-  Widget buildPage(
-    BuildContext context,
-    Animation<double> animation,
-    Animation<double> secondaryAnimation,
-  ) {
-    return builder(context);
-  }
-
-  @override
-  Widget buildTransitions(
-    BuildContext context,
-    Animation<double> animation,
-    Animation<double> secondaryAnimation,
-    Widget child,
-  ) {
-    return FadeTransition(
-      opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
-      child: child,
-    );
-  }
-}
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({Key? key}) : super(key: key);
@@ -792,7 +430,7 @@ class _ProfilePageState extends State<ProfilePage>
     const String placeholderBanner =
         'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=2070&auto=format&fit=crop';
     final String bannerImageUrl =
-        (user.bannerUrl != null && user.bannerUrl!.isNotEmpty)
+    (user.bannerUrl != null && user.bannerUrl!.isNotEmpty)
         ? user.bannerUrl!
         : placeholderBanner;
 
@@ -853,10 +491,10 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   Widget _buildAvatarWithStoryAddButton(
-    User user,
-    double radius,
-    String heroTag,
-  ) {
+      User user,
+      double radius,
+      String heroTag,
+      ) {
     return Hero(
       tag: heroTag,
       child: Material(
@@ -926,77 +564,78 @@ class _ProfilePageState extends State<ProfilePage>
       ),
       child: (posts.isEmpty)
           ? Container(
-              height: 300,
-              alignment: Alignment.center,
-              child: const Text('Belum ada postingan'),
-            )
+        height: 300,
+        alignment: Alignment.center,
+        child: const Text('Belum ada postingan'),
+      )
           : Padding(
-              padding: const EdgeInsets.fromLTRB(12, 24, 12, 72),
-              child: AnimationLimiter(
-                child: GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(12),
-                  itemCount: posts.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: columnCount,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                  ),
-                  itemBuilder: (context, index) {
-                    final SimplePost post = posts[index];
-                    return AnimationConfiguration.staggeredGrid(
-                      position: index,
-                      duration: const Duration(milliseconds: 400),
-                      columnCount: columnCount,
-                      child: SlideAnimation(
-                        verticalOffset: 50.0,
-                        child: FadeInAnimation(
-                          child: PressableGridItem(
-                            key: ValueKey(post.postId),
-                            post: post,
-                            user: user,
-                            onTap: () {
-                              if (post.isVideo) {
-                                final fullPostObject = Post(
-                                  id: post.postId,
-                                  caption: post.caption,
-                                  mediaUrl: post.mediaUrl,
-                                  isVideo: post.isVideo,
-                                  createdAt: post.createdAt,
-                                  user: user,
-                                  likesCount: 0,
-                                  commentsCount: 0,
-                                  isLikedByUser: post.isLikedByUser,
-                                  isBookmarked: post.isBookmarked,
-                                );
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => ClipsViewerPage(
-                                      initialClip: fullPostObject,
-                                    ),
-                                  ),
-                                );
-                              } else {
-                                final navProvider =
-                                    Provider.of<NavigationProvider>(
-                                      context,
-                                      listen: false,
-                                    );
-                                navProvider.showOverlay(
-                                  PostDetail(postId: post.postId),
-                                );
-                              }
-                            },
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
+        padding: const EdgeInsets.fromLTRB(12, 24, 12, 72),
+        child: AnimationLimiter(
+          child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(12),
+            itemCount: posts.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columnCount,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
             ),
+            itemBuilder: (context, index) {
+              final SimplePost post = posts[index];
+              return AnimationConfiguration.staggeredGrid(
+                position: index,
+                duration: const Duration(milliseconds: 400),
+                columnCount: columnCount,
+                child: SlideAnimation(
+                  verticalOffset: 50.0,
+                  child: FadeInAnimation(
+                    child: PressableGridItem(
+                      // ^-- INI SEKARANG MENGGUNAKAN VERSI IMPOR
+                      key: ValueKey(post.postId),
+                      post: post,
+                      user: user,
+                      onTap: () {
+                        if (post.isVideo) {
+                          final fullPostObject = Post(
+                            id: post.postId,
+                            caption: post.caption,
+                            mediaUrl: post.mediaUrl,
+                            isVideo: post.isVideo,
+                            createdAt: post.createdAt,
+                            user: user,
+                            likesCount: 0,
+                            commentsCount: 0,
+                            isLikedByUser: post.isLikedByUser,
+                            isBookmarked: post.isBookmarked,
+                          );
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => ClipsViewerPage(
+                                initialClip: fullPostObject,
+                              ),
+                            ),
+                          );
+                        } else {
+                          final navProvider =
+                          Provider.of<NavigationProvider>(
+                            context,
+                            listen: false,
+                          );
+                          navProvider.showOverlay(
+                            PostDetail(postId: post.postId),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
     );
   }
 
@@ -1041,17 +680,17 @@ class _ProfilePageState extends State<ProfilePage>
       children: bioItems
           .map(
             (item) => Padding(
-              padding: const EdgeInsets.only(bottom: 2.0),
-              child: Text(
-                item,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[800],
-                  height: 1.4,
-                ),
-              ),
+          padding: const EdgeInsets.only(bottom: 2.0),
+          child: Text(
+            item,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[800],
+              height: 1.4,
             ),
-          )
+          ),
+        ),
+      )
           .toList(),
     );
   }
@@ -1124,9 +763,8 @@ class _ProfilePageState extends State<ProfilePage>
             _showSuggestions
                 ? Icons.person_add_disabled_outlined
                 : Icons.person_add_alt_1_outlined,
-            semanticLabel: _showSuggestions
-                ? 'Sembunyikan Saran'
-                : 'Tampilkan Saran',
+            semanticLabel:
+            _showSuggestions ? 'Sembunyikan Saran' : 'Tampilkan Saran',
           ),
         ),
       ],
@@ -1375,13 +1013,13 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
                         gradient: _isFollowed
                             ? null
                             : LinearGradient(
-                                colors: [
-                                  Colors.amber.shade600,
-                                  Colors.orange.shade800,
-                                ],
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight,
-                              ),
+                          colors: [
+                            Colors.amber.shade600,
+                            Colors.orange.shade800,
+                          ],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Container(
@@ -1393,23 +1031,23 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
                         alignment: Alignment.center,
                         child: _isLoading
                             ? SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 3.5,
-                                  color: _isFollowed
-                                      ? Colors.black54
-                                      : Colors.white,
-                                ),
-                              )
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3.5,
+                            color: _isFollowed
+                                ? Colors.black54
+                                : Colors.white,
+                          ),
+                        )
                             : Text(
-                                buttonText,
-                                style: TextStyle(
-                                  color: _isFollowed
-                                      ? Colors.black54
-                                      : Colors.white,
-                                ),
-                              ),
+                          buttonText,
+                          style: TextStyle(
+                            color: _isFollowed
+                                ? Colors.black54
+                                : Colors.white,
+                          ),
+                        ),
                       ),
                     ),
                   ),

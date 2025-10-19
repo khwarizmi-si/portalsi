@@ -262,26 +262,31 @@ class _SingleClipPlayerState extends State<SingleClipPlayer>
     });
   }
 
+  // lib/widgets/single_clip_player.dart
+
   void _toggleLike() async {
+    // --- 1. Simpan nilai ASLI (lama) SEBELUM setState ---
+    final bool originalLikedStatus = _isLiked;
+    final int originalLikesCount = _likesCount;
+
+    // --- 2. Lakukan pembaruan optimis menggunakan nilai baru ---
     setState(() {
-      _isLiked = !_isLiked;
-      if (_isLiked) {
-        _likesCount++;
-      } else {
-        _likesCount--;
-      }
+      _isLiked = !originalLikedStatus;
+      _likesCount = originalLikesCount + (!originalLikedStatus ? 1 : -1);
     });
 
     try {
-      await _likeService.toggleLikeHttp(widget.post.id);
+      // --- 3. Panggil service dengan nilai ASLI (lama) ---
+      await _likeService.toggleLikeHttp(
+        widget.post.id,
+        isCurrentlyLiked: originalLikedStatus,  // <-- ARGUMEN YANG HILANG
+        currentLikesCount: originalLikesCount, // <-- ARGUMEN YANG HILANG
+      );
     } catch (e) {
+      // --- 4. Jika gagal, kembalikan (rollback) ke nilai ASLI ---
       setState(() {
-        _isLiked = !_isLiked;
-        if (_isLiked) {
-          _likesCount++;
-        } else {
-          _likesCount--;
-        }
+        _isLiked = originalLikedStatus;
+        _likesCount = originalLikesCount;
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -110,9 +110,14 @@ class PostDetailController extends ChangeNotifier {
 
     try {
       // --- PERBAIKAN DI SINI ---
-      // Panggil metode HTTP yang mengembalikan Future<bool>
-      await _likeService.toggleLikeHttp(postId);
+      // Gunakan instance _likeService yang sudah ada
+      await _likeService.toggleLikeHttp(
+        postId,
+        isCurrentlyLiked: originalStatus,
+        currentLikesCount: originalCount,
+      );
     } catch (e) {
+      // Rollback
       post.isLikedByUser = originalStatus;
       post.likesCount = originalCount;
       notifyListeners();

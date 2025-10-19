@@ -540,47 +540,177 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
     );
   }
 
+  // lib/pages/dashboard_page.dart
+
+// ... (kode Anda yang lain di atas)
+
   void _showGroupSelectionDialog(BuildContext context, List<Group> groups) {
-    showDialog(
+    showGeneralDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Pilih Grup', style: TextStyle(fontWeight: FontWeight.bold)),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: groups.length,
-              itemBuilder: (context, index) {
-                final group = groups[index];
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundImage: group.avatarUrl != null && group.avatarUrl!.isNotEmpty
-                        ? NetworkImage(group.avatarUrl!)
-                        : null,
-                    child: group.avatarUrl == null || group.avatarUrl!.isEmpty
-                        ? const Icon(Icons.group)
-                        : null,
-                  ),
-                  title: Text(group.name),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => GroupChatRoomPage(group: group),
+      barrierDismissible: true,
+      barrierLabel: 'Pilih Group',
+      transitionDuration: const Duration(milliseconds: 450),
+      pageBuilder: (context, anim1, anim2) => const SizedBox.shrink(),
+      transitionBuilder: (context, anim1, anim2, child) {
+        final curve = Curves.easeOutBack.transform(anim1.value);
+        return Transform.scale(
+          scale: curve,
+          child: Opacity(
+            opacity: anim1.value,
+            child: Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28.0)),
+              elevation: 0,
+              backgroundColor: Colors.transparent,
+              child: Container(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.85, // Sedikit lebih lebar
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAFB), // Warna latar belakang sedikit keabuan
+                  borderRadius: BorderRadius.circular(28.0),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 30,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // --- BAGIAN HEADER DENGAN IKON GRADIENT ---
+                    Container(
+                      padding: const EdgeInsets.only(top: 28, bottom: 16),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                // Inilah bagian gradient-nya
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.orange.shade400,
+                                    Colors.orange.shade700,
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                      color: Colors.orange.withOpacity(0.4),
+                                      blurRadius: 15,
+                                      offset: const Offset(0, 5)
+                                  )
+                                ]
+                            ),
+                            child: const Icon(
+                              Icons.groups_3_rounded,
+                              size: 40,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Pilih Group',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF333333),
+                            ),
+                          ),
+                        ],
                       ),
-                    );
-                  },
-                );
-              },
+                    ),
+
+                    // --- BAGIAN LIST GRUP DI DALAM KOTAK ---
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                        itemCount: groups.length,
+                        itemBuilder: (context, index) {
+                          final group = groups[index];
+                          // Widget Kartu untuk setiap item grup
+                          return Container(
+                            margin: const EdgeInsets.symmetric(vertical: 5),
+                            decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: Colors.grey.shade200)
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () {
+                                  Navigator.of(context).pop();
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          GroupChatRoomPage(group: group),
+                                    ),
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(16),
+                                splashColor: Colors.orange.withOpacity(0.1),
+                                highlightColor: Colors.orange.withOpacity(0.05),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 14),
+                                  child: Row(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 20,
+                                        backgroundColor: Colors.grey.shade100,
+                                        backgroundImage: group.avatarUrl != null &&
+                                            group.avatarUrl!.isNotEmpty
+                                            ? NetworkImage(group.avatarUrl!)
+                                            : null,
+                                        child: group.avatarUrl == null ||
+                                            group.avatarUrl!.isEmpty
+                                            ? Icon(Icons.group,
+                                          color: Colors.grey.shade500, size: 20,)
+                                            : null,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          group.name,
+                                          style: const TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.black87,
+                                          ),
+                                        ),
+                                      ),
+                                      Icon(
+                                        Icons.arrow_forward_ios_rounded,
+                                        color: Colors.grey.shade400,
+                                        size: 16,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         );
       },
+      barrierColor: Colors.black.withOpacity(0.4),
     );
   }
+
+// ... (kode Anda yang lain di bawah)
 
   Future<void> _loadNotificationCount() async {
     try {
@@ -660,7 +790,7 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
         ],
       ),
       child: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
         title: const Text('Portal SI', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 26)),
         actions: [

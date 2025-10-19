@@ -1,5 +1,8 @@
 import 'dart:io';
+import 'dart:ui';
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart'; // <-- Tambahkan ini
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:video_player/video_player.dart';
@@ -60,6 +63,8 @@ class _EditClipsPageState extends State<EditClipsPage> {
   bool _isLoading = true;
   bool _isProcessing = false;
 
+  bool _showFeatureCard = false;
+
   final List<TextOverlay> _textOverlays = [];
   final List<StickerOverlay> _stickerOverlays = [];
   Object? _activeOverlay;
@@ -80,6 +85,7 @@ class _EditClipsPageState extends State<EditClipsPage> {
     super.initState();
     _initializePlayer();
     _fetchRecommendedSong();
+    _checkFirstVisit();
 
     if (widget.initialDraft != null) {
       _loadDraft(widget.initialDraft!);
@@ -115,6 +121,34 @@ class _EditClipsPageState extends State<EditClipsPage> {
       setState(() => _isLoading = false);
     } catch (e) {
       print("Error initializing video player: $e");
+    }
+  }
+
+  Future<void> _checkFirstVisit() async {
+    // Beri sedikit jeda agar UI selesai build frame pertama
+    await Future.delayed(const Duration(milliseconds: 750));
+
+    final prefs = await SharedPreferences.getInstance();
+    // Cek key 'hasSeenEditClipsTutorial'. Jika null (belum ada), anggap false.
+    final hasSeen = prefs.getBool('hasSeenEditClipsTutorial') ?? false;
+
+    if (!hasSeen && mounted) {
+      setState(() {
+        _showFeatureCard = true; // Tampilkan kartu jika belum pernah terlihat
+      });
+    }
+  }
+
+  /// Menyimpan status "sudah dilihat" dan menyembunyikan kartu.
+  Future<void> _dismissFeatureCard() async {
+    final prefs = await SharedPreferences.getInstance();
+    // Set key ke 'true' agar tidak muncul lagi
+    await prefs.setBool('hasSeenEditClipsTutorial', true);
+
+    if (mounted) {
+      setState(() {
+        _showFeatureCard = false; // Sembunyikan kartu dengan animasi
+      });
     }
   }
 
@@ -466,6 +500,12 @@ class _EditClipsPageState extends State<EditClipsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    // Dapatkan tinggi AppBar (jika ada) atau perkiraan tinggi status bar + appbar kustom
+    final appBarHeight = AppBar().preferredSize.height + MediaQuery.of(context).padding.top;
+    // Perkiraan tinggi toolbar di bagian bawah. Sesuaikan jika perlu.
+    const bottomToolbarHeight = -20.0;
+
     return WillPopScope(
       onWillPop: () async {
         _handleExitAttempt();
@@ -519,10 +559,235 @@ class _EditClipsPageState extends State<EditClipsPage> {
                   onEffectsTap: _onEffectsButtonTap,
                   onNextTap: _onNextButtonTap,
                 ),
+                AnimatedOpacity(
+                  opacity: _showFeatureCard ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 300),
+                  child: IgnorePointer( // Mencegah interaksi saat kartu tidak ada
+                    ignoring: !_showFeatureCard,
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+                      child: Container(
+                        // Memberi sedikit warna gelap pada blur
+                        color: Colors.black.withOpacity(0.1),
+                      ),
+                    ),
+                  ),
+                ),
+                // --- 👆 BATAS EFEK BLUR 👆 ---
+
+                // Kartu fitur
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 500),
+                  curve: Curves.easeOutCubic,
+                  bottom: _showFeatureCard ? (bottomToolbarHeight + 10.0) : -screenHeight,
+                  left: 0,
+                  right: 0,
+                  child: _FeatureDiscoveryCard(
+                    onDismiss: _dismissFeatureCard,
+                  ),
+                ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+// --- 👇 GANTI KESELURUHAN WIDGET CARD LAMA DENGAN YANG INI 👇 ---
+class _FeatureDiscoveryCard extends StatelessWidget {
+  final VoidCallback onDismiss;
+
+  const _FeatureDiscoveryCard({required this.onDismiss});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.92,
+          height: MediaQuery.of(context).size.height * 0.6,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24.0),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 20,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24.0)),
+                child: Image.asset(
+                  'assets/images/edit_features.png', // <-- Pastikan path ini benar
+                  height: 150,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      height: 150,
+                      width: double.infinity,
+                      color: Colors.grey.shade300,
+                      child: const Center(
+                        child: Text(
+                          'Ganti dengan gambar Anda\n(e.g., assets/images/edit_features.png)',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.black54),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 0.0),
+                child: Text(
+                  "Selamat Datang di Editor Clips!",
+                  textAlign: TextAlign.left,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              _buildFeatureItem(
+                Icons.text_fields_rounded,
+                'Tambahkan Teks & Stiker',
+                'Kreasikan videomu dengan tulisan dan stiker unik.',
+              ),
+              _buildFeatureItem(
+                Icons.music_note_rounded,
+                'Pilih Musik Favorit',
+                'Gunakan lagu yang sedang tren atau dari galerimu.',
+              ),
+              _buildFeatureItem(
+                Icons.auto_awesome_rounded,
+                'Gunakan Efek Keren',
+                'Coba berbagai filter dan efek untuk video sinematik.',
+              ),
+              const SizedBox(height: 10),
+
+              // --- 👇 TOMBOL X DIHAPUS, DIGANTI DENGAN 2 TOMBOL DI BAWAH 👇 ---
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                child: Row(
+                  children: [
+                    // Tombol Sekunder: "Tidak sekarang"
+                    TextButton(
+                      onPressed: onDismiss, // Menjalankan fungsi dismiss
+                      child: Text(
+                        'Tidak sekarang',
+                        style: TextStyle(
+                          color: Colors.orange.shade700, // Tulisan oranye
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    // Tombol Primer: "Coba Fitur di Clips"
+                    GestureDetector(
+                      onTap: onDismiss, // Menjalankan fungsi dismiss
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12), // Bulat
+                          gradient: LinearGradient( // Gradien Amber ke Oranye
+                            colors: [
+                              Colors.amber.shade400,
+                              Colors.orange.shade700,
+                            ],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.orange.withOpacity(0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Text(
+                          "Coba Fitur di Clips", // Saya sesuaikan sedikit teksnya
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // --- 👆 BATAS PERUBAHAN 👆 ---
+            ],
+          ),
+          // Tombol 'X' (Positioned) yang sebelumnya di sini sudah dihapus
+        ),
+      ),
+    );
+  }
+
+  // Paste juga _buildFeatureItem yang sudah dimodifikasi
+  Widget _buildFeatureItem(IconData icon, String title, String subtitle) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [
+                  Colors.amber.shade400,
+                  Colors.orange.shade700,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Icon(icon, color: Colors.white, size: 24),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.black54,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

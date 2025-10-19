@@ -183,19 +183,47 @@ class HomeController with ChangeNotifier {
     notifyListeners();
   }
 
+  // lib/controllers/home_controller.dart
+
   Future<void> toggleLike(int postId) async {
-    final index = _feedItems.indexWhere((item) => item is Map<String, dynamic> && item['type'] == 'post' && item['post_id'] == postId);
-    if (index != -1) {
-      final postMap = Map<String, dynamic>.from(_feedItems[index]);
-      final isLiked = postMap['is_liked'] ?? false;
-      final likesCount = postMap['likes_count'] ?? 0;
-      postMap['is_liked'] = !isLiked;
-      postMap['likes_count'] = likesCount + (!isLiked ? 1 : -1);
+    final index = _feedItems.indexWhere((item) =>
+    item is Map<String, dynamic> &&
+        item['type'] == 'post' &&
+        item['post_id'] == postId);
+
+    if (index == -1) return;
+
+    // 1. Ambil data asli. Kita beri nama 'originalLiked' dan 'originalCount'
+    final postMap = Map<String, dynamic>.from(_feedItems[index]);
+    final bool originalLiked = postMap['is_liked'] ?? false;
+    final int originalCount = postMap['likes_count'] ?? 0;
+
+    // 2. Pembaruan Optimis (langsung ubah UI)
+    postMap['is_liked'] = !originalLiked;
+    postMap['likes_count'] = originalCount + (!originalLiked ? 1 : -1);
+    _feedItems[index] = postMap;
+    notifyListeners();
+
+    // 3. Panggil API
+    try {
+      await _likeService.toggleLikeHttp(
+        postId,
+        isCurrentlyLiked: originalLiked,     // <-- Menggunakan 'originalLiked'
+        currentLikesCount: originalCount,   // <-- Menggunakan 'originalCount'
+      );
+    } catch (e) {
+      // 4. Jika Gagal: Rollback (kembalikan ke data asli)
+
+      // --- PERBAIKAN DI SINI ---
+      // Pastikan Anda menggunakan nama yang sama dengan yang didefinisikan di atas
+      postMap['is_liked'] = originalLiked;     // <-- HARUS 'originalLiked'
+      postMap['likes_count'] = originalCount;  // <-- HARUS 'originalCount'
+      // --- AKHIR PERBAIKAN ---
+
       _feedItems[index] = postMap;
       notifyListeners();
+      print("Gagal toggle like di home: $e");
     }
-    // _likeService.toggleLikeSocket(postId);
-    LikeService().toggleLikeHttp(postId);
   }
 
   Future<void> toggleBookmark(int postId) async {

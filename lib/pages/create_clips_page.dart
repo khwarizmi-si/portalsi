@@ -146,41 +146,141 @@ class _CreateClipsPageState extends State<CreateClipsPage> {
     }
   }
 
-  Future<void> _showCompressionInfoDialog() async {
+  Future<void> _showMandatoryCompressionDialog() async {
     final prefs = await SharedPreferences.getInstance();
-    const String prefKey = 'dont_show_compression_info';
+    const String prefKey = 'dont_show_compression_info_again';
     bool shouldShow = prefs.getBool(prefKey) ?? true;
 
     if (!shouldShow || !mounted) {
       return;
     }
 
+    bool dontShowAgain = false;
+
     return showDialog<void>(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: false, // Wajib, tidak bisa ditutup dengan tap di luar
       builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          title: const Text('Ukuran Video Besar'),
-          content: const SingleChildScrollView(
-            child: Text(
-                'Video yang Anda pilih perlu dioptimalkan agar lebih cepat diunggah. Proses ini mungkin memakan waktu beberapa saat.'),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Jangan tampilkan lagi'),
-              onPressed: () {
-                prefs.setBool(prefKey, false);
-                Navigator.of(dialogContext).pop();
-              },
-            ),
-            ElevatedButton(
-              child: const Text('Oke, Mengerti'),
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-              },
-            ),
-          ],
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              backgroundColor: Colors.white,
+              // Ikon yang melambangkan "optimasi otomatis"
+              icon: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.orange.shade400, Colors.orangeAccent.shade700],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.red.withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 5),
+                    ),
+                  ],
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.auto_fix_high_rounded, color: Colors.white, size: 40),
+              ),
+              // Judul yang bersifat informatif, bukan pertanyaan
+              title: const Text(
+                "Menyiapkan Video Anda",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Pesan yang jelas dan to-the-point
+                  Text(
+                    'Ukuran video ini melebihi batas. Kami sedang mengoptimalkannya secara otomatis agar lebih cepat diunggah dan hemat kuota.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey.shade700, height: 1.4),
+                  ),
+                  const SizedBox(height: 20),
+                  // Opsi checkbox tetap dipertahankan untuk UX yang baik
+                  InkWell(
+                    onTap: () {
+                      setDialogState(() {
+                        dontShowAgain = !dontShowAgain;
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Checkbox(
+                            value: dontShowAgain,
+                            onChanged: (bool? value) {
+                              setDialogState(() {
+                                dontShowAgain = value ?? false;
+                              });
+                            },
+                            activeColor: Colors.orange.shade800,
+                          ),
+                          const Text('Saya mengerti, jangan tampilkan lagi'),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actionsAlignment: MainAxisAlignment.center,
+              actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+              actions: <Widget>[
+                // --- PERUBAHAN UTAMA: TOMBOL GRADIENT ---
+                Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.amber.shade600, Colors.orange.shade800],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.orange.withOpacity(0.4),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent, // Buat transparan
+                      shadowColor: Colors.transparent,     // Hilangkan bayangan bawaan
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    // Teks tombol yang menyatakan pemahaman, bukan persetujuan
+                    child: const Text(
+                      'Oke, Saya Mengerti',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Colors.white,
+                      ),
+                    ),
+                    onPressed: () {
+                      if (dontShowAgain) {
+                        prefs.setBool(prefKey, false);
+                      }
+                      Navigator.of(dialogContext).pop();
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -201,7 +301,7 @@ class _CreateClipsPageState extends State<CreateClipsPage> {
     File fileToPass = mediaFile;
 
     if (mediaFile.lengthSync() > _maxFileSizeInBytes) {
-      await _showCompressionInfoDialog();
+      await _showMandatoryCompressionDialog();
       if (!mounted) return;
 
       setState(() {

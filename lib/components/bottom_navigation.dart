@@ -23,10 +23,10 @@ class _FabMenuPopup extends StatelessWidget {
     final bool dontShowAgain = prefs.getBool('dont_show_clips_permission') ?? false;
 
     // Fungsi navigasi agar tidak duplikat kode
-    void navigateToCreatePost() {
-      Navigator.of(context).pop(); // Tutup menu asal
-      Navigator.push(context, MaterialPageRoute(builder: (context) => const CreatePostPage(isClips: true)));
-    }
+    // void navigateToCreatePost() {
+    //   Navigator.of(context).pop(); // Tutup menu asal
+    //   Navigator.push(context, MaterialPageRoute(builder: (context) => const CreatePostPage(isClips: true)));
+    // }
 
     void navigateToCreateClips() {
       Navigator.of(context).pop(); // Tutup menu asal
@@ -34,7 +34,7 @@ class _FabMenuPopup extends StatelessWidget {
     }
 
     if (dontShowAgain) {
-      navigateToCreatePost();
+      navigateToCreateClips();
       return;
     }
 
@@ -126,7 +126,7 @@ class _FabMenuPopup extends StatelessWidget {
                         await prefs.setBool('dont_show_clips_permission', true);
                         // Baru lakukan navigasi
                         Navigator.of(dialogContext).pop();
-                        navigateToCreatePost();
+                        navigateToCreateClips();
                       },
                       style: TextButton.styleFrom(
                         foregroundColor: Colors.grey.shade600, // Warna teks

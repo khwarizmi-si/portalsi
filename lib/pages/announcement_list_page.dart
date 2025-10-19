@@ -49,19 +49,98 @@ class _AnnouncementListPageState extends State<AnnouncementListPage> {
   Future<bool?> _showConfirmationDialog() {
     return showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (BuildContext context) {
+        // Warna utama untuk dialog ini
+        final Color destructiveColor = const Color(0xFFD32F2F); // Merah yang lebih dalam
+        final Color warningIconColor = const Color(0xFFFFA000); // Amber yang kaya
+
         return AlertDialog(
-          title: const Text('Konfirmasi Hapus'),
-          content: const Text('Apakah Anda yakin ingin menghapus pengumuman ini?'),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Batal'),
-              onPressed: () => Navigator.of(context).pop(false),
+          // shape: RoundedRectangle-Border(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+
+          // 1. Ikon dengan warna amber yang lebih hangat
+          icon: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.red.shade400, Colors.redAccent.shade700],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.red.withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+              shape: BoxShape.circle,
             ),
-            TextButton(
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Hapus'),
-              onPressed: () => Navigator.of(context).pop(true),
+            child: const Icon(Icons.delete_forever_outlined, color: Colors.white, size: 40),
+          ),
+
+          title: const Text(
+            'Hapus Permanen?',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+          ),
+
+          content: const Text(
+            'Tindakan ini tidak dapat diurungkan. Semua data yang terkait akan hilang selamanya.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.black54, height: 1.4),
+          ),
+
+          actionsAlignment: MainAxisAlignment.center,
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+          actions: <Widget>[
+            Row(
+              children: [
+                // 2. Tombol "Batal" yang netral
+                Expanded(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      side: BorderSide(color: Colors.grey.shade400, width: 1.5), // Border abu-abu
+                      foregroundColor: Colors.black87, // Teks hitam
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text('Batal'),
+                    onPressed: () => Navigator.of(context).pop(false),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // 3. Tombol "Hapus" dengan warna merah yang lebih elegan
+                Expanded(
+                  child: Ink( // Gunakan Ink untuk gradien
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      gradient: LinearGradient(
+                        colors: [Colors.amber.shade600, Colors.orange.shade800],
+                      ),
+                    ),
+                    child: InkWell( // Untuk efek tap
+                      onTap: () => Navigator.of(context).pop(true),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        alignment: Alignment.center,
+                        child: const Text(
+                          'Ya, Hapus',
+                          style: TextStyle(
+                            color: Colors.white, // Teks putih
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         );
@@ -70,19 +149,78 @@ class _AnnouncementListPageState extends State<AnnouncementListPage> {
   }
 
   // --- 1. FUNGSI BARU UNTUK MENAMPILKAN POPUP PERINGATAN ---
+  // --- FUNGSI POPUP PERINGATAN DENGAN DESAIN BARU ---
   Future<void> _showPermissionDeniedDialog() {
     return showDialog<void>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Aksi Ditolak'),
-          content: const Text('Anda tidak bisa menghapus pengumuman yang dibuat oleh orang lain.'),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+
+          // 1. Ikon baru dengan gradien biru yang sesuai tema "informasi/blokir"
+          icon: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.blue.shade700, Colors.blueAccent.shade700],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.blue.withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+              shape: BoxShape.circle,
+            ),
+            // Ikon yang melambangkan "permission denied" atau "gagal"
+            child: const Icon(Icons.gpp_bad_outlined, color: Colors.white, size: 40),
+          ),
+
+          title: const Text(
+            'Aksi Ditolak',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+          ),
+
+          content: const Text(
+            'Anda tidak memiliki izin untuk menghapus pengumuman yang dibuat oleh orang lain.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.black54, height: 1.4),
+          ),
+
+          actionsAlignment: MainAxisAlignment.center,
+          actionsPadding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
           actions: <Widget>[
-            TextButton(
-              child: const Text('OK'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
+            // 2. Satu tombol aksi full-width dengan gradien
+            Ink(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                gradient: LinearGradient(
+                  colors: [Colors.blue.shade600, Colors.blue.shade800],
+                ),
+              ),
+              child: InkWell(
+                onTap: () => Navigator.of(context).pop(),
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: double.infinity, // Memastikan tombol memenuhi lebar
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  alignment: Alignment.center,
+                  child: const Text(
+                    'Mengerti', // 3. Teks yang lebih baik dari "OK"
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         );

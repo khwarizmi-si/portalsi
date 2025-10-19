@@ -1,6 +1,7 @@
 // lib/pages/post_detail.dart
 
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:just_audio/just_audio.dart';
 import 'package:marquee/marquee.dart';
 import 'package:portal_si/components/circular_avatar_fetcher.dart';
@@ -142,7 +143,8 @@ class _PostDetailViewState extends State<PostDetailView> {
 
   late final AudioPlayer _audioPlayer;
   bool _isMusicMuted = false;
-
+  StreamSubscription? _likeSubscription;
+  StreamSubscription? _bookmarkSubscription;
   Comment? _replyingToComment;
   List<Comment> _comments = [];
   bool _isLoadingComments = true;
@@ -154,6 +156,33 @@ class _PostDetailViewState extends State<PostDetailView> {
     _post = widget.post;
     _fetchComments();
     _initAudioPlayer();
+    _likeSubscription = _likeService.likeUpdates
+        .where((update) => update.postId == _post.id)
+        .listen((update) {
+      if (mounted) {
+        // Cek apakah state memang berbeda
+        if (_post.isLikedByUser != update.isLiked ||
+            (update.likesCount != null && _post.likesCount != update.likesCount)) {
+          setState(() {
+            _post = _post.copyWith(
+              isLikedByUser: update.isLiked,
+              // Hanya update jumlah like jika stream mengirimkannya
+              likesCount: update.likesCount ?? _post.likesCount,
+            );
+          });
+        }
+      }
+    });
+
+    _bookmarkSubscription = _bookmarkService.bookmarkUpdates
+        .where((update) => update.postId == _post.id)
+        .listen((update) {
+      if (mounted && _post.isBookmarked != update.isBookmarked) {
+        setState(() {
+          _post = _post.copyWith(isBookmarked: update.isBookmarked);
+        });
+      }
+    });
   }
 
   Future<void> _initAudioPlayer() async {
@@ -172,10 +201,13 @@ class _PostDetailViewState extends State<PostDetailView> {
 
   @override
   void dispose() {
+    _likeSubscription?.cancel();
+    _bookmarkSubscription?.cancel();
     _commentController.dispose();
     _commentFocusNode.dispose();
     _audioPlayer.dispose();
     super.dispose();
+    _likeSubscription?.cancel();
   }
 
   void _toggleMusicMute() {
@@ -283,19 +315,28 @@ class _PostDetailViewState extends State<PostDetailView> {
       }
     }
   }
-
   Future<void> _toggleLike() async {
+    // Logika optimistic update di sini sudah benar
     final originalLikedStatus = _post.isLikedByUser;
     final originalLikesCount = _post.likesCount;
+
     setState(() {
       _post = _post.copyWith(
         isLikedByUser: !originalLikedStatus,
         likesCount: originalLikesCount + (originalLikedStatus ? -1 : 1),
       );
     });
+
     try {
-      await _likeService.toggleLikeHttp(_post.id);
+      // Panggil service baru. Kirimkan state ASLI (sebelum di-toggle)
+      // karena service akan menghitung state barunya.
+      await _likeService.toggleLikeHttp(
+        _post.id,
+        isCurrentlyLiked: originalLikedStatus,
+        currentLikesCount: originalLikesCount, // Kirim jumlah like saat ini
+      );
     } catch (e) {
+      // Rollback jika gagal
       setState(() {
         _post = _post.copyWith(
           isLikedByUser: originalLikedStatus,
@@ -304,7 +345,6 @@ class _PostDetailViewState extends State<PostDetailView> {
       });
     }
   }
-
   Future<void> _postComment() async {
     if (_commentController.text.trim().isEmpty || _isPostingComment) return;
     setState(() => _isPostingComment = true);
@@ -503,6 +543,7 @@ class _PostDetailViewState extends State<PostDetailView> {
       mediaContent = Hero(
         tag: 'post_hero_${_post.id}',
         child: Image.network(_post.mediaUrl!),
+
       );
     }
 

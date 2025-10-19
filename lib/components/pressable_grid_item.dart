@@ -1,17 +1,19 @@
 // lib/components/pressable_grid_item.dart
 
+import 'dart:async'; // <-- DIPERLUKAN
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:video_player/video_player.dart';
 import '../components/video_thumbnail_widget.dart';
 import '../models/post_model.dart';
 import '../models/user_model.dart';
 import '../services/bookmark_service.dart';
 import '../services/like_service.dart';
 
-// WIDGET UNTUK SHIMMER PLACEHOLDER
+// WIDGET UNTUK SHIMMER PLACEHOLDER (Tidak berubah)
 class ImagePlaceholder extends StatelessWidget {
   const ImagePlaceholder({Key? key}) : super(key: key);
 
@@ -27,7 +29,7 @@ class ImagePlaceholder extends StatelessWidget {
   }
 }
 
-// WIDGET Tombol yang bisa bereaksi terhadap hover
+// WIDGET Tombol yang bisa bereaksi terhadap hover (Tidak berubah)
 class HoverableButton extends StatefulWidget {
   final ValueNotifier<bool> isHoveredNotifier;
   final String? text;
@@ -61,12 +63,10 @@ class _HoverableButtonState extends State<HoverableButton> {
     super.dispose();
   }
 
-  // --- 👇 PERUBAHAN ADA DI SINI 👇 ---
   void _onHoverChanged() {
     if (mounted && _isHovered != widget.isHoveredNotifier.value) {
       setState(() {
         _isHovered = widget.isHoveredNotifier.value;
-        // Jika tombol mulai di-hover (berubah jadi oranye), berikan getaran kecil
         if (_isHovered) {
           HapticFeedback.lightImpact();
         }
@@ -79,6 +79,7 @@ class _HoverableButtonState extends State<HoverableButton> {
     Color iconColor = Colors.white;
     Color backgroundColor = Colors.black.withOpacity(0.4);
 
+    // --- 👇 INI ADALAH LOGIKA YANG MENENTUKAN TOMBOL TERISI 👇 ---
     if (widget.isFilled && !_isHovered) {
       backgroundColor = Colors.white.withOpacity(0.9);
       iconColor = Colors.red;
@@ -87,10 +88,10 @@ class _HoverableButtonState extends State<HoverableButton> {
       iconColor = Colors.white;
     }
 
-    if(widget.icon == Icons.bookmark && widget.isFilled && !_isHovered) {
+    if (widget.icon == Icons.bookmark && widget.isFilled && !_isHovered) {
       iconColor = Colors.blue.shade700;
     }
-
+    // --- 👆 AKHIR DARI LOGIKA 👆 ---
 
     return AnimatedScale(
       scale: _isHovered ? 1.15 : 1.0,
@@ -127,8 +128,8 @@ class _HoverableButtonState extends State<HoverableButton> {
   }
 }
 
-// WIDGET KONTEN POPUP
-class TransientPostPreview extends StatelessWidget {
+// --- 👇 PERUBAHAN: DARI STATELESS MENJADI STATEFUL WIDGET 👇 ---
+class TransientPostPreview extends StatefulWidget {
   final SimplePost post;
   final User user;
   final Map<String, GlobalKey> buttonKeys;
@@ -143,8 +144,119 @@ class TransientPostPreview extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  State<TransientPostPreview> createState() => _TransientPostPreviewState();
+}
+
+class _TransientPostPreviewState extends State<TransientPostPreview> {
+  // State lokal untuk post
+  late SimplePost _post;
+
+  // Service dan stream subscriptions
+  final LikeService _likeService = LikeService();
+  final BookmarkService _bookmarkService = BookmarkService();
+  StreamSubscription? _likeSubscription;
+  StreamSubscription? _bookmarkSubscription;
+
+  // --- 👇 TAMBAHAN UNTUK VIDEO PLAYER 👇 ---
+  VideoPlayerController? _videoController;
+  bool _isVideoInitialized = false;
+  // --- 👆 AKHIR TAMBAHAN 👆 ---
+
+  @override
+  void initState() {
+    super.initState();
+    _post = widget.post;
+
+    // Listener untuk stream (tidak berubah)
+    _likeSubscription = _likeService.likeUpdates
+        .where((update) => update.postId == _post.postId)
+        .listen((update) {
+      if (mounted && _post.isLikedByUser != update.isLiked) {
+        setState(() {
+          _post = _post.copyWith(isLikedByUser: update.isLiked);
+        });
+      }
+    });
+
+    _bookmarkSubscription = _bookmarkService.bookmarkUpdates
+        .where((update) => update.postId == _post.postId)
+        .listen((update) {
+      if (mounted && _post.isBookmarked != update.isBookmarked) {
+        setState(() {
+          _post = _post.copyWith(isBookmarked: update.isBookmarked);
+        });
+      }
+    });
+
+    // --- 👇 TAMBAHAN: Inisialisasi video player jika ini video 👇 ---
+    if (widget.post.isVideo) {
+      _videoController =
+      VideoPlayerController.networkUrl(Uri.parse(widget.post.mediaUrl))
+        ..initialize().then((_) {
+          // Pastikan widget masih ada sebelum setState
+          if (mounted) {
+            setState(() {
+              _isVideoInitialized = true;
+            });
+            _videoController!.setLooping(true); // Putar berulang
+            _videoController!.play(); // Mulai putar
+          }
+        });
+    }
+    // --- 👆 AKHIR TAMBAHAN 👆 ---
+  }
+
+  @override
+  void dispose() {
+    _likeSubscription?.cancel();
+    _bookmarkSubscription?.cancel();
+
+    // --- 👇 TAMBAHAN: Hentikan dan hancurkan controller 👇 ---
+    // Ini sangat penting agar video berhenti saat popup ditutup
+    _videoController?.pause();
+    _videoController?.dispose();
+    // --- 👆 AKHIR TAMBAHAN 👆 ---
+
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     const Color textColor = Colors.white;
+
+    // --- 👇 PERUBAHAN: Tentukan widget media yang akan tampil 👇 ---
+    Widget mediaDisplay;
+    if (_post.isVideo) {
+      // Jika ini video, cek apakah sudah siap
+      if (_isVideoInitialized && _videoController != null) {
+        // Jika siap, tampilkan VideoPlayer
+        mediaDisplay = AspectRatio(
+          aspectRatio: _videoController!.value.aspectRatio,
+          child: VideoPlayer(_videoController!),
+        );
+      } else {
+        // Jika belum siap, tampilkan placeholder
+        mediaDisplay = const AspectRatio(
+          aspectRatio: 1, // Placeholder 1:1
+          child: ImagePlaceholder(), // Placeholder shimmer Anda
+        );
+      }
+    } else {
+      // Jika ini gambar, tampilkan seperti biasa
+      mediaDisplay = CachedNetworkImage(
+        imageUrl: _post.mediaUrl,
+        fit: BoxFit.contain,
+        placeholder: (context, url) => const AspectRatio(
+          aspectRatio: 1,
+          child: ImagePlaceholder(),
+        ),
+        errorWidget: (context, url, error) => const AspectRatio(
+          aspectRatio: 1,
+          child: Icon(Icons.broken_image),
+        ),
+      );
+    }
+    // --- 👆 AKHIR PERUBAHAN 👆 ---
 
     return Material(
       color: Colors.transparent,
@@ -157,6 +269,7 @@ class TransientPostPreview extends StatelessWidget {
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Info user (tidak berubah)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12.0),
                   child: Row(
@@ -166,16 +279,18 @@ class TransientPostPreview extends StatelessWidget {
                         height: 32,
                         child: ClipOval(
                           child: CachedNetworkImage(
-                            imageUrl: user.profilePictureUrl ?? '',
+                            imageUrl: widget.user.profilePictureUrl ?? '',
                             fit: BoxFit.cover,
-                            placeholder: (context, url) => const ImagePlaceholder(),
-                            errorWidget: (context, url, error) => const CircleAvatar(backgroundColor: Colors.grey),
+                            placeholder: (context, url) =>
+                            const ImagePlaceholder(),
+                            errorWidget: (context, url, error) =>
+                            const CircleAvatar(backgroundColor: Colors.grey),
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        user.username,
+                        widget.user.username,
                         style: const TextStyle(
                           color: textColor,
                           fontWeight: FontWeight.bold,
@@ -186,48 +301,48 @@ class TransientPostPreview extends StatelessWidget {
                     ],
                   ),
                 ),
+                // Media (Gambar atau Video)
                 ClipRRect(
                   borderRadius: BorderRadius.circular(16),
                   child: Hero(
-                    tag: 'post-hero-${post.postId}',
-                    child: CachedNetworkImage(
-                      imageUrl: post.mediaUrl,
-                      fit: BoxFit.contain,
-                      placeholder: (context, url) => const AspectRatio(
-                        aspectRatio: 1,
-                        child: ImagePlaceholder(),
-                      ),
-                    ),
+                    tag: 'post-hero-${_post.postId}',
+                    // --- 👇 PERUBAHAN: Gunakan 'mediaDisplay' 👇 ---
+                    child: mediaDisplay,
+                    // --- 👆 AKHIR PERUBAHAN 👆 ---
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 24),
-
+            // Tombol (tidak berubah)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
                   children: [
                     HoverableButton(
-                      key: buttonKeys['like'],
-                      isHoveredNotifier: buttonHoverNotifiers['like']!,
-                      icon: post.isLikedByUser ? Icons.favorite : Icons.favorite_border,
-                      isFilled: post.isLikedByUser,
+                      key: widget.buttonKeys['like'],
+                      isHoveredNotifier: widget.buttonHoverNotifiers['like']!,
+                      icon: _post.isLikedByUser
+                          ? Icons.favorite
+                          : Icons.favorite_border,
+                      isFilled: _post.isLikedByUser,
                     ),
                     const SizedBox(width: 8),
                     HoverableButton(
-                      key: buttonKeys['comment'],
-                      isHoveredNotifier: buttonHoverNotifiers['comment']!,
+                      key: widget.buttonKeys['comment'],
+                      isHoveredNotifier: widget.buttonHoverNotifiers['comment']!,
                       icon: Icons.chat_bubble_outline,
                     ),
                   ],
                 ),
                 HoverableButton(
-                  key: buttonKeys['bookmark'],
-                  isHoveredNotifier: buttonHoverNotifiers['bookmark']!,
-                  icon: post.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                  isFilled: post.isBookmarked,
+                  key: widget.buttonKeys['bookmark'],
+                  isHoveredNotifier: widget.buttonHoverNotifiers['bookmark']!,
+                  icon: _post.isBookmarked
+                      ? Icons.bookmark
+                      : Icons.bookmark_border,
+                  isFilled: _post.isBookmarked,
                 ),
               ],
             ),
@@ -237,6 +352,8 @@ class TransientPostPreview extends StatelessWidget {
     );
   }
 }
+// --- 👆 AKHIR PERUBAHAN STATEFUL WIDGET 👆 ---
+
 
 // WIDGET UTAMA
 class PressableGridItem extends StatefulWidget {
@@ -263,6 +380,13 @@ class _PressableGridItemState extends State<PressableGridItem> {
   final LikeService _likeService = LikeService();
   final BookmarkService _bookmarkService = BookmarkService();
 
+  // --- 👇 PERUBAHAN: Listener ini HANYA untuk thumbnail di grid 👇 ---
+  StreamSubscription? _likeSubscription;
+  StreamSubscription? _bookmarkSubscription;
+  // --- 👆 AKHIR PERUBAHAN 👆 ---
+
+  // --- ❌ HAPUS _overlaySetState ❌ ---
+
   final Map<String, GlobalKey> _buttonKeys = {
     'like': GlobalKey(),
     'comment': GlobalKey(),
@@ -278,10 +402,35 @@ class _PressableGridItemState extends State<PressableGridItem> {
   void initState() {
     super.initState();
     _post = widget.post;
+
+    // Listener ini HANYA untuk memperbarui state _post di
+    // _PressableGridItemState. Ini tidak lagi mencoba
+    // memperbarui overlay secara paksa.
+    _likeSubscription = _likeService.likeUpdates
+        .where((update) => update.postId == _post.postId)
+        .listen((update) {
+      if (mounted && _post.isLikedByUser != update.isLiked) {
+        setState(() {
+          _post = _post.copyWith(isLikedByUser: update.isLiked);
+        });
+      }
+    });
+
+    _bookmarkSubscription = _bookmarkService.bookmarkUpdates
+        .where((update) => update.postId == _post.postId)
+        .listen((update) {
+      if (mounted && _post.isBookmarked != update.isBookmarked) {
+        setState(() {
+          _post = _post.copyWith(isBookmarked: update.isBookmarked);
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
+    _likeSubscription?.cancel();
+    _bookmarkSubscription?.cancel();
     _removePreviewOverlay();
     _buttonHoverNotifiers.forEach((_, notifier) => notifier.dispose());
     super.dispose();
@@ -293,6 +442,7 @@ class _PressableGridItemState extends State<PressableGridItem> {
     final overlayState = Overlay.of(context);
     _overlayEntry = OverlayEntry(
       builder: (context) {
+        // --- 👇 PERUBAHAN: Hapus StatefulBuilder, jadi lebih sederhana 👇 ---
         return Stack(
           children: [
             BackdropFilter(
@@ -303,6 +453,8 @@ class _PressableGridItemState extends State<PressableGridItem> {
             ),
             Center(
               child: TransientPostPreview(
+                // Kirim state _post saat ini.
+                // TransientPostPreview akan mengelolanya sendiri dari sini.
                 post: _post,
                 user: widget.user,
                 buttonKeys: _buttonKeys,
@@ -311,13 +463,15 @@ class _PressableGridItemState extends State<PressableGridItem> {
             ),
           ],
         );
+        // --- 👆 AKHIR PERUBAHAN 👆 ---
       },
     );
 
-    overlayState?.insert(_overlayEntry!);
+    overlayState.insert(_overlayEntry!);
   }
 
   void _removePreviewOverlay() async {
+    // Logika pemicu aksi tidak berubah.
     if (_buttonHoverNotifiers['like']!.value) {
       await _handleLike();
     } else if (_buttonHoverNotifiers['comment']!.value) {
@@ -328,41 +482,39 @@ class _PressableGridItemState extends State<PressableGridItem> {
 
     _overlayEntry?.remove();
     _overlayEntry = null;
+
+    // --- ❌ HAPUS _overlaySetState = null ❌ ---
+
     _buttonHoverNotifiers.forEach((_, notifier) => notifier.value = false);
   }
 
+  // --- Fungsi _handleLike dan _handleBookmark tidak berubah ---
+  // (Mereka memanggil service, service menyiarkan ke stream,
+  // dan KEDUA listener (di grid dan di popup) akan menangkapnya)
   Future<void> _handleLike() async {
-    final originalStatus = _post.isLikedByUser;
-    setState(() {
-      _post = _post.copyWith(isLikedByUser: !originalStatus);
-    });
     try {
-      await _likeService.toggleLikeHttp(_post.postId);
-      print("✅ Like toggled successfully");
+      // Panggil fungsi baru dengan state _post saat ini.
+      // SimplePost tidak punya likesCount, jadi kita kirim null.
+      await _likeService.toggleLikeHttp(
+        _post.postId,
+        isCurrentlyLiked: _post.isLikedByUser,
+        currentLikesCount: null, // <-- Kirim null
+      );
+      print("✅ Like toggle action initiated");
     } catch (e) {
-      setState(() {
-        _post = _post.copyWith(isLikedByUser: originalStatus);
-      });
       print("❌ Failed to toggle like: $e");
     }
   }
 
   Future<void> _handleBookmark() async {
-    final originalStatus = _post.isBookmarked;
-    setState(() {
-      _post = _post.copyWith(isBookmarked: !originalStatus);
-    });
     try {
-      if (_post.isBookmarked) {
+      if (!_post.isBookmarked) {
         await _bookmarkService.addBookmark(_post.postId);
       } else {
         await _bookmarkService.removeBookmark(_post.postId);
       }
-      print("✅ Bookmark toggled successfully");
+      print("✅ Bookmark toggle action initiated");
     } catch (e) {
-      setState(() {
-        _post = _post.copyWith(isBookmarked: originalStatus);
-      });
       print("❌ Failed to toggle bookmark: $e");
     }
   }
@@ -371,14 +523,19 @@ class _PressableGridItemState extends State<PressableGridItem> {
     widget.onTap();
   }
 
+  // ... (Sisa _PressableGridItemState tidak berubah) ...
+
   void _handleLongPressMoveUpdate(LongPressMoveUpdateDetails details) {
     _buttonKeys.forEach((key, globalKey) {
-      final RenderBox? buttonRenderBox = globalKey.currentContext?.findRenderObject() as RenderBox?;
+      final RenderBox? buttonRenderBox =
+      globalKey.currentContext?.findRenderObject() as RenderBox?;
       if (buttonRenderBox == null) return;
 
       final buttonRect = Rect.fromPoints(
         buttonRenderBox.localToGlobal(Offset.zero),
-        buttonRenderBox.localToGlobal(buttonRenderBox.size.bottomRight(Offset.zero)),
+        buttonRenderBox.localToGlobal(
+          buttonRenderBox.size.bottomRight(Offset.zero),
+        ),
       );
 
       final fingerPosition = details.globalPosition;
@@ -397,8 +554,9 @@ class _PressableGridItemState extends State<PressableGridItem> {
     setState(() => _isPressed = false);
     widget.onTap();
   }
+
   void _onTapCancel() {
-    if(mounted){
+    if (mounted) {
       setState(() => _isPressed = false);
     }
   }
@@ -407,8 +565,10 @@ class _PressableGridItemState extends State<PressableGridItem> {
   Widget build(BuildContext context) {
     Widget mediaDisplay;
     if (_post.isVideo) {
+      // 1. JIKA INI VIDEO, TAMPILKAN THUMBNAIL VIDEO
       mediaDisplay = VideoThumbnailWidget(videoUrl: _post.mediaUrl);
     } else {
+      // 2. JIKA BUKAN VIDEO, TAMPILKAN GAMBAR
       mediaDisplay = CachedNetworkImage(
         imageUrl: _post.mediaUrl,
         fit: BoxFit.cover,
@@ -439,12 +599,14 @@ class _PressableGridItemState extends State<PressableGridItem> {
             fit: StackFit.expand,
             children: [
               if (_post.isVideo)
-                mediaDisplay
+                mediaDisplay // Menampilkan VideoThumbnailWidget
               else
-                Hero(
+                Hero( // Menampilkan CachedNetworkImage
                   tag: 'post-hero-${_post.postId}',
                   child: mediaDisplay,
                 ),
+
+              // --- 👇 IKON VIDEO JUGA SUDAH DITAMBAHKAN 👇 ---
               if (_post.isVideo)
                 const Positioned(
                   top: 8.0,
