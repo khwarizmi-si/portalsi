@@ -105,10 +105,10 @@ dependencies:
   latlong2: ^0.9.0    # Helper untuk koordinat latitude/longitude
   firebase_core: ^3.0.0  # Versi terbaru
   firebase_messaging: ^15.0.0 # Versi terbaru
+  timezone: ^0.10.0
   # pusher_client: ^2.0.0
   # laravel_echo: ^1.0.0-beta.1
   # pusher_channels_flutter: ^2.2.1
-
 
 
 dev_dependencies:

@@ -15,6 +15,8 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+
+
 android {
     namespace = "com.portal.si"
 
@@ -43,10 +45,10 @@ android {
     }
 defaultConfig {
     applicationId = "com.portal.si"
-    minSdk = flutter.minSdkVersion
+    minSdk = 24
     targetSdk = 36
-    versionCode = 21
-    versionName = "1.4.12"
+    versionCode = 22
+    versionName = "1.4.19"
     multiDexEnabled = true
 }
 

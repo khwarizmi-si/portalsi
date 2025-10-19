@@ -1,3 +1,4 @@
+
 // lib/main.dart
 
 import 'dart:async';
@@ -148,6 +149,9 @@ Future<void> main() async {
 
   await initializeDateFormatting('id_ID', null);
 
+  // Inisialisasi AppLifecycleManager
+  AppLifecycleManager();
+
   runApp(
     MultiProvider(
       providers: [
@@ -191,11 +195,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       case AppLifecycleState.resumed:
         AppLifecycleManager.isAppInForeground = true;
         print('▶️ App resumed - now in foreground.');
+        // Aplikasi kembali ke foreground, batalkan notifikasi tidak aktif
+        NotificationSystemService.instance.cancelNotification(999);
         CacheManager.onAppResumed();
         break;
       case AppLifecycleState.paused:
         AppLifecycleManager.isAppInForeground = false;
         print('⏸️ App paused - now in background.');
+        // Aplikasi masuk ke background, jadwalkan notifikasi tidak aktif
+        NotificationSystemService.instance.scheduleInactiveUserNotification();
         CacheManager.onAppPaused();
         break;
       case AppLifecycleState.detached:

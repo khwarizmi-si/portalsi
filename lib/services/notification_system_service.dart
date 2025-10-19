@@ -1,9 +1,13 @@
+
 // lib/services/notification_service.dart
 
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
+
 
 class NotificationSystemService {
   // Singleton pattern
@@ -14,6 +18,8 @@ class NotificationSystemService {
   FlutterLocalNotificationsPlugin();
 
   Future<void> initialize() async {
+    // Inisialisasi timezone
+    tz.initializeTimeZones();
     // Pengaturan inisialisasi untuk Android
     const AndroidInitializationSettings androidSettings =
     AndroidInitializationSettings('@mipmap/ic_launcher'); // Gunakan ikon default
@@ -27,11 +33,46 @@ class NotificationSystemService {
     );
 
     await _notificationsPlugin.initialize(settings);
-    print("✅ NotificationService berhasil diinisialisasi.");
 
     // Buat Channel Notifikasi untuk Android (PENTING!)
     await _createNotificationChannel();
   }
+
+  Future<void> cancelNotification(int id) async {
+    await _notificationsPlugin.cancel(id);
+  }
+
+    Future<void> scheduleInactiveUserNotification() async {
+    // Batalkan notifikasi yang mungkin sudah ada sebelumnya untuk menghindari duplikasi
+    await _notificationsPlugin.cancel(999); // Gunakan ID unik untuk notifikasi ini
+
+    final tz.TZDateTime scheduledDate =
+        tz.TZDateTime.now(tz.local).add(const Duration(hours: 48));
+
+    await _notificationsPlugin.zonedSchedule(
+      999, // ID unik notifikasi
+      'Kami merindukanmu!',
+      'Upload Postinganmu',
+      scheduledDate,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'inactive_user_channel',
+          'Notifikasi Pengguna Tidak Aktif',
+          channelDescription: 'Mengingatkan pengguna untuk kembali ke aplikasi.',
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+    );
+  }
+
 
   Future<void> showGroupedNotification({
     required int id,                 // ID unik untuk setiap notifikasi anak
@@ -108,7 +149,18 @@ class NotificationSystemService {
         .resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
-    print("📢 Android Notification Channel 'Pesan Baru' dibuat.");
+
+    const AndroidNotificationChannel inactiveUserChannel = AndroidNotificationChannel(
+      'inactive_user_channel', // id
+      'Notifikasi Pengguna Tidak Aktif', // title
+      description: 'Mengingatkan pengguna untuk kembali ke aplikasi.', // description
+      importance: Importance.defaultImportance,
+    );
+
+     await _notificationsPlugin
+        .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(inactiveUserChannel);
   }
 
   Future<void> showNewMessageNotification({
@@ -164,7 +216,6 @@ class NotificationSystemService {
       notificationDetails,
       payload: payload, // Sematkan data sender di sini
     );
-    print("📬 Notifikasi ditampilkan dengan ID: $messageId dan payload.");
   }
 
   /// [BARU] Fungsi privat untuk mengunduh gambar dari URL.
@@ -176,7 +227,7 @@ class NotificationSystemService {
         return ByteArrayAndroidBitmap(response.bodyBytes);
       }
     } catch (e) {
-      print("Gagal mengunduh gambar untuk notifikasi: $e");
+      // Gagal mengunduh gambar untuk notifikasi: $e
     }
     return null;
   }
@@ -210,7 +261,6 @@ class NotificationSystemService {
 
     // Tampilkan notifikasi
     await _notificationsPlugin.show(id, title, body, notificationDetails);
-    print("📬 Notifikasi global ditampilkan.");
   }
 
   Future<void> showRichNotificationWithAvatar({
@@ -240,7 +290,6 @@ class NotificationSystemService {
 
     // Tampilkan notifikasi
     await _notificationsPlugin.show(id, title, body, notificationDetails);
-    print("📬 Notifikasi dengan avatar ditampilkan.");
   }
 
   Future<void> showCommentNotification({
@@ -291,6 +340,5 @@ class NotificationSystemService {
 
     // 4. Tampilkan Notifikasi
     await _notificationsPlugin.show(id, title, body, notificationDetails);
-    print("📬 Notifikasi komentar kaya informasi ditampilkan.");
   }
 }
