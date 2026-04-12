@@ -121,8 +121,10 @@ class _SplashScreenState extends State<SplashScreen> {
       return;
     }
 
+    // Jika platform web dan token ada, langsung masuk ke /home
+    // (WebSocket, background service, dll tidak didukung di web)
     if (kIsWeb) {
-      if (mounted) Navigator.of(context).pushReplacementNamed('/welcome');
+      if (mounted) Navigator.of(context).pushReplacementNamed('/home');
       return;
     }
 

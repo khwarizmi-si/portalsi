@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "448077829511",
-    "project_id": "portal-si-d6059",
-    "storage_bucket": "portal-si-d6059.firebasestorage.app"
+    "project_number": "665921199744",
+    "project_id": "portalsi-web-real",
+    "storage_bucket": "portalsi-web-real.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:448077829511:android:e09a313b3224a4efbbaf22",
+        "mobilesdk_app_id": "1:665921199744:android:ecee51fe51a91c21f11065",
         "android_client_info": {
           "package_name": "com.portal.si"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBodTa_o2TbN36H0_TUVAWW_3m5irKKFvs"
+          "current_key": "AIzaSyAA3DDTJDc_xpSOKmkny9Y6Qv7wk3zuTHA"
         }
       ],
       "services": {
