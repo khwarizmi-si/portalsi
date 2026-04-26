@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:image_picker/image_picker.dart' show XFile;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -29,13 +31,16 @@ class SharePostPage extends StatefulWidget {
   final Song? selectedSong;
   final List<TextOverlay> textOverlays;
   final List<StickerOverlay> stickerOverlays;
+  // Web-only: pass an XFile picked by image_picker/file_picker
+  final XFile? webMediaFile;
 
   const SharePostPage({
     super.key,
-    required this.mediaFiles,
+    this.mediaFiles = const [],
     this.selectedSong,
     this.textOverlays = const [],
     this.stickerOverlays = const [],
+    this.webMediaFile,
   });
 
   @override
@@ -127,7 +132,7 @@ class _SharePostPageState extends State<SharePostPage> {
         final token = await SecureStorage.getToken();
         if (token == null) throw Exception("Token tidak ditemukan");
 
-        final url = Uri.parse('https://api-new.portalsi.com/api/users/search?username=$query&page=$_mentionCurrentPage');
+        final url = Uri.parse('https://api.portalsi.com/api/users/search?username=$query&page=$_mentionCurrentPage');
         final response = await http.get(url, headers: {'Accept': 'application/json', 'Authorization': 'Bearer $token'});
 
         if (response.statusCode == 200) {
@@ -322,7 +327,12 @@ class _SharePostPageState extends State<SharePostPage> {
       return;
     }
 
-    if (widget.mediaFiles.isEmpty) {
+    // Validate: need either native Files or a web XFile
+    final bool hasMedia = kIsWeb
+        ? widget.webMediaFile != null
+        : widget.mediaFiles.isNotEmpty;
+
+    if (!hasMedia) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Tidak ada media untuk diunggah!')),
       );
@@ -336,19 +346,31 @@ class _SharePostPageState extends State<SharePostPage> {
     );
 
     try {
-      final File mediaFile = widget.mediaFiles.first;
-      final bool isVideo = mediaFile.path.toLowerCase().endsWith('.mp4');
-
       Uint8List? thumbnailData;
-      if (isVideo) {
-        thumbnailData = await VideoThumbnail.thumbnailData(
-          video: mediaFile.path,
-          imageFormat: ImageFormat.JPEG,
-          maxWidth: 128,
-          quality: 25,
-        );
+      bool isVideo = false;
+      File? nativeFile;
+
+      if (kIsWeb && widget.webMediaFile != null) {
+        // ── Web path: use XFile ────────────────────────────────────────
+        final xFile = widget.webMediaFile!;
+        final ext = xFile.name.split('.').last.toLowerCase();
+        isVideo = ['mp4', 'mov', 'avi', 'webm', 'mkv'].contains(ext);
+        thumbnailData = await xFile.readAsBytes();
+        // On web we pass mediaBytes to startUpload instead of File
       } else {
-        thumbnailData = await mediaFile.readAsBytes();
+        // ── Native path: use dart:io File ──────────────────────────────
+        nativeFile = widget.mediaFiles.first;
+        isVideo = nativeFile.path.toLowerCase().endsWith('.mp4');
+        if (isVideo) {
+          thumbnailData = await VideoThumbnail.thumbnailData(
+            video: nativeFile.path,
+            imageFormat: ImageFormat.JPEG,
+            maxWidth: 128,
+            quality: 25,
+          );
+        } else {
+          thumbnailData = await nativeFile.readAsBytes();
+        }
       }
 
       if (thumbnailData == null) {
@@ -386,12 +408,24 @@ class _SharePostPageState extends State<SharePostPage> {
         fields['sticker_overlays_json'] = jsonEncode(stickersAsMap);
       }
 
-      uploadProvider.startUpload(
-        type: UploadType.post,
-        fields: fields,
-        mediaFile: mediaFile,
-        thumbnail: thumbnailData,
-      );
+      if (kIsWeb && widget.webMediaFile != null) {
+        // Read the full media file bytes separately from the thumbnail
+        final Uint8List mediaBytes = await widget.webMediaFile!.readAsBytes();
+        uploadProvider.startUploadFromBytes(
+          type: UploadType.post,
+          fields: fields,
+          mediaBytes: mediaBytes,
+          fileName: widget.webMediaFile!.name,
+          thumbnail: thumbnailData,
+        );
+      } else {
+        uploadProvider.startUpload(
+          type: UploadType.post,
+          fields: fields,
+          mediaFile: nativeFile!,
+          thumbnail: thumbnailData,
+        );
+      }
 
       final navProvider = Provider.of<NavigationProvider>(context, listen: false);
       navProvider.navigateToTab(0);
@@ -449,9 +483,11 @@ class _SharePostPageState extends State<SharePostPage> {
                                 width: 80, height: 80 * (5 / 4),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
-                                  child: widget.mediaFiles.isNotEmpty
-                                      ? _MediaThumbnailPreview(file: widget.mediaFiles.first)
-                                      : Container(color: Colors.grey.shade800),
+                                  child: kIsWeb && widget.webMediaFile != null
+                                      ? _WebMediaThumbnailPreview(xFile: widget.webMediaFile!)
+                                      : widget.mediaFiles.isNotEmpty
+                                          ? _MediaThumbnailPreview(file: widget.mediaFiles.first)
+                                          : Container(color: Colors.grey.shade800),
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -636,6 +672,41 @@ class _MediaThumbnailPreviewState extends State<_MediaThumbnailPreview> {
           return Image.memory(snapshot.data!, fit: BoxFit.cover);
         }
         return Container(color: Colors.grey.shade800, child: const Center(child: CircularProgressIndicator(strokeWidth: 2)));
+      },
+    );
+  }
+}
+
+/// Web-compatible thumbnail preview using XFile.readAsBytes()
+class _WebMediaThumbnailPreview extends StatefulWidget {
+  final XFile xFile;
+  const _WebMediaThumbnailPreview({required this.xFile});
+
+  @override
+  State<_WebMediaThumbnailPreview> createState() => _WebMediaThumbnailPreviewState();
+}
+
+class _WebMediaThumbnailPreviewState extends State<_WebMediaThumbnailPreview> {
+  late Future<Uint8List> _bytesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _bytesFuture = widget.xFile.readAsBytes();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List>(
+      future: _bytesFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.done && snapshot.hasData) {
+          return Image.memory(snapshot.data!, fit: BoxFit.cover);
+        }
+        return Container(
+          color: Colors.grey.shade200,
+          child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        );
       },
     );
   }

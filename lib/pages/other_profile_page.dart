@@ -1,6 +1,7 @@
 // lib/pages/other_profile_page.dart
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
@@ -17,6 +18,7 @@ import '../models/user_model.dart';
 import '../providers/navigation_provider.dart';
 import '../services/follow_service.dart';
 import '../services/user_service.dart';
+import '../utils/follow_state_manager.dart';
 import '../utils/navigation_helper.dart';
 import 'chat_room.dart';
 import 'clips_viewer_page.dart';
@@ -214,20 +216,48 @@ class _OtherProfilePageState extends State<OtherProfilePage>
       await _followService.getFollowStatus(widget.username);
 
       if (mounted) {
+        final isFollowing = followStatus['isFollowing'] ?? false;
         setState(() {
           _profileData = profile;
-          _isFollowing = followStatus['isFollowing'] ?? false;
+          _isFollowing = isFollowing;
           _isLoading = false;
         });
+        // Seed global cache so other pages can read it instantly
+        if (profile.id != null) {
+          FollowStateManager().seed({profile.id!: isFollowing});
+        }
         _animationController.forward(from: 0.0);
       }
     } catch (e) {
       if (mounted) {
+        // Check for 404 / user not found
+        final msg = e.toString().toLowerCase();
         setState(() {
-          _error = "Gagal memuat profil: ${e.toString()}";
+          _error = msg.contains('404') || msg.contains('not found')
+              ? 'Profil "@${widget.username}" tidak ditemukan.'
+              : 'Gagal memuat profil. Coba lagi.';
           _isLoading = false;
         });
       }
+    }
+  }
+
+  /// Back navigation that works both as overlay (native) and as a pushed route (web)
+  void _handleBack() {
+    if (!kIsWeb) {
+      final navProvider = Provider.of<NavigationProvider>(context, listen: false);
+      if (navProvider.overlayPage != null) {
+        navProvider.hideOverlay();
+        return;
+      }
+    }
+    // On web use rootNavigator so we pop the full-screen push correctly
+    final navigator = Navigator.of(context, rootNavigator: kIsWeb);
+    if (navigator.canPop()) {
+      navigator.pop();
+    } else {
+      // Deep-linked directly — go home
+      Navigator.pushNamedAndRemoveUntil(context, '/home', (r) => false);
     }
   }
 
@@ -235,36 +265,50 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     if (_isFollowActionLoading || _profileData == null) return;
     setState(() => _isFollowActionLoading = true);
 
+    final originalFollowersCount = _profileData!.followersCount;
+    final originalFollowingState = _isFollowing;
+    final userId = _profileData!.id;
+
+    // Optimistic update
+    setState(() {
+      _isFollowing = !_isFollowing;
+      _profileData = _profileData!.copyWith(
+        followersCount: originalFollowersCount + (_isFollowing ? 1 : -1),
+      );
+    });
+
+    // Broadcast immediately so other pages update instantly
+    if (userId != null) {
+      FollowStateManager().setFollowing(userId, _isFollowing);
+    }
+
     try {
       final username = _profileData!.username;
-      final originalFollowersCount = _profileData!.followersCount;
-      final originalFollowingState = _isFollowing;
-
-      setState(() {
-        _isFollowing = !_isFollowing;
-        _profileData = _profileData!.copyWith(
-          followersCount: originalFollowersCount + (_isFollowing ? 1 : -1),
-        );
-      });
-
       bool success = _isFollowing
           ? await _followService.followUser(username)
           : await _followService.unfollowUser(username);
 
       if (!success && mounted) {
+        // Revert on failure
         setState(() {
           _isFollowing = originalFollowingState;
           _profileData =
               _profileData!.copyWith(followersCount: originalFollowersCount);
         });
+        if (userId != null) {
+          FollowStateManager().setFollowing(userId, originalFollowingState);
+        }
       }
     } catch (e) {
-      // Revert on error
       if (mounted) {
         setState(() {
-          // Re-fetch to be safe or revert manually
-          _loadAllData();
+          _isFollowing = originalFollowingState;
+          _profileData =
+              _profileData!.copyWith(followersCount: originalFollowersCount);
         });
+        if (userId != null) {
+          FollowStateManager().setFollowing(userId, originalFollowingState);
+        }
       }
     } finally {
       if (mounted) setState(() => _isFollowActionLoading = false);
@@ -329,9 +373,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
           children: [
             IconButton(
               icon: const Icon(Icons.arrow_back, color: Colors.black),
-              onPressed: () {
-                Provider.of<NavigationProvider>(context, listen: false).hideOverlay();
-              },
+              onPressed: _handleBack,
             ),
 
             Row(
@@ -366,15 +408,52 @@ class _OtherProfilePageState extends State<OtherProfilePage>
       screenContent = const ProfilePageSkeleton();
     } else if (_error != null) {
       screenContent = Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(_error!),
-              ElevatedButton(
-                  onPressed: _loadAllData, child: const Text('Coba Lagi')),
-            ],
-          ),
+        backgroundColor: const Color(0xFFFFFBF0),
+        body: Column(
+          children: [
+            _buildOtherProfileAppBar(null),
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Container(width: 110, height: 110,
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.orange.withOpacity(0.08))),
+                          Container(width: 80, height: 80,
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.orange.withOpacity(0.14))),
+                          const Icon(Icons.person_off_outlined, size: 40, color: Colors.orange),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        _error!,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 15, color: Colors.grey.shade700, height: 1.5),
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton.icon(
+                        onPressed: _loadAllData,
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        label: const Text('Coba Lagi'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          elevation: 0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       );
     } else {

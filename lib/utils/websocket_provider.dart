@@ -43,7 +43,7 @@
 //     if (_userId == null) return;
 
 //     _setupListeners();
-//     final wsUrl = ApiEndpoints.getWebSocketUrl('wss://api-new.portalsi.com/app/fiouy3umnruqcwdsoxni?protocol=7&client=js&version=7.0');
+//     final wsUrl = ApiEndpoints.getWebSocketUrl('wss://api.portalsi.com/app/fiouy3umnruqcwdsoxni?protocol=7&client=js&version=7.0');
 //     // Tidak perlu `await _service.connect(wsUrl);` di sini jika service sudah di-manage di tempat lain (misal: SessionManager)
 //     // Namun jika ini adalah entry point utama, biarkan saja.
 //     await _service.connect(wsUrl);
@@ -145,7 +145,7 @@
 
 //   void disconnect() => _service.disconnect();
 //   Future<void> reconnect() async {
-//     final wsUrl = ApiEndpoints.getWebSocketUrl('wss://api-new.portalsi.com/app/fiouy3umnruqcwdsoxni?protocol=7&client=js&version=7.0');
+//     final wsUrl = ApiEndpoints.getWebSocketUrl('wss://api.portalsi.com/app/fiouy3umnruqcwdsoxni?protocol=7&client=js&version=7.0');
 //     await _service.connect(wsUrl);
 //   }
 // }

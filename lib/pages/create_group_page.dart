@@ -1,6 +1,5 @@
 // lib/pages/create_group_page.dart
 
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:portal_si/models/group_model.dart';
 import 'package:portal_si/pages/group_chat_room_page.dart';
@@ -122,8 +121,8 @@ class CreateGroupPage extends StatelessWidget {
             height: 150,
             width: double.infinity,
             color: Colors.grey.shade200,
-            child: controller.coverFile != null
-                ? Image.file(controller.coverFile!, fit: BoxFit.cover)
+            child: controller.coverBytes != null
+                ? Image.memory(controller.coverBytes!, fit: BoxFit.cover)
                 : const Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -149,10 +148,10 @@ class CreateGroupPage extends StatelessWidget {
                   child: CircleAvatar(
                     radius: 38,
                     backgroundColor: Colors.grey.shade300,
-                    backgroundImage: controller.avatarFile != null
-                        ? FileImage(controller.avatarFile!)
+                    backgroundImage: controller.avatarBytes != null
+                        ? MemoryImage(controller.avatarBytes!)
                         : null,
-                    child: controller.avatarFile == null
+                    child: controller.avatarBytes == null
                         ? const Icon(Icons.camera_alt,
                         color: Colors.white, size: 30)
                         : null,

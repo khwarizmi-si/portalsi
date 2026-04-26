@@ -107,10 +107,18 @@ class _EditGroupPageState extends State<EditGroupPage> {
     // 3. Jika tidak keduanya, biarkan `avatarToUpload` null (tidak mengubah gambar)
 
     try {
+      Uint8List? avatarBytes;
+      String? avatarFileName;
+      if (avatarToUpload != null) {
+        avatarBytes = await avatarToUpload.readAsBytes();
+        avatarFileName = avatarToUpload.path.split('/').last;
+      }
+
       final success = await _groupService.updateGroup(
         groupId: widget.group.id,
         name: newName,
-        avatarFile: avatarToUpload,
+        avatarBytes: avatarBytes,
+        avatarFileName: avatarFileName,
       );
 
       if (success && mounted) {

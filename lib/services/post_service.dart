@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
 import '../models/liker_model.dart';
@@ -105,6 +106,70 @@ class PostService extends ApiService {
       log("Upload dibatalkan: $e");
       throw Exception('Upload dibatalkan oleh pengguna.');
     }
+  }
+
+  /// Web-compatible variant that uploads from raw bytes (no dart:io File).
+  Future<Post?> createPostFromBytes(
+    Map<String, String> fields, {
+    required Uint8List mediaBytes,
+    required String fileName,
+    Function(int sent, int total)? onProgress,
+  }) async {
+    final token = await getToken();
+    var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/posts'));
+    request.headers['Authorization'] = 'Bearer $token';
+    request.headers['Accept'] = 'application/json';
+    request.fields.addAll(fields);
+
+    // Detect mime type from extension
+    final ext = fileName.split('.').last.toLowerCase();
+    final mimeType = ['mp4', 'mov', 'avi', 'webm', 'mkv'].contains(ext)
+        ? 'video/$ext'
+        : 'image/$ext';
+
+    int bytesSent = 0;
+    final totalBytes = mediaBytes.length;
+    Stream<List<int>> bytesStream = Stream.fromIterable(
+      _chunkBytes(mediaBytes, 65536),
+    ).map((chunk) {
+      bytesSent += chunk.length;
+      onProgress?.call(bytesSent, totalBytes);
+      return chunk;
+    });
+
+    request.files.add(http.MultipartFile(
+      'media',
+      bytesStream,
+      totalBytes,
+      filename: fileName,
+    ));
+
+    try {
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final responseData = jsonDecode(response.body);
+        if (responseData['post'] is Map<String, dynamic>) {
+          return Post.fromJson(responseData['post'] as Map<String, dynamic>);
+        }
+        throw Exception('Format data post tidak valid dalam respons.');
+      } else {
+        throw Exception(
+          'Gagal membuat postingan. Status: ${response.statusCode}, Body: ${response.body}',
+        );
+      }
+    } on http.ClientException catch (e) {
+      log("Web upload error: $e");
+      throw Exception('Upload dibatalkan.');
+    }
+  }
+
+  List<List<int>> _chunkBytes(Uint8List bytes, int chunkSize) {
+    final chunks = <List<int>>[];
+    for (int i = 0; i < bytes.length; i += chunkSize) {
+      chunks.add(bytes.sublist(i, i + chunkSize > bytes.length ? bytes.length : i + chunkSize));
+    }
+    return chunks;
   }
 
   Future<Post?> fetchPinnedPost() async {

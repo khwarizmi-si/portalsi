@@ -117,7 +117,7 @@ class ChatRoomController extends ChangeNotifier {
     try {
       final token = await SecureStorage.getToken();
       if (token == null) return;
-      final url = Uri.parse('https://api-new.portalsi.com/api/websocket/online-status/${recipient.id}');
+      final url = Uri.parse('https://api.portalsi.com/api/websocket/online-status/${recipient.id}');
       final response = await http.get(
         url,
         headers: {
@@ -170,7 +170,7 @@ class ChatRoomController extends ChangeNotifier {
       if (token == null) {
         throw Exception("Authentication token not found.");
       }
-      final url = Uri.parse('https://api-new.portalsi.com/api/messages/user/${recipient.id}/read');
+      final url = Uri.parse('https://api.portalsi.com/api/messages/user/${recipient.id}/read');
       final response = await http.patch(
         url,
         headers: {
@@ -361,7 +361,7 @@ class ChatRoomController extends ChangeNotifier {
     try {
       final token = await SecureStorage.getToken();
       if (token == null) throw Exception("Token tidak ditemukan.");
-      final url = Uri.parse('https://api-new.portalsi.com/api/messages/conversation-from/${recipient.id}');
+      final url = Uri.parse('https://api.portalsi.com/api/messages/conversation-from/${recipient.id}');
       final response = await http.get(url, headers: {
         'Authorization': 'Bearer $token',
         'Accept': 'application/json',
@@ -576,7 +576,7 @@ class ChatRoomController extends ChangeNotifier {
     final bearerToken = await SecureStorage.getToken();
     if (bearerToken == null) throw Exception('Bearer token not found.');
 
-    final uri = Uri.parse('https://api-new.portalsi.com/api/messages/send');
+    final uri = Uri.parse('https://api.portalsi.com/api/messages/send');
     final request = http.MultipartRequest('POST', uri)
       ..headers['Authorization'] = 'Bearer $bearerToken'
       ..headers['Accept'] = 'application/json'
@@ -649,7 +649,7 @@ class ChatRoomController extends ChangeNotifier {
     final bearerToken = await SecureStorage.getToken();
     if (bearerToken == null) throw Exception('Bearer token not found.');
 
-    final uri = Uri.parse('https://api-new.portalsi.com/api/messages/send');
+    final uri = Uri.parse('https://api.portalsi.com/api/messages/send');
     final request = http.MultipartRequest('POST', uri)
       ..headers['Authorization'] = 'Bearer $bearerToken'
       ..headers['Accept'] = 'application/json'

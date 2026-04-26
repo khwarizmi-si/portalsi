@@ -91,7 +91,7 @@ class AnnouncementService extends ApiService {
 
     var request = http.MultipartRequest(
       'POST',
-      Uri.parse('https://api-new.portalsi.com/api/announcements'),
+      Uri.parse('https://api.portalsi.com/api/announcements'),
     );
 
     request.headers['Authorization'] = 'Bearer $token';

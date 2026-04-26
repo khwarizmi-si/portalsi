@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:move_to_background/move_to_background.dart';
@@ -56,26 +57,45 @@ class _MainScaffoldState extends State<MainScaffold> with TickerProviderStateMix
     super.initState();
     _pageController = PageController(initialPage: _pageViewIndex);
 
+    // Faster on web for snappier feel, native keeps the 350ms
+    final overlayDuration = kIsWeb
+        ? const Duration(milliseconds: 260)
+        : const Duration(milliseconds: 320);
+
     _overlayAnimationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 350),
+      duration: overlayDuration,
     );
 
-    _pageViewSlideAnimation = Tween<Offset>(
-      begin: Offset.zero,
-      end: const Offset(-1.0, 0.0),
-    ).animate(CurvedAnimation(
-      parent: _overlayAnimationController,
-      curve: Curves.easeOutCubic,
-    ));
+    // On web: fade+scale overlay (no slide — avoids jank from large layout shifts)
+    // On native: slide in from right
+    if (kIsWeb) {
+      _pageViewSlideAnimation = Tween<Offset>(
+        begin: Offset.zero,
+        end: Offset.zero, // no slide on web
+      ).animate(_overlayAnimationController);
 
-    _overlaySlideAnimation = Tween<Offset>(
-      begin: const Offset(1.0, 0.0),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _overlayAnimationController,
-      curve: Curves.easeOutCubic,
-    ));
+      _overlaySlideAnimation = Tween<Offset>(
+        begin: Offset.zero,
+        end: Offset.zero, // handled by FadeTransition in build()
+      ).animate(_overlayAnimationController);
+    } else {
+      _pageViewSlideAnimation = Tween<Offset>(
+        begin: Offset.zero,
+        end: const Offset(-1.0, 0.0),
+      ).animate(CurvedAnimation(
+        parent: _overlayAnimationController,
+        curve: Curves.easeOutCubic,
+      ));
+
+      _overlaySlideAnimation = Tween<Offset>(
+        begin: const Offset(1.0, 0.0),
+        end: Offset.zero,
+      ).animate(CurvedAnimation(
+        parent: _overlayAnimationController,
+        curve: Curves.easeOutCubic,
+      ));
+    }
 
     _shakeController = AnimationController(
       vsync: this,
@@ -122,6 +142,18 @@ class _MainScaffoldState extends State<MainScaffold> with TickerProviderStateMix
     _shakeController.forward(from: 0.0);
   }
 
+  Widget _buildPageView(NavigationProvider navProvider) {
+    return PageView(
+      controller: _pageController,
+      onPageChanged: _onPageChanged,
+      // Disable swipe while overlay is showing to prevent accidental tab changes
+      physics: navProvider.overlayPage != null
+          ? const NeverScrollableScrollPhysics()
+          : const AlwaysScrollableScrollPhysics(),
+      children: _swipeablePages,
+    );
+  }
+
   int _mapNavToPageViewIndex(int navIndex) {
     if (navIndex >= 3) {
       return navIndex - 1;
@@ -165,18 +197,30 @@ class _MainScaffoldState extends State<MainScaffold> with TickerProviderStateMix
     super.dispose();
   }
 
-  void _onItemTapped(int navIndex) {
+  // Maps nav index → URL path for web address bar
+  static const _tabPaths = {
+    0: '/home',
+    1: '/explore',
+    3: '/store',
+    4: '/profile',
+  };
 
+  void _onItemTapped(int navIndex) {
     FocusManager.instance.primaryFocus?.unfocus();
 
     if (navIndex == 2) return;
     final navProvider = Provider.of<NavigationProvider>(context, listen: false);
     if (navProvider.overlayPage != null) {
-      navProvider.hideOverlay();
+      navProvider.forceHideOverlay();
     }
-    _pageController.jumpToPage(
-      _mapNavToPageViewIndex(navIndex),
-    );
+    final pageIndex = _mapNavToPageViewIndex(navIndex);
+    _pageController.jumpToPage(pageIndex);
+
+    // Update browser URL bar on web
+    if (kIsWeb) {
+      final path = _tabPaths[navIndex] ?? '/home';
+      SystemNavigator.routeInformationUpdated(location: path);
+    }
   }
 
   void _onPageChanged(int pageIndex) {
@@ -190,6 +234,10 @@ class _MainScaffoldState extends State<MainScaffold> with TickerProviderStateMix
   Widget build(BuildContext context) {
     final double bottomInset = MediaQuery.of(context).viewPadding.bottom;
     final navProvider = Provider.of<NavigationProvider>(context, listen: false);
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    // Responsive: batasi lebar maksimum untuk layar besar (web/tablet)
+    final bool isWideScreen = screenWidth > 600;
 
     return AnimatedBuilder(
       animation: _shakeAnimation,
@@ -200,37 +248,43 @@ class _MainScaffoldState extends State<MainScaffold> with TickerProviderStateMix
         );
       },
       child: PopScope(
-        canPop: false,
+        canPop: false, // Never allow MainScaffold itself to be popped — prevents blank screen
         onPopInvoked: (bool didPop) async {
           if (didPop) return;
 
-          // 1. Jika ada halaman overlay (profil orang lain), tutup overlay-nya dulu
           if (navProvider.overlayPage != null) {
-            navProvider.hideOverlay();
+            navProvider.forceHideOverlay();
             return;
           }
 
-          // 2. Jika tab yang aktif bukan tab home (indeks 0), pindah ke tab Home
           if (_pageViewIndex != 0) {
             _onItemTapped(0);
             return;
           }
 
-          // 3. Jika sudah di tab home (index 0), terapkan logika konfirmasi keluar
+          // On web: the browser back button is handled by the browser itself
+          // (go to previous history entry). On native, show exit confirmation.
+          if (kIsWeb) return;
+
           final now = DateTime.now();
           final isExitConfirmed = _lastPressedAt != null &&
               now.difference(_lastPressedAt!) < const Duration(seconds: 2);
 
           if (isExitConfirmed) {
-            // Konfirmasi berhasil: Pindahkan aplikasi ke background
             MoveToBackground.moveTaskToBack();
           } else {
-            // Konfirmasi gagal: Tampilkan SnackBar
             _lastPressedAt = now;
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Tekan kembali sekali lagi untuk keluar.'),
-                duration: Duration(seconds: 2),
+              SnackBar(
+                content: const Text('Tekan kembali sekali lagi untuk keluar.'),
+                duration: const Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                margin: EdgeInsets.only(
+                  bottom: 80 + bottomInset,
+                  left: 20,
+                  right: 20,
+                ),
               ),
             );
           }
@@ -245,30 +299,32 @@ class _MainScaffoldState extends State<MainScaffold> with TickerProviderStateMix
           child: Scaffold(
             body: Consumer<NavigationProvider>(
               builder: (context, navProvider, child) {
-                return Stack(
+                Widget mainContent = Stack(
                   children: [
-                    Image.asset(
-                      'assets/images/background.png',
-                      fit: BoxFit.cover,
-                      height: double.infinity,
-                      width: double.infinity,
-                    ),
-                    SlideTransition(
-                      position: _pageViewSlideAnimation,
-                      child: PageView(
-                        controller: _pageController,
-                        onPageChanged: _onPageChanged,
-                        physics: navProvider.overlayPage != null
-                            ? const NeverScrollableScrollPhysics()
-                            : const AlwaysScrollableScrollPhysics(),
-                        children: _swipeablePages,
-                      ),
-                    ),
-                    if (navProvider.overlayPage != null)
+                    // Background — solid white avoids any flash between repaints
+                    Container(color: Colors.white),
+                    // Main tab pages
+                    if (!kIsWeb)
                       SlideTransition(
-                        position: _overlaySlideAnimation,
-                        child: navProvider.overlayPage!,
-                      ),
+                        position: _pageViewSlideAnimation,
+                        child: _buildPageView(navProvider),
+                      )
+                    else
+                      _buildPageView(navProvider),
+                    // Overlay page (native: slide, web: fade+scale)
+                    if (navProvider.overlayPage != null)
+                      kIsWeb
+                          ? FadeTransition(
+                              opacity: CurvedAnimation(
+                                parent: _overlayAnimationController,
+                                curve: Curves.easeOut,
+                              ),
+                              child: navProvider.overlayPage!,
+                            )
+                          : SlideTransition(
+                              position: _overlaySlideAnimation,
+                              child: navProvider.overlayPage!,
+                            ),
                     Positioned(
                       bottom: bottomInset,
                       left: 0.0,
@@ -278,11 +334,20 @@ class _MainScaffoldState extends State<MainScaffold> with TickerProviderStateMix
                         onTap: _onItemTapped,
                       ),
                     ),
-                    // Tombol Portfolio
-                    // if (_pageViewIndex == _mapNavToPageViewIndex(1))
-                    //   _buildPortfolioButton(bottomInset),
                   ],
                 );
+
+                // Untuk layar lebar, batasi lebar konten
+                if (isWideScreen) {
+                  mainContent = Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 500),
+                      child: mainContent,
+                    ),
+                  );
+                }
+
+                return mainContent;
               },
             ),
             backgroundColor: Colors.white,

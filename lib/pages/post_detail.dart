@@ -1,6 +1,7 @@
 // lib/pages/post_detail.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:async';
 import 'package:just_audio/just_audio.dart';
 import 'package:marquee/marquee.dart';
@@ -52,9 +53,9 @@ class _PostDetailState extends State<PostDetail> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false,
+      canPop: kIsWeb, // On web let Navigator handle pops (dialog barrier, system back)
       onPopInvoked: (bool didPop) {
-        if (!didPop) {
+        if (!didPop && !kIsWeb) {
           Provider.of<NavigationProvider>(context, listen: false).hideOverlay();
         }
       },
@@ -74,13 +75,17 @@ class _PostDetailState extends State<PostDetail> {
               ],
             ),
             child: AppBar(
-              title: const Text('Postingan', style: TextStyle(color: Colors.black)),
+              title: const Text('Postingan', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
               backgroundColor: Colors.white,
               elevation: 0,
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back, color: Colors.black),
                 onPressed: () {
-                  Provider.of<NavigationProvider>(context, listen: false).hideOverlay();
+                  if (kIsWeb) {
+                    Navigator.of(context, rootNavigator: true).pop();
+                  } else {
+                    Provider.of<NavigationProvider>(context, listen: false).hideOverlay();
+                  }
                 },
               ),
             ),
@@ -143,6 +148,8 @@ class _PostDetailViewState extends State<PostDetailView> {
 
   late final AudioPlayer _audioPlayer;
   bool _isMusicMuted = false;
+  bool _audioReady = false;   // true once the audio source is loaded
+  bool _audioPlaying = false; // manual play state (web requires gesture)
   StreamSubscription? _likeSubscription;
   StreamSubscription? _bookmarkSubscription;
   Comment? _replyingToComment;
@@ -192,11 +199,28 @@ class _PostDetailViewState extends State<PostDetailView> {
       try {
         await _audioPlayer.setUrl(musicUrl);
         await _audioPlayer.setLoopMode(LoopMode.one);
-        _audioPlayer.play();
+        if (mounted) setState(() => _audioReady = true);
+
+        // On web, browsers block autoplay until the user interacts with the page.
+        // We show a play button instead of calling play() directly.
+        if (!kIsWeb) {
+          _audioPlayer.play();
+          if (mounted) setState(() => _audioPlaying = true);
+        }
       } catch (e) {
-        print("Error loading audio source in detail: $e");
+        debugPrint("Error loading audio source in detail: $e");
       }
     }
+  }
+
+  void _toggleAudioPlayback() {
+    if (!_audioReady) return;
+    if (_audioPlaying) {
+      _audioPlayer.pause();
+    } else {
+      _audioPlayer.play();
+    }
+    setState(() => _audioPlaying = !_audioPlaying);
   }
 
   @override
@@ -556,20 +580,45 @@ class _PostDetailViewState extends State<PostDetailView> {
             Positioned(
               bottom: 8,
               left: 8,
-              child: GestureDetector(
-                onTap: _toggleMusicMute,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.5),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    _isMusicMuted ? Icons.volume_off : Icons.volume_up,
-                    color: Colors.white,
-                    size: 18,
-                  ),
-                ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // On web, show play/pause button (browsers need user gesture)
+                  if (kIsWeb)
+                    GestureDetector(
+                      onTap: _toggleAudioPlayback,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        margin: const EdgeInsets.only(right: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.85),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _audioPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                  // Mute/unmute button (always visible when audio is playing)
+                  if (!kIsWeb || _audioPlaying)
+                    GestureDetector(
+                      onTap: _toggleMusicMute,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _isMusicMuted ? Icons.volume_off : Icons.volume_up,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
         ],

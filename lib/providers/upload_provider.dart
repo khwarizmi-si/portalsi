@@ -2,6 +2,7 @@
 import 'dart:io';
 import 'dart:async';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../services/post_service.dart';
 import '../services/story_service.dart'; // <-- Import StoryService
@@ -101,6 +102,53 @@ class UploadProvider with ChangeNotifier {
       _finishUpload();
     } catch (e) {
       print("Upload failed or was cancelled: $e");
+      _finishUpload();
+    }
+  }
+
+  /// Web-compatible variant: uploads from raw bytes (no dart:io File required).
+  Future<void> startUploadFromBytes({
+    required UploadType type,
+    required Map<String, String> fields,
+    required Uint8List mediaBytes,
+    required String fileName,
+    required Uint8List thumbnail,
+  }) async {
+    if (_currentTask != null) return;
+
+    final String taskId = DateTime.now().millisecondsSinceEpoch.toString();
+    _currentTask = UploadTask(
+      id: taskId,
+      type: type,
+      mediaFile: null,
+      fields: fields,
+      thumbnail: thumbnail,
+    );
+    _uploadProgress = 0.0;
+
+    _progressSubscription = _currentTask!.progress.listen((progress) {
+      _uploadProgress = progress;
+      notifyListeners();
+    });
+
+    notifyListeners();
+
+    try {
+      if (type == UploadType.post) {
+        await _postService.createPostFromBytes(
+          fields,
+          mediaBytes: mediaBytes,
+          fileName: fileName,
+          onProgress: (sent, total) {
+            if (_currentTask?.isCancelled == false) {
+              _currentTask!.updateProgress(sent / total);
+            }
+          },
+        );
+      }
+      _finishUpload();
+    } catch (e) {
+      debugPrint("Web upload failed: $e");
       _finishUpload();
     }
   }

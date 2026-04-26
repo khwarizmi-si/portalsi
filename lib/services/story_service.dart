@@ -35,7 +35,7 @@ Stream<List<int>> _createUploadStream(File file, void Function(int, int) onProgr
 }
 
 class StoryService {
-  final baseUrl = 'https://api-new.portalsi.com/api';
+  final baseUrl = 'https://api.portalsi.com/api';
 
   /// --- FUNGSI BARU UNTUK MENGUNGGAH STORY DENGAN PROGRESS ---
   Future<void> createStory(

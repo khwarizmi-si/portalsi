@@ -31,7 +31,7 @@ class WebSocketService {
       return;
     }
     _token = token;
-    final uri = Uri.parse('wss://api-new.portalsi.com:443/app/fiouy3umnruqcwdsoxni');
+    final uri = Uri.parse('wss://api.portalsi.com:443/app/fiouy3umnruqcwdsoxni');
 
     try {
       _statusController.add('connecting');
@@ -77,7 +77,7 @@ class WebSocketService {
     if (_socketId == null || _token == null) return;
     try {
       final authResponse = await http.post(
-        Uri.parse('https://api-new.portalsi.com/api/broadcasting/auth'),
+        Uri.parse('https://api.portalsi.com/api/broadcasting/auth'),
         headers: {'Authorization': 'Bearer $_token', 'Content-Type': 'application/json'},
         body: jsonEncode({'socket_id': _socketId, 'channel_name': channelName}),
       );

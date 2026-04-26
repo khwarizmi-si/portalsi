@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'dart:math'; // Diperlukan untuk konstanta MB
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:photo_manager_image_provider/photo_manager_image_provider.dart';
 import 'package:path_provider/path_provider.dart';
@@ -14,6 +16,7 @@ import 'camera_page.dart';
 import 'drafts_page.dart';
 import './edit_clips/edit_clips_page.dart';
 import 'edit_post_page.dart';
+import 'share_post_page.dart';
 
 class CreatePostPage extends StatefulWidget {
   // --- 👇 PERUBAHAN 1: Tambahkan parameter ini 👇 ---
@@ -534,9 +537,12 @@ class _CreatePostPageState extends State<CreatePostPage> {
 
   @override
   Widget build(BuildContext context) {
+    // ── Web: show a file-picker based UI (photo_manager/VideoCompress not web-compatible) ──
+    if (kIsWeb) {
+      return _WebCreatePostView(isClips: widget.isClips);
+    }
 
     final String pageTitle = widget.isClips ? 'Buat Clips Baru' : 'Buat Postingan Baru';
-
 
     return Scaffold(
       // MODIFIKASI: Atur warna latar belakang Scaffold menjadi putih.
@@ -647,9 +653,8 @@ class _CreatePostPageState extends State<CreatePostPage> {
                           if (index == 0) {
                             return GestureDetector(
                               onTap: () {
-                                // Aksi untuk membuka halaman kamera
                                 Navigator.of(context).push(
-                                  MaterialPageRoute(builder: (context) => const CameraPage()), // Navigasi ke CameraPage
+                                  MaterialPageRoute(builder: (context) => const CameraPage()),
                                 );
                               },
                               child: Container(color: Colors.grey[800], child: const Icon(Icons.camera_alt, color: Colors.white, size: 30)),
@@ -681,6 +686,221 @@ class _CreatePostPageState extends State<CreatePostPage> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Web-only create post view — uses file_picker (photo_manager not supported)
+// ─────────────────────────────────────────────────────────────────────────────
+class _WebCreatePostView extends StatefulWidget {
+  final bool isClips;
+  const _WebCreatePostView({this.isClips = false});
+
+  @override
+  State<_WebCreatePostView> createState() => _WebCreatePostViewState();
+}
+
+class _WebCreatePostViewState extends State<_WebCreatePostView> {
+  XFile? _pickedFile;
+  Uint8List? _previewBytes;
+  bool _isPicking = false;
+
+  Future<void> _pickMedia() async {
+    setState(() => _isPicking = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: widget.isClips ? FileType.video : FileType.image,
+        withData: true,
+      );
+      if (result != null && result.files.isNotEmpty) {
+        final f = result.files.first;
+        final bytes = f.bytes;
+        if (bytes != null) {
+          setState(() {
+            _pickedFile = XFile.fromData(bytes, name: f.name, mimeType: f.extension != null ? 'image/${f.extension}' : null);
+            _previewBytes = bytes;
+          });
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _isPicking = false);
+    }
+  }
+
+  void _proceed() {
+    if (_pickedFile == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SharePostPage(webMediaFile: _pickedFile),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.close, color: Colors.black, size: 28),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(
+          widget.isClips ? 'Buat Clips Baru' : 'Postingan Baru',
+          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        centerTitle: true,
+        actions: [
+          if (_pickedFile != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: TextButton(
+                onPressed: _proceed,
+                child: const Text('Lanjut', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+            ),
+        ],
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFFFFDDBC), Colors.white],
+            begin: Alignment.bottomLeft,
+            end: Alignment.topRight,
+          ),
+        ),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Preview box
+                if (_previewBytes != null)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.memory(
+                      _previewBytes!,
+                      height: 280,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
+                  )
+                else
+                  GestureDetector(
+                    onTap: _isPicking ? null : _pickMedia,
+                    child: Container(
+                      height: 240,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withOpacity(0.07),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.orange.withOpacity(0.3), width: 2, strokeAlign: BorderSide.strokeAlignInside),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            widget.isClips ? Icons.videocam_rounded : Icons.add_photo_alternate_rounded,
+                            size: 64,
+                            color: Colors.orange,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            widget.isClips ? 'Pilih Video' : 'Pilih Foto',
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orange),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            widget.isClips ? 'Format: MP4, MOV, WEBM' : 'Format: JPG, PNG, WEBP',
+                            style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                const SizedBox(height: 24),
+
+                if (_previewBytes != null) ...[
+                  // File name chip
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.check_circle_rounded, color: Colors.orange, size: 16),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            _pickedFile!.name,
+                            style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.w500, fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Change file button
+                  OutlinedButton.icon(
+                    onPressed: _isPicking ? null : _pickMedia,
+                    icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+                    label: const Text('Ganti File'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.orange,
+                      side: const BorderSide(color: Colors.orange),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Proceed button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _proceed,
+                      icon: const Icon(Icons.arrow_forward_rounded, size: 20),
+                      label: const Text('Lanjut ke Unggah', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  ElevatedButton.icon(
+                    onPressed: _isPicking ? null : _pickMedia,
+                    icon: _isPicking
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : Icon(widget.isClips ? Icons.video_library_rounded : Icons.photo_library_rounded, size: 20),
+                    label: Text(
+                      _isPicking ? 'Memilih...' : (widget.isClips ? 'Pilih dari Perangkat' : 'Pilih dari Perangkat'),
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      elevation: 0,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );

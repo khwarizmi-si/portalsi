@@ -32,10 +32,8 @@ class NewMessageController extends ChangeNotifier {
       }
 
       // 2. Gunakan ID tersebut untuk mengambil daftar followers dari service Anda
-      final followersData = await _followService.getFollowers(currentUser.id!);
-
-      // 3. Ubah data mentah (List<dynamic>) menjadi daftar objek User
-      _allFollowers = followersData.map((data) => User.fromJson(data)).toList();
+      // getFollowers now returns List<User> directly — no need to re-map.
+      _allFollowers = await _followService.getFollowers(currentUser.id!);
       _filteredFollowers = _allFollowers;
 
     } catch (e) {

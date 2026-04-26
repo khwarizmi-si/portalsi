@@ -2,9 +2,11 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/user_model.dart';
 import '../services/group_service.dart';
@@ -19,9 +21,13 @@ class CreateGroupController with ChangeNotifier {
   final List<User> _selectedUsers = [];
   bool _isLoading = true;
   String? _errorMessage;
-  File? _avatarFile;
-  File? _coverFile;
   bool _isCreatingGroup = false;
+
+  // Web-compatible image storage (bytes + filename)
+  Uint8List? _avatarBytes;
+  String? _avatarFileName;
+  Uint8List? _coverBytes;
+  String? _coverFileName;
 
   int _currentPage = 1;
   bool _hasNextPage = true;
@@ -35,8 +41,12 @@ class CreateGroupController with ChangeNotifier {
   List<User> get selectedUsers => _selectedUsers;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
-  File? get avatarFile => _avatarFile;
-  File? get coverFile => _coverFile;
+  // Legacy File getters — always null on web, kept for API compat
+  get avatarFile => null;
+  get coverFile => null;
+  // Bytes getters for display
+  Uint8List? get avatarBytes => _avatarBytes;
+  Uint8List? get coverBytes => _coverBytes;
   bool get isCreatingGroup => _isCreatingGroup;
   bool get isLoadingMore => _isLoadingMore;
   bool get hasNextPage => _hasNextPage;
@@ -91,7 +101,7 @@ class CreateGroupController with ChangeNotifier {
       }
 
       final List<dynamic> userListJson = response['data'] ?? [];
-      _mutuals = userListJson.map((json) => User.fromJson(json)).toList();
+      _mutuals = userListJson.map(_toUser).toList();
       _hasNextPage = response['next_page_url'] != null;
       _errorMessage = null;
     } catch (e) {
@@ -100,6 +110,13 @@ class CreateGroupController with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Safely converts a dynamic item to User — handles both raw Map and
+  /// already-deserialized User objects.
+  User _toUser(dynamic item) {
+    if (item is User) return item;
+    return User.fromJson(item as Map<String, dynamic>);
   }
 
   Future<void> fetchMoreData() async {
@@ -118,7 +135,7 @@ class CreateGroupController with ChangeNotifier {
       }
 
       final List<dynamic> userListJson = response['data'] ?? [];
-      _mutuals.addAll(userListJson.map((json) => User.fromJson(json)).toList());
+      _mutuals.addAll(userListJson.map(_toUser).toList());
       _hasNextPage = response['next_page_url'] != null;
     } catch (e) {
       _currentPage--;
@@ -150,19 +167,41 @@ class CreateGroupController with ChangeNotifier {
   }
 
   Future<void> pickImage(bool isAvatar) async {
-    final picker = ImagePicker();
     try {
-      final XFile? pickedFile = await picker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 85,
-        maxWidth: 1080,
-      );
+      Uint8List? bytes;
+      String? fileName;
 
-      if (pickedFile != null) {
+      if (kIsWeb) {
+        // Web: use file_picker to get raw bytes
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.image,
+          withData: true,
+        );
+        if (result != null && result.files.isNotEmpty) {
+          bytes = result.files.first.bytes;
+          fileName = result.files.first.name;
+        }
+      } else {
+        // Native: use image_picker, then read bytes
+        final picker = ImagePicker();
+        final XFile? pickedFile = await picker.pickImage(
+          source: ImageSource.gallery,
+          imageQuality: 85,
+          maxWidth: 1080,
+        );
+        if (pickedFile != null) {
+          bytes = await pickedFile.readAsBytes();
+          fileName = pickedFile.name;
+        }
+      }
+
+      if (bytes != null) {
         if (isAvatar) {
-          _avatarFile = File(pickedFile.path);
+          _avatarBytes = bytes;
+          _avatarFileName = fileName ?? 'avatar.jpg';
         } else {
-          _coverFile = File(pickedFile.path);
+          _coverBytes = bytes;
+          _coverFileName = fileName ?? 'cover.jpg';
         }
         notifyListeners();
       }
@@ -183,7 +222,7 @@ class CreateGroupController with ChangeNotifier {
 
     try {
       final token = await SecureStorage.getToken();
-      final uri = Uri.parse('https://api-new.portalsi.com/api/groups');
+      final uri = Uri.parse('https://api.portalsi.com/api/groups');
       var request = http.MultipartRequest('POST', uri)
         ..headers['Authorization'] = 'Bearer $token'
         ..headers['Accept'] = 'application/json';
@@ -195,11 +234,19 @@ class CreateGroupController with ChangeNotifier {
         request.fields['members[$i]'] = memberIds[i];
       }
 
-      if (_avatarFile != null) {
-        request.files.add(await http.MultipartFile.fromPath('avatar', _avatarFile!.path));
+      if (_avatarBytes != null) {
+        request.files.add(http.MultipartFile.fromBytes(
+          'avatar',
+          _avatarBytes!,
+          filename: _avatarFileName ?? 'avatar.jpg',
+        ));
       }
-      if (_coverFile != null) {
-        request.files.add(await http.MultipartFile.fromPath('cover', _coverFile!.path));
+      if (_coverBytes != null) {
+        request.files.add(http.MultipartFile.fromBytes(
+          'cover',
+          _coverBytes!,
+          filename: _coverFileName ?? 'cover.jpg',
+        ));
       }
 
       final streamedResponse = await request.send();

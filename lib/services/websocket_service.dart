@@ -18,7 +18,7 @@ class AppEvent {
 
 class WebSocketService {
   final String _wsBaseUrl = "wss://ws.portalsi.com:443/app/fiouy3umnruqcwdsoxni";
-  final String _authBaseUrl = "https://api-new.portalsi.com/api";
+  final String _authBaseUrl = "https://api.portalsi.com/api";
   final String _token;
 
   WebSocketChannel? _channel;

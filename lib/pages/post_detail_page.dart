@@ -1,4 +1,5 @@
 // lib/pages/post_detail_page.dart
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:portal_si/components/post_card.dart';
@@ -34,13 +35,21 @@ class PostDetailPage extends StatelessWidget {
     );
   }
 
+  void _handleBack(BuildContext context) {
+    if (kIsWeb) {
+      // On web the page is shown via showGeneralDialog — use Navigator.pop
+      Navigator.of(context, rootNavigator: true).pop();
+    } else {
+      Provider.of<NavigationProvider>(context, listen: false).hideOverlay();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // --- PERUBAHAN 1: Bungkus dengan PopScope ---
     return PopScope(
-      canPop: false,
+      canPop: kIsWeb, // on web let the dialog barrier handle it
       onPopInvoked: (bool didPop) {
-        if (!didPop) {
+        if (!didPop && !kIsWeb) {
           Provider.of<NavigationProvider>(context, listen: false).hideOverlay();
         }
       },
@@ -55,16 +64,14 @@ class PostDetailPage extends StatelessWidget {
           return controller;
         },
         child: Scaffold(
-          backgroundColor: Colors.transparent,
+          backgroundColor: Colors.white,
           appBar: AppBar(
-            title: const Text("Detail Postingan"),
-            // --- PERUBAHAN 2: Tambahkan tombol kembali kustom ---
+            title: const Text("Detail Postingan", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
+            backgroundColor: Colors.white,
+            elevation: 0,
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () {
-                Provider.of<NavigationProvider>(context, listen: false)
-                    .hideOverlay();
-              },
+              icon: const Icon(Icons.close_rounded, color: Colors.black),
+              onPressed: () => _handleBack(context),
             ),
           ),
           body: Consumer<PostDetailController>(
@@ -121,7 +128,12 @@ class PostDetailPage extends StatelessWidget {
                           onComment: () =>
                               _showCommentSheet(context, relatedPost),
                           onProfileTap: () {
-                            Provider.of<NavigationProvider>(context, listen: false).hideOverlay();
+                            if (kIsWeb) {
+                              // On web the post is in a showGeneralDialog — pop it first
+                              Navigator.of(context, rootNavigator: true).pop();
+                            } else {
+                              Provider.of<NavigationProvider>(context, listen: false).hideOverlay();
+                            }
                             Future.delayed(const Duration(milliseconds: 100), () {
                               NavigationHelper.navigateToProfile(
                                   context, relatedPost.user);

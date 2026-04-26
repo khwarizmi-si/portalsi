@@ -7,7 +7,7 @@ import '../utils/secure_storage.dart';
 import '../models/login_history_model.dart';
 
 class HistoryService {
-  final String _baseUrl = 'https://api-new.portalsi.com/api';
+  final String _baseUrl = 'https://api.portalsi.com/api';
 
   // Fungsi untuk mengambil daftar riwayat login
   Future<List<LoginHistory>> fetchLoginHistories() async {

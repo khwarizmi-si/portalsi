@@ -141,6 +141,8 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
 
   Widget _buildFirstPage() {
     const Color primaryOrange = Color(0xFFF97C33);
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return Column(
       children: [
         Expanded(
@@ -149,12 +151,46 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
             opacity: _fadeOutAnim1,
             child: SlideTransition(
               position: _slideOutAnim1,
-              child: ClipRRect(
-                borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(40), bottomRight: Radius.circular(40)),
-                child: Container(
-                  color: const Color(0xFFFDE1D2),
-                  child: Image.asset('assets/images/welkam.webp', fit: BoxFit.cover),
-                ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(36),
+                      bottomRight: Radius.circular(36),
+                    ),
+                    child: Container(
+                      color: const Color(0xFFFDE1D2),
+                      child: Image.asset(
+                        'assets/images/welkam.webp',
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  // Gradient overlay untuk readability
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: 100,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: const BorderRadius.only(
+                          bottomLeft: Radius.circular(36),
+                          bottomRight: Radius.circular(36),
+                        ),
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.15),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -162,7 +198,7 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
         Expanded(
           flex: 3,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            padding: const EdgeInsets.symmetric(horizontal: 28.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -171,45 +207,65 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
                   opacity: _fadeOutAnim2,
                   child: SlideTransition(
                     position: _slideOutAnim2,
-                    child: const Text('Selamat Datang di Portal SI', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.black, height: 1.2)),
+                    child: const Text(
+                      'Selamat Datang\ndi Portal SI',
+                      style: TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                        height: 1.2,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 FadeTransition(
                   opacity: _fadeOutAnim3,
                   child: SlideTransition(
                     position: _slideOutAnim3,
-                    child: const Text('Terkoneksi dengan Iman, Terinspirasi untuk Kebaikan', style: TextStyle(fontSize: 16, color: Colors.grey)),
+                    child: Text(
+                      'Terkoneksi dengan Iman,\nTerinspirasi untuk Kebaikan',
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: Colors.grey.shade500,
+                        height: 1.5,
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
         ),
-        Expanded(
-          flex: 1,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: Center(
-              child: FadeTransition(
-                opacity: _fadeOutAnim4,
-                child: SlideTransition(
-                  position: _slideOutAnim4,
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      // onPressed: _triggerTransition,
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          SlideTransitionRoute(page: const LoginPage()),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryOrange,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
-                      ),
-                      child: const Text('Lanjutkan', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(28, 0, 28, 0),
+          child: FadeTransition(
+            opacity: _fadeOutAnim4,
+            child: SlideTransition(
+              position: _slideOutAnim4,
+              child: SizedBox(
+                width: double.infinity,
+                height: 54,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      SlideTransitionRoute(page: const LoginPage()),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryOrange,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Mulai Sekarang',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -217,7 +273,7 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
             ),
           ),
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: screenHeight * 0.04),
       ],
     );
   }
@@ -230,7 +286,7 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
           minHeight: MediaQuery.of(context).size.height,
         ),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 60, 24, 30),
+          padding: const EdgeInsets.fromLTRB(28, 60, 28, 30),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -242,68 +298,98 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
                     opacity: _fadeInAnim1,
                     child: SlideTransition(
                       position: _slideInAnim1,
-                      child: Image.asset('assets/logo_la_rg.png', height: 48),
+                      child: Image.asset('assets/logo_la_rg.png', height: 44),
                     ),
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 28),
                   FadeTransition(
                     opacity: _fadeInAnim2,
                     child: SlideTransition(
                       position: _slideInAnim2,
-                      child: const Text('Login akan Terasa\nJauh Lebih Mudah\ndengan Akun RG.', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black, height: 1.3)),
+                      child: const Text(
+                        'Login Lebih Mudah\ndengan Akun RG.',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                          height: 1.3,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
+              const SizedBox(height: 24),
               FadeTransition(
                 opacity: _fadeInAnim3,
                 child: SlideTransition(
                   position: _slideInAnim3,
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20.0),
+                    borderRadius: BorderRadius.circular(24.0),
                     child: Image.asset(
                       'assets/images/muslim_man.png',
                       width: double.infinity,
                       fit: BoxFit.cover,
-                      height: MediaQuery.of(context).size.height * 0.3,
+                      height: MediaQuery.of(context).size.height * 0.28,
                     ),
                   ),
                 ),
               ),
+              const SizedBox(height: 24),
               Column(
                 children: [
                   FadeTransition(
                     opacity: _fadeInAnim4,
                     child: SlideTransition(
                       position: _slideInAnim4,
-                      child: const Center(
-                        child: Text('Login ke berbagai layanan dengan\nsekali klik tanpa khawatir harus ngisi-ngisi form tambahan lagi', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontSize: 14)),
+                      child: Center(
+                        child: Text(
+                          'Cukup sekali klik untuk masuk ke semua\nlayanan tanpa perlu isi form lagi.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.grey.shade500,
+                            fontSize: 14,
+                            height: 1.5,
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
                   FadeTransition(
                     opacity: _fadeInAnim5,
                     child: SlideTransition(
                       position: _slideInAnim5,
                       child: SizedBox(
                         width: double.infinity,
-                        height: 50,
+                        height: 54,
                         child: ElevatedButton(
-                          // TAMBAHAN: Panggil fungsi _loginWithSDK saat ditekan
                           onPressed: _isLoading ? null : _loginWithSDK,
-                          style: ElevatedButton.styleFrom(backgroundColor: rgRed, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25))),
-                          // TAMBAHAN: Tampilkan loading atau teks
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: rgRed,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            elevation: 0,
+                          ),
                           child: _isLoading
                               ? const SizedBox(
-                            height: 24,
-                            width: 24,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 3,
-                            ),
-                          )
-                              : const Text('Lanjutkan dengan Akun RG', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                                  height: 22,
+                                  width: 22,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.5,
+                                  ),
+                                )
+                              : const Text(
+                                  'Lanjutkan dengan Akun RG',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                         ),
                       ),
                     ),
@@ -320,7 +406,14 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
                               SlideTransitionRoute(page: const LoginPage()),
                             );
                           },
-                          child: const Text('Lain Kali', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
+                          child: Text(
+                            'Lain Kali',
+                            style: TextStyle(
+                              color: Colors.grey.shade700,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
+                          ),
                         ),
                       ),
                     ),

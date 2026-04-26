@@ -1,4 +1,5 @@
 // lib/utils/navigation_helper.dart
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -74,29 +75,96 @@ class NavigationHelper {
 
 
   static Future<void> navigateToProfile(BuildContext context, User user) async {
-    final navProvider = Provider.of<NavigationProvider>(context, listen: false);
-
-    // Cek apakah user yang dituju adalah user yang sedang login
+    // Check if navigating to own profile
     final currentUserId = await SecureStorage.getUserId();
     if (currentUserId != null && user.id != null && user.id == currentUserId) {
-      navProvider.navigateToTab(4);
+      if (kIsWeb) {
+        SystemNavigator.routeInformationUpdated(location: '/profile');
+      }
+      Provider.of<NavigationProvider>(context, listen: false).navigateToTab(4);
       return;
     }
 
-    final newPage = OtherProfilePage(username: user.username);
+    final username = user.username;
+    final profilePage = OtherProfilePage(username: username);
 
-    // INI BAGIAN KUNCINYA
+    if (kIsWeb) {
+      // Capture the navigator before any async gap so context stays valid
+      final navigator = Navigator.of(context, rootNavigator: true);
+      SystemNavigator.routeInformationUpdated(location: '/$username');
+      navigator.push(
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) => profilePage,
+          transitionsBuilder: (_, animation, __, child) => FadeTransition(
+            opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+            child: SlideTransition(
+              position: Tween<Offset>(begin: const Offset(0.04, 0), end: Offset.zero)
+                  .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+              child: child,
+            ),
+          ),
+          transitionDuration: const Duration(milliseconds: 250),
+          reverseTransitionDuration: const Duration(milliseconds: 200),
+        ),
+      ).then((_) {
+        // Restore URL to whichever main tab was active
+        SystemNavigator.routeInformationUpdated(location: '/home');
+      });
+      return;
+    }
+
+    // Native: use overlay system
+    final navProvider = Provider.of<NavigationProvider>(context, listen: false);
     if (navProvider.overlayPage != null) {
-      navProvider.replaceOverlay(newPage); // Jika sudah ada, ganti
+      navProvider.replaceOverlay(profilePage);
     } else {
-      navProvider.showOverlay(newPage); // Jika belum ada, tampilkan
+      navProvider.showOverlay(profilePage);
     }
   }
 
   static void navigateToPostDetail(BuildContext context, int postId, {Post? initialPost}) {
-    final navProvider = Provider.of<NavigationProvider>(context, listen: false);
+    if (kIsWeb) {
+      // ── Web: Instagram-style dialog modal ────────────────────────────
+      showGeneralDialog(
+        context: context,
+        barrierDismissible: true,
+        barrierLabel: 'Post Detail',
+        barrierColor: Colors.black.withOpacity(0.6),
+        transitionDuration: const Duration(milliseconds: 220),
+        pageBuilder: (ctx, animation, _) {
+          return Center(
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                width: 430,
+                height: MediaQuery.of(ctx).size.height * 0.92,
+                clipBehavior: Clip.hardEdge,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: PostDetailPage(postId: postId, initialPost: initialPost),
+              ),
+            ),
+          );
+        },
+        transitionBuilder: (ctx, animation, _, child) {
+          return FadeTransition(
+            opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.94, end: 1.0).animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+              ),
+              child: child,
+            ),
+          );
+        },
+      );
+      return;
+    }
 
-    // Kirim postId dan juga initialPost ke halaman detail
+    // ── Native: existing overlay system ──────────────────────────────
+    final navProvider = Provider.of<NavigationProvider>(context, listen: false);
     navProvider.showOverlay(PostDetailPage(postId: postId, initialPost: initialPost));
   }
 

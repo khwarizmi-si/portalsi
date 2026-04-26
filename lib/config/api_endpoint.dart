@@ -1,5 +1,5 @@
 class ApiEndpoints {
-  static const String baseUrl = 'https://api-new.portalsi.com';
+  static const String baseUrl = 'https://api.portalsi.com';
 
   // Laravel Broadcast + Reverb Endpoints
   static const String broadcastAuth = '/broadcasting/auth';

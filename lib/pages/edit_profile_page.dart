@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -99,6 +101,34 @@ class _EditProfilePageState extends State<EditProfilePage>
 
   Future<void> _pickAndCropImage({required bool isBanner}) async {
     HapticFeedback.lightImpact();
+
+    // ── Web: use FilePicker (no camera, no dart:io File, no crop page) ──
+    if (kIsWeb) {
+      try {
+        final result = await FilePicker.platform.pickFiles(
+          type: FileType.image,
+          withData: true,
+        );
+        if (result == null || result.files.isEmpty || !mounted) return;
+
+        final f = result.files.first;
+        final bytes = f.bytes;
+        if (bytes == null) return;
+
+        final xFile = XFile.fromData(bytes, name: f.name ?? 'image.jpg');
+        if (isBanner) {
+          setState(() => _selectedBannerXFile = xFile);
+        } else {
+          setState(() => _selectedImageXFile = xFile);
+        }
+        HapticFeedback.mediumImpact();
+      } catch (e) {
+        _showErrorDialog("Gagal memproses gambar: $e");
+      }
+      return;
+    }
+
+    // ── Native: existing gallery/camera + crop flow ───────────────────
     final source = await _showImageSourceModal(isBanner: isBanner);
     if (source == null) return;
 

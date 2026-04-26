@@ -50,7 +50,7 @@ class TokenRefreshService {
       final dio = Dio();
       // Ganti '/auth/refresh' dengan endpoint API Anda yang sebenarnya
       final response = await dio.post(
-          'https://api-new.portalsi.com/api/login',
+          'https://api.portalsi.com/api/login',
           data: {
             'refresh_token': refreshToken,
           }

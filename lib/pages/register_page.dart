@@ -193,6 +193,21 @@ class _RegisterPageState extends State<RegisterPage> {
                               validator: (value) {
                                 if (value == null || value.isEmpty) return 'Username tidak boleh kosong';
                                 if (value.length < 3) return 'Username minimal 3 karakter';
+                                if (value.length > 30) return 'Username maksimal 30 karakter';
+                                // Block reserved URL paths (Instagram-style routing)
+                                const reservedUsernames = {
+                                  'home', 'explore', 'store', 'profile', 'settings',
+                                  'login', 'register', 'signup', 'messages', 'message',
+                                  'notif', 'notifs', 'notifications', 'notification',
+                                  'feed', 'post', 'story', 'welcome', 'updater',
+                                  'user', 'portfolio', 'announcement', 'clips',
+                                  'search', 'create', 'upload', 'admin', 'api',
+                                  'edit', 'delete', 'report', 'help', 'about',
+                                  'terms', 'privacy', 'contact',
+                                };
+                                if (reservedUsernames.contains(value.toLowerCase())) {
+                                  return 'Username ini tidak tersedia, coba yang lain';
+                                }
                                 return null;
                               },
                             ),

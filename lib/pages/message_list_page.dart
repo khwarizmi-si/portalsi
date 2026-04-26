@@ -17,15 +17,38 @@ class MessageListPage extends StatelessWidget {
   Widget _buildAppBar(BuildContext context) {
     return Container(
       padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
-      color: Colors.white,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
         child: Row(
-          children: const [
-            Text(
-              'Pesan',
-              style: TextStyle(
-                  color: Colors.black, fontWeight: FontWeight.bold, fontSize: 24),
+          children: [
+            IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black87, size: 20),
+              onPressed: () {
+                // Pop if there is a route to pop, otherwise navigate home
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                } else {
+                  Navigator.of(context).pushReplacementNamed('/home');
+                }
+              },
+              tooltip: 'Kembali',
+            ),
+            const Expanded(
+              child: Text(
+                'Pesan',
+                style: TextStyle(
+                    color: Colors.black, fontWeight: FontWeight.bold, fontSize: 22),
+              ),
             ),
           ],
         ),

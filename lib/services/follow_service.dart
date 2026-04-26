@@ -7,7 +7,7 @@ import '../models/user_model.dart';
 import '../utils/secure_storage.dart';
 
 class FollowService {
-  final String _baseUrl = 'https://api-new.portalsi.com/api';
+  final String _baseUrl = 'https://api.portalsi.com/api';
 
   static final Map<String, Map<String, dynamic>> _profileCache = {};
   static final Map<String, Map<String, dynamic>> _followStatusCache = {};
@@ -353,7 +353,7 @@ class FollowService {
     }
   }
 
-  Future<List<dynamic>> getFollowers(dynamic userIdentifier, {bool forceRefresh = false}) async {
+  Future<List<User>> getFollowers(dynamic userIdentifier, {bool forceRefresh = false}) async {
     _totalRequests++;
     final cacheKey = 'followers_$userIdentifier';
     if (!forceRefresh && _followersCache.containsKey(cacheKey)) {

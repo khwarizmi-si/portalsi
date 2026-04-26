@@ -7,10 +7,10 @@ import '../utils/secure_storage.dart';
 
 abstract class ApiService {
   final String _scheme = 'https';
-  final String _host = 'api-new.portalsi.com';
+  final String _host = 'api.portalsi.com';
   final String _unencodedPath = '/api';
   final http.Client _client = http.Client();
-  static const Duration _timeout = Duration(seconds: 15);
+  static const Duration _timeout = Duration(seconds: 30);
 
   // --- ✨ PERUBAHAN 1: Tambahkan getter publik untuk baseUrl ---
   String get baseUrl => '$_scheme://$_host$_unencodedPath';

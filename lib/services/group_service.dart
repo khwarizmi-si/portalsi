@@ -2,18 +2,17 @@
 
 import 'dart:convert';
 import 'dart:developer';
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
-import 'package:path/path.dart' as path;
 import 'package:portal_si/models/user_model.dart'; // Pastikan import User model
 import '../models/group_member_model.dart';
 import '../models/group_model.dart';
 import '../utils/secure_storage.dart';
 
 class GroupService {
-  final String _baseUrl = 'https://api-new.portalsi.com/api';
+  final String _baseUrl = 'https://api.portalsi.com/api';
 
   Future<Map<String, String>> _getHeaders() async {
     final token = await SecureStorage.getToken();
@@ -68,65 +67,49 @@ class GroupService {
     required int groupId,
     required String name,
     String? description,
-    File? avatarFile,
+    Uint8List? avatarBytes,
+    String? avatarFileName,
   }) async {
     final token = await SecureStorage.getToken();
-    if (token == null) {
-      throw Exception('Token tidak ditemukan.');
-    }
+    if (token == null) throw Exception('Token tidak ditemukan.');
 
-    // Gunakan MultipartRequest karena ada kemungkinan upload file (avatar)
     final request = http.MultipartRequest(
-      'POST', // Sesuai dokumentasi, gunakan POST
+      'POST',
       Uri.parse('$_baseUrl/groups/$groupId'),
     );
 
-    // Set header
     request.headers['Authorization'] = 'Bearer $token';
     request.headers['Accept'] = 'application/json';
 
-    // Tambahkan fields ke form-data
     request.fields['name'] = name;
-    if (description != null) {
-      request.fields['description'] = description;
-    }
-    // Catatan: API Anda mungkin memerlukan '_method' = 'PUT' atau 'PATCH'
-    // jika backend framework (spt. Laravel) menggunakannya untuk meniru method tsb.
-    // request.fields['_method'] = 'PATCH'; // Contoh jika diperlukan
+    if (description != null) request.fields['description'] = description;
 
-    // Tambahkan file avatar jika ada
-    if (avatarFile != null) {
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'avatar', // 'name' dari field file di API
-          avatarFile.path,
-          contentType: MediaType('image', 'jpeg'), // Sesuaikan tipe konten jika perlu
-        ),
-      );
+    if (avatarBytes != null) {
+      request.files.add(http.MultipartFile.fromBytes(
+        'avatar',
+        avatarBytes,
+        filename: avatarFileName ?? 'avatar.jpg',
+        contentType: MediaType('image', 'jpeg'),
+      ));
     }
 
     try {
       final response = await request.send();
-
-      // Anda bisa membaca respons jika perlu
-      // final responseBody = await response.stream.bytesToString();
-      // print('Status Code: ${response.statusCode}');
-      // print('Response Body: $responseBody');
-
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
-      // Tangani error jaringan atau lainnya
-      print('Error saat update grup: $e');
+      debugPrint('Error saat update grup: $e');
       return false;
     }
   }
 
-  /// Membuat grup baru dengan nama, deskripsi, dan gambar.
+  /// Membuat grup baru dengan nama, deskripsi, dan gambar (bytes-based, web-safe).
   Future<Map<String, dynamic>?> createGroup({
     required String name,
     String? description,
-    File? avatar,
-    File? cover,
+    Uint8List? avatarBytes,
+    String? avatarFileName,
+    Uint8List? coverBytes,
+    String? coverFileName,
   }) async {
     final token = await SecureStorage.getToken();
     if (token == null) throw Exception('Token tidak ditemukan');
@@ -138,20 +121,19 @@ class GroupService {
     request.headers['Accept'] = 'application/json';
 
     request.fields['name'] = name;
-    if (description != null) {
-      request.fields['description'] = description;
+    if (description != null) request.fields['description'] = description;
+
+    if (avatarBytes != null) {
+      request.files.add(http.MultipartFile.fromBytes(
+        'avatar', avatarBytes,
+        filename: avatarFileName ?? 'avatar.jpg',
+      ));
     }
-    if (avatar != null) {
-      request.files.add(
-        await http.MultipartFile.fromPath('avatar', avatar.path,
-            filename: path.basename(avatar.path)),
-      );
-    }
-    if (cover != null) {
-      request.files.add(
-        await http.MultipartFile.fromPath('cover', cover.path,
-            filename: path.basename(cover.path)),
-      );
+    if (coverBytes != null) {
+      request.files.add(http.MultipartFile.fromBytes(
+        'cover', coverBytes,
+        filename: coverFileName ?? 'cover.jpg',
+      ));
     }
 
     try {
@@ -163,8 +145,7 @@ class GroupService {
         debugPrint('✅ Grup berhasil dibuat!');
         return responseData['group'] as Map<String, dynamic>?;
       } else {
-        throw Exception(
-            'Gagal membuat grup: ${responseData['message'] ?? response.body}');
+        throw Exception('Gagal membuat grup: ${responseData['message'] ?? response.body}');
       }
     } catch (e) {
       throw Exception('Error saat membuat grup: $e');

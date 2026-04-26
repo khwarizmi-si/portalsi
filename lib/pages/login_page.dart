@@ -470,11 +470,13 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     );
   }
 
-  // --- METHOD BUILD UTAMA DIUBAH TOTAL SESUAI DESAIN BARU ---
+  // --- METHOD BUILD UTAMA DENGAN DESAIN MODERN ---
   @override
   Widget build(BuildContext context) {
     const Color primaryOrange = Color(0xFFF97C33);
-    const Color lightGrey = Color(0xFFF7F7F7);
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenHeight < 700;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -487,66 +489,137 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           backgroundColor: Colors.white,
           body: Stack(
             children: [
-              // Bagian gambar atas
+              // Bagian gambar atas dengan gradient overlay
               Positioned(
                 top: 0,
                 left: 0,
                 right: 0,
-                height: MediaQuery.of(context).size.height * 0.4,
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(40),
-                    bottomRight: Radius.circular(40),
-                  ),
-                  child: Image.asset(
-                    'assets/images/login.webp', // <-- GANTI DENGAN GAMBAR ANDA
-                    fit: BoxFit.cover,
-                  ),
+                height: screenHeight * (isSmallScreen ? 0.3 : 0.38),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(36),
+                        bottomRight: Radius.circular(36),
+                      ),
+                      child: Image.asset(
+                        'assets/images/login.webp',
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    // Gradient overlay
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      height: 120,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: const BorderRadius.only(
+                            bottomLeft: Radius.circular(36),
+                            bottomRight: Radius.circular(36),
+                          ),
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Colors.black.withOpacity(0.2),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Tombol Back
+                    Positioned(
+                      top: MediaQuery.of(context).padding.top + 8,
+                      left: 12,
+                      child: IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: Colors.black87),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               // Konten utama
               SafeArea(
                 child: ListView(
+                  padding: EdgeInsets.zero,
                   children: [
-                    // Spacer untuk memberi ruang di atas
-                    SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+                    SizedBox(height: screenHeight * (isSmallScreen ? 0.24 : 0.32)),
                     // Container putih untuk form
                     Container(
-                      padding: const EdgeInsets.all(24.0),
-                      decoration: const BoxDecoration(
+                      padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
+                      decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.only(
-                          topLeft: Radius.circular(40),
-                          topRight: Radius.circular(40),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(32),
+                          topRight: Radius.circular(32),
                         ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 20,
+                            offset: const Offset(0, -5),
+                          ),
+                        ],
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Login Portal SI', style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, fontFamily: 'YourCustomFont')), // Ganti font jika ada
-                          const SizedBox(height: 30),
+                          const Text(
+                            'Masuk ke\nAkun Anda',
+                            style: TextStyle(
+                              fontSize: 30,
+                              fontWeight: FontWeight.bold,
+                              height: 1.2,
+                              letterSpacing: -0.5,
+                              color: Colors.black,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Silakan masukkan email dan password Anda',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                          const SizedBox(height: 28),
                           Form(
                             key: _formKey,
                             child: Column(
                               children: [
                                 _buildCustomTextField(
                                   controller: _emailController,
-                                  hintText: 'Email atau Username', // Teks diubah
-                                  icon: Icons.person_outline, // Ikon diubah menjadi lebih generik
+                                  hintText: 'Email atau Username',
+                                  icon: Icons.person_outline_rounded,
                                   validator: (value) {
-                                    // Validasi dilonggarkan, hanya cek kosong
                                     if (value == null || value.isEmpty) return 'Kolom ini tidak boleh kosong';
                                     return null;
                                   },
                                 ),
-                                const SizedBox(height: 16),
+                                const SizedBox(height: 14),
                                 _buildCustomTextField(
                                   controller: _passwordController,
                                   hintText: 'Password',
-                                  icon: Icons.lock_outline,
+                                  icon: Icons.lock_outline_rounded,
                                   obscureText: _obscurePassword,
                                   suffixIcon: IconButton(
-                                    icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: Colors.grey),
+                                    icon: Icon(
+                                      _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                      color: Colors.grey.shade400,
+                                      size: 22,
+                                    ),
                                     onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                                   ),
                                   validator: (value) {
@@ -555,84 +628,63 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                                     return null;
                                   },
                                 ),
+                                const SizedBox(height: 4),
                                 Align(
-                                  alignment: Alignment.centerLeft,
+                                  alignment: Alignment.centerRight,
                                   child: TextButton(
                                     onPressed: _lupaPassword,
-                                    child: const Text('Lupa password kamu?', style: TextStyle(color: primaryOrange, fontWeight: FontWeight.bold)),
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                                    ),
+                                    child: const Text(
+                                      'Lupa Password?',
+                                      style: TextStyle(
+                                        color: primaryOrange,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                      ),
+                                    ),
                                   ),
-                                )
+                                ),
                               ],
                             ),
                           ),
-                          const SizedBox(height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              // Row(
-                              //   children: [
-                              //     Checkbox(
-                              //       value: _rememberMe,
-                              //       onChanged: (value) => setState(() => _rememberMe = value!),
-                              //       activeColor: primaryOrange,
-                              //     ),
-                              //     const Text('Remember me'),
-                              //   ],
-                              // ),
-                              // TextButton(
-                              //   onPressed: () {},
-                              //   child: const Text('Forget password', style: TextStyle(color: primaryOrange, fontWeight: FontWeight.bold)),
-                              // ),
-                            ],
-                          ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 20),
                           SizedBox(
                             width: double.infinity,
-                            height: 50,
+                            height: 54,
                             child: ElevatedButton(
                               onPressed: _isLoading ? null : _handleLogin,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: primaryOrange,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                                foregroundColor: Colors.white,
+                                disabledBackgroundColor: primaryOrange.withOpacity(0.6),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
                                 elevation: 0,
                               ),
-                              child: const Text('Lanjutkan', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                              child: const Text(
+                                'Masuk',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 30),
-                          // Row(
-                          //   children: [
-                          //     const Expanded(child: Divider(color: Colors.grey)),
-                          //     Padding(
-                          //       padding: const EdgeInsets.symmetric(horizontal: 16),
-                          //       child: Text('Atau gunakan', style: TextStyle(color: Colors.grey.shade600)),
-                          //     ),
-                          //     const Expanded(child: Divider(color: Colors.grey)),
-                          //   ],
-                          // ),
-                          // const SizedBox(height: 30),
-                          // Row(
-                          //   mainAxisAlignment: MainAxisAlignment.center,
-                          //   children: [
-                          // //     _buildSocialButton(iconPath: 'assets/logo_google.png', onPressed: () {}),
-                          // //     const SizedBox(width: 20),
-                          //     _buildAkunRgLoginButton(
-                          //       onPressed: _isLoading ? null : _showLoginWithSdkBottomSheet,
-                          //     ),
-                          //   ],
-                          // ),
-                          const SizedBox(height: 40),
+                          const SizedBox(height: 32),
                           Center(
                             child: RichText(
                               textAlign: TextAlign.center,
-                              text: const TextSpan(
-                                style: TextStyle(fontSize: 12, color: Colors.grey),
-                                children: [
-                                  TextSpan(text: 'Dengan melanjutkan, berarti Anda setuju dengan\n'),
-                                  TextSpan(text: 'Ketentuan', style: TextStyle(color: primaryOrange, decoration: TextDecoration.underline)),
+                              text: TextSpan(
+                                style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                                children: const [
+                                  TextSpan(text: 'Dengan melanjutkan, Anda menyetujui\n'),
+                                  TextSpan(text: 'Ketentuan', style: TextStyle(color: primaryOrange, fontWeight: FontWeight.w600)),
                                   TextSpan(text: ' dan '),
-                                  TextSpan(text: 'Kebijakan Privasi', style: TextStyle(color: primaryOrange, decoration: TextDecoration.underline)),
-                                  TextSpan(text: ' kami'),
+                                  TextSpan(text: 'Kebijakan Privasi', style: TextStyle(color: primaryOrange, fontWeight: FontWeight.w600)),
                                 ],
                               ),
                             ),
@@ -641,25 +693,29 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Text(
-                                "Belum memiliki akun?",
-                                style: TextStyle(color: Colors.grey),
+                              Text(
+                                "Belum punya akun?",
+                                style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
                               ),
                               TextButton(
                                 onPressed: () {
                                   Navigator.push(
                                     context,
                                     PageTransition(
-                                      type: PageTransitionType.rightToLeft, // Tipe animasi dari kanan ke kiri
+                                      type: PageTransitionType.rightToLeft,
                                       child: RegisterPage(),
                                     ),
                                   );
                                 },
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                ),
                                 child: const Text(
                                   'Daftar Sekarang',
                                   style: TextStyle(
                                     color: primaryOrange,
                                     fontWeight: FontWeight.bold,
+                                    fontSize: 14,
                                   ),
                                 ),
                               ),
@@ -678,7 +734,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     );
   }
 
-  // Widget bantuan baru untuk text field
+  // Widget text field modern
   Widget _buildCustomTextField({
     required TextEditingController controller,
     required String hintText,
@@ -691,15 +747,37 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       controller: controller,
       obscureText: obscureText,
       validator: validator,
+      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
       decoration: InputDecoration(
         hintText: hintText,
-        prefixIcon: Icon(icon, color: Colors.grey),
+        hintStyle: TextStyle(
+          color: Colors.grey.shade400,
+          fontWeight: FontWeight.w400,
+          fontSize: 15,
+        ),
+        prefixIcon: Icon(icon, color: Colors.grey.shade400, size: 22),
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor: const Color(0xFFF7F7F7),
+        fillColor: const Color(0xFFF8F8F8),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(25),
+          borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: Colors.grey.shade200, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFF97C33), width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Colors.red, width: 1),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Colors.red, width: 1.5),
         ),
         contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
       ),

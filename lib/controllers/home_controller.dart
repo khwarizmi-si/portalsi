@@ -123,47 +123,84 @@ class HomeController with ChangeNotifier {
     _currentPage = 1;
     notifyListeners();
 
+    // Track berapa API call yang berhasil
+    int successCount = 0;
+    final List<String> errors = [];
+
+    // --- PERBAIKAN UTAMA: Setiap API call dibungkus try/catch sendiri ---
+    // Sehingga jika satu gagal, yang lain tetap berjalan.
+
+    // 1. Fetch Posts
     try {
-      final results = await Future.wait([
-        _postService.fetchPosts(page: 1),
-        _storyService.getStoryFeed(),
-        _announcementService.refreshPinnedAnnouncements(),
-        _postService.fetchPinnedPost(),
-      ]);
+      final paginatedResponse = await _postService.fetchPosts(page: 1);
+      _feedItems = paginatedResponse.feedItems;
+      _hasNextPage = paginatedResponse.hasNextPage;
+      await _saveToCache('posts', _feedItems);
+      successCount++;
+    } catch (e) {
+      log('⚠️ Gagal memuat postingan: $e');
+      errors.add('postingan');
+      // Coba muat dari cache jika tersedia
+      final cachedPosts = await _loadRawListFromCache('posts');
+      if (cachedPosts.isNotEmpty) {
+        _feedItems = cachedPosts;
+        _hasNextPage = false;
+        successCount++; // Cache dianggap sukses parsial
+      }
+    }
 
-      final paginatedResponse = results[0] as PaginatedFeedResponse;
-      final storiesData = results[1] as List<dynamic>; // <-- Data mentah cerita
-      final announcementsData = results[2] as List<Announcement>;
-      final pinnedPostData = results[3] as Post?;
-
-      // --- 👇 TAMBAHKAN LOG PENTING INI DI SINI 👇 ---
+    // 2. Fetch Stories
+    try {
+      final storiesData = await _storyService.getStoryFeed();
       log('--- 🕵️‍♂️ MENGINTIP DATA MENTAH STORY FEED SETELAH REFRESH ---');
       log(jsonEncode(storiesData));
       log('----------------------------------------------------------');
-      // --- 👆 BATAS LOG 👆 ---
-
-      _feedItems = paginatedResponse.feedItems;
-      _hasNextPage = paginatedResponse.hasNextPage;
       _stories = storiesData.map((e) => UserWithStories.fromJson(e)).toList();
-      _pinnedAnnouncements = announcementsData;
-      _pinnedPost = pinnedPostData;
-
-      // SIMPAN DATA BARU KE CACHE (KECUALI STORY)
-      await _saveToCache('posts', _feedItems);
-      // --- 👇 PERUBAHAN 2: PENYIMPANAN CACHE STORY DINONAKTIFKAN 👇 ---
-      // await _saveToCache('stories', _stories.map((s) => s.toJson()).toList());
-      await _saveToCache('announcements', _pinnedAnnouncements.map((a) => a.toJson()).toList());
-
-      _errorMessage = null;
+      successCount++;
     } catch (e) {
-      _errorMessage = e.toString();
-    } finally {
-      _isLoading = false;
-      if (isInitialLoad) {
-        _isFetchingMore = false;
-      }
-      notifyListeners();
+      log('⚠️ Gagal memuat stories: $e');
+      errors.add('stories');
+      // Stories tetap kosong, bukan masalah kritis
     }
+
+    // 3. Fetch Pinned Announcements
+    try {
+      final announcementsData = await _announcementService.refreshPinnedAnnouncements();
+      _pinnedAnnouncements = announcementsData;
+      await _saveToCache('announcements', _pinnedAnnouncements.map((a) => a.toJson()).toList());
+      successCount++;
+    } catch (e) {
+      log('⚠️ Gagal memuat pengumuman: $e');
+      errors.add('pengumuman');
+      // Coba muat dari cache
+      final cachedAnnouncements = await _loadFromCache<Announcement>('announcements', Announcement.fromJson);
+      if (cachedAnnouncements.isNotEmpty) {
+        _pinnedAnnouncements = cachedAnnouncements;
+        successCount++;
+      }
+    }
+
+    // 4. Fetch Pinned Post
+    try {
+      _pinnedPost = await _postService.fetchPinnedPost();
+      successCount++;
+    } catch (e) {
+      log('⚠️ Gagal memuat pinned post: $e');
+      errors.add('pinned post');
+    }
+
+    // Hanya tampilkan error jika SEMUA API call gagal
+    if (successCount == 0) {
+      _errorMessage = 'Sepertinya ada masalah koneksi. Silakan periksa internet Anda dan coba lagi.';
+    } else {
+      _errorMessage = null;
+    }
+
+    _isLoading = false;
+    if (isInitialLoad) {
+      _isFetchingMore = false;
+    }
+    notifyListeners();
   }
 
   Future<void> fetchMorePosts() async {

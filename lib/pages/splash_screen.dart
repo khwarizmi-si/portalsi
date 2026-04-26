@@ -160,23 +160,47 @@ class _SplashScreenState extends State<SplashScreen> {
           systemNavigationBarColor: Colors.white,
           systemNavigationBarIconBrightness: Brightness.dark,
         ),
-        child:Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Image.asset(
-              width: 80,
-              height: 80,
-              'assets/logopsifull.png',
+        child: Scaffold(
+          backgroundColor: Colors.white,
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Logo dengan animasi fade-in sederhana
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 800),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, child) {
+                    return Opacity(
+                      opacity: value,
+                      child: Transform.scale(
+                        scale: 0.8 + (0.2 * value),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Image.asset(
+                    'assets/logopsifull.png',
+                    width: 90,
+                    height: 90,
+                  ),
+                ),
+                const SizedBox(height: 28),
+                // Loading indicator yang lebih halus
+                SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: const Color(0xFFF97C33),
+                    backgroundColor: Colors.orange.shade50,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 20),
-            const CircularProgressIndicator(),
-          ],
+          ),
         ),
-      ),
-    ),
     );
   }
 }

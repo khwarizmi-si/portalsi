@@ -275,7 +275,7 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
     _loadNotificationCount();
   }
 
-  // Tambahkan method ini di dalam class _HomePageState
+  // Widget error state yang lebih modern dan informatif
   Widget _buildErrorStateWidget(BuildContext context, HomeController controller) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32.0),
@@ -283,72 +283,101 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Ikon untuk representasi visual
-          Icon(
-            Icons.wifi_off_rounded,
-            size: 80,
-            color: Colors.grey.shade400,
-          ),
-          const SizedBox(height: 24),
-
-          // Judul pesan error
-          const Text(
-            "Oops, Gagal Terhubung",
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
+          // Ilustrasi lingkaran dengan gradien
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [
+                  Colors.orange.shade50,
+                  Colors.amber.shade50,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
             ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-
-          // Deskripsi yang lebih ramah
-          Text(
-            "Sepertinya ada masalah dengan koneksi internet Anda. Silakan periksa kembali dan coba lagi.",
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 15,
-              color: Colors.grey.shade600,
-              height: 1.4,
+            child: Center(
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.orange.shade100,
+                      Colors.amber.shade100,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: Icon(
+                  Icons.cloud_off_rounded,
+                  size: 40,
+                  color: Colors.orange.shade400,
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 32),
 
-          // Tombol "Coba Lagi" dengan desain yang sesuai
-          ElevatedButton(
-            onPressed: () {
-              // Panggil fungsi refresh yang sudah ada
-              Provider.of<HomeController>(context, listen: false).refreshDashboardData();
-              Provider.of<UserProvider>(context, listen: false).fetchCurrentUser();
-            },
-            style: ElevatedButton.styleFrom(
-              padding: EdgeInsets.zero, // Hapus padding default
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              elevation: 8, // Beri sedikit bayangan agar menonjol
-              shadowColor: Colors.orange.withOpacity(0.4),
+          // Judul pesan error
+          const Text(
+            "Koneksi Terputus",
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+              letterSpacing: -0.5,
             ),
-            child: Ink(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.amber.shade600, Colors.orange.shade800],
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+
+          // Deskripsi yang lebih ramah
+          Text(
+            "Tidak bisa terhubung ke server.\nPeriksa koneksi internet Anda\ndan coba lagi.",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.grey.shade500,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 36),
+
+          // Tombol "Coba Lagi" modern
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton(
+              onPressed: () {
+                Provider.of<HomeController>(context, listen: false).refreshDashboardData(isInitialLoad: true);
+                Provider.of<UserProvider>(context, listen: false).fetchCurrentUser();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF97C33),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                borderRadius: BorderRadius.circular(12),
+                elevation: 0,
               ),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
-                child: const Text(
-                  'Coba Lagi',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(Icons.refresh_rounded, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Coba Lagi',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
@@ -400,53 +429,36 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
     VoidCallback? onTap,
     bool isSpecial = false,
     Key? key,
+    Color? iconBgColor,
+    Color? iconColor,
   }) {
+    final bgColor = iconBgColor ?? const Color(0xFFF97C33);
+    final fgColor = iconColor ?? Colors.white;
+
     return GestureDetector(
       key: key,
       onTap: onTap,
       child: Column(
         children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              if (isSpecial)
-                Positioned(
-                  top: 5,
-                  left: -4,
-                  child: Container(
-                    width: 62,
-                    height: 62,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(18.0),
-                    ),
-                  ),
-                ),
-              Container(
-                width: 64, height: 64,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.amber.shade400, Colors.orange.shade500],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20.0),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.orange.withOpacity(0.3),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Icon(icon, color: Colors.white, size: 30),
-              ),
-            ],
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: bgColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(18.0),
+              border: Border.all(color: bgColor.withOpacity(0.15), width: 1),
+            ),
+            child: Icon(icon, color: bgColor, size: 28),
           ),
           const SizedBox(height: 8),
           Text(
             label,
-            style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+            style: TextStyle(
+              fontWeight: FontWeight.w500,
+              fontSize: 12,
+              color: Colors.grey.shade700,
+            ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),
@@ -777,73 +789,158 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
     return Container(
       padding: EdgeInsets.only(
           top: max(0.0, MediaQuery.of(context).padding.top - 25),
-          bottom: 5
+          bottom: 8,
       ),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 18),
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
           )
         ],
       ),
       child: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text('Portal SI', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 26)),
+        titleSpacing: 20,
+        title: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFF97C33).withOpacity(0.25),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.asset(
+                  'assets/logopsi.png',
+                  height: 36,
+                  width: 36,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    width: 36, height: 36,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF97C33),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.school_rounded, color: Colors.white, size: 22),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              'Portal SI',
+              style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+                fontSize: 24,
+                letterSpacing: -0.5,
+              ),
+            ),
+          ],
+        ),
         actions: [
-          IconButton(
+          _buildAppBarIconButton(
             key: _anncIconKey,
+            icon: Icons.campaign_outlined,
+            tooltip: 'Pengumuman',
             onPressed: () {
               HapticFeedback.lightImpact();
               final RenderBox renderBox = _anncIconKey.currentContext!.findRenderObject() as RenderBox;
               final originOffset = renderBox.localToGlobal(Offset.zero) + Offset(renderBox.size.width / 2, renderBox.size.height / 2);
               Navigator.push(context, ScaleFromPositionRoute(widget: const AnnouncementListPage(), originOffset: originOffset)).then((_) => _loadNotificationCount());
             },
-            icon: const Icon(Icons.campaign_outlined, color: Colors.black),
-            tooltip: 'List Pengumuman',
           ),
           Stack(
+            clipBehavior: Clip.none,
             children: [
-              IconButton(
+              _buildAppBarIconButton(
                 key: _notificationIconKey,
+                icon: Icons.notifications_outlined,
+                tooltip: 'Notifikasi',
                 onPressed: () {
                   HapticFeedback.lightImpact();
                   final RenderBox renderBox = _notificationIconKey.currentContext!.findRenderObject() as RenderBox;
                   final originOffset = renderBox.localToGlobal(Offset.zero) + Offset(renderBox.size.width / 2, renderBox.size.height / 2);
                   Navigator.push(context, ScaleFromPositionRoute(widget: const NotificationPage(), originOffset: originOffset)).then((_) => _loadNotificationCount());
                 },
-                icon: const Icon(Icons.notifications, color: Colors.black),
-                tooltip: 'Notifikasi',
               ),
               if (_unreadNotificationCount > 0)
                 Positioned(
-                  top: 8,
-                  right: 8,
+                  top: 6,
+                  right: 6,
                   child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white, width: 1.5)),
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF3B30),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white, width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.red.withOpacity(0.3),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
                     constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                    child: Text(_unreadNotificationCount > 99 ? '99+' : _unreadNotificationCount.toString(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                    child: Text(
+                      _unreadNotificationCount > 99 ? '99+' : _unreadNotificationCount.toString(),
+                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ),
             ],
           ),
-          IconButton(
+          _buildAppBarIconButton(
             key: _msgIconKey,
+            icon: Icons.chat_bubble_outline_rounded,
+            tooltip: 'Pesan',
             onPressed: () {
               HapticFeedback.lightImpact();
               final RenderBox renderBox = _msgIconKey.currentContext!.findRenderObject() as RenderBox;
               final originOffset = renderBox.localToGlobal(Offset.zero) + Offset(renderBox.size.width / 2, renderBox.size.height / 2);
               Navigator.push(context, ScaleFromPositionRoute(widget: const MessageListPage(), originOffset: originOffset)).then((_) => _loadNotificationCount());
             },
-            icon: const Icon(Icons.send_outlined, color: Colors.black),
-            tooltip: 'Pesan',
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAppBarIconButton({
+    Key? key,
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: IconButton(
+        key: key,
+        onPressed: onPressed,
+        icon: Icon(icon, color: Colors.black87, size: 24),
+        tooltip: tooltip,
+        splashRadius: 22,
+        style: IconButton.styleFrom(
+          backgroundColor: Colors.grey.shade50,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
       ),
     );
   }

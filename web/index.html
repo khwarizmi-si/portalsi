@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -18,21 +18,126 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="Portal SI — Platform sosial mahasiswa Sistem Informasi. Berbagi, terhubung, dan berkolaborasi.">
+  <meta name="keywords" content="Portal SI, Sistem Informasi, mahasiswa, sosial media, kampus">
+  <meta name="author" content="Portal SI">
 
-  <!-- iOS meta tags & icons -->
+  <!-- Theme color for browser chrome -->
+  <meta name="theme-color" content="#F97C33">
+
+  <!-- Open Graph / Social preview -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Portal SI">
+  <meta property="og:description" content="Platform sosial mahasiswa Sistem Informasi.">
+  <meta property="og:image" content="icons/Icon-512.png">
+
+  <!-- iOS PWA meta tags -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="portal_si">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Portal SI">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="shortcut icon" href="favicon.png">
 
-  <title>portal_si</title>
+  <title>Portal SI</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    /* ── Base reset ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      width: 100%; height: 100%;
+      /* Match app background so there's zero flash between HTML and Flutter */
+      background-color: #FFFFFF;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Loading splash ──────────────────────────────────────────── */
+    #loading-overlay {
+      position: fixed; inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #FFFFFF;
+      z-index: 9999;
+      transition: opacity 0.35s ease;
+    }
+    #loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #loading-logo {
+      width: 72px; height: 72px;
+      border-radius: 18px;
+      object-fit: contain;
+      box-shadow: 0 8px 24px rgba(249,124,51,0.25);
+      animation: logoPulse 1.8s ease-in-out infinite;
+    }
+    @keyframes logoPulse {
+      0%, 100% { transform: scale(1);    opacity: 1;    }
+      50%       { transform: scale(1.07); opacity: 0.88; }
+    }
+    #loading-text {
+      margin-top: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: #1A1A1A;
+      letter-spacing: -0.5px;
+    }
+    #loading-sub {
+      margin-top: 4px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px;
+      color: #999;
+    }
+    #loading-bar {
+      margin-top: 28px;
+      width: 100px; height: 3px;
+      background: rgba(249,124,51,0.15);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    #loading-bar-inner {
+      height: 100%;
+      width: 40%;
+      background: linear-gradient(90deg, #F97C33, #FFB347);
+      border-radius: 99px;
+      animation: barSlide 1.1s ease-in-out infinite;
+    }
+    @keyframes barSlide {
+      0%   { transform: translateX(-120%); }
+      100% { transform: translateX(360%); }
+    }
+  </style>
 </head>
 <body>
+  <!-- Native loading overlay — hidden when Flutter takes over -->
+  <div id="loading-overlay">
+    <img id="loading-logo" src="icons/Icon-192.png" alt="Portal SI">
+    <div id="loading-text">Portal SI</div>
+    <div id="loading-sub">Memuat aplikasi...</div>
+    <div id="loading-bar"><div id="loading-bar-inner"></div></div>
+  </div>
+
+  <script>
+    // Hide the loading overlay once Flutter renders its first frame
+    window.addEventListener('flutter-first-frame', function() {
+      var overlay = document.getElementById('loading-overlay');
+      if (overlay) {
+        overlay.classList.add('hidden');
+        setTimeout(function() { overlay.remove(); }, 500);
+      }
+    });
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

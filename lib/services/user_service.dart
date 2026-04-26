@@ -17,7 +17,7 @@ import 'dart:io';
 
 
 class ProfileService {
-  static const String _baseUrl = 'https://api-new.portalsi.com/api';
+  static const String _baseUrl = 'https://api.portalsi.com/api';
   final http.Client _client = http.Client();
 
   static final ProfileService _instance = ProfileService._internal();

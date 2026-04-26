@@ -131,7 +131,7 @@ class FcmService {
       if (apiToken == null) return; // Pengguna belum login
 
       // Ganti dengan endpoint backend Anda
-      const String endpoint = 'https://api-new.portalsi.com/api/device-tokens';
+      const String endpoint = 'https://api.portalsi.com/api/device-tokens';
       final response = await http.post(
         Uri.parse(endpoint),
         headers: {
@@ -164,7 +164,7 @@ class FcmService {
       if (apiToken == null) return;
 
       // Ganti dengan endpoint backend Anda
-      const String endpoint = 'https://api-new.portalsi.com/api/device-tokens';
+      const String endpoint = 'https://api.portalsi.com/api/device-tokens';
       await http.delete(
         Uri.parse(endpoint),
         headers: {

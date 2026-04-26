@@ -34,6 +34,8 @@ import 'package:provider/provider.dart';
 import 'package:portal_si/controllers/home_controller.dart';
 import 'package:portal_si/pages/notif_page.dart';
 import 'package:portal_si/utils/user_provider.dart';
+import 'package:portal_si/utils/web_frame.dart';
+import 'package:portal_si/pages/not_found_page.dart';
 import 'models/user_model.dart';
 import 'pages/login_page.dart';
 import 'pages/register_page.dart';
@@ -45,6 +47,9 @@ import 'pages/story_page.dart';
 import 'managers/cache_manager.dart';
 import 'services/follow_service.dart';
 import 'package:intl/date_symbol_data_local.dart';
+// URL strategy — conditional import for web vs native
+import 'url_strategy_stub.dart'
+    if (dart.library.html) 'url_strategy_web.dart';
 
 // ===================================================================
 // --- [TAMBAHAN BARU] LOGIKA UNTUK BACKGROUND SERVICE & FCM ---
@@ -125,6 +130,9 @@ Future<void> initializeBackgroundService() async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Configure URL strategy (removes '#' hash on web)
+  configureApp();
 
   // Inisialisasi Firebase di awal
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -230,36 +238,107 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           primarySwatch: Colors.orange,
           fontFamily: 'AlanSans',
           visualDensity: VisualDensity.adaptivePlatformDensity,
-          // Mendefinisikan tema khusus untuk ProgressIndicator
+          // White scaffold background prevents flash between page transitions
+          scaffoldBackgroundColor: Colors.white,
+          // On web, use instant page transitions to eliminate jank
+          pageTransitionsTheme: kIsWeb
+              ? const PageTransitionsTheme(builders: {
+                  TargetPlatform.linux:   FadeUpwardsPageTransitionsBuilder(),
+                  TargetPlatform.windows: FadeUpwardsPageTransitionsBuilder(),
+                  TargetPlatform.macOS:   FadeUpwardsPageTransitionsBuilder(),
+                  TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+                  TargetPlatform.iOS:     FadeUpwardsPageTransitionsBuilder(),
+                })
+              : const PageTransitionsTheme(builders: {
+                  TargetPlatform.android: ZoomPageTransitionsBuilder(),
+                  TargetPlatform.iOS:     CupertinoPageTransitionsBuilder(),
+                }),
           progressIndicatorTheme: const ProgressIndicatorThemeData(
-            color: Colors.orange, // Semua indikator akan berwarna oranye
+            color: Colors.orange,
           ),
         ),
+        // ── Global 430 px mobile frame on wide screens ──────────────
+        builder: (context, child) {
+          return WebFrame(child: child ?? const SizedBox.shrink());
+        },
         navigatorObservers: [
           CacheNavigationObserver(),
         ],
         home: const SplashScreen(),
+        // ── Named routes ─────────────────────────────────────────────
         routes: {
-          '/login': (context) => const LoginPage(),
+          '/login':    (context) => const LoginPage(),
           '/register': (context) => RegisterPage(),
-          '/home': (context) => const MainScaffold(),
-          '/feed': (context) => FeedPage(),
+          '/home':     (context) => const MainScaffold(),
+          '/feed':     (context) => FeedPage(),
           '/story': (context) {
             final user = ModalRoute.of(context)!.settings.arguments as User;
             return InstagramStoryPage(user: user);
           },
-          '/notif': (context) => const NotificationPage(),
+          '/notif':   (context) => const NotificationPage(),
           '/message': (context) => MessageListPage(),
           '/welcome': (context) => WelcomePage(),
-          '/updater': (context) => UpdateScreenPage(onUpdateNow: () {}, onUpdateLater: () {}),
+          '/updater': (context) =>
+              UpdateScreenPage(onUpdateNow: () {}, onUpdateLater: () {}),
           '/other-profile': (context) {
-            final args =
-            ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
-            return OtherProfilePage(
-              username: args['username'],
-            );
+            final args = ModalRoute.of(context)!.settings.arguments
+                as Map<String, dynamic>;
+            return OtherProfilePage(username: args['username']);
           },
           if (kDebugMode) '/debug_cache': (context) => const CacheDebugPage(),
+        },
+        // ── Deep-link / dynamic routes ───────────────────────────────
+        onGenerateRoute: (settings) {
+          final uri = Uri.parse(settings.name ?? '/');
+          final segments = uri.pathSegments;
+
+          // Paths that are owned by the app — never treated as usernames.
+          // Keep this list in sync with AppRoutes.reservedPaths below.
+          const reservedPaths = {
+            'home', 'explore', 'store', 'profile', 'settings',
+            'login', 'register', 'signup', 'messages', 'message',
+            'notif', 'notifs', 'notifications', 'notification',
+            'feed', 'post', 'story', 'welcome', 'updater',
+            'debug_cache', 'other-profile', 'user', 'portfolio',
+            'announcement', 'clips', 'search', 'create', 'upload',
+            'edit-profile', 'edit_profile',
+          };
+
+          // /post/:id  →  open MainScaffold (post detail opened via overlay)
+          if (segments.length == 2 && segments[0] == 'post') {
+            final id = int.tryParse(segments[1]);
+            if (id != null) {
+              return MaterialPageRoute(
+                settings: settings,
+                builder: (_) => const MainScaffold(),
+              );
+            }
+          }
+
+          // Legacy /user/:username support (redirect to /:username style)
+          if (segments.length == 2 && segments[0] == 'user' && segments[1].isNotEmpty) {
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) => OtherProfilePage(username: segments[1]),
+            );
+          }
+
+          // /:username  →  OtherProfilePage  (Instagram-style)
+          if (segments.length == 1 && !reservedPaths.contains(segments[0].toLowerCase())) {
+            final username = segments[0];
+            if (username.isNotEmpty) {
+              return MaterialPageRoute(
+                settings: settings,
+                builder: (_) => OtherProfilePage(username: username),
+              );
+            }
+          }
+
+          // Unmatched → 404
+          return MaterialPageRoute(
+            settings: settings,
+            builder: (_) => const NotFoundPage(),
+          );
         },
         debugShowCheckedModeBanner: false,
       ),

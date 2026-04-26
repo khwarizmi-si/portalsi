@@ -14,7 +14,7 @@ import 'notification_system_service.dart';
 import 'token_refresh_service.dart';
 
 class AuthService {
-  static const String baseUrl = 'https://api-new.portalsi.com/api';
+  static const String baseUrl = 'https://api.portalsi.com/api';
   final TokenRefreshService _tokenRefreshService = TokenRefreshService();
 
   static WebSocketService? webSocketService;
