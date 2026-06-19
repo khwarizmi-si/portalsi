@@ -151,7 +151,10 @@ class StoryService {
       headers: {'Authorization': 'Bearer $token'},
     );
     if (res.statusCode == 200) {
-      return jsonDecode(res.body);
+      final data = jsonDecode(res.body);
+      // ponytail: API returns {stories:[...], suggestions:[...]}; the home feed
+      // expects just the list. Casting the Map as List was what broke home.
+      return data is List ? data : (data['stories'] as List? ?? []);
     } else {
       throw Exception('Gagal memuat story feed');
     }
