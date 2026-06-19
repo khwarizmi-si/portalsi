@@ -19,11 +19,9 @@ class NotificationService {
       }
 
       final data = jsonDecode(res.body);
-      if (data is List) {
-        return List<Map<String, dynamic>>.from(data);
-      } else {
-        throw Exception('Format data notifikasi tidak sesuai');
-      }
+      // ponytail: API returns {"notifications":[...]}; older shape was a bare list.
+      final list = data is List ? data : (data['notifications'] ?? []);
+      return List<Map<String, dynamic>>.from(list);
     } else {
       throw Exception('Gagal memuat notifikasi (${res.statusCode})');
     }
