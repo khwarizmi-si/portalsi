@@ -1,4 +1,5 @@
 // lib/providers/feed_provider.dart
+import 'package:portal_si/config/api_endpoint.dart';
 import 'dart:convert';
 import 'dart:developer';
 import 'package:flutter/material.dart';
@@ -52,7 +53,7 @@ class FeedProvider with ChangeNotifier {
       final token = await SecureStorage.getToken();
       if (token == null) return;
 
-      final url = Uri.parse('https://api-new.portalsi.com/api/explore?page=$_currentPage');
+      final url = Uri.parse('${ApiEndpoints.apiUrl}/explore?page=$_currentPage');
       final response = await http.get(url, headers: {'Accept': 'application/json', 'Authorization': 'Bearer $token'});
 
       if (response.statusCode == 200) {

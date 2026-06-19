@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:portal_si/services/notification_system_service.dart';
 import 'package:portal_si/utils/secure_storage.dart';
+import '../config/api_endpoint.dart';
 import '../firebase_options.dart'; // File ini akan dibuat otomatis oleh FlutterFire CLI
 
 // Handler untuk notifikasi saat aplikasi di background/terminated
@@ -130,8 +131,7 @@ class FcmService {
       final apiToken = await SecureStorage.getToken();
       if (apiToken == null) return; // Pengguna belum login
 
-      // Ganti dengan endpoint backend Anda
-      const String endpoint = 'https://api-new.portalsi.com/api/device-tokens';
+      final String endpoint = '${ApiEndpoints.apiUrl}/device-tokens';
       final response = await http.post(
         Uri.parse(endpoint),
         headers: {
@@ -163,8 +163,7 @@ class FcmService {
       final apiToken = await SecureStorage.getToken();
       if (apiToken == null) return;
 
-      // Ganti dengan endpoint backend Anda
-      const String endpoint = 'https://api-new.portalsi.com/api/device-tokens';
+      final String endpoint = '${ApiEndpoints.apiUrl}/device-tokens';
       await http.delete(
         Uri.parse(endpoint),
         headers: {

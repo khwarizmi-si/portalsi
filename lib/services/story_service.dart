@@ -9,6 +9,7 @@ import 'package:path/path.dart' as path;
 import '../models/paginated_story_feed.dart';
 import '../models/story_model.dart';
 import '../models/story_viewer_model.dart';
+import '../config/api_endpoint.dart';
 import '../utils/secure_storage.dart';
 
 // Fungsi helper yang sama dari PostService untuk stream dengan progress
@@ -35,7 +36,7 @@ Stream<List<int>> _createUploadStream(File file, void Function(int, int) onProgr
 }
 
 class StoryService {
-  final baseUrl = 'https://api-new.portalsi.com/api';
+  final baseUrl = ApiEndpoints.apiUrl;
 
   /// --- FUNGSI BARU UNTUK MENGUNGGAH STORY DENGAN PROGRESS ---
   Future<void> createStory(
@@ -150,7 +151,10 @@ class StoryService {
       headers: {'Authorization': 'Bearer $token'},
     );
     if (res.statusCode == 200) {
-      return jsonDecode(res.body);
+      final data = jsonDecode(res.body);
+      // ponytail: API returns {stories:[...], suggestions:[...]}; the home feed
+      // expects just the list. Casting the Map as List was what broke home.
+      return data is List ? data : (data['stories'] as List? ?? []);
     } else {
       throw Exception('Gagal memuat story feed');
     }

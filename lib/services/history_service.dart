@@ -3,11 +3,12 @@
 import 'dart:convert';
 import 'dart:developer';
 import 'package:http/http.dart' as http;
+import '../config/api_endpoint.dart';
 import '../utils/secure_storage.dart';
 import '../models/login_history_model.dart';
 
 class HistoryService {
-  final String _baseUrl = 'https://api-new.portalsi.com/api';
+  final String _baseUrl = ApiEndpoints.apiUrl;
 
   // Fungsi untuk mengambil daftar riwayat login
   Future<List<LoginHistory>> fetchLoginHistories() async {

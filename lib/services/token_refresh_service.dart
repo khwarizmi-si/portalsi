@@ -1,6 +1,7 @@
 // lib/services/token_refresh_service.dart
 import 'dart:async';
 import 'package:dio/dio.dart'; // Gunakan http client Anda, contoh ini menggunakan Dio
+import '../config/api_endpoint.dart';
 import '../utils/secure_storage.dart';
 
 class TokenRefreshService {
@@ -48,9 +49,8 @@ class TokenRefreshService {
       }
 
       final dio = Dio();
-      // Ganti '/auth/refresh' dengan endpoint API Anda yang sebenarnya
       final response = await dio.post(
-          'https://api-new.portalsi.com/api/login',
+          '${ApiEndpoints.apiUrl}/login',
           data: {
             'refresh_token': refreshToken,
           }

@@ -1,3 +1,4 @@
+import 'package:portal_si/config/api_endpoint.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:page_transition/page_transition.dart';
@@ -291,7 +292,7 @@ class _RankingPageState extends State<RankingPage> with SingleTickerProviderStat
           itemCount: _searchResults.length,
           itemBuilder: (context, index) {
             final student = _searchResults[index];
-            final photoUrl = 'https://api-new.portalsi.com/storage/photo/${student.photo}';
+            final photoUrl = '${ApiEndpoints.storageUrl}/photo/${student.photo}';
 
             return ListTile(
               leading: _buildProfileImage(photoUrl, radius: 20),
@@ -546,7 +547,7 @@ class _RankingPageState extends State<RankingPage> with SingleTickerProviderStat
     final double elevation = isFirstPlace ? 20.0 : 10.0;
     final double height = isFirstPlace ? 140.0 : 120.0;
 
-    final photoUrl = 'https://api-new.portalsi.com/storage/photo/${student.photo}';
+    final photoUrl = '${ApiEndpoints.storageUrl}/photo/${student.photo}';
 
     return GestureDetector(
       onTap: () => _navigateToDetail(student.id),
@@ -615,7 +616,7 @@ class _RankingPageState extends State<RankingPage> with SingleTickerProviderStat
         children: List.generate(remainingStudents.length, (index) {
           final user = remainingStudents[index];
           final rank = index + 4;
-          final photoUrl = 'https://api-new.portalsi.com/storage/photo/${user.photo}';
+          final photoUrl = '${ApiEndpoints.storageUrl}/photo/${user.photo}';
 
           return ListTile(
             contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),

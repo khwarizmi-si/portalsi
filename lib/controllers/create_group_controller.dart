@@ -1,5 +1,6 @@
 // lib/controllers/create_group_controller.dart
 
+import 'package:portal_si/config/api_endpoint.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -183,7 +184,7 @@ class CreateGroupController with ChangeNotifier {
 
     try {
       final token = await SecureStorage.getToken();
-      final uri = Uri.parse('https://api-new.portalsi.com/api/groups');
+      final uri = Uri.parse('${ApiEndpoints.apiUrl}/groups');
       var request = http.MultipartRequest('POST', uri)
         ..headers['Authorization'] = 'Bearer $token'
         ..headers['Accept'] = 'application/json';

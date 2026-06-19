@@ -21,8 +21,19 @@ class MessageListPage extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
         child: Row(
-          children: const [
-            Text(
+          children: [
+            // ponytail: back arrow only when there's something to pop (page was
+            // pushed); as a bottom-nav tab there's nothing to pop, so it hides.
+            if (Navigator.canPop(context)) ...[
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: const Icon(Icons.arrow_back, color: Colors.black),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+              const SizedBox(width: 12),
+            ],
+            const Text(
               'Pesan',
               style: TextStyle(
                   color: Colors.black, fontWeight: FontWeight.bold, fontSize: 24),

@@ -1,3 +1,4 @@
+import 'package:portal_si/config/api_endpoint.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
@@ -127,7 +128,7 @@ class _SharePostPageState extends State<SharePostPage> {
         final token = await SecureStorage.getToken();
         if (token == null) throw Exception("Token tidak ditemukan");
 
-        final url = Uri.parse('https://api-new.portalsi.com/api/users/search?username=$query&page=$_mentionCurrentPage');
+        final url = Uri.parse('${ApiEndpoints.apiUrl}/users/search?username=$query&page=$_mentionCurrentPage');
         final response = await http.get(url, headers: {'Accept': 'application/json', 'Authorization': 'Bearer $token'});
 
         if (response.statusCode == 200) {

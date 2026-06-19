@@ -1,3 +1,4 @@
+import 'package:portal_si/config/api_endpoint.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
@@ -328,7 +329,7 @@ class _StoryPreviewPageState extends State<StoryPreviewPage>
   Future<User?> _fetchCurrentUser(String token) async {
     final dio = Dio();
     try {
-      final response = await dio.get('https://api-new.portalsi.com/api/user', options: Options(headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'}));
+      final response = await dio.get('${ApiEndpoints.apiUrl}/user', options: Options(headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'}));
       if (response.statusCode == 200 && response.data != null) {
         return User.fromJson(response.data);
       }

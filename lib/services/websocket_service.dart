@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:portal_si/config/api_endpoint.dart';
 import 'package:portal_si/services/notification_system_service.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../utils/app_lifecycle_manager.dart';
@@ -17,8 +18,8 @@ class AppEvent {
 }
 
 class WebSocketService {
-  final String _wsBaseUrl = "wss://ws.portalsi.com:443/app/fiouy3umnruqcwdsoxni";
-  final String _authBaseUrl = "https://api-new.portalsi.com/api";
+  final String _wsBaseUrl = ApiEndpoints.wsBaseUrl;
+  final String _authBaseUrl = "${ApiEndpoints.baseUrl}/api";
   final String _token;
 
   WebSocketChannel? _channel;

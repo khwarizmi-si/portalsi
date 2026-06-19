@@ -1,0 +1,88 @@
+PODS:
+  - device_info_plus (0.0.1):
+    - Flutter
+  - Flutter (1.0.0)
+  - flutter_background_service_ios (0.0.3):
+    - Flutter
+  - flutter_web_browser (0.17.3):
+    - Flutter
+  - fluttertoast (0.0.2):
+    - Flutter
+  - geocoding_ios (1.0.5):
+    - Flutter
+  - libwebp (1.5.0):
+    - libwebp/demux (= 1.5.0)
+    - libwebp/mux (= 1.5.0)
+    - libwebp/sharpyuv (= 1.5.0)
+    - libwebp/webp (= 1.5.0)
+  - libwebp/demux (1.5.0):
+    - libwebp/webp
+  - libwebp/mux (1.5.0):
+    - libwebp/demux
+  - libwebp/sharpyuv (1.5.0)
+  - libwebp/webp (1.5.0):
+    - libwebp/sharpyuv
+  - package_info_plus (0.4.5):
+    - Flutter
+  - video_compress (0.3.0):
+    - Flutter
+  - video_thumbnail (0.0.1):
+    - Flutter
+    - libwebp
+  - wakelock_plus (0.0.1):
+    - Flutter
+
+DEPENDENCIES:
+  - device_info_plus (from `.symlinks/plugins/device_info_plus/ios`)
+  - Flutter (from `Flutter`)
+  - flutter_background_service_ios (from `.symlinks/plugins/flutter_background_service_ios/ios`)
+  - flutter_web_browser (from `.symlinks/plugins/flutter_web_browser/ios`)
+  - fluttertoast (from `.symlinks/plugins/fluttertoast/ios`)
+  - geocoding_ios (from `.symlinks/plugins/geocoding_ios/ios`)
+  - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
+  - video_compress (from `.symlinks/plugins/video_compress/ios`)
+  - video_thumbnail (from `.symlinks/plugins/video_thumbnail/ios`)
+  - wakelock_plus (from `.symlinks/plugins/wakelock_plus/ios`)
+
+SPEC REPOS:
+  trunk:
+    - libwebp
+
+EXTERNAL SOURCES:
+  device_info_plus:
+    :path: ".symlinks/plugins/device_info_plus/ios"
+  Flutter:
+    :path: Flutter
+  flutter_background_service_ios:
+    :path: ".symlinks/plugins/flutter_background_service_ios/ios"
+  flutter_web_browser:
+    :path: ".symlinks/plugins/flutter_web_browser/ios"
+  fluttertoast:
+    :path: ".symlinks/plugins/fluttertoast/ios"
+  geocoding_ios:
+    :path: ".symlinks/plugins/geocoding_ios/ios"
+  package_info_plus:
+    :path: ".symlinks/plugins/package_info_plus/ios"
+  video_compress:
+    :path: ".symlinks/plugins/video_compress/ios"
+  video_thumbnail:
+    :path: ".symlinks/plugins/video_thumbnail/ios"
+  wakelock_plus:
+    :path: ".symlinks/plugins/wakelock_plus/ios"
+
+SPEC CHECKSUMS:
+  device_info_plus: 335f3ce08d2e174b9fdc3db3db0f4e3b1f66bd89
+  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  flutter_background_service_ios: 00d31bdff7b4bfe06d32375df358abe0329cf87e
+  flutter_web_browser: 68b27d2c4773b059cef19e12c890cb204518d3c3
+  fluttertoast: 2c67e14dce98bbdb200df9e1acf610d7a6264ea1
+  geocoding_ios: 86f1c479822f07a2f79f7094f2b753d1e9e20215
+  libwebp: 02b23773aedb6ff1fd38cec7a77b81414c6842a8
+  package_info_plus: 566e1b7a2f3900e4b0020914ad3fc051dcc95596
+  video_compress: f2133a07762889d67f0711ac831faa26f956980e
+  video_thumbnail: b637e0ad5f588ca9945f6e2c927f73a69a661140
+  wakelock_plus: fd58c82b1388f4afe3fe8aa2c856503a262a5b03
+
+PODFILE CHECKSUM: 1263f85fe11f9032e9fae462965badd975ec953c
+
+COCOAPODS: 1.16.2

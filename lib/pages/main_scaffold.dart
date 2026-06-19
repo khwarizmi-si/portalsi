@@ -4,7 +4,7 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:move_to_background/move_to_background.dart';
+import 'package:portal_si/utils/app_background.dart';
 import 'package:portal_si/components/bottom_navigation.dart';
 import 'package:portal_si/pages/dashboard_page.dart';
 import 'package:portal_si/pages/feed_page.dart';
@@ -223,7 +223,7 @@ class _MainScaffoldState extends State<MainScaffold> with TickerProviderStateMix
 
           if (isExitConfirmed) {
             // Konfirmasi berhasil: Pindahkan aplikasi ke background
-            MoveToBackground.moveTaskToBack();
+            AppBackground.moveTaskToBack();
           } else {
             // Konfirmasi gagal: Tampilkan SnackBar
             _lastPressedAt = now;

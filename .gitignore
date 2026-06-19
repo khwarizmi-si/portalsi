@@ -47,3 +47,11 @@ app.*.map.json
 /android/key.properties
 /android/app/my-release-key.jks
 lib/generated
+
+# SSO secrets injected via --dart-define-from-file (keep real values out of git)
+akun_rg.env.json
+*.env.json
+!*.env.example.json
+# Build artifacts / iOS ephemeral
+/Flutter/
+/android/build/

@@ -4,10 +4,11 @@ import 'dart:convert';
 import 'dart:core';
 import 'package:http/http.dart' as http;
 import '../models/user_model.dart';
+import '../config/api_endpoint.dart';
 import '../utils/secure_storage.dart';
 
 class FollowService {
-  final String _baseUrl = 'https://api-new.portalsi.com/api';
+  final String _baseUrl = ApiEndpoints.apiUrl;
 
   static final Map<String, Map<String, dynamic>> _profileCache = {};
   static final Map<String, Map<String, dynamic>> _followStatusCache = {};

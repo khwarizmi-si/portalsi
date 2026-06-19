@@ -8,6 +8,8 @@ import 'package:portal_si/pages/download_app_prompt_page.dart';
 import 'package:portal_si/pages/permissions_page.dart';
 import 'package:portal_si/pages/update_screen.dart';
 import 'package:upgrader/upgrader.dart';
+import 'package:http/http.dart' as http;
+import '../config/api_endpoint.dart';
 import '../managers/cache_manager.dart';
 import '../services/auth_service.dart';
 import '../utils/secure_storage.dart';
@@ -121,10 +123,34 @@ class _SplashScreenState extends State<SplashScreen> {
       return;
     }
 
-    // Jika platform web dan token ada, langsung masuk ke /home
-    // (WebSocket, background service, dll tidak didukung di web)
+    // Web: validate the stored token before trusting it. A stale/invalid token
+    // (e.g. left over from a prod build) must bounce to login, not strand the
+    // user on a broken home. (WebSocket/background service aren't used on web.)
     if (kIsWeb) {
-      if (mounted) Navigator.of(context).pushReplacementNamed('/home');
+      try {
+        final res = await http.get(
+          Uri.parse('${ApiEndpoints.apiUrl}/user'),
+          headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
+        ).timeout(const Duration(seconds: 10));
+        if (res.statusCode == 200) {
+          if (mounted) Navigator.of(context).pushReplacementNamed('/home');
+          // Honor a deep link on refresh (/username or /post/:id) by pushing it
+          // on top of home, so refreshing a profile/post stays there.
+          final path = Uri.base.path;
+          if (mounted &&
+              path.isNotEmpty &&
+              path != '/' &&
+              path != '/home') {
+            Navigator.of(context).pushNamed(path);
+          }
+        } else {
+          await SecureStorage.deleteToken();
+          if (mounted) Navigator.of(context).pushReplacementNamed('/welcome');
+        }
+      } catch (_) {
+        await SecureStorage.deleteToken();
+        if (mounted) Navigator.of(context).pushReplacementNamed('/welcome');
+      }
       return;
     }
 

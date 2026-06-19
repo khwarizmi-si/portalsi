@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../config/api_endpoint.dart';
 import '../utils/secure_storage.dart';
 
 class NotificationService {
-  final baseUrl = 'https://api-new.portalsi.com/api';
+  final baseUrl = ApiEndpoints.apiUrl;
 
   Future<List<Map<String, dynamic>>> getNotifications() async {
     final token = await SecureStorage.getToken();
@@ -18,11 +19,9 @@ class NotificationService {
       }
 
       final data = jsonDecode(res.body);
-      if (data is List) {
-        return List<Map<String, dynamic>>.from(data);
-      } else {
-        throw Exception('Format data notifikasi tidak sesuai');
-      }
+      // ponytail: API returns {"notifications":[...]}; older shape was a bare list.
+      final list = data is List ? data : (data['notifications'] ?? []);
+      return List<Map<String, dynamic>>.from(list);
     } else {
       throw Exception('Gagal memuat notifikasi (${res.statusCode})');
     }
