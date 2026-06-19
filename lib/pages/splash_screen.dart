@@ -134,6 +134,15 @@ class _SplashScreenState extends State<SplashScreen> {
         ).timeout(const Duration(seconds: 10));
         if (res.statusCode == 200) {
           if (mounted) Navigator.of(context).pushReplacementNamed('/home');
+          // Honor a deep link on refresh (/username or /post/:id) by pushing it
+          // on top of home, so refreshing a profile/post stays there.
+          final path = Uri.base.path;
+          if (mounted &&
+              path.isNotEmpty &&
+              path != '/' &&
+              path != '/home') {
+            Navigator.of(context).pushNamed(path);
+          }
         } else {
           await SecureStorage.deleteToken();
           if (mounted) Navigator.of(context).pushReplacementNamed('/welcome');

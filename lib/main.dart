@@ -4,6 +4,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
+import 'pages/post_detail_page.dart';
 // --- [TAMBAHAN] Import untuk Firebase ---
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -125,6 +127,9 @@ Future<void> initializeBackgroundService() async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Clean path URLs on web (/username, /post/1) instead of /#/...
+  if (kIsWeb) usePathUrlStrategy();
 
   // Inisialisasi Firebase di awal
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -281,6 +286,29 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             );
           },
           if (kDebugMode) '/debug_cache': (context) => const CacheDebugPage(),
+        },
+        // Web deep links: /post/:id -> a post, /:username -> a profile.
+        // Lets profile/post URLs be shared and survive a page refresh.
+        onGenerateRoute: (settings) {
+          final name = settings.name ?? '';
+          final uri = Uri.parse(name);
+          final segments = uri.pathSegments;
+          if (segments.length == 2 && segments.first == 'post') {
+            final id = int.tryParse(segments[1]);
+            if (id != null) {
+              return MaterialPageRoute(
+                settings: settings,
+                builder: (_) => PostDetailPage(postId: id),
+              );
+            }
+          }
+          if (segments.length == 1 && segments.first.isNotEmpty) {
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) => OtherProfilePage(username: segments.first),
+            );
+          }
+          return null;
         },
         debugShowCheckedModeBanner: false,
       ),
