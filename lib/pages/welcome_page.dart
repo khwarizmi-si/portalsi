@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_web_browser/flutter_web_browser.dart';
 import 'dart:convert';
 
+import '../config/auth_sdk_config.dart';
 import '../utils/slide_transition_route.dart';
 import 'login_page.dart';
 
@@ -90,19 +91,30 @@ class _WelcomePageState extends State<WelcomePage> with TickerProviderStateMixin
     });
 
     try {
-      final baseUrl = 'https://akunrg.com/au/pengenalan';
+      // ponytail: no SSO secrets locally -> go straight to the email/password
+      // form. SSO creds come from --dart-define (AuthSdkConfig), never hardcoded.
+      if (!AuthSdkConfig.isConfigured) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          Navigator.of(context)
+              .push(SlideTransitionRoute(page: const LoginPage()));
+        }
+        return;
+      }
+
       final params = {
-        'client_id': "6ab3cbd0-51ce-4987-94fd-9e66db9f0abf",
-        'client_secret': "8c0f8331-2364-4e69-86e6-bd91b013e3ca",
-        'auth_v1': "0e3ef8f9-55fd-43cc-a52f-f7d13299dfc2",
-        'auth_v2': "047c6d2e-e0c6-459f-85a1-54e35561d2ae",
-        'redirect': "https://portalsi.com/get/larg",
+        'client_id': AuthSdkConfig.clientId,
+        'client_secret': AuthSdkConfig.clientSecret,
+        'auth_v1': AuthSdkConfig.authV1,
+        'auth_v2': AuthSdkConfig.authV2,
+        'redirect': AuthSdkConfig.redirect,
         'target': "connect",
-        'redirect_from': "https://portalsi.com",
+        'redirect_from': AuthSdkConfig.redirectFrom,
         'via': 'tombolLoginApp',
       };
 
-      final finalUri = Uri.parse(baseUrl).replace(queryParameters: params);
+      final finalUri =
+          Uri.parse(AuthSdkConfig.baseUrl).replace(queryParameters: params);
 
       await FlutterWebBrowser.openWebPage(
         url: finalUri.toString(),
