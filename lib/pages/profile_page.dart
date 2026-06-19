@@ -104,6 +104,12 @@ class _ProfilePageState extends State<ProfilePage>
       _userFuture = _profileService.getProfile();
       _suggestionsFuture = _profileService.fetchSuggestions();
     });
+    // ponytail: getProfile() can be up to 10min stale, so follower/following
+    // counts lag after follow/unfollow. Revalidate in the background and swap
+    // in the fresh data (no spinner — the future is already complete).
+    _profileService.refreshProfile().then((fresh) {
+      if (mounted) setState(() => _userFuture = Future.value(fresh));
+    }).catchError((_) {});
   }
 
   Future<void> _navigateToCreateStory(User user) async {

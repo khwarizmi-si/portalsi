@@ -238,6 +238,27 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         navigatorObservers: [
           CacheNavigationObserver(),
         ],
+        // ponytail: this is a phone UI. On a wide desktop browser, stretching it
+        // full-width looks broken — center it in a phone-width column and tell
+        // the layout it's 460px wide (MediaQuery override) so nothing overflows.
+        builder: (context, child) {
+          final mq = MediaQuery.of(context);
+          if (!kIsWeb || mq.size.width <= 600) return child!;
+          return ColoredBox(
+            color: const Color(0xFFE6E7EB),
+            child: Center(
+              child: ClipRect(
+                child: SizedBox(
+                  width: 460,
+                  child: MediaQuery(
+                    data: mq.copyWith(size: Size(460, mq.size.height)),
+                    child: Material(color: Colors.white, child: child),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
         home: const SplashScreen(),
         routes: {
           '/login': (context) => const LoginPage(),
