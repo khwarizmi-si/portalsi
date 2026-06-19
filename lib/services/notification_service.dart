@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../config/api_endpoint.dart';
 import '../utils/secure_storage.dart';
 
 class NotificationService {
-  final baseUrl = 'https://api-new.portalsi.com/api';
+  final baseUrl = ApiEndpoints.apiUrl;
 
   Future<List<Map<String, dynamic>>> getNotifications() async {
     final token = await SecureStorage.getToken();

@@ -10,10 +10,11 @@ import 'package:path/path.dart' as path;
 import 'package:portal_si/models/user_model.dart'; // Pastikan import User model
 import '../models/group_member_model.dart';
 import '../models/group_model.dart';
+import '../config/api_endpoint.dart';
 import '../utils/secure_storage.dart';
 
 class GroupService {
-  final String _baseUrl = 'https://api-new.portalsi.com/api';
+  final String _baseUrl = ApiEndpoints.apiUrl;
 
   Future<Map<String, String>> _getHeaders() async {
     final token = await SecureStorage.getToken();

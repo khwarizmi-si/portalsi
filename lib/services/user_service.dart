@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:portal_si/models/user_model.dart';
+import '../config/api_endpoint.dart';
 import '../utils/secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
@@ -17,7 +18,7 @@ import 'dart:io';
 
 
 class ProfileService {
-  static const String _baseUrl = 'https://api-new.portalsi.com/api';
+  static const String _baseUrl = ApiEndpoints.apiUrl;
   final http.Client _client = http.Client();
 
   static final ProfileService _instance = ProfileService._internal();

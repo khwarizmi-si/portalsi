@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_web_browser/flutter_web_browser.dart';
 import 'package:page_transition/page_transition.dart';
+import 'package:portal_si/config/auth_sdk_config.dart';
 import 'package:portal_si/pages/register_page.dart';
 import 'package:portal_si/services/auth_service.dart';
 import 'package:portal_si/utils/secure_storage.dart';
@@ -183,39 +184,28 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     });
 
     try {
-      // ⚠️ Ganti 'localhost' dengan IP Address Anda jika testing di HP
-      // final uri = Uri.parse('http://localhost:90/layanan-akun/sdk-akun-rg-v1/portal-run.php');
-      // final response = await http.get(uri);
+      // SSO credentials are injected at build time via --dart-define and must
+      // never be hardcoded here. See lib/config/auth_sdk_config.dart.
+      if (!AuthSdkConfig.isConfigured) {
+        throw StateError(
+          'SSO belum dikonfigurasi. Jalankan dengan --dart-define '
+          '(AKUN_RG_CLIENT_ID/CLIENT_SECRET/AUTH_V1/AUTH_V2).',
+        );
+      }
 
-      // if (response.statusCode != 200) {
-      //   throw Exception('Gagal memuat konfigurasi: Status code ${response.statusCode}');
-      // }
-
-      // final config = jsonDecode(response.body);
-      final baseUrl = 'https://akunrg.com/au/pengenalan';
-      // final response = await http.get(baseUrl);
-      // final params = {
-      //   'client_id': config['client_id'],
-      //   'client_secret': config['client_secret'],
-      //   'auth_v1': config['auth_v1'],
-      //   'auth_v2': config['auth_v2'],
-      //   'redirect': config['redirect'],
-      //   'target': config['target'],
-      //   'redirect_from': 'https://kimo.com/',
-      //   'via': 'tombolLogin',
-      // };
       final params = {
-        'client_id': "6ab3cbd0-51ce-4987-94fd-9e66db9f0abf",
-        'client_secret': "8c0f8331-2364-4e69-86e6-bd91b013e3ca",
-        'auth_v1': "0e3ef8f9-55fd-43cc-a52f-f7d13299dfc2",
-        'auth_v2': "047c6d2e-e0c6-459f-85a1-54e35561d2ae",
-        'redirect': "portalsi://callback",
+        'client_id': AuthSdkConfig.clientId,
+        'client_secret': AuthSdkConfig.clientSecret,
+        'auth_v1': AuthSdkConfig.authV1,
+        'auth_v2': AuthSdkConfig.authV2,
+        'redirect': AuthSdkConfig.redirect,
         'target': "connect",
-        'redirect_from': "https://portalsi.com",
+        'redirect_from': AuthSdkConfig.redirectFrom,
         'via': 'tombolLoginApp',
       };
 
-      final finalUri = Uri.parse(baseUrl).replace(queryParameters: params);
+      final finalUri =
+          Uri.parse(AuthSdkConfig.baseUrl).replace(queryParameters: params);
 
       await FlutterWebBrowser.openWebPage(
         url: finalUri.toString(),

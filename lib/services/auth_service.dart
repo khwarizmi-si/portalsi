@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:portal_si/services/websocket_service.dart';
 import 'package:portal_si/utils/secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../config/api_endpoint.dart';
 import '../utils/app_lifecycle_manager.dart';
 import 'fcm_service.dart';
 import 'group_service.dart';
@@ -14,7 +15,7 @@ import 'notification_system_service.dart';
 import 'token_refresh_service.dart';
 
 class AuthService {
-  static const String baseUrl = 'https://api-new.portalsi.com/api';
+  static const String baseUrl = ApiEndpoints.apiUrl;
   final TokenRefreshService _tokenRefreshService = TokenRefreshService();
 
   static WebSocketService? webSocketService;

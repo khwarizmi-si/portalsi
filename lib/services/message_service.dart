@@ -1,5 +1,6 @@
 // lib/services/message_service.dart
 
+import 'package:portal_si/config/api_endpoint.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
@@ -80,7 +81,7 @@ class ChatService extends ApiService {
     if (token == null) throw Exception("Token tidak ditemukan.");
 
     // Ganti endpoint ini dengan endpoint API Anda yang sebenarnya
-    final url = Uri.parse('https://api-new.portalsi.com/api/messages/channels');
+    final url = Uri.parse('${ApiEndpoints.apiUrl}/messages/channels');
 
     try {
       final response = await http.get(url, headers: {
@@ -122,7 +123,7 @@ class ChatService extends ApiService {
 
     final response = await http.get(
       Uri.parse(
-          'https://api-new.portalsi.com/api/messages/conversation/${recipientUser.id}'),
+          '${ApiEndpoints.apiUrl}/messages/conversation/${recipientUser.id}'),
       headers: {
         'Authorization': 'Bearer $token',
         'Accept': 'application/json',

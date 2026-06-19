@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../config/api_endpoint.dart';
 import '../utils/secure_storage.dart';
 
 class ExploreService {
-  // Ganti dengan URL API Anda yang sebenarnya
-  final baseUrl = 'https://api-new.portalsi.com/api'; // Contoh URL yang benar
+  final baseUrl = ApiEndpoints.apiUrl;
 
   Future<List<dynamic>> getExplorePosts() async {
     final token = await SecureStorage.getToken();

@@ -1,5 +1,6 @@
 // lib/pages/feed_page.dart
 
+import 'package:portal_si/config/api_endpoint.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
@@ -107,7 +108,7 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
         log('❌ GAGAL: Token tidak ditemukan untuk pencarian.');
         return;
       }
-      final url = Uri.parse('https://api-new.portalsi.com/api/users/search?username=$query');
+      final url = Uri.parse('${ApiEndpoints.apiUrl}/users/search?username=$query');
       final response = await http.get(url, headers: {
         'Accept': 'application/json',
         'Authorization': 'Bearer $token',
@@ -184,7 +185,7 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
         }
         return;
       }
-      final url = Uri.parse('https://api-new.portalsi.com/api/explore?page=$_currentPage');
+      final url = Uri.parse('${ApiEndpoints.apiUrl}/explore?page=$_currentPage');
       final response = await http.get(url, headers: {
         'Accept': 'application/json',
         'Authorization': 'Bearer $token',

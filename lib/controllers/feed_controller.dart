@@ -1,5 +1,6 @@
 // lib/controllers/feed_controller.dart
 
+import 'package:portal_si/config/api_endpoint.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -92,7 +93,7 @@ class FeedController extends ChangeNotifier {
 
     try {
       final authToken = await SecureStorage.getToken();
-      final uri = Uri.parse('https://api-new.portalsi.com/api/users/search')
+      final uri = Uri.parse('${ApiEndpoints.apiUrl}/users/search')
           .replace(queryParameters: {'username': query}); // Diubah dari 'q'
 
 

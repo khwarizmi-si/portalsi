@@ -1,10 +1,11 @@
 // lib/services/comment_like_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../config/api_endpoint.dart';
 import '../utils/secure_storage.dart';
 
 class CommentLikeService {
-  static const String baseUrl = 'https://api-new.portalsi.com/api';
+  static const String baseUrl = ApiEndpoints.apiUrl;
 
   /// Toggle like status untuk comment
   /// Endpoint: POST/DELETE https://api.portalsi.com/api/comments/{comment_id}/like

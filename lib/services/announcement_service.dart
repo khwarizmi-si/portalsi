@@ -8,6 +8,7 @@ import 'dart:typed_data'; // WAJIB: Untuk menangani data gambar sebagai 'bytes' 
 import 'package:flutter/foundation.dart' show kIsWeb; // WAJIB: Untuk mendeteksi platform web (kIsWeb).
 import 'package:http/http.dart' as http; // WAJIB: Untuk melakukan request HTTP (MultipartRequest).
 import 'package:image_picker/image_picker.dart'; // WAJIB: Untuk bisa mengenali tipe data XFile.
+import '../config/api_endpoint.dart';
 import '../utils/secure_storage.dart';
 
 class AnnouncementService extends ApiService {
@@ -91,7 +92,7 @@ class AnnouncementService extends ApiService {
 
     var request = http.MultipartRequest(
       'POST',
-      Uri.parse('https://api-new.portalsi.com/api/announcements'),
+      Uri.parse('${ApiEndpoints.apiUrl}/announcements'),
     );
 
     request.headers['Authorization'] = 'Bearer $token';
