@@ -7,6 +7,8 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
+import '../controllers/home_controller.dart';
 import '../services/post_service.dart';
 
 class CreatePostWebPage extends StatefulWidget {
@@ -58,6 +60,11 @@ class _CreatePostWebPageState extends State<CreatePostWebPage> {
         mediaBytes: _bytes,
         mediaFilename: _filename,
       );
+      if (!mounted) return;
+      // Refresh the home feed so the new post shows up immediately.
+      try {
+        await context.read<HomeController>().refreshDashboardData();
+      } catch (_) {}
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Postingan berhasil diunggah 🎉')),
