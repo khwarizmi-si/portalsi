@@ -17,6 +17,7 @@ import 'package:collection/collection.dart';
 import '../components/verified_badge.dart';
 import '../controllers/chat_room_controller.dart';
 import '../models/chat.dart';
+import 'chat_info_page.dart';
 import '../models/user_model.dart';
 import 'package:portal_si/pages/image_preview_screen.dart';
 
@@ -729,6 +730,16 @@ class _ChatAppBar extends StatelessWidget {
   final User user;
   const _ChatAppBar({required this.user});
 
+  void _openInfo(BuildContext context) {
+    final controller = Provider.of<ChatRoomController>(context, listen: false);
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            ChatInfoPage(user: user, messages: controller.messages),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -744,17 +755,23 @@ class _ChatAppBar extends StatelessWidget {
               icon: const Icon(Icons.arrow_back, color: kTextColor),
               onPressed: () => Navigator.of(context).pop(),
             ),
-            CircleAvatar(
-              radius: 20,
-              backgroundColor: Colors.grey[300],
-              backgroundImage:
-              user.profilePictureUrl != null && user.profilePictureUrl!.isNotEmpty
-                  ? NetworkImage(user.profilePictureUrl!)
-                  : null,
+            GestureDetector(
+              onTap: () => _openInfo(context),
+              child: CircleAvatar(
+                radius: 20,
+                backgroundColor: Colors.grey[300],
+                backgroundImage:
+                user.profilePictureUrl != null && user.profilePictureUrl!.isNotEmpty
+                    ? NetworkImage(user.profilePictureUrl!)
+                    : null,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Row(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _openInfo(context),
+                child: Row(
                 children: [
                   Flexible(
                     child: Text(
@@ -770,7 +787,8 @@ class _ChatAppBar extends StatelessWidget {
                     const SizedBox(width: 6),
                     const VerifiedBadge(size: 17),
                   ]
-                ],
+                  ],
+                ),
               ),
             ),
             IconButton(
@@ -1224,12 +1242,35 @@ class _MessageInputBarState extends State<_MessageInputBar> {
             key: _attachIconKey,
             icon: const Icon(Icons.add, color: kSubtleTextColor, size: 28,),
             onPressed: () {
+              final chatController = context.read<ChatRoomController>();
+
+              // ponytail: the positioned popup relies on global button coords,
+              // which break inside the centered desktop web panel. On web, show
+              // the same menu as a bottom sheet (auto-positioned, no math).
+              if (kIsWeb) {
+                showModalBottomSheet(
+                  context: context,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => ChangeNotifierProvider.value(
+                    value: chatController,
+                    child: const SafeArea(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Align(
+                          alignment: Alignment.bottomLeft,
+                          child: _AttachmentPopupMenu(),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+                return;
+              }
+
               final RenderBox renderBox =
               _attachIconKey.currentContext!.findRenderObject() as RenderBox;
               final size = renderBox.size;
               final position = renderBox.localToGlobal(Offset.zero);
-
-              final chatController = context.read<ChatRoomController>();
 
               Navigator.of(context).push(
                 _FadeSlideUpRoute(

@@ -5,7 +5,9 @@
 // browser dialog (image_picker works on web) and upload the bytes directly,
 // skipping the native upload queue.
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../controllers/home_controller.dart';
@@ -22,6 +24,8 @@ class _CreatePostWebPageState extends State<CreatePostWebPage> {
   final _picker = ImagePicker();
   final _captionController = TextEditingController();
   final _postService = PostService();
+  final _cropKey = GlobalKey();
+  final _transform = TransformationController();
 
   Uint8List? _bytes;
   String? _filename;
@@ -31,6 +35,7 @@ class _CreatePostWebPageState extends State<CreatePostWebPage> {
   @override
   void dispose() {
     _captionController.dispose();
+    _transform.dispose();
     super.dispose();
   }
 
@@ -48,17 +53,36 @@ class _CreatePostWebPageState extends State<CreatePostWebPage> {
     });
   }
 
+  /// Render the framed (panned/zoomed) image to PNG bytes so the post matches
+  /// what the user composed. Falls back to the original bytes on failure.
+  Future<({Uint8List bytes, String name})> _composedImage() async {
+    try {
+      final boundary =
+          _cropKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return (bytes: _bytes!, name: _filename ?? 'post.png');
+      final image = await boundary.toImage(pixelRatio: 2.0);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (data == null) return (bytes: _bytes!, name: _filename ?? 'post.png');
+      return (bytes: data.buffer.asUint8List(), name: 'post.png');
+    } catch (_) {
+      return (bytes: _bytes!, name: _filename ?? 'post.png');
+    }
+  }
+
   Future<void> _submit() async {
     if (_bytes == null) return;
     setState(() => _isUploading = true);
     try {
+      final media = _isVideo
+          ? (bytes: _bytes!, name: _filename ?? 'video.mp4')
+          : await _composedImage();
       await _postService.createPost(
         {
           'caption': _captionController.text.trim(),
           'is_video': _isVideo ? '1' : '0',
         },
-        mediaBytes: _bytes,
-        mediaFilename: _filename,
+        mediaBytes: media.bytes,
+        mediaFilename: media.name,
       );
       if (!mounted) return;
       // Refresh the home feed so the new post shows up immediately.
@@ -136,9 +160,30 @@ class _CreatePostWebPageState extends State<CreatePostWebPage> {
                                 style: const TextStyle(color: Colors.grey)),
                           ],
                         )
-                      : Image.memory(_bytes!, fit: BoxFit.cover),
+                      : RepaintBoundary(
+                          key: _cropKey,
+                          child: ClipRect(
+                            child: InteractiveViewer(
+                              transformationController: _transform,
+                              minScale: 1,
+                              maxScale: 4,
+                              clipBehavior: Clip.hardEdge,
+                              child: Image.memory(_bytes!,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  height: double.infinity),
+                            ),
+                          ),
+                        ),
             ),
           ),
+          if (hasMedia && !_isVideo)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text('Geser & cubit untuk atur posisi/ukuran gambar',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                  textAlign: TextAlign.center),
+            ),
           const SizedBox(height: 16),
           Row(
             children: [
