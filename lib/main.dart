@@ -243,22 +243,44 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         navigatorObservers: [
           CacheNavigationObserver(),
         ],
-        // ponytail: this is a phone UI. On a wide desktop browser, stretching it
-        // full-width looks broken — center it in a phone-width column and tell
-        // the layout it's 460px wide (MediaQuery override) so nothing overflows.
+        // Desktop web: this is a phone-first UI, so present it as an intentional
+        // centered "app" panel (rounded, elevated, on a soft backdrop) instead
+        // of stretching it full-width. MediaQuery is overridden to the panel
+        // width so layouts never overflow.
         builder: (context, child) {
           final mq = MediaQuery.of(context);
           if (!kIsWeb || mq.size.width <= 600) return child!;
-          return ColoredBox(
-            color: const Color(0xFFE6E7EB),
+          const panelWidth = 460.0;
+          final panelHeight =
+              mq.size.height.clamp(0.0, 940.0).toDouble();
+          return DecoratedBox(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFEDEFF3), Color(0xFFDFE3EA)],
+              ),
+            ),
             child: Center(
-              child: ClipRect(
-                child: SizedBox(
-                  width: 460,
-                  child: MediaQuery(
-                    data: mq.copyWith(size: Size(460, mq.size.height)),
-                    child: Material(color: Colors.white, child: child),
-                  ),
+              child: Container(
+                width: panelWidth,
+                height: panelHeight,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.12),
+                      blurRadius: 40,
+                      spreadRadius: 2,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: MediaQuery(
+                  data: mq.copyWith(size: Size(panelWidth, panelHeight)),
+                  child: Material(color: Colors.white, child: child),
                 ),
               ),
             ),
