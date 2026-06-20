@@ -513,6 +513,10 @@ class ChatRoomController extends ChangeNotifier {
     }
   }
 
+  /// Web entry point: send a picked image straight from bytes (no PhotoManager).
+  Future<void> sendImageBytes(Uint8List bytes, String filename) =>
+      _sendMediaBytes(bytes, filename);
+
   Future<void> sendMediaMessage(List<AssetEntity> assets) async {
     for (final asset in assets) {
       if (kIsWeb) {

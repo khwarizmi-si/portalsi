@@ -355,24 +355,12 @@ class _AttachmentPopupMenu extends StatelessWidget {
     );
 
     if (result != null && result.files.isNotEmpty) {
-      List<AssetEntity> webAssets = [];
-      for (var file in result.files) {
+      // ponytail: send bytes straight to the controller — PhotoManager (used by
+      // the old AssetEntity round-trip) doesn't exist on web.
+      for (final file in result.files) {
         if (file.bytes != null) {
-          try {
-            final AssetEntity? asset = await PhotoManager.editor.saveImage(
-              file.bytes!,
-              filename: file.name,
-            );
-            if (asset != null) {
-              webAssets.add(asset);
-            }
-          } catch (e) {
-            print("Gagal memproses file web: ${file.name}, error: $e");
-          }
+          await chatController.sendImageBytes(file.bytes!, file.name);
         }
-      }
-      if (webAssets.isNotEmpty) {
-        chatController.sendMediaMessage(webAssets);
       }
     }
   }
