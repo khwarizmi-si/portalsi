@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
@@ -43,7 +44,10 @@ class PostService extends ApiService {
 
   Future<Post?> createPost(
       Map<String, String> fields,
-      {File? mediaFile, Function(int sent, int total)? onProgress}
+      {File? mediaFile,
+      Uint8List? mediaBytes,
+      String? mediaFilename,
+      Function(int sent, int total)? onProgress}
       ) async {
     final token = await getToken();
     var request = http.MultipartRequest(
@@ -55,7 +59,16 @@ class PostService extends ApiService {
     request.headers['Accept'] = 'application/json';
     request.fields.addAll(fields);
 
-    if (mediaFile != null) {
+    // Web has no file paths — upload raw bytes (e.g. from image_picker XFile).
+    if (mediaBytes != null) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'media',
+          mediaBytes,
+          filename: mediaFilename ?? 'upload.bin',
+        ),
+      );
+    } else if (mediaFile != null) {
       if (onProgress != null) {
         // Menggunakan stream kustom untuk melaporkan progres
         final stream = _createUploadStream(mediaFile, onProgress);

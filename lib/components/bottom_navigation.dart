@@ -1,6 +1,7 @@
 // lib/components/bottom_navigation.dart
 import 'dart:async';
 import 'dart:ui';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +10,7 @@ import '../models/user_model.dart';
 import '../pages/create_announcement_page.dart';
 import '../pages/create_clips_page.dart';
 import '../pages/create_post_page.dart';
+import '../pages/create_post_web_page.dart';
 import '../pages/create_story_page.dart';
 import '../providers/scroll_provider.dart';
 import '../utils/user_provider.dart';
@@ -155,7 +157,16 @@ class _FabMenuPopup extends StatelessWidget {
         text: 'Buat Postingan',
         onTap: () {
           Navigator.pop(context);
-          Navigator.push(context, MaterialPageRoute(builder: (context) => const CreatePostPage()));
+          // ponytail: web can't use the PhotoManager-based page; use the simple
+          // image_picker web flow instead.
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => kIsWeb
+                  ? const CreatePostWebPage()
+                  : const CreatePostPage(),
+            ),
+          );
         },
       ),
       _buildMenuItem(
