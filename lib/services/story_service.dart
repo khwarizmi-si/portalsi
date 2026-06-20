@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:developer';
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
 import '../models/paginated_story_feed.dart';
@@ -41,7 +42,10 @@ class StoryService {
   /// --- FUNGSI BARU UNTUK MENGUNGGAH STORY DENGAN PROGRESS ---
   Future<void> createStory(
       Map<String, String> fields,
-      {File? mediaFile, Function(int sent, int total)? onProgress}
+      {File? mediaFile,
+      Uint8List? mediaBytes,
+      String? mediaFilename,
+      Function(int sent, int total)? onProgress}
       ) async {
     final token = await SecureStorage.getToken();
     var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/stories'));
@@ -50,7 +54,11 @@ class StoryService {
     request.headers['Accept'] = 'application/json';
     request.fields.addAll(fields);
 
-    if (mediaFile != null) {
+    // Web has no file paths — upload raw bytes.
+    if (mediaBytes != null) {
+      request.files.add(http.MultipartFile.fromBytes('media', mediaBytes,
+          filename: mediaFilename ?? 'story.png'));
+    } else if (mediaFile != null) {
       if (onProgress != null) {
         final stream = _createUploadStream(mediaFile, onProgress);
         request.files.add(

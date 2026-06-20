@@ -11,6 +11,7 @@ import '../pages/create_announcement_page.dart';
 import '../pages/create_clips_page.dart';
 import '../pages/create_post_page.dart';
 import '../pages/create_post_web_page.dart';
+import '../pages/create_story_web_page.dart';
 import '../pages/create_story_page.dart';
 import '../providers/scroll_provider.dart';
 import '../utils/user_provider.dart';
@@ -184,10 +185,12 @@ class _FabMenuPopup extends StatelessWidget {
         onTap: () {
           Navigator.pop(context);
           if (currentUser != null) {
-            Navigator.push(context, MaterialPageRoute(builder: (context) => CreateStoryPage(
-              currentUser: currentUser,
-              heroTag: 'story_create_avatar_${currentUser.id}',
-            )));
+            Navigator.push(context, MaterialPageRoute(builder: (context) => kIsWeb
+                ? const CreateStoryWebPage()
+                : CreateStoryPage(
+                    currentUser: currentUser,
+                    heroTag: 'story_create_avatar_${currentUser.id}',
+                  )));
           }
         },
       ),

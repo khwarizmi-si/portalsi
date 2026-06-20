@@ -1,10 +1,12 @@
 // lib/components/story_circle.dart
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/story_model.dart';
 import '../models/user_model.dart';
 import '../pages/create_story_page.dart';
+import '../pages/create_story_web_page.dart';
 import '../services/story_service.dart';
 import 'circular_avatar_fetcher.dart'; // Pastikan ini di-import
 
@@ -52,6 +54,16 @@ class _StoryCircleState extends State<StoryCircle> {
   }
 
   Future<void> _navigateToCreateStory(User user) async {
+    // Web: skip mobile permission checks + the AssetEntity page; use the
+    // simple image_picker web story flow.
+    if (kIsWeb) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const CreateStoryWebPage()),
+      );
+      return;
+    }
+
     // Cek status izin awal
     var cameraStatus = await Permission.camera.status;
     var photoStatus = await Permission.photos.status;
