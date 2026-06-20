@@ -330,7 +330,14 @@ class _OtherProfilePageState extends State<OtherProfilePage>
             IconButton(
               icon: const Icon(Icons.arrow_back, color: Colors.black),
               onPressed: () {
-                Provider.of<NavigationProvider>(context, listen: false).hideOverlay();
+                // ponytail: works whether shown as an overlay (in-app) or as a
+                // pushed route (web deep link / refresh).
+                final nav = Provider.of<NavigationProvider>(context, listen: false);
+                if (nav.overlayPage != null) {
+                  nav.hideOverlay();
+                } else if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                }
               },
             ),
 
@@ -408,11 +415,14 @@ class _OtherProfilePageState extends State<OtherProfilePage>
       );
     }
 
+    final navProvider = Provider.of<NavigationProvider>(context, listen: false);
     return PopScope(
-      canPop: false,
+      // Allow a real pop when shown as a pushed route (web deep link);
+      // intercept only when shown as an in-app overlay.
+      canPop: navProvider.overlayPage == null,
       onPopInvoked: (bool didPop) {
-        if (!didPop) {
-          Provider.of<NavigationProvider>(context, listen: false).hideOverlay();
+        if (!didPop && navProvider.overlayPage != null) {
+          navProvider.hideOverlay();
         }
       },
       child: screenContent,
