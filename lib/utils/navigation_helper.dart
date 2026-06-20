@@ -1,5 +1,4 @@
 // lib/utils/navigation_helper.dart
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -55,12 +54,6 @@ class NavigationHelper {
         debugPrint('✅ NavigationHelper: Navigating to other profile');
       }
 
-      // Web: use a real route so the URL becomes /username and survives refresh.
-      if (kIsWeb) {
-        Navigator.of(context).pushNamed('/$username');
-        return;
-      }
-
       Provider.of<NavigationProvider>(context, listen: false).showOverlay(
         OtherProfilePage(username: username),
       );
@@ -90,12 +83,6 @@ class NavigationHelper {
       return;
     }
 
-    // Web: route to /username so the URL is shareable and refresh-safe.
-    if (kIsWeb) {
-      Navigator.of(context).pushNamed('/${user.username}');
-      return;
-    }
-
     final newPage = OtherProfilePage(username: user.username);
 
     // INI BAGIAN KUNCINYA
@@ -107,12 +94,6 @@ class NavigationHelper {
   }
 
   static void navigateToPostDetail(BuildContext context, int postId, {Post? initialPost}) {
-    // Web: route to /post/:id so the post URL is shareable and refresh-safe.
-    if (kIsWeb) {
-      Navigator.of(context).pushNamed('/post/$postId');
-      return;
-    }
-
     final navProvider = Provider.of<NavigationProvider>(context, listen: false);
 
     // Kirim postId dan juga initialPost ke halaman detail
