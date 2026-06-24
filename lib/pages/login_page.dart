@@ -1,15 +1,14 @@
 import 'dart:async'; // <-- TAMBAHAN: Import untuk Timer/Future.delayed
 import 'package:app_links/app_links.dart';
-import 'package:flutter/foundation.dart' show kIsWeb; // ADDED IMPORT for kIsWeb
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_web_browser/flutter_web_browser.dart';
 import 'package:page_transition/page_transition.dart';
 import 'package:portal_si/config/auth_sdk_config.dart';
+import 'package:portal_si/pages/forgot_password_page.dart';
 import 'package:portal_si/pages/register_page.dart';
 import 'package:portal_si/services/auth_service.dart';
 import 'package:portal_si/utils/secure_storage.dart';
-import 'package:url_launcher/url_launcher.dart'; // ADDED IMPORT for url_launcher
 
 import '../models/user_model.dart';
 import '../services/user_cache_service.dart';
@@ -130,52 +129,16 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     });
   }
 
-  Future<void> _lupaPassword() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    const String forgotPasswordUrl = 'https://portalsi.com/forgot-password';
-
-    try {
-      if (kIsWeb) {
-        // For web, use url_launcher to open in a new tab
-        if (!await launchUrl(Uri.parse(forgotPasswordUrl), webOnlyWindowName: '_blank')) {
-          throw 'Could not launch $forgotPasswordUrl';
-        }
-      } else {
-        // For mobile, use FlutterWebBrowser
-        await FlutterWebBrowser.openWebPage(
-          url: forgotPasswordUrl,
-          customTabsOptions: const CustomTabsOptions(
-            colorScheme: CustomTabsColorScheme.system,
-            showTitle: true,
-            urlBarHidingEnabled: true,
-          ),
-          safariVCOptions: const SafariViewControllerOptions(
-            barCollapsingEnabled: true,
-            preferredBarTintColor: Colors.white,
-            preferredControlTintColor: Colors.black,
-            dismissButtonStyle: SafariViewControllerDismissButtonStyle.close,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal membuka halaman lupa password: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
+  void _lupaPassword() {
+    // Open the in-app reset flow. The old external page
+    // (portalsi.com/forgot-password) returned 404.
+    Navigator.push(
+      context,
+      PageTransition(
+        type: PageTransitionType.rightToLeft,
+        child: const ForgotPasswordPage(),
+      ),
+    );
   }
 
   Future<void> _loginWithSDK() async {

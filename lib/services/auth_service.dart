@@ -229,7 +229,7 @@ class AuthService {
           'login': email,
           'password': password
         }),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 30));
 
       final data = json.decode(response.body);
 
@@ -331,7 +331,7 @@ class AuthService {
           'email': email,
           'password': password,
         },
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 30));
 
       final data = json.decode(response.body);
 
@@ -353,6 +353,37 @@ class AuthService {
       return {'success': false, 'message': 'Permintaan melebihi batas waktu. Periksa koneksi Anda.'};
     } catch (e) {
       return {'success': false, 'message': 'Terjadi kesalahan jaringan atau server: $e'};
+    }
+  }
+
+  /// Requests a password-reset link for [email] via POST /api/forgot-password.
+  /// Returns `{success, message}`; `success` is true only when the backend
+  /// confirms the reset link was sent.
+  Future<Map<String, dynamic>> forgotPassword(String email) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/forgot-password'),
+        headers: {
+          'Content-Type': 'application/json; charset=UTF-8',
+          'Accept': 'application/json',
+        },
+        body: json.encode({'email': email}),
+      ).timeout(const Duration(seconds: 30));
+
+      final data = json.decode(response.body) as Map<String, dynamic>;
+      final message = data['message'] as String? ?? 'Terjadi kesalahan.';
+
+      if (response.statusCode == 200) {
+        return {'success': true, 'message': message};
+      }
+      return {'success': false, 'message': message};
+    } on TimeoutException {
+      return {
+        'success': false,
+        'message': 'Permintaan melebihi batas waktu. Periksa koneksi Anda.'
+      };
+    } catch (e) {
+      return {'success': false, 'message': 'Terjadi kesalahan jaringan: $e'};
     }
   }
 
