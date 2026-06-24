@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../api-portalsi"
+		}
+	],
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "portalsi"
+	}
+}

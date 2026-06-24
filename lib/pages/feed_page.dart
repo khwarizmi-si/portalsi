@@ -116,11 +116,17 @@ class _FeedPageState extends State<FeedPage>
       });
       if (response.statusCode == 200) {
         final dynamic decodedData = json.decode(response.body);
-        final List usersJson =
-            decodedData is List ? decodedData : decodedData['data'];
+        List<dynamic> usersJson;
+        if (decodedData is List) {
+          usersJson = decodedData;
+        } else if (decodedData is Map<String, dynamic> && decodedData['data'] is List) {
+          usersJson = decodedData['data'] as List<dynamic>;
+        } else {
+          usersJson = [];
+        }
         if (mounted) {
           setState(() {
-            _searchResults = usersJson.map((u) => User.fromJson(u)).toList();
+            _searchResults = usersJson.map((u) => User.fromJson(u as Map<String, dynamic>)).toList();
           });
         }
       } else {
@@ -253,9 +259,9 @@ class _FeedPageState extends State<FeedPage>
     final scrollProvider = Provider.of<ScrollProvider>(context, listen: false);
     final direction = _scrollController.position.userScrollDirection;
     if (direction == ScrollDirection.reverse) {
-      scrollProvider.setScrolled(false);
-    } else if (direction == ScrollDirection.forward) {
       scrollProvider.setScrolled(true);
+    } else if (direction == ScrollDirection.forward) {
+      scrollProvider.setScrolled(false);
     }
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 200) {

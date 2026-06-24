@@ -39,8 +39,8 @@ class LikeService extends ApiService {
               "👍 Real-time like update received for post ${updateData['post_id']}");
           _streamController.add(LikeUpdate(
             postId: updateData['post_id'] as int,
-            likesCount: updateData['likes_count'] as int, // WS selalu punya data
-            isLiked: updateData['is_liked_by_user'] as bool,
+            likesCount: updateData['likes_count'] as int?,
+            isLiked: updateData['is_liked_by_user'] as bool? ?? false,
           ));
         }
       } catch (e, s) {
