@@ -32,7 +32,7 @@ class CommentLikeService {
                     'Accept': 'application/json',
                   },
                 )
-                .timeout(const Duration(seconds: 10))
+                .timeout(const Duration(seconds: 30))
           : await http
                 .post(
                   Uri.parse('$baseUrl/comments/$commentId/like'),
@@ -42,7 +42,7 @@ class CommentLikeService {
                     'Content-Type': 'application/json',
                   },
                 )
-                .timeout(const Duration(seconds: 10));
+                .timeout(const Duration(seconds: 30));
 
       print('Comment like toggle - Method: ${isLiked ? "DELETE" : "POST"}');
       print('Status code: ${response.statusCode}');
@@ -82,7 +82,7 @@ class CommentLikeService {
               'Authorization': 'Bearer $authToken',
             },
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 30));
 
       print('GET /comments/$commentId/likes');
       print('Status code: ${response.statusCode}');

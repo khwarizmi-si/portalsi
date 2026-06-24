@@ -131,7 +131,7 @@ class _SplashScreenState extends State<SplashScreen> {
         final res = await http.get(
           Uri.parse('${ApiEndpoints.apiUrl}/user'),
           headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
-        ).timeout(const Duration(seconds: 10));
+        ).timeout(const Duration(seconds: 30));
         if (res.statusCode == 200) {
           if (mounted) Navigator.of(context).pushReplacementNamed('/home');
           // Honor a deep link on refresh (/username or /post/:id) by pushing it

@@ -340,7 +340,7 @@ class FollowService {
     try {
       print('🌐 API call: Getting following list');
       final headers = await _getHeaders();
-      final res = await http.get(Uri.parse('$_baseUrl/users/$userId/following'), headers: headers).timeout(const Duration(seconds: 8));
+      final res = await http.get(Uri.parse('$_baseUrl/users/$userId/following'), headers: headers).timeout(const Duration(seconds: 30));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         _followingCache[cacheKey] = {...data, '_cached_at': DateTime.now().toIso8601String()};
@@ -369,7 +369,7 @@ class FollowService {
     try {
       print('🌐 API call: Getting followers for $userIdentifier');
       final headers = await _getHeaders();
-      final res = await http.get(Uri.parse('$_baseUrl/users/$userIdentifier/followers'), headers: headers).timeout(const Duration(seconds: 8));
+      final res = await http.get(Uri.parse('$_baseUrl/users/$userIdentifier/followers'), headers: headers).timeout(const Duration(seconds: 30));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         _followersCache[cacheKey] = {...data, '_cached_at': DateTime.now().toIso8601String()};
@@ -405,7 +405,7 @@ class FollowService {
     try {
       print('🌐 API call: Getting following for $userIdentifier');
       final headers = await _getHeaders();
-      final res = await http.get(Uri.parse('$_baseUrl/users/$userIdentifier/following'), headers: headers).timeout(const Duration(seconds: 8));
+      final res = await http.get(Uri.parse('$_baseUrl/users/$userIdentifier/following'), headers: headers).timeout(const Duration(seconds: 30));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);

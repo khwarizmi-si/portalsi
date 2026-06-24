@@ -1,5 +1,7 @@
 // lib/models/login_history_model.dart
 
+import 'package:portal_si/utils/safe_parse.dart';
+
 class LoginHistory {
   final int id;
   final String device;
@@ -23,7 +25,7 @@ class LoginHistory {
       id: json['id'],
       device: deviceName,
       location: json['location'],
-      loginAt: DateTime.parse(json['login_at']),
+      loginAt: safeParseDate(json['login_at']),
       isCurrentSession: json['is_current_device'] ?? false,
     );
   }

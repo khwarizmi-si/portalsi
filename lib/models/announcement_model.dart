@@ -1,5 +1,7 @@
 // lib/models/announcement_model.dart
 
+import 'package:portal_si/utils/safe_parse.dart';
+
 class Announcement {
   final int id;
   final String title;
@@ -26,7 +28,7 @@ class Announcement {
       content: json['content'],
       imageUrl: json['image_url'],
       pinned: json['pinned'] ?? false,
-      createdAt: DateTime.parse(json['created_at']),
+      createdAt: safeParseDate(json['created_at']),
       creator: Creator.fromJson(json['creator']),
     );
   }

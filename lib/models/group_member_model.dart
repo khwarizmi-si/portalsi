@@ -1,5 +1,7 @@
 // file: lib/models/group_member_model.dart
 
+import 'package:portal_si/utils/safe_parse.dart';
+
 class GroupMember {
   final int userId;
   final String? fullName;
@@ -30,14 +32,12 @@ class GroupMember {
       userId: json['user_id'] ?? 0,
       fullName: json['full_name'],
       role: json['role'] ?? 'member',
-      joinedAt: json['joined_at'] != null
-          ? DateTime.parse(json['joined_at'])
-          : DateTime.now(),
+      joinedAt: safeParseDate(json['joined_at']),
       isMuted: json['is_muted'] ?? false,
       username: json['username'] ?? 'Pengguna Dihapus',
       profilePictureUrl: json['profile_picture_url'],
       isOnline: json['is_online'] ?? false,
-      lastSeen: json['last_seen'] != null ? DateTime.parse(json['last_seen']) : null,
+      lastSeen: safeParseDateOrNull(json['last_seen']),
       isFollowing: json['is_following'] ?? false, // <-- TAMBAHKAN BARIS INI
     );
   }

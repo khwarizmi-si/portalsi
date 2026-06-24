@@ -1,5 +1,7 @@
 // lib/models/story_viewer_model.dart
 
+import 'package:portal_si/utils/safe_parse.dart';
+
 class StoryViewersInfo {
   final int storyId;
   final int totalViewers;
@@ -46,7 +48,7 @@ class StoryViewer {
       // API mengirim 0 atau 1, kita ubah jadi boolean
       isVerified: json['is_verified'] == 1,
       // API mengirim string, kita ubah jadi DateTime
-      viewedAt: DateTime.parse(json['viewed_at']),
+      viewedAt: safeParseDate(json['viewed_at']),
     );
   }
 }

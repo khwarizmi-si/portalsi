@@ -1,6 +1,7 @@
 // lib/models/comment_model.dart
 
 import 'user_model.dart'; // Pastikan path ini benar
+import 'package:portal_si/utils/safe_parse.dart';
 
 class Comment {
   final int id;
@@ -73,7 +74,7 @@ class Comment {
       postId: int.tryParse(json['post_id'].toString()) ?? 0,
       userId: userId,
       content: json['content'] ?? '',
-      createdAt: DateTime.parse(json['created_at']),
+      createdAt: safeParseDate(json['created_at']),
 
       username: username,
       profilePictureUrl: profilePictureUrl,
@@ -82,9 +83,7 @@ class Comment {
       isVerified: userJson['is_verified'] ?? false,
       liked: json['is_liked'] as bool? ?? false,
 
-      updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'] as String)
-          : DateTime.parse(json['created_at'] as String),
+      updatedAt: safeParseDate(json['updated_at'] ?? json['created_at']),
 
       parentId: int.tryParse(json['parent_comment_id']?.toString() ?? ''),
       replies: replyList,

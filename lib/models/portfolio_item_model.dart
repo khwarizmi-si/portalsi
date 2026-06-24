@@ -1,5 +1,6 @@
 
 import 'package:portal_si/models/portfolio_user_model.dart';
+import 'package:portal_si/utils/safe_parse.dart';
 
 class PortfolioItem {
   final int id;
@@ -24,7 +25,7 @@ class PortfolioItem {
       title: json['title'],
       description: json['description'],
       imageUrl: json['media_url'],
-      createdAt: DateTime.parse(json['created_at']),
+      createdAt: safeParseDate(json['created_at']),
       // Asumsi API mengembalikan objek 'user' di dalam setiap item portofolio
       user: PortfolioUser.fromJson(json['user'] ?? {'username': json['user_name']}),
     );

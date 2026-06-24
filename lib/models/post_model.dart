@@ -3,6 +3,7 @@
 import 'comment_model.dart';
 import 'liker_model.dart';
 import 'user_model.dart';
+import 'package:portal_si/utils/safe_parse.dart';
 
 class Post {
   final int id;
@@ -118,7 +119,7 @@ class Post {
       thumbnailUrl: postData['thumbnail_url'],
       isVideo: _boolFromJson(postData['is_video']) ||
           _looksLikeVideo(postData['media_url']),
-      createdAt: DateTime.parse(postData['created_at']),
+      createdAt: safeParseDate(postData['created_at']),
       likesCount: postData['likes_count'] ?? 0,
       commentsCount: postData['comments_count'] ?? 0,
       isLikedByUser: _boolFromJson(postData['is_liked']),

@@ -1,3 +1,5 @@
+import 'package:portal_si/utils/safe_parse.dart';
+
 class SimplePost {
   final int postId;
   final String? caption;
@@ -34,7 +36,7 @@ class SimplePost {
       caption: json['caption'],
       mediaUrl: json['media_url'],
       thumbnailUrl: json['thumbnail_url'],
-      createdAt: DateTime.parse(json['created_at']),
+      createdAt: safeParseDate(json['created_at']),
       // Gunakan hasil parsing yang sudah kita buat
       isVideo: parsedIsVideo,
       isLikedByUser: json['is_liked_by_user'] ?? false,
@@ -145,7 +147,7 @@ class User {
       recentPosts: recentPostsList,
       isOnline: json['is_online'] ?? false,
       lastSeen:
-          json['last_seen'] != null ? DateTime.parse(json['last_seen']) : null,
+          safeParseDateOrNull(json['last_seen']),
       hasStory: json['has_story'] ?? false,
       storyViewed: json['story_viewed'] ?? false,
       role: json['role'], // <-- TAMBAHKAN LOGIKA PARSING

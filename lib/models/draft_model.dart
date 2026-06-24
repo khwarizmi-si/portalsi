@@ -1,5 +1,6 @@
 // lib/models/draft_model.dart
 import 'package:photo_manager/photo_manager.dart';
+import 'package:portal_si/utils/safe_parse.dart';
 
 class Draft {
   final String id; // ID unik untuk setiap draf
@@ -42,7 +43,7 @@ class Draft {
       textOverlaysJson: List<String>.from(map['textOverlaysJson']),
       stickerOverlaysJson: List<String>.from(map['stickerOverlaysJson']),
       effectName: map['effectName'],
-      createdAt: DateTime.parse(map['createdAt']),
+      createdAt: safeParseDate(map['createdAt']),
     );
   }
 }

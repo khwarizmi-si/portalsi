@@ -3,6 +3,7 @@
 import 'dart:convert';
 
 import 'user_model.dart';
+import 'package:portal_si/utils/safe_parse.dart';
 
 class StoryDetail {
   final int storyId;
@@ -68,7 +69,7 @@ class StoryDetail {
       type: json['type'],
       mediaUrl: json['media_url'],
       caption: json['caption'] ?? '',
-      createdAt: DateTime.parse(json['created_at']),
+      createdAt: safeParseDate(json['created_at']),
       musicTrackName: json['music_track_name'],
       musicArtistName: json['music_artist_name'],
       musicPreviewUrl: json['music_preview_url'],

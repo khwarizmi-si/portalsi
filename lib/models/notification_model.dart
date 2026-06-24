@@ -1,5 +1,6 @@
 // lib/models/notification_model.dart
 import 'user_model.dart';
+import 'package:portal_si/utils/safe_parse.dart';
 
 class NotificationModel {
   final int id;
@@ -27,7 +28,7 @@ class NotificationModel {
       message: json['message'] ?? '', // Fallback jika message null
       sender: User.fromJson(json['sender']),
       relatedPostId: json['related_post_id'],
-      createdAt: DateTime.parse(json['created_at']),
+      createdAt: safeParseDate(json['created_at']),
       isRead: json['is_read'] ?? false,
     );
   }

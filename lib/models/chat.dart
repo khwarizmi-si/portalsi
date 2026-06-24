@@ -5,6 +5,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/cupertino.dart';
 import 'package:portal_si/models/group_model.dart';
+import 'package:portal_si/utils/safe_parse.dart';
 import 'user_model.dart'; // Pastikan import model User sudah ada
 
 // Enum untuk tipe pesan
@@ -148,7 +149,7 @@ class ChatMessage {
       text: json['content'],
       mediaUrl: json['media_url'],
       localMediaPath: json['local_media_path'],
-      timestamp: DateTime.parse(json['sent_at']),
+      timestamp: safeParseDate(json['sent_at']),
       status: (json['is_read'] == true || json['is_read'] == 1)
           ? MessageStatus.read
           : MessageStatus.sent,
@@ -230,7 +231,9 @@ class UserConversation extends Conversation {
 
       final sentAtString = lastChatData['sent_at'] as String?;
       if (sentAtString != null) {
-        timestamp = DateTime.parse(sentAtString.replaceFirst(' ', 'T'));
+        timestamp =
+            safeParseDateOrNull(sentAtString.replaceFirst(' ', 'T')) ??
+                timestamp;
       }
 
       final isReadValue = lastChatData['is_read'];
@@ -282,11 +285,7 @@ class GroupConversation extends Conversation {
 
   factory GroupConversation.fromJson(Map<String, dynamic> json) {
     // Tangani kasus di mana 'sent_at' mungkin kosong atau null untuk grup baru
-    DateTime? timestamp;
-    if (json['sent_at'] != null && json['sent_at'].isNotEmpty) {
-      // Perhatikan: JSON API untuk Grup menggunakan format ISO 8601 (ada 'T' dan 'Z')
-      timestamp = DateTime.parse(json['sent_at']); // [PERBAIKAN: Gunakan parse standar]
-    }
+    final DateTime? timestamp = safeParseDateOrNull(json['sent_at']);
 
     // Ambil pesan terakhir. Jika kosong, gunakan teks default.
     final String lastMsg = json['last_message'] as String? ?? '';
