@@ -3,6 +3,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -22,19 +23,40 @@ class EditGroupPage extends StatefulWidget {
 
 class _EditGroupPageState extends State<EditGroupPage> {
   late final TextEditingController _nameController;
-  final GlobalKey _previewAvatarKey = GlobalKey(); // Kunci untuk menangkap gambar
+  final GlobalKey _previewAvatarKey =
+      GlobalKey(); // Kunci untuk menangkap gambar
   final GroupService _groupService = GroupService();
   final ImagePicker _picker = ImagePicker();
 
   // State untuk mengelola avatar
   File? _selectedAvatarFile;
+  Uint8List? _selectedAvatarBytes;
+  String? _selectedAvatarFilename;
   String? _currentAvatarUrl;
   String? _selectedEmoji;
   bool _isLoading = false;
 
   final List<String> _defaultAvatars = [
-    '🎉', '💎', '🏈', '🌮', '😎', '❤️', '✨', '👀', '🌈', '🦄', '🌻', '🎂',
-    '👗', '✌️', '🎄', '🌶️', '🏠', '📣', '🚀', '☁️',
+    '🎉',
+    '💎',
+    '🏈',
+    '🌮',
+    '😎',
+    '❤️',
+    '✨',
+    '👀',
+    '🌈',
+    '🦄',
+    '🌻',
+    '🎂',
+    '👗',
+    '✌️',
+    '🎄',
+    '🌶️',
+    '🏠',
+    '📣',
+    '🚀',
+    '☁️',
   ];
 
   @override
@@ -52,10 +74,14 @@ class _EditGroupPageState extends State<EditGroupPage> {
 
   /// Fungsi untuk memilih gambar dari galeri
   Future<void> _pickImage() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    final XFile? image =
+        await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
     if (image != null) {
+      final bytes = kIsWeb ? await image.readAsBytes() : null;
       setState(() {
-        _selectedAvatarFile = File(image.path);
+        _selectedAvatarFile = kIsWeb ? null : File(image.path);
+        _selectedAvatarBytes = bytes;
+        _selectedAvatarFilename = image.name;
         _selectedEmoji = null; // Reset pilihan emoji
         _currentAvatarUrl = null;
       });
@@ -65,9 +91,12 @@ class _EditGroupPageState extends State<EditGroupPage> {
   /// 🎨 [BARU] Fungsi untuk mengubah widget menjadi file gambar
   Future<File?> _generateFileFromWidget() async {
     try {
-      RenderRepaintBoundary boundary = _previewAvatarKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
-      ui.Image image = await boundary.toImage(pixelRatio: 3.0); // Tingkatkan pixelRatio untuk kualitas
-      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      RenderRepaintBoundary boundary = _previewAvatarKey.currentContext!
+          .findRenderObject() as RenderRepaintBoundary;
+      ui.Image image = await boundary.toImage(
+          pixelRatio: 3.0); // Tingkatkan pixelRatio untuk kualitas
+      ByteData? byteData =
+          await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) return null;
 
       Uint8List pngBytes = byteData.buffer.asUint8List();
@@ -82,12 +111,27 @@ class _EditGroupPageState extends State<EditGroupPage> {
     }
   }
 
+  Future<Uint8List?> _generateBytesFromWidget() async {
+    try {
+      final boundary = _previewAvatarKey.currentContext!.findRenderObject()
+          as RenderRepaintBoundary;
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      return byteData?.buffer.asUint8List();
+    } catch (e) {
+      debugPrint("Error generating bytes from widget: $e");
+      return null;
+    }
+  }
+
   /// Fungsi yang dipanggil saat tombol 'Done' ditekan
   void _handleSaveChanges() async {
     final newName = _nameController.text.trim();
     if (newName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Nama grup tidak boleh kosong.'), backgroundColor: Colors.red),
+        const SnackBar(
+            content: Text('Nama grup tidak boleh kosong.'),
+            backgroundColor: Colors.red),
       );
       return;
     }
@@ -95,14 +139,24 @@ class _EditGroupPageState extends State<EditGroupPage> {
     setState(() => _isLoading = true);
 
     File? avatarToUpload;
+    Uint8List? avatarBytesToUpload;
+    String? avatarFilename;
 
     // Tentukan file avatar yang akan di-upload
-    if (_selectedAvatarFile != null) {
+    if (_selectedAvatarBytes != null) {
+      avatarBytesToUpload = _selectedAvatarBytes;
+      avatarFilename = _selectedAvatarFilename;
+    } else if (_selectedAvatarFile != null) {
       // 1. Jika pengguna memilih file dari galeri
       avatarToUpload = _selectedAvatarFile;
     } else if (_selectedEmoji != null) {
       // 2. Jika pengguna memilih emoji, generate file dari emoji
-      avatarToUpload = await _generateFileFromWidget();
+      if (kIsWeb) {
+        avatarBytesToUpload = await _generateBytesFromWidget();
+        avatarFilename = 'avatar_emoji.png';
+      } else {
+        avatarToUpload = await _generateFileFromWidget();
+      }
     }
     // 3. Jika tidak keduanya, biarkan `avatarToUpload` null (tidak mengubah gambar)
 
@@ -111,11 +165,15 @@ class _EditGroupPageState extends State<EditGroupPage> {
         groupId: widget.group.id,
         name: newName,
         avatarFile: avatarToUpload,
+        avatarBytes: avatarBytesToUpload,
+        avatarFilename: avatarFilename,
       );
 
       if (success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Info grup berhasil diperbarui.'), backgroundColor: Colors.green),
+          const SnackBar(
+              content: Text('Info grup berhasil diperbarui.'),
+              backgroundColor: Colors.green),
         );
         Navigator.of(context).pop(true);
       } else {
@@ -124,7 +182,9 @@ class _EditGroupPageState extends State<EditGroupPage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Terjadi kesalahan: ${e.toString()}'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Terjadi kesalahan: ${e.toString()}'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -138,7 +198,12 @@ class _EditGroupPageState extends State<EditGroupPage> {
   Widget _buildAvatarPreview() {
     Widget avatarContent;
 
-    if (_selectedAvatarFile != null) {
+    if (_selectedAvatarBytes != null) {
+      avatarContent = CircleAvatar(
+        radius: 45,
+        backgroundImage: MemoryImage(_selectedAvatarBytes!),
+      );
+    } else if (_selectedAvatarFile != null) {
       // Prioritas 1: Tampilkan gambar dari galeri
       avatarContent = CircleAvatar(
         radius: 45,
@@ -182,22 +247,31 @@ class _EditGroupPageState extends State<EditGroupPage> {
         elevation: 0,
         leading: TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Batalkan', style: TextStyle(color: Colors.red, fontSize: 16)),
+          child: const Text('Batalkan',
+              style: TextStyle(color: Colors.red, fontSize: 16)),
         ),
         leadingWidth: 100,
-        title: const Text('Edit Grup', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Edit Grup',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         actions: [
           _isLoading
               ? const Padding(
-            padding: EdgeInsets.only(right: 20.0),
-            child: SizedBox(
-                width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-          )
+                  padding: EdgeInsets.only(right: 20.0),
+                  child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white)),
+                )
               : TextButton(
-            onPressed: _handleSaveChanges,
-            child: const Text('Terapkan', style: TextStyle(color: Color(0xFF209A83), fontSize: 16, fontWeight: FontWeight.bold)),
-          ),
+                  onPressed: _handleSaveChanges,
+                  child: const Text('Terapkan',
+                      style: TextStyle(
+                          color: Color(0xFF209A83),
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold)),
+                ),
         ],
         systemOverlayStyle: SystemUiOverlayStyle.light,
       ),
@@ -214,7 +288,8 @@ class _EditGroupPageState extends State<EditGroupPage> {
                   child: CircleAvatar(
                     radius: 14,
                     backgroundColor: Colors.grey.shade700,
-                    child: const Icon(Icons.edit, size: 16, color: Colors.white),
+                    child:
+                        const Icon(Icons.edit, size: 16, color: Colors.white),
                   ),
                 )
               ],
@@ -250,7 +325,8 @@ class _EditGroupPageState extends State<EditGroupPage> {
               itemCount: _defaultAvatars.length,
               itemBuilder: (context, index) {
                 final emoji = _defaultAvatars[index];
-                final isSelected = _selectedEmoji == emoji; // Cek apakah emoji ini sedang dipilih
+                final isSelected = _selectedEmoji ==
+                    emoji; // Cek apakah emoji ini sedang dipilih
 
                 return GestureDetector(
                   onTap: () {
@@ -258,6 +334,8 @@ class _EditGroupPageState extends State<EditGroupPage> {
                     setState(() {
                       _selectedEmoji = emoji;
                       _selectedAvatarFile = null; // Reset pilihan file
+                      _selectedAvatarBytes = null;
+                      _selectedAvatarFilename = null;
                       _currentAvatarUrl = null;
                     });
                   },
@@ -266,12 +344,16 @@ class _EditGroupPageState extends State<EditGroupPage> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: isSelected
-                          ? Border.all(color: Colors.blue, width: 3) // Tampilkan border jika terpilih
+                          ? Border.all(
+                              color: Colors.blue,
+                              width: 3) // Tampilkan border jika terpilih
                           : null,
                     ),
                     child: CircleAvatar(
                       radius: 30,
-                      backgroundColor: Colors.primaries[index % Colors.primaries.length].withOpacity(0.3),
+                      backgroundColor: Colors
+                          .primaries[index % Colors.primaries.length]
+                          .withOpacity(0.3),
                       child: Text(emoji, style: const TextStyle(fontSize: 28)),
                     ),
                   ),

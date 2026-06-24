@@ -1,6 +1,7 @@
 // lib/pages/create_group_page.dart
 
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:portal_si/models/group_model.dart';
 import 'package:portal_si/pages/group_chat_room_page.dart';
@@ -32,41 +33,42 @@ class CreateGroupPage extends StatelessWidget {
               actions: [
                 TextButton(
                   onPressed: controller.isCreatingGroup ||
-                      controller.groupNameController.text.isEmpty
+                          controller.groupNameController.text.isEmpty
                       ? null
                       : () async {
-                    final newGroupData = await controller.createGroup();
+                          final newGroupData = await controller.createGroup();
 
-                    if (newGroupData != null && context.mounted) {
-                      final newGroup = Group.fromJson(newGroupData);
+                          if (newGroupData != null && context.mounted) {
+                            final newGroup = Group.fromJson(newGroupData);
 
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('Grup berhasil dibuat!'),
-                            backgroundColor: Colors.green),
-                      );
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('Grup berhasil dibuat!'),
+                                  backgroundColor: Colors.green),
+                            );
 
-                      Navigator.of(context)
-                          .pushReplacement(MaterialPageRoute(
-                        builder: (_) =>
-                            GroupChatRoomPage(group: newGroup),
-                      ));
-                    } else if (controller.errorMessage != null && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text(controller.errorMessage!),
-                            backgroundColor: Colors.red),
-                      );
-                    }
-                  },
+                            Navigator.of(context)
+                                .pushReplacement(MaterialPageRoute(
+                              builder: (_) =>
+                                  GroupChatRoomPage(group: newGroup),
+                            ));
+                          } else if (controller.errorMessage != null &&
+                              context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content: Text(controller.errorMessage!),
+                                  backgroundColor: Colors.red),
+                            );
+                          }
+                        },
                   child: controller.isCreatingGroup
                       ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2))
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2))
                       : const Text('Buat',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 16)),
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 16)),
                 )
               ],
             ),
@@ -76,7 +78,7 @@ class CreateGroupPage extends StatelessWidget {
                 _buildGroupHeader(context, controller),
                 Padding(
                   padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: TextField(
                     onChanged: controller.search,
                     decoration: InputDecoration(
@@ -93,7 +95,7 @@ class CreateGroupPage extends StatelessWidget {
                 ),
                 Padding(
                   padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8.0),
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8.0),
                   child: Text(
                       "Pilih Anggota (${controller.selectedUsers.length})",
                       style: const TextStyle(
@@ -122,18 +124,20 @@ class CreateGroupPage extends StatelessWidget {
             height: 150,
             width: double.infinity,
             color: Colors.grey.shade200,
-            child: controller.coverFile != null
-                ? Image.file(controller.coverFile!, fit: BoxFit.cover)
-                : const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.add_photo_alternate_outlined,
-                    color: Colors.grey),
-                SizedBox(height: 4),
-                Text("Tambah foto cover group",
-                    style: TextStyle(color: Colors.grey)),
-              ],
-            ),
+            child: kIsWeb && controller.coverBytes != null
+                ? Image.memory(controller.coverBytes!, fit: BoxFit.cover)
+                : controller.coverFile != null
+                    ? Image.file(controller.coverFile!, fit: BoxFit.cover)
+                    : const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.add_photo_alternate_outlined,
+                              color: Colors.grey),
+                          SizedBox(height: 4),
+                          Text("Tambah foto cover group",
+                              style: TextStyle(color: Colors.grey)),
+                        ],
+                      ),
           ),
         ),
         Padding(
@@ -149,12 +153,17 @@ class CreateGroupPage extends StatelessWidget {
                   child: CircleAvatar(
                     radius: 38,
                     backgroundColor: Colors.grey.shade300,
-                    backgroundImage: controller.avatarFile != null
-                        ? FileImage(controller.avatarFile!)
-                        : null,
-                    child: controller.avatarFile == null
+                    backgroundImage: kIsWeb && controller.avatarBytes != null
+                        ? MemoryImage(controller.avatarBytes!)
+                            as ImageProvider<Object>
+                        : controller.avatarFile != null
+                            ? FileImage(controller.avatarFile!)
+                                as ImageProvider<Object>
+                            : null,
+                    child: controller.avatarFile == null &&
+                            controller.avatarBytes == null
                         ? const Icon(Icons.camera_alt,
-                        color: Colors.white, size: 30)
+                            color: Colors.white, size: 30)
                         : null,
                   ),
                 ),

@@ -5,6 +5,8 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:async';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:mime/mime.dart';
 import 'package:path/path.dart' as path;
 import '../models/liker_model.dart';
 import '../models/paginated_response.dart';
@@ -14,7 +16,8 @@ import 'api_service.dart';
 import '../models/post_model.dart';
 
 // Fungsi helper untuk membuat stream yang melaporkan progres unggahan
-Stream<List<int>> _createUploadStream(File file, void Function(int, int) onProgress) {
+Stream<List<int>> _createUploadStream(
+    File file, void Function(int, int) onProgress) {
   final fileStream = file.openRead();
   final totalBytes = file.lengthSync();
   int bytesSent = 0;
@@ -36,19 +39,56 @@ Stream<List<int>> _createUploadStream(File file, void Function(int, int) onProgr
   );
 }
 
+Future<http.Response> _sendMultipartWithProgress(
+  http.MultipartRequest request,
+  Function(int sent, int total)? onProgress,
+) async {
+  final client = http.Client();
+  try {
+    final total = request.contentLength;
+    var sent = 0;
+    final streamedRequest = http.StreamedRequest(request.method, request.url)
+      ..headers.addAll(request.headers)
+      ..contentLength = total
+      ..followRedirects = request.followRedirects
+      ..maxRedirects = request.maxRedirects
+      ..persistentConnection = request.persistentConnection;
+
+    request.finalize().listen(
+      (chunk) {
+        sent += chunk.length;
+        onProgress?.call(sent, total);
+        streamedRequest.sink.add(chunk);
+      },
+      onError: streamedRequest.sink.addError,
+      onDone: streamedRequest.sink.close,
+      cancelOnError: true,
+    );
+
+    final streamedResponse = await client.send(streamedRequest);
+    return http.Response.fromStream(streamedResponse);
+  } finally {
+    client.close();
+  }
+}
 
 class PostService extends ApiService {
   PostService._internal();
   static final PostService _instance = PostService._internal();
   factory PostService() => _instance;
 
-  Future<Post?> createPost(
-      Map<String, String> fields,
+  MediaType? _mediaTypeFor(String? filename, Uint8List bytes) {
+    final mime = lookupMimeType(filename ?? '', headerBytes: bytes);
+    final parts = mime?.split('/');
+    if (parts == null || parts.length != 2) return null;
+    return MediaType(parts[0], parts[1]);
+  }
+
+  Future<Post?> createPost(Map<String, String> fields,
       {File? mediaFile,
       Uint8List? mediaBytes,
       String? mediaFilename,
-      Function(int sent, int total)? onProgress}
-      ) async {
+      Function(int sent, int total)? onProgress}) async {
     final token = await getToken();
     var request = http.MultipartRequest(
       'POST',
@@ -66,6 +106,7 @@ class PostService extends ApiService {
           'media',
           mediaBytes,
           filename: mediaFilename ?? 'upload.bin',
+          contentType: _mediaTypeFor(mediaFilename, mediaBytes),
         ),
       );
     } else if (mediaFile != null) {
@@ -93,8 +134,7 @@ class PostService extends ApiService {
     }
 
     try {
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
+      final response = await _sendMultipartWithProgress(request, onProgress);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         log("✅ Respons Sukses dari Endpoint /posts:\n${response.body}");
@@ -105,13 +145,8 @@ class PostService extends ApiService {
           throw Exception('Format data post tidak valid dalam respons.');
         }
       } else {
-        // Jika koneksi ditutup (biasanya karena pembatalan), lempar error spesifik
-        if (streamedResponse.request == null) {
-          throw Exception('Upload dibatalkan oleh pengguna.');
-        }
         throw Exception(
-            'Gagal membuat postingan. Status: ${response.statusCode}, Body: ${response.body}'
-        );
+            'Gagal membuat postingan. Status: ${response.statusCode}, Body: ${response.body}');
       }
     } on http.ClientException catch (e) {
       // Menangkap error ketika stream dibatalkan secara paksa
@@ -134,7 +169,7 @@ class PostService extends ApiService {
       final bool hasNext = responseData['next_page_url'] != null;
       return PaginatedFeedResponse(feedItems: items, hasNextPage: hasNext);
     } else {
-      print('⚠️ Peringatan: Format respons /posts tidak sesuai.');
+      log('Peringatan: Format respons /posts tidak sesuai.');
       return PaginatedFeedResponse(feedItems: [], hasNextPage: false);
     }
   }
@@ -177,15 +212,16 @@ class PostService extends ApiService {
             .toList();
       }
       return [];
-
     } catch (e) {
       log('❌ Gagal mengambil data likers untuk post $postId: $e');
       return [];
     }
   }
 
-  Future<Map<String, dynamic>> getClipsFeed({int? startingPostId, String? nextUrl}) async {
-    assert(startingPostId != null || nextUrl != null, 'Harus menyediakan startingPostId atau nextUrl');
+  Future<Map<String, dynamic>> getClipsFeed(
+      {int? startingPostId, String? nextUrl}) async {
+    assert(startingPostId != null || nextUrl != null,
+        'Harus menyediakan startingPostId atau nextUrl');
 
     try {
       dynamic responseData;
@@ -203,10 +239,10 @@ class PostService extends ApiService {
         if (response.statusCode == 200) {
           responseData = jsonDecode(response.body);
         } else {
-          throw Exception('Endpoint tidak ditemukan (${response.statusCode}). URL: $nextUrl');
+          throw Exception(
+              'Endpoint tidak ditemukan (${response.statusCode}). URL: $nextUrl');
         }
-      }
-      else {
+      } else {
         final String endpoint = 'clips/$startingPostId';
         log("🚀 Mencoba mengambil clips dari ENDPOINT: $endpoint");
         responseData = await get(endpoint);
@@ -215,8 +251,10 @@ class PostService extends ApiService {
       log("✅ SUKSES: Respons diterima.");
 
       if (responseData is Map<String, dynamic>) {
-        final List<dynamic> clipsJson = responseData['next_clips'] as List? ?? [];
-        final List<Post> clips = clipsJson.map((json) => Post.fromJson(json)).toList();
+        final List<dynamic> clipsJson =
+            responseData['next_clips'] as List? ?? [];
+        final List<Post> clips =
+            clipsJson.map((json) => Post.fromJson(json)).toList();
 
         return {
           'clips': clips,

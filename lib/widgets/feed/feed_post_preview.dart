@@ -2,6 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'dart:ui';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../../components/video_thumbnail_widget.dart';
 import '../../models/post_model.dart'; // Pastikan path ini benar
 
 class FeedPostPreview extends StatelessWidget {
@@ -31,18 +33,29 @@ class FeedPostPreview extends StatelessWidget {
                 children: [
                   // Gambar Postingan
                   ClipRRect(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(24)),
                     child: Hero(
-                      tag: 'feed-post-${post.id}', // Tag HARUS sama dengan di grid
-                      child: Image.network(
-                        post.mediaUrl ?? '',
+                      tag:
+                          'feed-post-${post.id}', // Tag HARUS sama dengan di grid
+                      child: SizedBox(
                         height: 300,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, url, error) => Container(
-                          height: 300,
-                          color: Colors.grey[200],
-                          child: Icon(Icons.broken_image, color: Colors.grey[400]),
-                        ),
+                        child: post.isVideo && (post.mediaUrl ?? '').isNotEmpty
+                            ? VideoThumbnailWidget(
+                                videoUrl: post.mediaUrl!,
+                                thumbnailUrl: post.thumbnailUrl,
+                              )
+                            : CachedNetworkImage(
+                                imageUrl: post.mediaUrl ?? '',
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) =>
+                                    Container(color: Colors.grey[200]),
+                                errorWidget: (context, url, error) => Container(
+                                  color: Colors.grey[200],
+                                  child: Icon(Icons.broken_image,
+                                      color: Colors.grey[400]),
+                                ),
+                              ),
                       ),
                     ),
                   ),
@@ -57,16 +70,22 @@ class FeedPostPreview extends StatelessWidget {
                           children: [
                             CircleAvatar(
                               radius: 18,
-                              backgroundImage: NetworkImage(post.user.profilePictureUrl ?? ''),
+                              backgroundImage:
+                                  post.user.profilePictureUrl != null
+                                      ? CachedNetworkImageProvider(
+                                          post.user.profilePictureUrl!)
+                                      : null,
                             ),
                             const SizedBox(width: 12),
                             Text(
                               post.user.username,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 16),
                             ),
                           ],
                         ),
-                        if (post.caption != null && post.caption!.isNotEmpty) ...[
+                        if (post.caption != null &&
+                            post.caption!.isNotEmpty) ...[
                           const SizedBox(height: 12),
                           Text(
                             post.caption!,
@@ -87,7 +106,8 @@ class FeedPostPreview extends StatelessWidget {
             const SizedBox(height: 8),
             _buildActionButton(context, Icons.link, 'Salin Tautan'),
             const SizedBox(height: 8),
-            _buildActionButton(context, Icons.flag_outlined, 'Laporkan', isDestructive: true),
+            _buildActionButton(context, Icons.flag_outlined, 'Laporkan',
+                isDestructive: true),
           ],
         ),
       ),
@@ -95,7 +115,8 @@ class FeedPostPreview extends StatelessWidget {
   }
 
   // Helper untuk membuat tombol aksi
-  Widget _buildActionButton(BuildContext context, IconData icon, String label, {bool isDestructive = false}) {
+  Widget _buildActionButton(BuildContext context, IconData icon, String label,
+      {bool isDestructive = false}) {
     return GestureDetector(
       onTap: () {
         // TODO: Tambahkan logika untuk setiap tombol di sini
@@ -111,7 +132,8 @@ class FeedPostPreview extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: isDestructive ? Colors.red : Colors.black, size: 20),
+            Icon(icon,
+                color: isDestructive ? Colors.red : Colors.black, size: 20),
             const SizedBox(width: 12),
             Text(
               label,

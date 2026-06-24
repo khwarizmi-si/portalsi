@@ -19,13 +19,16 @@ import '../app_state.dart';
 final mainScaffoldKey = GlobalKey<_MainScaffoldState>();
 
 class MainScaffold extends StatefulWidget {
-  const MainScaffold({Key? key}) : super(key: key);
+  final int initialNavIndex;
+
+  const MainScaffold({Key? key, this.initialNavIndex = 0}) : super(key: key);
 
   @override
   State<MainScaffold> createState() => _MainScaffoldState();
 }
 
-class _MainScaffoldState extends State<MainScaffold> with TickerProviderStateMixin {
+class _MainScaffoldState extends State<MainScaffold>
+    with TickerProviderStateMixin {
   late final PageController _pageController;
   int _pageViewIndex = 0;
   bool _isPortfolioButtonPressed = false;
@@ -54,6 +57,7 @@ class _MainScaffoldState extends State<MainScaffold> with TickerProviderStateMix
   @override
   void initState() {
     super.initState();
+    _pageViewIndex = _mapNavToPageViewIndex(widget.initialNavIndex);
     _pageController = PageController(initialPage: _pageViewIndex);
 
     _overlayAnimationController = AnimationController(
@@ -94,9 +98,9 @@ class _MainScaffoldState extends State<MainScaffold> with TickerProviderStateMix
       curve: Curves.easeInOut,
     ));
 
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final navProvider = Provider.of<NavigationProvider>(context, listen: false);
+      final navProvider =
+          Provider.of<NavigationProvider>(context, listen: false);
 
       navProvider.navigateToTab = (int navIndex) {
         _onItemTapped(navIndex);
@@ -166,7 +170,6 @@ class _MainScaffoldState extends State<MainScaffold> with TickerProviderStateMix
   }
 
   void _onItemTapped(int navIndex) {
-
     FocusManager.instance.primaryFocus?.unfocus();
 
     if (navIndex == 2) return;

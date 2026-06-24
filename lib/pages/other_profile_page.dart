@@ -44,7 +44,8 @@ class _ExpandableBioState extends State<_ExpandableBio> {
   @override
   void initState() {
     super.initState();
-    _isLongBio = widget.bio.length > maxChars || widget.bio.split('\n').length > maxLinesThreshold;
+    _isLongBio = widget.bio.length > maxChars ||
+        widget.bio.split('\n').length > maxLinesThreshold;
   }
 
   @override
@@ -70,8 +71,10 @@ class _ExpandableBioState extends State<_ExpandableBio> {
           child: Text(
             widget.bio,
             maxLines: _isExpanded ? null : maxLinesThreshold,
-            overflow: _isExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
-            style: TextStyle(color: Colors.grey[800], fontSize: 15, height: 1.5),
+            overflow:
+                _isExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
+            style:
+                TextStyle(color: Colors.grey[800], fontSize: 15, height: 1.5),
           ),
         ),
         const SizedBox(height: 5),
@@ -155,7 +158,8 @@ class _OtherProfilePageState extends State<OtherProfilePage>
             children: [
               Container(
                 width: 300,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
@@ -189,7 +193,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
                     imageUrl: _profileData!.profilePictureUrl!,
                     fit: BoxFit.cover,
                     placeholder: (context, url) =>
-                    const Center(child: CircularProgressIndicator()),
+                        const Center(child: CircularProgressIndicator()),
                     errorWidget: (context, url, error) =>
                         Container(color: Colors.grey[200]),
                   ),
@@ -211,7 +215,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     try {
       final profile = await _profileService.getOtherProfile(widget.username);
       final followStatus =
-      await _followService.getFollowStatus(widget.username);
+          await _followService.getFollowStatus(widget.username);
 
       if (mounted) {
         setState(() {
@@ -330,17 +334,17 @@ class _OtherProfilePageState extends State<OtherProfilePage>
             IconButton(
               icon: const Icon(Icons.arrow_back, color: Colors.black),
               onPressed: () {
-                // ponytail: works whether shown as an overlay (in-app) or as a
-                // pushed route (web deep link / refresh).
-                final nav = Provider.of<NavigationProvider>(context, listen: false);
+                final nav =
+                    Provider.of<NavigationProvider>(context, listen: false);
                 if (nav.overlayPage != null) {
                   nav.hideOverlay();
                 } else if (Navigator.of(context).canPop()) {
                   Navigator.of(context).pop();
+                } else {
+                  Navigator.of(context).pushReplacementNamed('/home');
                 }
               },
             ),
-
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -356,8 +360,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
                   ),
                 ),
                 const SizedBox(width: 8),
-                if (user?.isVerified ?? false)
-                  const VerifiedBadge(size: 18),
+                if (user?.isVerified ?? false) const VerifiedBadge(size: 18),
               ],
             ),
           ],
@@ -433,8 +436,8 @@ class _OtherProfilePageState extends State<OtherProfilePage>
     final imageUrl = _profileData?.bannerUrl?.isNotEmpty == true
         ? _profileData!.bannerUrl!
         : (_profileData?.profilePictureUrl?.isNotEmpty == true
-        ? _profileData!.profilePictureUrl!
-        : 'https://via.placeholder.com/400');
+            ? _profileData!.profilePictureUrl!
+            : 'https://via.placeholder.com/400');
 
     return SizedBox(
       height: 160,
@@ -442,9 +445,12 @@ class _OtherProfilePageState extends State<OtherProfilePage>
       child: CachedNetworkImage(
         imageUrl: imageUrl,
         fit: BoxFit.cover,
-        placeholder: (context, url) =>
-            Shimmer.fromColors(baseColor: Colors.grey.shade300, highlightColor: Colors.grey.shade100, child: Container(color: Colors.white)),
-        errorWidget: (context, url, error) => Container(color: Colors.grey[300]),
+        placeholder: (context, url) => Shimmer.fromColors(
+            baseColor: Colors.grey.shade300,
+            highlightColor: Colors.grey.shade100,
+            child: Container(color: Colors.white)),
+        errorWidget: (context, url, error) =>
+            Container(color: Colors.grey[300]),
       ),
     );
   }
@@ -532,7 +538,8 @@ class _OtherProfilePageState extends State<OtherProfilePage>
               child: ElevatedButton(
                 onPressed: _isFollowActionLoading ? null : _handleFollowAction,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _isFollowing ? Colors.grey[200] : const Color(0xFFF58723),
+                  backgroundColor:
+                      _isFollowing ? Colors.grey[200] : const Color(0xFFF58723),
                   foregroundColor: _isFollowing ? Colors.black : Colors.white,
                   elevation: _isFollowing ? 0 : 2,
                   shape: RoundedRectangleBorder(
@@ -541,20 +548,20 @@ class _OtherProfilePageState extends State<OtherProfilePage>
                 ),
                 child: _isFollowActionLoading
                     ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
                     : Text(
-                  _isFollowing ? 'Mengikuti' : 'Ikuti',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
+                        _isFollowing ? 'Mengikuti' : 'Ikuti',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
               ),
             ),
             const SizedBox(width: 12),
@@ -577,21 +584,31 @@ class _OtherProfilePageState extends State<OtherProfilePage>
             ),
           ],
         ),
-        const SizedBox(height: 10,),
+        const SizedBox(
+          height: 10,
+        ),
         Row(
           children: [
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
                   boxShadow: [
-                    BoxShadow(color: const Color(0x83B98946), offset: const Offset(0, 3), blurRadius: 10, spreadRadius: -2),
+                    BoxShadow(
+                        color: const Color(0x83B98946),
+                        offset: const Offset(0, 3),
+                        blurRadius: 10,
+                        spreadRadius: -2),
                   ],
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: ElevatedButton(
                   onPressed: () {
                     if (_profileData != null) {
-                      Navigator.push(context, PageTransition(type: PageTransitionType.rightToLeft, child: PortfolioPage(user: _profileData!)));
+                      Navigator.push(
+                          context,
+                          PageTransition(
+                              type: PageTransitionType.rightToLeft,
+                              child: PortfolioPage(user: _profileData!)));
                       HapticFeedback.lightImpact();
                     }
                   },
@@ -600,9 +617,12 @@ class _OtherProfilePageState extends State<OtherProfilePage>
                     foregroundColor: Colors.grey[800],
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
                   ),
-                  child: const Text('Lihat Portofolio', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  child: const Text('Lihat Portofolio',
+                      style:
+                          TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                 ),
               ),
             ),
@@ -683,7 +703,9 @@ class _OtherProfilePageState extends State<OtherProfilePage>
                       post: post,
                       user: _profileData!,
                       onTap: () {
-                        final navProvider = Provider.of<NavigationProvider>(context, listen: false);
+                        final navProvider = Provider.of<NavigationProvider>(
+                            context,
+                            listen: false);
 
                         if (post.isVideo) {
                           final fullPostObject = Post.fromJson({
@@ -697,9 +719,14 @@ class _OtherProfilePageState extends State<OtherProfilePage>
                             'is_liked_by_user': post.isLikedByUser,
                             'is_bookmarked': post.isBookmarked,
                           });
-                          Navigator.push(context, MaterialPageRoute(builder: (context) => ClipsViewerPage(initialClip: fullPostObject)));
+                          Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => ClipsViewerPage(
+                                      initialClip: fullPostObject)));
                         } else {
-                          navProvider.replaceOverlay(PostDetail(postId: post.postId));
+                          navProvider
+                              .replaceOverlay(PostDetail(postId: post.postId));
                         }
                       },
                     ),
@@ -711,7 +738,7 @@ class _OtherProfilePageState extends State<OtherProfilePage>
         ),
       ),
     );
-    }
+  }
 }
 
 class ProfilePageSkeleton extends StatelessWidget {
@@ -757,7 +784,8 @@ class ProfilePageSkeleton extends StatelessWidget {
                                 child: Padding(
                                   padding: const EdgeInsets.only(bottom: 8.0),
                                   child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       _buildStatSkeleton(),
                                       _buildStatSkeleton(),
@@ -777,9 +805,13 @@ class ProfilePageSkeleton extends StatelessWidget {
                           const SizedBox(height: 24),
                           Row(
                             children: [
-                              Expanded(child: _buildLineSkeleton(height: 48, radius: 10)),
+                              Expanded(
+                                  child: _buildLineSkeleton(
+                                      height: 48, radius: 10)),
                               const SizedBox(width: 12),
-                              Expanded(child: _buildLineSkeleton(height: 48, radius: 10)),
+                              Expanded(
+                                  child: _buildLineSkeleton(
+                                      height: 48, radius: 10)),
                             ],
                           ),
                           const SizedBox(height: 10),
@@ -788,7 +820,6 @@ class ProfilePageSkeleton extends StatelessWidget {
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 4),
                   Padding(
                     padding: const EdgeInsets.all(12.0),
@@ -798,7 +829,8 @@ class ProfilePageSkeleton extends StatelessWidget {
                       mainAxisSpacing: 8,
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      children: List.generate(6, (index) => _buildGridItemSkeleton()),
+                      children:
+                          List.generate(6, (index) => _buildGridItemSkeleton()),
                     ),
                   ),
                 ],

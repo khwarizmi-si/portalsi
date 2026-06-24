@@ -47,7 +47,6 @@ import '../utils/navigation_helper.dart';
 import 'group_chat_room_page.dart';
 import 'main_scaffold.dart';
 
-
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
@@ -55,7 +54,8 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientMixin{
+class _HomePageState extends State<DashboardPage>
+    with AutomaticKeepAliveClientMixin {
   final ScrollController _scrollController = ScrollController();
   int _unreadNotificationCount = 0;
   final GlobalKey _notificationIconKey = GlobalKey();
@@ -107,7 +107,8 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                     curve: Curves.elasticOut,
                     scale: isDialogVisible ? 1.0 : 0.8,
                     child: Dialog(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24)),
                       elevation: 0,
                       backgroundColor: Colors.white,
                       child: Padding(
@@ -121,7 +122,10 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 gradient: LinearGradient(
-                                  colors: [Colors.red.shade400, Colors.redAccent.shade700],
+                                  colors: [
+                                    Colors.red.shade400,
+                                    Colors.redAccent.shade700
+                                  ],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
@@ -133,7 +137,8 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                                   ),
                                 ],
                               ),
-                              child: const Icon(Icons.policy_rounded, color: Colors.white, size: 40),
+                              child: const Icon(Icons.policy_rounded,
+                                  color: Colors.white, size: 40),
                             ),
                             const SizedBox(height: 20),
                             const Text(
@@ -155,17 +160,25 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                                   height: 1.5,
                                 ),
                                 children: <TextSpan>[
-                                  const TextSpan(text: 'Fitur ini hanya tersedia untuk peran '),
+                                  const TextSpan(
+                                      text:
+                                          'Fitur ini hanya tersedia untuk peran '),
                                   TextSpan(
                                     text: 'Teacher',
-                                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade700),
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.orange.shade700),
                                   ),
                                   const TextSpan(text: ' dan '),
                                   TextSpan(
                                     text: 'Parent',
-                                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade700),
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.orange.shade700),
                                   ),
-                                  const TextSpan(text: ' untuk menjaga privasi dan memastikan komunikasi yang terstruktur.'),
+                                  const TextSpan(
+                                      text:
+                                          ' untuk menjaga privasi dan memastikan komunikasi yang terstruktur.'),
                                 ],
                               ),
                             ),
@@ -189,19 +202,24 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                               },
                               style: ElevatedButton.styleFrom(
                                 padding: EdgeInsets.zero,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12)),
                                 elevation: 0,
                               ),
                               child: Ink(
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
-                                    colors: [Colors.amber.shade600, Colors.orange.shade800],
+                                    colors: [
+                                      Colors.amber.shade600,
+                                      Colors.orange.shade800
+                                    ],
                                   ),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Container(
                                   width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 14),
                                   alignment: Alignment.center,
                                   child: const Text(
                                     'Saya Mengerti',
@@ -232,17 +250,18 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
   void initState() {
     super.initState();
     _scrollController.addListener(() {
-      final scrollProvider = Provider.of<ScrollProvider>(context, listen: false);
+      final scrollProvider =
+          Provider.of<ScrollProvider>(context, listen: false);
       final direction = _scrollController.position.userScrollDirection;
 
       if (direction == ScrollDirection.reverse) {
         scrollProvider.setScrolled(true);
-      }
-      else if (direction == ScrollDirection.forward) {
+      } else if (direction == ScrollDirection.forward) {
         scrollProvider.setScrolled(false);
       }
 
-      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      if (_scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 200) {
         Provider.of<HomeController>(context, listen: false).fetchMorePosts();
       }
     });
@@ -268,7 +287,8 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
     // --- AKHIR PERBAIKAN ---
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<ScrollProvider>(context, listen: false).setDashboardController(_scrollController);
+      Provider.of<ScrollProvider>(context, listen: false)
+          .setDashboardController(_scrollController);
       Provider.of<UserProvider>(context, listen: false).fetchCurrentUser();
       Provider.of<HomeController>(context, listen: false).loadDashboardData();
     });
@@ -276,7 +296,8 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
   }
 
   // Tambahkan method ini di dalam class _HomePageState
-  Widget _buildErrorStateWidget(BuildContext context, HomeController controller) {
+  Widget _buildErrorStateWidget(
+      BuildContext context, HomeController controller) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32.0),
       child: Column(
@@ -319,8 +340,10 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
           ElevatedButton(
             onPressed: () {
               // Panggil fungsi refresh yang sudah ada
-              Provider.of<HomeController>(context, listen: false).refreshDashboardData();
-              Provider.of<UserProvider>(context, listen: false).fetchCurrentUser();
+              Provider.of<HomeController>(context, listen: false)
+                  .refreshDashboardData();
+              Provider.of<UserProvider>(context, listen: false)
+                  .fetchCurrentUser();
             },
             style: ElevatedButton.styleFrom(
               padding: EdgeInsets.zero, // Hapus padding default
@@ -340,7 +363,8 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
                 child: const Text(
                   'Coba Lagi',
                   style: TextStyle(
@@ -357,7 +381,6 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
     );
   }
 
-
   void _onHomeControllerUpdate() {
     final controller = Provider.of<HomeController>(context, listen: false);
     if (!controller.isLoading && controller.stories.isNotEmpty) {
@@ -367,12 +390,14 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
 
   void _prefetchStoryGradients(List<UserWithStories> users) {
     for (var user in users) {
-      if (user.stories.isNotEmpty && !_processedStoryIds.contains(user.userId)) {
-
+      if (user.stories.isNotEmpty &&
+          !_processedStoryIds.contains(user.userId)) {
         _processedStoryIds.add(user.userId);
 
         final firstStory = user.stories.first;
-        final imageUrl = firstStory.mediaUrl ?? firstStory.musicAlbumArtUrl;
+        final imageUrl = firstStory.isVideo
+            ? (firstStory.musicAlbumArtUrl ?? firstStory.mediaUrl)
+            : (firstStory.mediaUrl ?? firstStory.musicAlbumArtUrl);
 
         generateGradientColors(imageUrl).then((colors) {
           if (mounted && colors.isNotEmpty) {
@@ -423,7 +448,8 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                   ),
                 ),
               Container(
-                width: 64, height: 64,
+                width: 64,
+                height: 64,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [Colors.amber.shade400, Colors.orange.shade500],
@@ -470,7 +496,8 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                 onTap: () async {
                   final allowedRoles = ['teacher', 'parent'];
 
-                  if (currentUserRole != null && allowedRoles.contains(currentUserRole)) {
+                  if (currentUserRole != null &&
+                      allowedRoles.contains(currentUserRole)) {
                     HapticFeedback.lightImpact();
                     try {
                       final groups = await GroupService().getParentGroups();
@@ -480,14 +507,16 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => GroupChatRoomPage(group: groups.first),
+                            builder: (context) =>
+                                GroupChatRoomPage(group: groups.first),
                           ),
                         );
                       } else if (groups.length > 1) {
                         _showGroupSelectionDialog(context, groups);
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Tidak ada grup yang ditemukan.')),
+                          const SnackBar(
+                              content: Text('Tidak ada grup yang ditemukan.')),
                         );
                       }
                     } catch (e) {
@@ -508,7 +537,8 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                 label: 'Marketplace',
                 onTap: () {
                   HapticFeedback.lightImpact();
-                  Provider.of<NavigationProvider>(context, listen: false).navigateToTab(3);
+                  Provider.of<NavigationProvider>(context, listen: false)
+                      .navigateToTab(3);
                 },
               ),
               _buildQuickAccessItem(
@@ -517,9 +547,17 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                 label: 'Portfolio',
                 onTap: () {
                   HapticFeedback.lightImpact();
-                  final RenderBox renderBox = _portfolioButtonKey.currentContext!.findRenderObject() as RenderBox;
-                  final originOffset = renderBox.localToGlobal(Offset.zero) + Offset(renderBox.size.width / 2, renderBox.size.height / 2);
-                  Navigator.push(context, ScaleFromPositionRoute(widget: const PortfolioPage(), originOffset: originOffset));
+                  final RenderBox renderBox =
+                      _portfolioButtonKey.currentContext!.findRenderObject()
+                          as RenderBox;
+                  final originOffset = renderBox.localToGlobal(Offset.zero) +
+                      Offset(
+                          renderBox.size.width / 2, renderBox.size.height / 2);
+                  Navigator.push(
+                      context,
+                      ScaleFromPositionRoute(
+                          widget: const PortfolioPage(),
+                          originOffset: originOffset));
                 },
               ),
               _buildQuickAccessItem(
@@ -528,9 +566,18 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                 label: 'Pengumuman',
                 onTap: () {
                   HapticFeedback.lightImpact();
-                  final RenderBox renderBox = _announcementButtonKey.currentContext!.findRenderObject() as RenderBox;
-                  final originOffset = renderBox.localToGlobal(Offset.zero) + Offset(renderBox.size.width / 2, renderBox.size.height / 2);
-                  Navigator.push(context, ScaleFromPositionRoute(widget: const AnnouncementListPage(), originOffset: originOffset)).then((_) => _loadNotificationCount());
+                  final RenderBox renderBox =
+                      _announcementButtonKey.currentContext!.findRenderObject()
+                          as RenderBox;
+                  final originOffset = renderBox.localToGlobal(Offset.zero) +
+                      Offset(
+                          renderBox.size.width / 2, renderBox.size.height / 2);
+                  Navigator.push(
+                          context,
+                          ScaleFromPositionRoute(
+                              widget: const AnnouncementListPage(),
+                              originOffset: originOffset))
+                      .then((_) => _loadNotificationCount());
                 },
               ),
             ],
@@ -558,15 +605,18 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
           child: Opacity(
             opacity: anim1.value,
             child: Dialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28.0)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28.0)),
               elevation: 0,
               backgroundColor: Colors.transparent,
               child: Container(
                 constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.85, // Sedikit lebih lebar
+                  maxWidth: MediaQuery.of(context).size.width *
+                      0.85, // Sedikit lebih lebar
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF9FAFB), // Warna latar belakang sedikit keabuan
+                  color: const Color(
+                      0xFFF9FAFB), // Warna latar belakang sedikit keabuan
                   borderRadius: BorderRadius.circular(28.0),
                   boxShadow: [
                     BoxShadow(
@@ -601,10 +651,8 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                                   BoxShadow(
                                       color: Colors.orange.withOpacity(0.4),
                                       blurRadius: 15,
-                                      offset: const Offset(0, 5)
-                                  )
-                                ]
-                            ),
+                                      offset: const Offset(0, 5))
+                                ]),
                             child: const Icon(
                               Icons.groups_3_rounded,
                               size: 40,
@@ -638,8 +686,8 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                             decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: Colors.grey.shade200)
-                            ),
+                                border:
+                                    Border.all(color: Colors.grey.shade200)),
                             child: Material(
                               color: Colors.transparent,
                               child: InkWell(
@@ -664,14 +712,18 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                                       CircleAvatar(
                                         radius: 20,
                                         backgroundColor: Colors.grey.shade100,
-                                        backgroundImage: group.avatarUrl != null &&
-                                            group.avatarUrl!.isNotEmpty
-                                            ? NetworkImage(group.avatarUrl!)
-                                            : null,
+                                        backgroundImage:
+                                            group.avatarUrl != null &&
+                                                    group.avatarUrl!.isNotEmpty
+                                                ? NetworkImage(group.avatarUrl!)
+                                                : null,
                                         child: group.avatarUrl == null ||
-                                            group.avatarUrl!.isEmpty
-                                            ? Icon(Icons.group,
-                                          color: Colors.grey.shade500, size: 20,)
+                                                group.avatarUrl!.isEmpty
+                                            ? Icon(
+                                                Icons.group,
+                                                color: Colors.grey.shade500,
+                                                size: 20,
+                                              )
                                             : null,
                                       ),
                                       const SizedBox(width: 12),
@@ -729,7 +781,6 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
     }
   }
 
-
   void _showCommentSheet(BuildContext context, Post post) {
     showModalBottomSheet(
       context: context,
@@ -776,9 +827,7 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
   Widget _buildAppBar(BuildContext context) {
     return Container(
       padding: EdgeInsets.only(
-          top: max(0.0, MediaQuery.of(context).padding.top - 25),
-          bottom: 5
-      ),
+          top: max(0.0, MediaQuery.of(context).padding.top - 25), bottom: 5),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
@@ -790,17 +839,29 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
         ],
       ),
       child: AppBar(
+        automaticallyImplyLeading: false,
         backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text('Portal SI', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 26)),
+        title: const Text('Portal SI',
+            style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+                fontSize: 26)),
         actions: [
           IconButton(
             key: _anncIconKey,
             onPressed: () {
               HapticFeedback.lightImpact();
-              final RenderBox renderBox = _anncIconKey.currentContext!.findRenderObject() as RenderBox;
-              final originOffset = renderBox.localToGlobal(Offset.zero) + Offset(renderBox.size.width / 2, renderBox.size.height / 2);
-              Navigator.push(context, ScaleFromPositionRoute(widget: const AnnouncementListPage(), originOffset: originOffset)).then((_) => _loadNotificationCount());
+              final RenderBox renderBox =
+                  _anncIconKey.currentContext!.findRenderObject() as RenderBox;
+              final originOffset = renderBox.localToGlobal(Offset.zero) +
+                  Offset(renderBox.size.width / 2, renderBox.size.height / 2);
+              Navigator.push(
+                      context,
+                      ScaleFromPositionRoute(
+                          widget: const AnnouncementListPage(),
+                          originOffset: originOffset))
+                  .then((_) => _loadNotificationCount());
             },
             icon: const Icon(Icons.campaign_outlined, color: Colors.black),
             tooltip: 'List Pengumuman',
@@ -811,9 +872,18 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                 key: _notificationIconKey,
                 onPressed: () {
                   HapticFeedback.lightImpact();
-                  final RenderBox renderBox = _notificationIconKey.currentContext!.findRenderObject() as RenderBox;
-                  final originOffset = renderBox.localToGlobal(Offset.zero) + Offset(renderBox.size.width / 2, renderBox.size.height / 2);
-                  Navigator.push(context, ScaleFromPositionRoute(widget: const NotificationPage(), originOffset: originOffset)).then((_) => _loadNotificationCount());
+                  final RenderBox renderBox =
+                      _notificationIconKey.currentContext!.findRenderObject()
+                          as RenderBox;
+                  final originOffset = renderBox.localToGlobal(Offset.zero) +
+                      Offset(
+                          renderBox.size.width / 2, renderBox.size.height / 2);
+                  Navigator.push(
+                          context,
+                          ScaleFromPositionRoute(
+                              widget: const NotificationPage(),
+                              originOffset: originOffset))
+                      .then((_) => _loadNotificationCount());
                 },
                 icon: const Icon(Icons.notifications, color: Colors.black),
                 tooltip: 'Notifikasi',
@@ -824,9 +894,21 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                   right: 8,
                   child: Container(
                     padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white, width: 1.5)),
-                    constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                    child: Text(_unreadNotificationCount > 99 ? '99+' : _unreadNotificationCount.toString(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                    decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white, width: 1.5)),
+                    constraints:
+                        const BoxConstraints(minWidth: 18, minHeight: 18),
+                    child: Text(
+                        _unreadNotificationCount > 99
+                            ? '99+'
+                            : _unreadNotificationCount.toString(),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center),
                   ),
                 ),
             ],
@@ -835,9 +917,16 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
             key: _msgIconKey,
             onPressed: () {
               HapticFeedback.lightImpact();
-              final RenderBox renderBox = _msgIconKey.currentContext!.findRenderObject() as RenderBox;
-              final originOffset = renderBox.localToGlobal(Offset.zero) + Offset(renderBox.size.width / 2, renderBox.size.height / 2);
-              Navigator.push(context, ScaleFromPositionRoute(widget: const MessageListPage(), originOffset: originOffset)).then((_) => _loadNotificationCount());
+              final RenderBox renderBox =
+                  _msgIconKey.currentContext!.findRenderObject() as RenderBox;
+              final originOffset = renderBox.localToGlobal(Offset.zero) +
+                  Offset(renderBox.size.width / 2, renderBox.size.height / 2);
+              Navigator.push(
+                      context,
+                      ScaleFromPositionRoute(
+                          widget: const MessageListPage(),
+                          originOffset: originOffset))
+                  .then((_) => _loadNotificationCount());
             },
             icon: const Icon(Icons.send_outlined, color: Colors.black),
             tooltip: 'Pesan',
@@ -910,7 +999,9 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Text("$percentage%", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                          Text("$percentage%",
+                              style: const TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.w500)),
                         ],
                       ),
                     ],
@@ -924,7 +1015,8 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                       context: context,
                       builder: (dialogContext) => AlertDialog(
                         title: const Text("Batalkan Unggahan?"),
-                        content: const Text("Anda yakin ingin membatalkan proses unggah ini?"),
+                        content: const Text(
+                            "Anda yakin ingin membatalkan proses unggah ini?"),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(dialogContext),
@@ -935,7 +1027,8 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                               uploadProvider.cancelUpload();
                               Navigator.pop(dialogContext);
                             },
-                            child: const Text("Batalkan", style: TextStyle(color: Colors.red)),
+                            child: const Text("Batalkan",
+                                style: TextStyle(color: Colors.red)),
                           ),
                         ],
                       ),
@@ -968,8 +1061,10 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
             onRefresh: () async {
               // Fungsi refresh yang sama dengan yang ada di body utama
               await Future.wait([
-                Provider.of<HomeController>(context, listen: false).refreshDashboardData(),
-                Provider.of<UserProvider>(context, listen: false).fetchCurrentUser(),
+                Provider.of<HomeController>(context, listen: false)
+                    .refreshDashboardData(),
+                Provider.of<UserProvider>(context, listen: false)
+                    .fetchCurrentUser(),
               ]);
             },
             // Bungkus dengan CustomScrollView agar RefreshIndicator berfungsi
@@ -985,20 +1080,26 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
         }
 
         // Kondisi jika feed kosong, tidak berubah
-        if (controller.feedItems.isEmpty && controller.pinnedPost == null && controller.pinnedAnnouncements.isEmpty) {
+        if (controller.feedItems.isEmpty &&
+            controller.pinnedPost == null &&
+            controller.pinnedAnnouncements.isEmpty) {
           return RefreshIndicator(
             color: Colors.orange,
             // Mengatur warna latar belakang lingkaran
             backgroundColor: Colors.orange.shade50,
             onRefresh: () async {
               await Future.wait([
-                Provider.of<HomeController>(context, listen: false).refreshDashboardData(),
-                Provider.of<UserProvider>(context, listen: false).fetchCurrentUser(),
+                Provider.of<HomeController>(context, listen: false)
+                    .refreshDashboardData(),
+                Provider.of<UserProvider>(context, listen: false)
+                    .fetchCurrentUser(),
               ]);
             },
             child: const CustomScrollView(
               slivers: [
-                SliverFillRemaining(child: Center(child: Text('Tidak ada konten untuk ditampilkan.')))
+                SliverFillRemaining(
+                    child: Center(
+                        child: Text('Tidak ada konten untuk ditampilkan.')))
               ],
             ),
           );
@@ -1011,8 +1112,10 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
           backgroundColor: Colors.orange.shade50,
           onRefresh: () async {
             await Future.wait([
-              Provider.of<HomeController>(context, listen: false).refreshDashboardData(),
-              Provider.of<UserProvider>(context, listen: false).fetchCurrentUser(),
+              Provider.of<HomeController>(context, listen: false)
+                  .refreshDashboardData(),
+              Provider.of<UserProvider>(context, listen: false)
+                  .fetchCurrentUser(),
             ]);
           },
           child: CustomScrollView(
@@ -1020,21 +1123,24 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
             slivers: [
               SliverToBoxAdapter(
                   child: StorySection(
-                    stories: controller.stories,
-                  )
-              ),
+                stories: controller.stories,
+              )),
               _buildUploadProgressCard(context),
               SliverToBoxAdapter(child: _buildQuickAccessButtons()),
-              SliverToBoxAdapter(child: PinnedAnnouncementsSection(announcements: controller.pinnedAnnouncements)),
+              SliverToBoxAdapter(
+                  child: PinnedAnnouncementsSection(
+                      announcements: controller.pinnedAnnouncements)),
               _buildPinnedPost(context, controller),
               SliverList(
                 delegate: SliverChildBuilderDelegate(
-                      (context, index) {
+                  (context, index) {
                     final dynamic item = controller.feedItems[index];
-                    final String itemType = item is Map ? item['type'] ?? '' : '';
+                    final String itemType =
+                        item is Map ? item['type'] ?? '' : '';
 
                     if (itemType == 'post') {
-                      final Post post = Post.fromJson(item as Map<String, dynamic>);
+                      final Post post =
+                          Post.fromJson(item as Map<String, dynamic>);
                       return PostCard(
                         post: post,
                         onLike: () => controller.toggleLike(post.id),
@@ -1043,7 +1149,8 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
                         onShare: () {},
                         onProfileTap: () {
                           AppState.navFrom = "dashboard";
-                          NavigationHelper.navigateToProfile(context, post.user);
+                          NavigationHelper.navigateToProfile(
+                              context, post.user);
                         },
                       );
                     } else if (itemType == 'suggestion') {
@@ -1059,9 +1166,10 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
               SliverToBoxAdapter(
                 child: controller.isFetchingMore
                     ? const Padding(
-                  padding: EdgeInsets.only(left: 16.0, right: 16.0, bottom: 120.0, top: 16.0),
-                  child: Center(child: CircularProgressIndicator()),
-                )
+                        padding: EdgeInsets.only(
+                            left: 16.0, right: 16.0, bottom: 120.0, top: 16.0),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
                     : const SizedBox.shrink(),
               ),
             ],
@@ -1076,7 +1184,8 @@ class _HomePageState extends State<DashboardPage> with AutomaticKeepAliveClientM
     if (pinnedPost == null) {
       return const SliverToBoxAdapter(child: SizedBox.shrink());
     }
-    final bool isExpired = DateTime.now().difference(pinnedPost.createdAt).inHours >= 24;
+    final bool isExpired =
+        DateTime.now().difference(pinnedPost.createdAt).inHours >= 24;
     if (isExpired) {
       return const SliverToBoxAdapter(child: SizedBox.shrink());
     }
@@ -1095,10 +1204,12 @@ class PinnedAnnouncementsSection extends StatefulWidget {
   const PinnedAnnouncementsSection({super.key, required this.announcements});
 
   @override
-  State<PinnedAnnouncementsSection> createState() => _PinnedAnnouncementsSectionState();
+  State<PinnedAnnouncementsSection> createState() =>
+      _PinnedAnnouncementsSectionState();
 }
 
-class _PinnedAnnouncementsSectionState extends State<PinnedAnnouncementsSection> {
+class _PinnedAnnouncementsSectionState
+    extends State<PinnedAnnouncementsSection> {
   int _currentIndex = 0;
   bool _isSwipingForward = true;
   Timer? _timer;
@@ -1137,7 +1248,8 @@ class _PinnedAnnouncementsSectionState extends State<PinnedAnnouncementsSection>
   void _swipe(int total, {required bool forward, bool fromAutoSwipe = false}) {
     setState(() {
       _isSwipingForward = forward;
-      _currentIndex = (forward ? _currentIndex + 1 : _currentIndex - 1 + total) % total;
+      _currentIndex =
+          (forward ? _currentIndex + 1 : _currentIndex - 1 + total) % total;
     });
     if (!fromAutoSwipe) _handleTimer(total);
   }
@@ -1160,8 +1272,10 @@ class _PinnedAnnouncementsSectionState extends State<PinnedAnnouncementsSection>
           GestureDetector(
             onHorizontalDragEnd: (details) {
               if (totalAnnouncements <= 1) return;
-              if (details.primaryVelocity! < -100) _swipe(totalAnnouncements, forward: true);
-              else if (details.primaryVelocity! > 100) _swipe(totalAnnouncements, forward: false);
+              if (details.primaryVelocity! < -100)
+                _swipe(totalAnnouncements, forward: true);
+              else if (details.primaryVelocity! > 100)
+                _swipe(totalAnnouncements, forward: false);
             },
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 350),
@@ -1170,7 +1284,9 @@ class _PinnedAnnouncementsSectionState extends State<PinnedAnnouncementsSection>
                   begin: Offset(_isSwipingForward ? 1.0 : -1.0, 0.0),
                   end: Offset.zero,
                 ).animate(animation);
-                return ClipRect(child: SlideTransition(position: offsetAnimation, child: child));
+                return ClipRect(
+                    child: SlideTransition(
+                        position: offsetAnimation, child: child));
               },
               child: AnnouncementCard(
                 key: ValueKey<int>(currentAnnouncement.id),
@@ -1203,7 +1319,8 @@ class _PinnedPostCard extends StatelessWidget {
   final HomeController controller;
   final VoidCallback onComment;
 
-  const _PinnedPostCard({required this.post, required this.controller, required this.onComment});
+  const _PinnedPostCard(
+      {required this.post, required this.controller, required this.onComment});
 
   @override
   Widget build(BuildContext context) {
@@ -1211,7 +1328,11 @@ class _PinnedPostCard extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       padding: const EdgeInsets.only(top: 12, bottom: 4),
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [Colors.amber.shade50, Colors.yellow.shade50, Colors.amber.shade100], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        gradient: LinearGradient(colors: [
+          Colors.amber.shade50,
+          Colors.yellow.shade50,
+          Colors.amber.shade100
+        ], begin: Alignment.topLeft, end: Alignment.bottomRight),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.amber.shade200, width: 1.5),
       ),
@@ -1224,7 +1345,10 @@ class _PinnedPostCard extends StatelessWidget {
               children: [
                 Icon(Icons.push_pin, color: Colors.amber.shade800, size: 18),
                 const SizedBox(width: 8),
-                Text("Postingan Disematkan", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber.shade900)),
+                Text("Postingan Disematkan",
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.amber.shade900)),
               ],
             ),
           ),
@@ -1256,19 +1380,25 @@ class ScaleFromPositionRoute extends PageRouteBuilder {
 
   ScaleFromPositionRoute({required this.widget, required this.originOffset})
       : super(
-    transitionDuration: const Duration(milliseconds: 350),
-    reverseTransitionDuration: const Duration(milliseconds: 250),
-    pageBuilder: (context, animation, secondaryAnimation) => widget,
-    opaque: false,
-    barrierDismissible: true,
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final screenSize = MediaQuery.of(context).size;
-      final alignX = (originOffset.dx / screenSize.width) * 2 - 1;
-      final alignY = (originOffset.dy / screenSize.height) * 2 - 1;
-      final curveAnimation = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
-      return ScaleTransition(alignment: Alignment(alignX, alignY), scale: curveAnimation, child: child);
-    },
-  );
+          transitionDuration: const Duration(milliseconds: 350),
+          reverseTransitionDuration: const Duration(milliseconds: 250),
+          pageBuilder: (context, animation, secondaryAnimation) => widget,
+          opaque: false,
+          barrierDismissible: true,
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            final screenSize = MediaQuery.of(context).size;
+            final alignX = (originOffset.dx / screenSize.width) * 2 - 1;
+            final alignY = (originOffset.dy / screenSize.height) * 2 - 1;
+            final curveAnimation = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic);
+            return ScaleTransition(
+                alignment: Alignment(alignX, alignY),
+                scale: curveAnimation,
+                child: child);
+          },
+        );
 }
 
 class AnnouncementCard extends StatefulWidget {
@@ -1335,7 +1465,8 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
                       username: widget.announcement.creator.username,
                       fullName: widget.announcement.creator.fullName,
                       isVerified: widget.announcement.creator.isVerified,
-                      profilePictureUrl: widget.announcement.creator.profilePictureUrl,
+                      profilePictureUrl:
+                          widget.announcement.creator.profilePictureUrl,
                     );
                     NavigationHelper.navigateToProfile(
                       context,
@@ -1347,7 +1478,6 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
                     userId: widget.announcement.creator.userId,
                   ),
                 ),
-
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
@@ -1355,10 +1485,12 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.campaign_outlined, color: Colors.orange.shade800, size: 16),
+                          Icon(Icons.campaign_outlined,
+                              color: Colors.orange.shade800, size: 16),
                           const SizedBox(width: 6),
                           Text(
-                            timeago.format(widget.announcement.createdAt, locale: 'id'),
+                            timeago.format(widget.announcement.createdAt,
+                                locale: 'id'),
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
@@ -1374,7 +1506,9 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
                                   child: Text(
                                     widget.announcement.creator.fullName,
                                     overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.grey.shade700),
                                   ),
                                 ),
                                 if (widget.announcement.creator.isVerified)
@@ -1402,7 +1536,8 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
                 AnimatedRotation(
                   turns: _isExpanded ? 0.5 : 0.0,
                   duration: const Duration(milliseconds: 300),
-                  child: const Icon(Icons.keyboard_arrow_down, color: Colors.black54),
+                  child: const Icon(Icons.keyboard_arrow_down,
+                      color: Colors.black54),
                 ),
               ],
             ),
@@ -1410,7 +1545,8 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
               duration: const Duration(milliseconds: 300),
               curve: Curves.fastOutSlowIn,
               child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: _isExpanded ? double.infinity : 0),
+                constraints: BoxConstraints(
+                    maxHeight: _isExpanded ? double.infinity : 0),
                 child: Padding(
                   padding: const EdgeInsets.only(top: 16),
                   child: Column(
@@ -1425,14 +1561,17 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
                               imageUrl: widget.announcement.imageUrl!,
                               width: double.infinity,
                               fit: BoxFit.cover,
-                              placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
-                              errorWidget: (context, url, error) => const Icon(Icons.error),
+                              placeholder: (context, url) => const Center(
+                                  child: CircularProgressIndicator()),
+                              errorWidget: (context, url, error) =>
+                                  const Icon(Icons.error),
                             ),
                           ),
                         ),
                       Text(
                         widget.announcement.content,
-                        style: TextStyle(color: Colors.grey.shade800, height: 1.5),
+                        style:
+                            TextStyle(color: Colors.grey.shade800, height: 1.5),
                       ),
                     ],
                   ),
@@ -1561,7 +1700,8 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
           initialUserId: widget.user['user_id'],
           heroTag: 'story_hero_${widget.user['user_id']}',
         ),
-        transitionsBuilder: (_, animation, __, child) => FadeTransition(opacity: animation, child: child),
+        transitionsBuilder: (_, animation, __, child) =>
+            FadeTransition(opacity: animation, child: child),
       ),
     );
 
@@ -1573,7 +1713,8 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
     final username = widget.user['username'] ?? 'No Username';
     final fullName = widget.user['full_name'] ?? 'No Name';
     final bool isFollowBack = widget.user['is_follow_back'] ?? false;
-    final String buttonText = _isFollowed ? 'Mengikuti' : (isFollowBack ? 'Ikuti Balik' : 'Ikuti');
+    final String buttonText =
+        _isFollowed ? 'Mengikuti' : (isFollowBack ? 'Ikuti Balik' : 'Ikuti');
     final bool isVerified = widget.user['is_verified'] ?? false;
 
     return Padding(
@@ -1633,21 +1774,30 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
                         ),
                       ),
                       if (isVerified)
-                        const SizedBox(width: 2,),
-                      if (isVerified)
-                        const VerifiedBadge(size: 14),
+                        const SizedBox(
+                          width: 2,
+                        ),
+                      if (isVerified) const VerifiedBadge(size: 14),
                     ],
                   ),
                   const SizedBox(height: 2),
-                  Text(fullName, style: TextStyle(fontSize: 12, color: Colors.grey.shade600), overflow: TextOverflow.ellipsis),
+                  Text(fullName,
+                      style:
+                          TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      overflow: TextOverflow.ellipsis),
                   const Spacer(),
                   ElevatedButton(
                     onPressed: _isLoading ? null : _toggleFollowStatus,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _isFollowed ? Colors.grey.shade300 : Colors.transparent,
-                      shadowColor: _isFollowed ? Colors.black.withOpacity(0.2) : Colors.transparent,
+                      backgroundColor: _isFollowed
+                          ? Colors.grey.shade300
+                          : Colors.transparent,
+                      shadowColor: _isFollowed
+                          ? Colors.black.withOpacity(0.2)
+                          : Colors.transparent,
                       padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
                       elevation: _isFollowed ? 0 : 2,
                     ),
                     child: Ink(
@@ -1655,34 +1805,39 @@ class _SuggestionProfileCardState extends State<_SuggestionProfileCard> {
                         gradient: _isFollowed
                             ? null
                             : LinearGradient(
-                          colors: [
-                            Colors.amber.shade600,
-                            Colors.orange.shade800,
-                          ],
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                        ),
+                                colors: [
+                                  Colors.amber.shade600,
+                                  Colors.orange.shade800,
+                                ],
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight,
+                              ),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Container(
-                        constraints: const BoxConstraints(minWidth: 88, minHeight: 36),
+                        constraints:
+                            const BoxConstraints(minWidth: 88, minHeight: 36),
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         alignment: Alignment.center,
                         child: _isLoading
                             ? SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 3.5,
-                            color: _isFollowed ? Colors.black54 : Colors.white,
-                          ),
-                        )
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 3.5,
+                                  color: _isFollowed
+                                      ? Colors.black54
+                                      : Colors.white,
+                                ),
+                              )
                             : Text(
-                          buttonText,
-                          style: TextStyle(
-                            color: _isFollowed ? Colors.black54 : Colors.white,
-                          ),
-                        ),
+                                buttonText,
+                                style: TextStyle(
+                                  color: _isFollowed
+                                      ? Colors.black54
+                                      : Colors.white,
+                                ),
+                              ),
                       ),
                     ),
                   )

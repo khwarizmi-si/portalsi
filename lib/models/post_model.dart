@@ -8,6 +8,7 @@ class Post {
   final int id;
   final String? caption;
   final String? mediaUrl;
+  final String? thumbnailUrl;
   final String? location;
   final bool isVideo;
   final DateTime createdAt;
@@ -35,6 +36,7 @@ class Post {
     required this.id,
     this.caption,
     this.mediaUrl,
+    this.thumbnailUrl,
     required this.isVideo,
     required this.createdAt,
     required this.likesCount,
@@ -55,22 +57,41 @@ class Post {
   });
 
   double get aspectRatio {
-    if (mediaWidth != null && mediaHeight != null && mediaWidth! > 0 && mediaHeight! > 0) {
+    if (mediaWidth != null &&
+        mediaHeight != null &&
+        mediaWidth! > 0 &&
+        mediaHeight! > 0) {
       return mediaWidth! / mediaHeight!;
     }
     return 1.0;
   }
 
+  static bool _boolFromJson(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    final normalized = value?.toString().trim().toLowerCase();
+    return normalized == '1' || normalized == 'true' || normalized == 'yes';
+  }
+
+  static bool _looksLikeVideo(String? url) {
+    final path = Uri.tryParse(url ?? '')?.path.toLowerCase() ?? '';
+    return path.endsWith('.mp4') ||
+        path.endsWith('.mov') ||
+        path.endsWith('.webm') ||
+        path.endsWith('.avi') ||
+        path.endsWith('.3gp') ||
+        path.endsWith('.mkv');
+  }
+
   factory Post.fromJson(Map<String, dynamic> json) {
     var commentsFromJson = json['comments'] as List? ?? [];
     List<Comment> commentList =
-    commentsFromJson.map((c) => Comment.fromJson(c)).toList();
-
+        commentsFromJson.map((c) => Comment.fromJson(c)).toList();
 
     var likersFromJson = json['recent_likers'] as List? ?? [];
     // Kita panggil Liker.fromJson tanpa currentUserId, yang sekarang sudah aman
     List<Liker> likerList =
-    likersFromJson.map((l) => Liker.fromJson(l)).toList();
+        likersFromJson.map((l) => Liker.fromJson(l)).toList();
 
     final postData = json['post'] is Map<String, dynamic> ? json['post'] : json;
 
@@ -78,10 +99,7 @@ class Post {
     if (postData['user'] != null && postData['user'] is Map<String, dynamic>) {
       postUser = User.fromJson(postData['user']);
     } else {
-      postUser = User(
-          id: postData['user_id'],
-          username: ''
-      );
+      postUser = User(id: postData['user_id'], username: '');
     }
 
     // --- PERUBAHAN: Parsing durasi video ---
@@ -91,16 +109,21 @@ class Post {
     }
 
     return Post(
-      id: int.tryParse(postData['post_id']?.toString() ?? postData['id']?.toString() ?? '0') ?? 0,
+      id: int.tryParse(postData['post_id']?.toString() ??
+              postData['id']?.toString() ??
+              '0') ??
+          0,
       caption: postData['caption'],
       mediaUrl: postData['media_url'],
-      isVideo: postData['is_video'] == 1 || postData['is_video'].toString() == '1',
+      thumbnailUrl: postData['thumbnail_url'],
+      isVideo: _boolFromJson(postData['is_video']) ||
+          _looksLikeVideo(postData['media_url']),
       createdAt: DateTime.parse(postData['created_at']),
       likesCount: postData['likes_count'] ?? 0,
       commentsCount: postData['comments_count'] ?? 0,
-      isLikedByUser: postData['is_liked'] ?? false,
+      isLikedByUser: _boolFromJson(postData['is_liked']),
       location: postData['location'],
-      isBookmarked: postData['is_bookmarked'] ?? false,
+      isBookmarked: _boolFromJson(postData['is_bookmarked']),
       user: postUser,
       mediaWidth: postData['media_width'],
       mediaHeight: postData['media_height'],
@@ -120,6 +143,7 @@ class Post {
       'post_id': id,
       'caption': caption,
       'media_url': mediaUrl,
+      'thumbnail_url': thumbnailUrl,
       'is_video': isVideo ? 1 : 0,
       'created_at': createdAt.toIso8601String(),
       'likes_count': likesCount,
@@ -131,10 +155,12 @@ class Post {
       'video_duration': videoDuration, // <-- Tambahkan ke JSON
     };
   }
+
   Post copyWith({
     int? id,
     String? caption,
     String? mediaUrl,
+    String? thumbnailUrl,
     bool? isVideo,
     bool? isBookmarked,
     DateTime? createdAt,
@@ -152,6 +178,7 @@ class Post {
       caption: caption ?? this.caption,
       isBookmarked: isBookmarked ?? this.isBookmarked,
       mediaUrl: mediaUrl ?? this.mediaUrl,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
       isVideo: isVideo ?? this.isVideo,
       createdAt: createdAt ?? this.createdAt,
       user: user ?? this.user,
@@ -161,7 +188,8 @@ class Post {
       mediaWidth: mediaWidth ?? this.mediaWidth,
       mediaHeight: mediaHeight ?? this.mediaHeight,
       comments: comments ?? this.comments,
-      videoDuration: videoDuration ?? this.videoDuration, // <-- Tambahkan di copyWith
+      videoDuration:
+          videoDuration ?? this.videoDuration, // <-- Tambahkan di copyWith
     );
   }
 }

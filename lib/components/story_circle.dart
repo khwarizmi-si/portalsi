@@ -7,7 +7,6 @@ import '../models/story_model.dart';
 import '../models/user_model.dart';
 import '../pages/create_story_page.dart';
 import '../pages/create_story_web_page.dart';
-import '../services/story_service.dart';
 import 'circular_avatar_fetcher.dart'; // Pastikan ini di-import
 
 class StoryCircle extends StatefulWidget {
@@ -57,10 +56,13 @@ class _StoryCircleState extends State<StoryCircle> {
     // Web: skip mobile permission checks + the AssetEntity page; use the
     // simple image_picker web story flow.
     if (kIsWeb) {
-      Navigator.push(
+      final result = await Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const CreateStoryWebPage()),
       );
+      if (result == true) {
+        widget.onStoryClosed?.call();
+      }
       return;
     }
 
@@ -76,7 +78,8 @@ class _StoryCircleState extends State<StoryCircle> {
       Navigator.push(
         context,
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => CreateStoryPage(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              CreateStoryPage(
             currentUser: user,
             heroTag: heroTag,
             initialImageUrl: user.profilePictureUrl,
@@ -89,7 +92,9 @@ class _StoryCircleState extends State<StoryCircle> {
     }
 
     // Jika semua izin sudah diberikan, langsung lanjutkan
-    if (cameraStatus.isGranted && photoStatus.isGranted && microphoneStatus.isGranted) {
+    if (cameraStatus.isGranted &&
+        photoStatus.isGranted &&
+        microphoneStatus.isGranted) {
       proceedToCreateStory();
       return;
     }
@@ -100,7 +105,8 @@ class _StoryCircleState extends State<StoryCircle> {
       barrierDismissible: false,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           // 👇 PERUBAHAN DI SINI: Icon dengan latar gradien
           icon: Container(
             padding: const EdgeInsets.all(12),
@@ -118,12 +124,16 @@ class _StoryCircleState extends State<StoryCircle> {
                 ),
               ],
             ),
-            child: const Icon(Icons.shield_outlined, color: Colors.white, size: 40), // Ubah warna ikon menjadi putih
+            child: const Icon(Icons.shield_outlined,
+                color: Colors.white, size: 40), // Ubah warna ikon menjadi putih
           ),
           title: Text(
             'Izin untuk Membuat Story',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            style: Theme.of(context)
+                .textTheme
+                .titleLarge
+                ?.copyWith(fontWeight: FontWeight.bold),
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -131,12 +141,18 @@ class _StoryCircleState extends State<StoryCircle> {
               Text(
                 'Untuk memberikan pengalaman terbaik, kami memerlukan akses ke:',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.black54),
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: Colors.black54),
               ),
               const SizedBox(height: 20),
-              _buildPermissionRow(Icons.camera_alt_outlined, 'Kamera', 'Untuk merekam foto & video.'),
-              _buildPermissionRow(Icons.photo_library_outlined, 'Galeri Foto', 'Untuk memilih dari media yang ada.'),
-              _buildPermissionRow(Icons.mic_none_outlined, 'Mikrofon', 'Untuk merekam suara di video.'),
+              _buildPermissionRow(Icons.camera_alt_outlined, 'Kamera',
+                  'Untuk merekam foto & video.'),
+              _buildPermissionRow(Icons.photo_library_outlined, 'Galeri Foto',
+                  'Untuk memilih dari media yang ada.'),
+              _buildPermissionRow(Icons.mic_none_outlined, 'Mikrofon',
+                  'Untuk merekam suara di video.'),
             ],
           ),
           actionsAlignment: MainAxisAlignment.center,
@@ -147,14 +163,16 @@ class _StoryCircleState extends State<StoryCircle> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // 👇 PERUBAHAN DI SINI: Tombol dengan gradien
-                Ink( // Gunakan Ink untuk membungkus Container dengan gradien
+                Ink(
+                  // Gunakan Ink untuk membungkus Container dengan gradien
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(12),
                     gradient: const LinearGradient(
                       colors: [Color(0xFF03B293), Color(0xFF116C63)],
                     ),
                   ),
-                  child: InkWell( // InkWell untuk efek tap dan onPressed
+                  child: InkWell(
+                    // InkWell untuk efek tap dan onPressed
                     onTap: () => Navigator.of(dialogContext).pop(true),
                     borderRadius: BorderRadius.circular(12),
                     child: Container(
@@ -173,7 +191,8 @@ class _StoryCircleState extends State<StoryCircle> {
                 ),
                 const SizedBox(height: 8),
                 TextButton(
-                  child: Text('Nanti Saja', style: TextStyle(color: Colors.grey.shade700)),
+                  child: Text('Nanti Saja',
+                      style: TextStyle(color: Colors.grey.shade700)),
                   onPressed: () => Navigator.of(dialogContext).pop(false),
                 ),
               ],
@@ -201,14 +220,17 @@ class _StoryCircleState extends State<StoryCircle> {
     var newMicrophoneStatus = await Permission.microphone.status;
 
     // Jika semua izin diberikan, lanjutkan ke halaman create story
-    if (newCameraStatus.isGranted && newPhotoStatus.isGranted && newMicrophoneStatus.isGranted) {
+    if (newCameraStatus.isGranted &&
+        newPhotoStatus.isGranted &&
+        newMicrophoneStatus.isGranted) {
       proceedToCreateStory();
     } else {
       // Jika ada izin yang ditolak, tampilkan snackbar
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Izin ditolak. Silakan aktifkan melalui Pengaturan Aplikasi.'),
+          content: const Text(
+              'Izin ditolak. Silakan aktifkan melalui Pengaturan Aplikasi.'),
           action: SnackBarAction(
             label: 'PENGATURAN',
             onPressed: openAppSettings,
@@ -230,8 +252,11 @@ class _StoryCircleState extends State<StoryCircle> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                Text(title,
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(subtitle,
+                    style:
+                        TextStyle(fontSize: 12, color: Colors.grey.shade600)),
               ],
             ),
           ),
@@ -240,13 +265,13 @@ class _StoryCircleState extends State<StoryCircle> {
     );
   }
 
-
   // --- 👇 PERBAIKAN UTAMA ADA DI FUNGSI INI 👇 ---
   Widget _buildAddStory(BuildContext context, String heroTag) {
     final int userId = widget.currentUserData?.id ?? 0;
     final String? profileUrl = widget.userProfileUrl;
     final bool hasStory = widget.hasStory;
-    final bool isViewed = widget.userStoryData?.isViewed ?? false; // Default ke false jika null
+    final bool isViewed =
+        widget.userStoryData?.isViewed ?? false; // Default ke false jika null
 
     return Stack(
       clipBehavior: Clip.none,
@@ -261,10 +286,10 @@ class _StoryCircleState extends State<StoryCircle> {
           onTap: hasStory
               ? null
               : () {
-            if (widget.currentUserData != null) {
-              _navigateToCreateStory(widget.currentUserData!);
-            }
-          },
+                  if (widget.currentUserData != null) {
+                    _navigateToCreateStory(widget.currentUserData!);
+                  }
+                },
           onStoryClosed: widget.onStoryClosed, // Tetap teruskan untuk refresh
           imageUrl: profileUrl,
           hasStory: hasStory,
@@ -366,7 +391,9 @@ class _StoryCircleState extends State<StoryCircle> {
             ),
           ),
           const SizedBox(height: 6),
-          Text(widget.name, style: const TextStyle(fontSize: 12, color: Colors.black87), maxLines: 1),
+          Text(widget.name,
+              style: const TextStyle(fontSize: 12, color: Colors.black87),
+              maxLines: 1),
         ],
       ),
     );

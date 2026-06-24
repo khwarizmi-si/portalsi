@@ -1,14 +1,11 @@
-// lib/models/user_model.dart
-
-import 'dart:developer';
-
 class SimplePost {
   final int postId;
   final String? caption;
   final String mediaUrl;
+  final String? thumbnailUrl;
   final DateTime createdAt;
   final bool isVideo;
-  final bool isLikedByUser;   // TAMBAHKAN BARIS INI
+  final bool isLikedByUser; // TAMBAHKAN BARIS INI
   final bool isBookmarked;
   // <-- TAMBAHKAN PROPERTI INI
 
@@ -16,27 +13,27 @@ class SimplePost {
     required this.postId,
     this.caption,
     required this.mediaUrl,
+    this.thumbnailUrl,
     required this.createdAt,
     required this.isVideo,
     required this.isLikedByUser, // TAMBAHKAN BARIS INI
-    required this.isBookmarked,// <-- TAMBAHKAN DI KONSTRUKTOR
+    required this.isBookmarked, // <-- TAMBAHKAN DI KONSTRUKTOR
   });
 
   factory SimplePost.fromJson(Map<String, dynamic> json) {
     // --- Log untuk Debugging ---
     final rawIsVideo = json['is_video'];
-    final bool parsedIsVideo = rawIsVideo == 1;
+    final normalized = rawIsVideo?.toString().trim().toLowerCase();
+    final bool parsedIsVideo =
+        rawIsVideo == true || normalized == '1' || normalized == 'true';
 
-    log('--- 🕵️‍♂️ Debugging Post #${json['post_id']} ---');
-    log('Nilai mentah "is_video" dari API: $rawIsVideo (Tipe Data: ${rawIsVideo.runtimeType})');
-    log('Hasil parsing menjadi "isVideo": $parsedIsVideo');
-    log('----------------------------------------');
     // --- Batas Log ---
 
     return SimplePost(
       postId: json['post_id'],
       caption: json['caption'],
       mediaUrl: json['media_url'],
+      thumbnailUrl: json['thumbnail_url'],
       createdAt: DateTime.parse(json['created_at']),
       // Gunakan hasil parsing yang sudah kita buat
       isVideo: parsedIsVideo,
@@ -50,6 +47,7 @@ class SimplePost {
       'post_id': postId,
       'caption': caption,
       'media_url': mediaUrl,
+      'thumbnail_url': thumbnailUrl,
       'created_at': createdAt.toIso8601String(),
       'is_video': isVideo, // <-- TAMBAHKAN KE JSON
     };
@@ -63,6 +61,7 @@ class SimplePost {
       postId: this.postId,
       caption: this.caption,
       mediaUrl: this.mediaUrl,
+      thumbnailUrl: this.thumbnailUrl,
       createdAt: this.createdAt,
       isVideo: this.isVideo,
       isLikedByUser: isLikedByUser ?? this.isLikedByUser,
@@ -114,9 +113,21 @@ class User {
     this.role, // <-- TAMBAHKAN DI KONSTRUKTOR
   });
 
+  static String? _cleanDefaultMediaUrl(dynamic value) {
+    final url = value?.toString().trim();
+    if (url == null || url.isEmpty) return null;
+    final path = Uri.tryParse(url)?.path ?? url;
+    if (path.endsWith('/default-profile.png') ||
+        path.endsWith('/default-banner.png')) {
+      return null;
+    }
+    return url;
+  }
+
   factory User.fromJson(Map<String, dynamic> json) {
     var postsFromJson = json['recent_posts'] as List? ?? [];
-    List<SimplePost> recentPostsList = postsFromJson.map((i) => SimplePost.fromJson(i)).toList();
+    List<SimplePost> recentPostsList =
+        postsFromJson.map((i) => SimplePost.fromJson(i)).toList();
 
     return User(
       id: json['id'] ?? json['user_id'],
@@ -124,8 +135,8 @@ class User {
       email: json['email'],
       fullName: json['full_name'] ?? json['name'],
       bio: json['bio'],
-      bannerUrl: json['banner_url'],
-      profilePictureUrl: json['profile_picture_url'],
+      bannerUrl: _cleanDefaultMediaUrl(json['banner_url']),
+      profilePictureUrl: _cleanDefaultMediaUrl(json['profile_picture_url']),
       isVerified: json['is_verified'] ?? false,
       isPrivate: json['is_private'] ?? false,
       followersCount: json['followers_count'] ?? 0,
@@ -133,7 +144,8 @@ class User {
       postsCount: json['posts_count'] ?? 0,
       recentPosts: recentPostsList,
       isOnline: json['is_online'] ?? false,
-      lastSeen: json['last_seen'] != null ? DateTime.parse(json['last_seen']) : null,
+      lastSeen:
+          json['last_seen'] != null ? DateTime.parse(json['last_seen']) : null,
       hasStory: json['has_story'] ?? false,
       storyViewed: json['story_viewed'] ?? false,
       role: json['role'], // <-- TAMBAHKAN LOGIKA PARSING

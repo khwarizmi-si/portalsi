@@ -16,6 +16,38 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 // Catatan: import 'dart:io' tidak lagi dibutuhkan untuk fungsi upload & pick.
 import 'dart:io';
 
+Future<http.Response> _sendMultipartWithProgress(
+  http.MultipartRequest request,
+  void Function(int sent, int total)? onUploadProgress,
+) async {
+  final client = http.Client();
+  try {
+    final total = request.contentLength;
+    var sent = 0;
+    final streamedRequest = http.StreamedRequest(request.method, request.url)
+      ..headers.addAll(request.headers)
+      ..contentLength = total
+      ..followRedirects = request.followRedirects
+      ..maxRedirects = request.maxRedirects
+      ..persistentConnection = request.persistentConnection;
+
+    request.finalize().listen(
+      (chunk) {
+        sent += chunk.length;
+        onUploadProgress?.call(sent, total);
+        streamedRequest.sink.add(chunk);
+      },
+      onError: streamedRequest.sink.addError,
+      onDone: streamedRequest.sink.close,
+      cancelOnError: true,
+    );
+
+    final streamedResponse = await client.send(streamedRequest);
+    return http.Response.fromStream(streamedResponse);
+  } finally {
+    client.close();
+  }
+}
 
 class ProfileService {
   static const String _baseUrl = ApiEndpoints.apiUrl;
@@ -47,7 +79,8 @@ class ProfileService {
 
     if (cachedData != null && cachedTimestamp != null) {
       final cacheTime = DateTime.fromMillisecondsSinceEpoch(cachedTimestamp);
-      if (DateTime.now().difference(cacheTime).inMinutes < _cacheDurationMinutes) {
+      if (DateTime.now().difference(cacheTime).inMinutes <
+          _cacheDurationMinutes) {
         print("✅ Memuat profil dari CACHE.");
         return User.fromJson(jsonDecode(cachedData));
       }
@@ -64,19 +97,22 @@ class ProfileService {
   Future<User> _fetchAndCacheProfile() async {
     try {
       final headers = await _getHeaders();
-      final response = await _client.get(Uri.parse('$_baseUrl/user'), headers: headers);
+      final response =
+          await _client.get(Uri.parse('$_baseUrl/user'), headers: headers);
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
         final user = User.fromJson(responseData);
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_profileCacheKey, jsonEncode(user.toJson()));
-        await prefs.setInt(_profileTimestampKey, DateTime.now().millisecondsSinceEpoch);
+        await prefs.setInt(
+            _profileTimestampKey, DateTime.now().millisecondsSinceEpoch);
         print("📦 Profil baru disimpan ke cache.");
         _preCacheProfileMedia(user);
         return user;
       } else {
-        throw Exception('Gagal memuat profil dari API: Status ${response.statusCode}');
+        throw Exception(
+            'Gagal memuat profil dari API: Status ${response.statusCode}');
       }
     } catch (e) {
       rethrow;
@@ -90,9 +126,10 @@ class ProfileService {
       cacheManager.downloadFile(user.profilePictureUrl!);
     }
     for (var post in user.recentPosts) {
-      if (post.mediaUrl.isNotEmpty) {
+      final mediaToCache = post.isVideo ? post.thumbnailUrl : post.mediaUrl;
+      if (mediaToCache != null && mediaToCache.isNotEmpty) {
         print("Pre-caching media post ID: ${post.postId}...");
-        cacheManager.downloadFile(post.mediaUrl);
+        cacheManager.downloadFile(mediaToCache);
       }
     }
   }
@@ -117,7 +154,8 @@ class ProfileService {
         }
       } else {
         // Jika request gagal, lempar error
-        throw Exception('Gagal memuat saran profil. Status: ${response.statusCode}');
+        throw Exception(
+            'Gagal memuat saran profil. Status: ${response.statusCode}');
       }
     } catch (e) {
       print("Error di fetchSuggestions: $e");
@@ -125,7 +163,12 @@ class ProfileService {
     }
   }
 
-  Future<bool> updateProfile(User user, {XFile? profilePicture, XFile? banner}) async {
+  Future<bool> updateProfile(
+    User user, {
+    XFile? profilePicture,
+    XFile? banner,
+    void Function(int sent, int total)? onUploadProgress,
+  }) async {
     try {
       final token = await SecureStorage.getToken();
       if (token == null) throw Exception('Authentication required');
@@ -148,7 +191,6 @@ class ProfileService {
       if (user.email != null) request.fields['email'] = user.email!;
       if (user.bio != null) request.fields['bio'] = user.bio!;
       request.fields['is_private'] = user.isPrivate ? '1' : '0';
-
 
       // 3. Tambahkan file foto profil jika ada yang baru
       if (profilePicture != null) {
@@ -187,8 +229,10 @@ class ProfileService {
       }
 
       // 5. Kirim request dan proses response
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
+      final response = await _sendMultipartWithProgress(
+        request,
+        onUploadProgress,
+      );
 
       if (response.statusCode == 200) {
         await refreshProfile(); // Refresh cache setelah berhasil update
@@ -207,7 +251,8 @@ class ProfileService {
   Future<User> getOtherProfile(String username) async {
     try {
       final headers = await _getHeaders();
-      final response = await _client.get(Uri.parse('$_baseUrl/profile/$username'), headers: headers);
+      final response = await _client
+          .get(Uri.parse('$_baseUrl/profile/$username'), headers: headers);
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(response.body);
@@ -220,7 +265,6 @@ class ProfileService {
     }
   }
   // --- Akhir dari bagian yang tidak berubah ---
-
 
   // =======================================================================
   // ❗❗ PERUBAHAN UTAMA ADA DI DUA FUNGSI DI BAWAH INI ❗❗

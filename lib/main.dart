@@ -1,4 +1,3 @@
-
 // lib/main.dart
 
 import 'dart:async';
@@ -70,12 +69,15 @@ void onStart(ServiceInstance service) async {
         for (final channelName in channels) {
           AuthService.webSocketService!.subscribeToChannel(channelName);
         }
-        debugPrint('✅ Background Service: Berhasil subscribe ke ${channels.length} channel.');
+        debugPrint(
+            '✅ Background Service: Berhasil subscribe ke ${channels.length} channel.');
       } else {
-        debugPrint('ℹ️ Background Service: Tidak ada channel percakapan aktif ditemukan.');
+        debugPrint(
+            'ℹ️ Background Service: Tidak ada channel percakapan aktif ditemukan.');
       }
     } else {
-      debugPrint('❌ Background Service: Token tidak ditemukan, tidak bisa memulai WebSocket.');
+      debugPrint(
+          '❌ Background Service: Token tidak ditemukan, tidak bisa memulai WebSocket.');
     }
   } catch (e, s) {
     debugPrint("🔥 FATAL ERROR di Background Service: $e");
@@ -99,11 +101,11 @@ Future<void> initializeBackgroundService() async {
   );
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-  FlutterLocalNotificationsPlugin();
+      FlutterLocalNotificationsPlugin();
 
   await flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
-      AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(channel);
 
   await service.configure(
@@ -114,7 +116,8 @@ Future<void> initializeBackgroundService() async {
       autoStartOnBoot: true,
       notificationChannelId: 'my_foreground_service_channel',
       initialNotificationTitle: 'Portal SI Service',
-      initialNotificationContent: 'App is running in background to keep you updated.',
+      initialNotificationContent:
+          'App is running in background to keep you updated.',
       foregroundServiceNotificationId: 888,
     ),
     iosConfiguration: IosConfiguration(
@@ -138,18 +141,22 @@ Future<void> main() async {
 
   await Hive.initFlutter();
 
-  if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
+  if (!kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS)) {
     await initializeBackgroundService();
     // Inisialisasi FCM service
     await FcmService.instance.initialize();
   } else {
-    debugPrint('ℹ️ Background Service & FCM tidak diinisialisasi pada platform ini (kIsWeb: $kIsWeb, platform: $defaultTargetPlatform).');
+    debugPrint(
+        'ℹ️ Background Service & FCM tidak diinisialisasi pada platform ini (kIsWeb: $kIsWeb, platform: $defaultTargetPlatform).');
   }
 
   if (!kIsWeb) {
     await NotificationSystemService.instance.initialize();
   } else {
-    debugPrint('ℹ️ NotificationSystemService tidak diinisialisasi pada platform web.');
+    debugPrint(
+        'ℹ️ NotificationSystemService tidak diinisialisasi pada platform web.');
   }
 
   await initializeDateFormatting('id_ID', null);
@@ -251,8 +258,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           final mq = MediaQuery.of(context);
           if (!kIsWeb || mq.size.width <= 600) return child!;
           const panelWidth = 460.0;
-          final panelHeight =
-              mq.size.height.clamp(0.0, 940.0).toDouble();
+          final panelHeight = mq.size.height.clamp(0.0, 940.0).toDouble();
           return DecoratedBox(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -291,18 +297,24 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           '/login': (context) => const LoginPage(),
           '/register': (context) => RegisterPage(),
           '/home': (context) => const MainScaffold(),
+          '/profile': (context) => const MainScaffold(initialNavIndex: 4),
           '/feed': (context) => FeedPage(),
           '/story': (context) {
-            final user = ModalRoute.of(context)!.settings.arguments as User;
+            final args = ModalRoute.of(context)?.settings.arguments;
+            if (args is! User) return const MainScaffold();
+            final user = args;
             return InstagramStoryPage(user: user);
           },
           '/notif': (context) => const NotificationPage(),
           '/message': (context) => MessageListPage(),
           '/welcome': (context) => WelcomePage(),
-          '/updater': (context) => UpdateScreenPage(onUpdateNow: () {}, onUpdateLater: () {}),
+          '/updater': (context) =>
+              UpdateScreenPage(onUpdateNow: () {}, onUpdateLater: () {}),
           '/other-profile': (context) {
-            final args =
-            ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+            final args = ModalRoute.of(context)?.settings.arguments;
+            if (args is! Map<String, dynamic> || args['username'] == null) {
+              return const MainScaffold();
+            }
             return OtherProfilePage(
               username: args['username'],
             );
@@ -404,7 +416,7 @@ class _CacheDebugPageState extends State<CacheDebugPage> {
                       );
                     },
                     style:
-                    ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                        ElevatedButton.styleFrom(backgroundColor: Colors.blue),
                     child: const Text('Print Stats'),
                   ),
                 ),
@@ -442,7 +454,7 @@ class _CacheDebugPageState extends State<CacheDebugPage> {
                       );
                     },
                     style:
-                    ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                        ElevatedButton.styleFrom(backgroundColor: Colors.red),
                     child: const Text('Clear All'),
                   ),
                 ),
@@ -459,7 +471,7 @@ class _CacheDebugPageState extends State<CacheDebugPage> {
                       );
                     },
                     style:
-                    ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                        ElevatedButton.styleFrom(backgroundColor: Colors.green),
                     child: const Text('Analyze'),
                   ),
                 ),
@@ -476,10 +488,10 @@ class _CacheDebugPageState extends State<CacheDebugPage> {
             const SizedBox(height: 8),
             const Text(
               '• Check console for cache statistics'
-                  '• High hit rate (>70%) = good performance'
-                  '• Clean cache regularly'
-                  '• Monitor memory usage'
-                  '• Remove this page in production',
+              '• High hit rate (>70%) = good performance'
+              '• Clean cache regularly'
+              '• Monitor memory usage'
+              '• Remove this page in production',
               style: TextStyle(fontSize: 14),
             ),
           ],

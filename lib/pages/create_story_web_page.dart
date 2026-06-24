@@ -1,10 +1,12 @@
 // lib/pages/create_story_web_page.dart
 //
 // ponytail: the mobile create-story page is AssetEntity/PhotoManager-based,
-// which don't exist on web. Simple web flow: pick an image, upload its bytes.
+// which don't exist on web. Simple web flow: pick media, upload its bytes.
 import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
+import '../controllers/home_controller.dart';
 import '../services/story_service.dart';
 
 class CreateStoryWebPage extends StatefulWidget {
@@ -15,13 +17,15 @@ class CreateStoryWebPage extends StatefulWidget {
 }
 
 class _CreateStoryWebPageState extends State<CreateStoryWebPage> {
-  final _picker = ImagePicker();
   final _captionController = TextEditingController();
   final _storyService = StoryService();
 
   Uint8List? _bytes;
   String? _filename;
+  bool _isVideo = false;
   bool _isUploading = false;
+  double? _uploadProgress;
+  String? _pickError;
 
   @override
   void dispose() {
@@ -29,29 +33,55 @@ class _CreateStoryWebPageState extends State<CreateStoryWebPage> {
     super.dispose();
   }
 
-  Future<void> _pick() async {
-    final XFile? file = await _picker.pickImage(source: ImageSource.gallery);
+  Future<void> _pick({required bool video}) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowMultiple: false,
+      withData: true,
+      allowedExtensions:
+          video ? const ['mp4', 'mov', 'webm'] : const ['jpg', 'jpeg', 'png'],
+    );
+    final file = result?.files.single;
+    final bytes = file?.bytes;
     if (file == null) return;
-    final bytes = await file.readAsBytes();
     if (!mounted) return;
+    if (bytes == null || bytes.isEmpty) {
+      setState(() => _pickError = 'File tidak bisa dibaca oleh browser.');
+      return;
+    }
     setState(() {
       _bytes = bytes;
-      _filename = file.name;
+      _filename = file.name.isNotEmpty
+          ? file.name
+          : (video ? 'story.mp4' : 'story.png');
+      _isVideo = video;
+      _pickError = null;
     });
   }
 
   Future<void> _submit() async {
     if (_bytes == null) return;
-    setState(() => _isUploading = true);
+    setState(() {
+      _isUploading = true;
+      _uploadProgress = 0;
+    });
     try {
       await _storyService.createStory(
         {
-          'type': 'image',
+          'type': _isVideo ? 'video' : 'image',
           'caption': _captionController.text.trim(),
         },
         mediaBytes: _bytes,
         mediaFilename: _filename,
+        onProgress: (sent, total) {
+          if (!mounted || total <= 0) return;
+          setState(() => _uploadProgress = (sent / total).clamp(0.0, 1.0));
+        },
       );
+      if (!mounted) return;
+      try {
+        await context.read<HomeController>().refreshDashboardData();
+      } catch (_) {}
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Story berhasil diunggah 🎉')),
@@ -59,7 +89,10 @@ class _CreateStoryWebPageState extends State<CreateStoryWebPage> {
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _isUploading = false);
+      setState(() {
+        _isUploading = false;
+        _uploadProgress = null;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text('Gagal mengunggah story: $e'),
@@ -82,11 +115,11 @@ class _CreateStoryWebPageState extends State<CreateStoryWebPage> {
           TextButton(
             onPressed: (hasMedia && !_isUploading) ? _submit : null,
             child: _isUploading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
+                ? Text(
+                    '${((_uploadProgress ?? 0) * 100).round()}%',
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold),
+                  )
                 : const Text('Bagikan',
                     style: TextStyle(
                         color: Colors.blueAccent,
@@ -100,17 +133,53 @@ class _CreateStoryWebPageState extends State<CreateStoryWebPage> {
           Expanded(
             child: Center(
               child: !hasMedia
-                  ? OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: const BorderSide(color: Colors.white54)),
-                      onPressed: _pick,
-                      icon: const Icon(Icons.add_photo_alternate_outlined),
-                      label: const Text('Pilih Foto'),
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: const BorderSide(color: Colors.white54)),
+                          onPressed: () => _pick(video: false),
+                          icon: const Icon(Icons.add_photo_alternate_outlined),
+                          label: const Text('Pilih Foto'),
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: const BorderSide(color: Colors.white54)),
+                          onPressed: () => _pick(video: true),
+                          icon: const Icon(Icons.videocam_outlined),
+                          label: const Text('Pilih Video'),
+                        ),
+                        if (_pickError != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Text(
+                              _pickError!,
+                              style: const TextStyle(color: Colors.redAccent),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                      ],
                     )
-                  : InteractiveViewer(
-                      child: Image.memory(_bytes!, fit: BoxFit.contain),
-                    ),
+                  : _isVideo
+                      ? Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.videocam,
+                                color: Colors.white70, size: 72),
+                            const SizedBox(height: 8),
+                            Text(
+                              _filename ?? 'video',
+                              style: const TextStyle(color: Colors.white70),
+                            ),
+                          ],
+                        )
+                      : InteractiveViewer(
+                          child: Image.memory(_bytes!, fit: BoxFit.contain),
+                        ),
             ),
           ),
           if (hasMedia)

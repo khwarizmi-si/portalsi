@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -33,8 +34,11 @@ class _EditProfilePageState extends State<EditProfilePage>
   late TextEditingController _bioController;
 
   bool _isSaving = false;
+  double? _uploadProgress;
   XFile? _selectedImageXFile;
   XFile? _selectedBannerXFile;
+  Uint8List? _selectedImageBytes;
+  Uint8List? _selectedBannerBytes;
   String _profilePictureUrl = '';
   String _bannerUrl = '';
   late User _currentProfile;
@@ -49,8 +53,10 @@ class _EditProfilePageState extends State<EditProfilePage>
     super.initState();
     _initializeControllers();
     _fetchLatestProfile();
-    _animationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
-    _buttonAnimationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 200));
+    _animationController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 800));
+    _buttonAnimationController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 200));
     _animationController.forward();
   }
 
@@ -103,25 +109,33 @@ class _EditProfilePageState extends State<EditProfilePage>
     if (source == null) return;
 
     try {
-      final XFile? pickedImage = await _profileService.pickImage(source: source);
+      final XFile? pickedImage =
+          await _profileService.pickImage(source: source);
       if (pickedImage == null || !mounted) return;
 
-      final File? croppedFile = await Navigator.push(
+      final XFile? croppedImage = await Navigator.push<XFile>(
         context,
         MaterialPageRoute(
           builder: (context) => _ImageCropperPage(
-            imageFile: File(pickedImage.path),
+            image: pickedImage,
             isBanner: isBanner,
           ),
           fullscreenDialog: true,
         ),
       );
 
-      if (croppedFile != null) {
+      if (croppedImage != null) {
+        final bytes = kIsWeb ? await croppedImage.readAsBytes() : null;
         if (isBanner) {
-          setState(() => _selectedBannerXFile = XFile(croppedFile.path));
+          setState(() {
+            _selectedBannerXFile = croppedImage;
+            _selectedBannerBytes = bytes;
+          });
         } else {
-          setState(() => _selectedImageXFile = XFile(croppedFile.path));
+          setState(() {
+            _selectedImageXFile = croppedImage;
+            _selectedImageBytes = bytes;
+          });
         }
         HapticFeedback.mediumImpact();
       }
@@ -141,7 +155,9 @@ class _EditProfilePageState extends State<EditProfilePage>
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+              child: Text(title,
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w600)),
             ),
             const SizedBox(height: 10),
             _buildImageSourceTile(
@@ -232,8 +248,13 @@ class _EditProfilePageState extends State<EditProfilePage>
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
     HapticFeedback.lightImpact();
-    _buttonAnimationController.forward().then((_) => _buttonAnimationController.reverse());
-    setState(() => _isSaving = true);
+    _buttonAnimationController
+        .forward()
+        .then((_) => _buttonAnimationController.reverse());
+    setState(() {
+      _isSaving = true;
+      _uploadProgress = 0;
+    });
     try {
       final updatedUserData = _currentProfile.copyWith(
         username: _usernameController.text.trim(),
@@ -245,6 +266,10 @@ class _EditProfilePageState extends State<EditProfilePage>
         updatedUserData,
         profilePicture: _selectedImageXFile,
         banner: _selectedBannerXFile,
+        onUploadProgress: (sent, total) {
+          if (!mounted || total <= 0) return;
+          setState(() => _uploadProgress = (sent / total).clamp(0.0, 1.0));
+        },
       );
       if (success) {
         HapticFeedback.mediumImpact();
@@ -266,7 +291,12 @@ class _EditProfilePageState extends State<EditProfilePage>
       HapticFeedback.heavyImpact();
       _showErrorDialog('Terjadi kesalahan: $e');
     } finally {
-      if (mounted) setState(() => _isSaving = false);
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+          _uploadProgress = null;
+        });
+      }
     }
   }
 
@@ -279,7 +309,9 @@ class _EditProfilePageState extends State<EditProfilePage>
         title: Row(children: [
           Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8)),
               child: const Icon(Icons.error_outline, color: Colors.red)),
           const SizedBox(width: 12),
           const Text('Oops!', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -291,8 +323,10 @@ class _EditProfilePageState extends State<EditProfilePage>
               style: TextButton.styleFrom(
                   backgroundColor: Colors.red.withOpacity(0.1),
                   foregroundColor: Colors.red,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-              child: const Text('OK', style: TextStyle(fontWeight: FontWeight.w600))),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10))),
+              child: const Text('OK',
+                  style: TextStyle(fontWeight: FontWeight.w600))),
         ],
       ),
     );
@@ -307,10 +341,14 @@ class _EditProfilePageState extends State<EditProfilePage>
         title: Row(children: [
           Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-              child: const Icon(Icons.check_circle_outline, color: Colors.green)),
+              decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8)),
+              child:
+                  const Icon(Icons.check_circle_outline, color: Colors.green)),
           const SizedBox(width: 12),
-          const Text('Berhasil!', style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text('Berhasil!',
+              style: TextStyle(fontWeight: FontWeight.bold)),
         ]),
         content: Text(message, style: const TextStyle(fontSize: 16)),
         actions: [
@@ -322,8 +360,10 @@ class _EditProfilePageState extends State<EditProfilePage>
               style: TextButton.styleFrom(
                   backgroundColor: Colors.green.withOpacity(0.1),
                   foregroundColor: Colors.green,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-              child: const Text('OK', style: TextStyle(fontWeight: FontWeight.w600))),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10))),
+              child: const Text('OK',
+                  style: TextStyle(fontWeight: FontWeight.w600))),
         ],
       ),
     );
@@ -345,7 +385,11 @@ class _EditProfilePageState extends State<EditProfilePage>
               foregroundColor: Colors.brown.shade800,
               elevation: 0,
               flexibleSpace: FlexibleSpaceBar(
-                title: Text('Edit Profil', style: TextStyle(color: Colors.brown.shade800, fontWeight: FontWeight.bold, fontSize: 20)),
+                title: Text('Edit Profil',
+                    style: TextStyle(
+                        color: Colors.brown.shade800,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20)),
                 background: Container(color: Colors.transparent),
               ),
               actions: [
@@ -353,13 +397,26 @@ class _EditProfilePageState extends State<EditProfilePage>
                   padding: const EdgeInsets.only(right: 16.0),
                   child: Center(
                     child: ScaleTransition(
-                      scale: Tween<double>(begin: 1.0, end: 0.95).animate(_buttonAnimationController),
+                      scale: Tween<double>(begin: 1.0, end: 0.95)
+                          .animate(_buttonAnimationController),
                       child: Container(
                         decoration: BoxDecoration(
-                          gradient: _isSaving ? null : LinearGradient(colors: [Colors.amber.shade600, Colors.orange.shade800]),
+                          gradient: _isSaving
+                              ? null
+                              : LinearGradient(colors: [
+                                  Colors.amber.shade600,
+                                  Colors.orange.shade800
+                                ]),
                           color: _isSaving ? Colors.grey[300] : null,
                           borderRadius: BorderRadius.circular(12),
-                          boxShadow: _isSaving ? null : [BoxShadow(color: Colors.amber.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))],
+                          boxShadow: _isSaving
+                              ? null
+                              : [
+                                  BoxShadow(
+                                      color: Colors.amber.withOpacity(0.4),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 4))
+                                ],
                         ),
                         child: Material(
                           color: Colors.transparent,
@@ -367,10 +424,19 @@ class _EditProfilePageState extends State<EditProfilePage>
                             onTap: _isSaving ? null : _saveProfile,
                             borderRadius: BorderRadius.circular(12),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 12),
                               child: _isSaving
-                                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                  : const Text('Simpan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2, color: Colors.white))
+                                  : const Text('Simpan',
+                                      style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16)),
                             ),
                           ),
                         ),
@@ -397,7 +463,55 @@ class _EditProfilePageState extends State<EditProfilePage>
               ),
             ),
           ]),
+          if (_isSaving) _buildUploadOverlay(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildUploadOverlay() {
+    final progress = (_uploadProgress ?? 0).clamp(0.0, 1.0);
+    final percent = (progress * 100).round();
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withOpacity(0.25),
+        child: Center(
+          child: Container(
+            width: 260,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Mengunggah $percent%',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                LinearProgressIndicator(
+                  value: progress == 0 ? null : progress,
+                  minHeight: 8,
+                  borderRadius: BorderRadius.circular(99),
+                  color: Colors.orange.shade700,
+                  backgroundColor: Colors.orange.shade100,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -412,29 +526,42 @@ class _EditProfilePageState extends State<EditProfilePage>
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
               color: Colors.grey.shade200,
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 15, offset: const Offset(0, 8))],
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 15,
+                    offset: const Offset(0, 8))
+              ],
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(20),
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 500),
                 child: _selectedBannerXFile != null
-                    ? (kIsWeb
-                    ? Image.network(_selectedBannerXFile!.path, key: ValueKey(_selectedBannerXFile!.path), fit: BoxFit.cover)
-                    : Image.file(File(_selectedBannerXFile!.path), key: ValueKey(_selectedBannerXFile!.path), fit: BoxFit.cover))
+                    ? (kIsWeb && _selectedBannerBytes != null
+                        ? Image.memory(_selectedBannerBytes!,
+                            key: const ValueKey('selected-banner'),
+                            fit: BoxFit.cover)
+                        : Image.file(File(_selectedBannerXFile!.path),
+                            key: ValueKey(_selectedBannerXFile!.path),
+                            fit: BoxFit.cover))
                     : _bannerUrl.isNotEmpty
-                    ? CachedNetworkImage(
-                  key: ValueKey(_bannerUrl),
-                  imageUrl: _bannerUrl,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(color: Colors.grey.shade300),
-                  errorWidget: (context, url, error) => const Icon(Icons.image_not_supported, color: Colors.grey),
-                )
-                    : Container(
-                  key: const ValueKey('placeholder'),
-                  color: Colors.grey.shade300,
-                  child: Icon(Icons.landscape, color: Colors.grey.shade500, size: 50),
-                ),
+                        ? CachedNetworkImage(
+                            key: ValueKey(_bannerUrl),
+                            imageUrl: _bannerUrl,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) =>
+                                Container(color: Colors.grey.shade300),
+                            errorWidget: (context, url, error) => const Icon(
+                                Icons.image_not_supported,
+                                color: Colors.grey),
+                          )
+                        : Container(
+                            key: const ValueKey('placeholder'),
+                            color: Colors.grey.shade300,
+                            child: Icon(Icons.landscape,
+                                color: Colors.grey.shade500, size: 50),
+                          ),
               ),
             ),
           ),
@@ -445,7 +572,9 @@ class _EditProfilePageState extends State<EditProfilePage>
               onTap: () => _pickAndCropImage(isBanner: true),
               child: Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.5),
+                    shape: BoxShape.circle),
                 child: const Icon(Icons.edit, color: Colors.white, size: 20),
               ),
             ),
@@ -460,20 +589,40 @@ class _EditProfilePageState extends State<EditProfilePage>
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 8))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 20,
+              offset: const Offset(0, 8))
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Informasi Profil', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.brown.shade800)),
+            Text('Informasi Profil',
+                style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.brown.shade800)),
             const SizedBox(height: 8),
-            Text('Lengkapi informasi profil Anda dengan data yang akurat', style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+            Text('Lengkapi informasi profil Anda dengan data yang akurat',
+                style: TextStyle(fontSize: 14, color: Colors.grey[600])),
             const SizedBox(height: 24),
-            _buildAnimatedTextField(controller: _fullNameController, labelText: 'Nama Lengkap', icon: Icons.badge_outlined, delay: 0.1, color: Colors.amber.shade700),
+            _buildAnimatedTextField(
+                controller: _fullNameController,
+                labelText: 'Nama Lengkap',
+                icon: Icons.badge_outlined,
+                delay: 0.1,
+                color: Colors.amber.shade700),
             const SizedBox(height: 20),
-            _buildAnimatedTextField(controller: _usernameController, labelText: 'Username', icon: Icons.alternate_email_outlined, delay: 0.2, color: Colors.orange.shade700),
+            _buildAnimatedTextField(
+                controller: _usernameController,
+                labelText: 'Username',
+                icon: Icons.alternate_email_outlined,
+                delay: 0.2,
+                color: Colors.orange.shade700),
             const SizedBox(height: 20),
             _buildAnimatedTextField(
               controller: _bioController,
@@ -502,37 +651,65 @@ class _EditProfilePageState extends State<EditProfilePage>
     bool isOptional = false,
     int? maxLength,
   }) {
-    final animation = Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(parent: _animationController, curve: Interval(delay, 1.0, curve: Curves.easeOutCubic)));
+    final animation = Tween<double>(begin: 0.0, end: 1.0).animate(
+        CurvedAnimation(
+            parent: _animationController,
+            curve: Interval(delay, 1.0, curve: Curves.easeOutCubic)));
     return FadeTransition(
       opacity: animation,
       child: SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(animation),
+        position: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
+            .animate(animation),
         child: Container(
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: color.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))]),
+          decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(15),
+              boxShadow: [
+                BoxShadow(
+                    color: color.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4))
+              ]),
           child: TextFormField(
             controller: controller,
             maxLength: maxLength,
             decoration: InputDecoration(
               labelText: labelText,
-              labelStyle: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.w500),
+              labelStyle: TextStyle(
+                  color: Colors.grey[600], fontWeight: FontWeight.w500),
               prefixIcon: Container(
                 margin: const EdgeInsets.all(12),
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8)),
                 child: Icon(icon, color: color, size: 20),
               ),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: Colors.grey.shade200, width: 1.5)),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide(color: color, width: 2)),
-              errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: const BorderSide(color: Colors.red, width: 1.5)),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(15),
+                  borderSide: BorderSide.none),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(15),
+                  borderSide:
+                      BorderSide(color: Colors.grey.shade200, width: 1.5)),
+              focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(15),
+                  borderSide: BorderSide(color: color, width: 2)),
+              errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(15),
+                  borderSide: const BorderSide(color: Colors.red, width: 1.5)),
               filled: true,
               fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             ),
             maxLines: maxLines,
             keyboardType: keyboardType,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-            validator: isOptional ? null : (value) => (value?.isEmpty ?? true) ? '$labelText tidak boleh kosong' : null,
+            validator: isOptional
+                ? null
+                : (value) => (value?.isEmpty ?? true)
+                    ? '$labelText tidak boleh kosong'
+                    : null,
           ),
         ),
       ),
@@ -548,8 +725,14 @@ class _EditProfilePageState extends State<EditProfilePage>
             child: Container(
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: LinearGradient(colors: [Colors.amber.shade600, Colors.orange.shade800]),
-                boxShadow: [BoxShadow(color: Colors.amber.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, 10))],
+                gradient: LinearGradient(
+                    colors: [Colors.amber.shade600, Colors.orange.shade800]),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.amber.withOpacity(0.4),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10))
+                ],
               ),
               padding: const EdgeInsets.all(4),
               child: CircleAvatar(
@@ -558,31 +741,58 @@ class _EditProfilePageState extends State<EditProfilePage>
                 child: ClipOval(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 500),
-                    transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: ScaleTransition(scale: animation, child: child)),
+                    transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(scale: animation, child: child)),
                     child: _selectedImageXFile != null
-                        ? (kIsWeb
-                        ? Image.network(_selectedImageXFile!.path, key: ValueKey(_selectedImageXFile!.path), fit: BoxFit.cover, width: 124, height: 124)
-                        : Image.file(File(_selectedImageXFile!.path), key: ValueKey(_selectedImageXFile!.path), fit: BoxFit.cover, width: 124, height: 124))
+                        ? (kIsWeb && _selectedImageBytes != null
+                            ? Image.memory(_selectedImageBytes!,
+                                key: const ValueKey('selected-profile'),
+                                fit: BoxFit.cover,
+                                width: 124,
+                                height: 124)
+                            : Image.file(File(_selectedImageXFile!.path),
+                                key: ValueKey(_selectedImageXFile!.path),
+                                fit: BoxFit.cover,
+                                width: 124,
+                                height: 124))
                         : _profilePictureUrl.isNotEmpty
-                        ? CachedNetworkImage(
-                      key: ValueKey(_profilePictureUrl),
-                      imageUrl: _profilePictureUrl,
-                      fit: BoxFit.cover,
-                      width: 124,
-                      height: 124,
-                      placeholder: (context, url) => Container(
-                          decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.grey.shade200, Colors.grey.shade300])),
-                          child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Colors.amber))),
-                      errorWidget: (context, url, error) => Container(
-                          decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.grey.shade200, Colors.grey.shade300])),
-                          child: Icon(Icons.person, size: 60, color: Colors.grey[600])),
-                    )
-                        : Container(
-                      width: 124,
-                      height: 124,
-                      decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.grey.shade200, Colors.grey.shade300])),
-                      child: Icon(Icons.person, size: 60, color: Colors.grey[600]),
-                    ),
+                            ? CachedNetworkImage(
+                                key: ValueKey(_profilePictureUrl),
+                                imageUrl: _profilePictureUrl,
+                                fit: BoxFit.cover,
+                                width: 124,
+                                height: 124,
+                                placeholder: (context, url) => Container(
+                                    decoration: BoxDecoration(
+                                        gradient: LinearGradient(colors: [
+                                      Colors.grey.shade200,
+                                      Colors.grey.shade300
+                                    ])),
+                                    child: const Center(
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.amber))),
+                                errorWidget: (context, url, error) => Container(
+                                    decoration: BoxDecoration(
+                                        gradient: LinearGradient(colors: [
+                                      Colors.grey.shade200,
+                                      Colors.grey.shade300
+                                    ])),
+                                    child: Icon(Icons.person,
+                                        size: 60, color: Colors.grey[600])),
+                              )
+                            : Container(
+                                width: 124,
+                                height: 124,
+                                decoration: BoxDecoration(
+                                    gradient: LinearGradient(colors: [
+                                  Colors.grey.shade200,
+                                  Colors.grey.shade300
+                                ])),
+                                child: Icon(Icons.person,
+                                    size: 60, color: Colors.grey[600]),
+                              ),
                   ),
                 ),
               ),
@@ -597,12 +807,18 @@ class _EditProfilePageState extends State<EditProfilePage>
                 decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: Colors.white,
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 10, offset: const Offset(0, 4))]),
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withOpacity(0.15),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4))
+                    ]),
                 padding: const EdgeInsets.all(4),
                 child: CircleAvatar(
                   radius: 20,
                   backgroundColor: Colors.amber.shade700,
-                  child: const Icon(Icons.camera_alt_outlined, color: Colors.white, size: 20),
+                  child: const Icon(Icons.camera_alt_outlined,
+                      color: Colors.white, size: 20),
                 ),
               ),
             ),
@@ -614,10 +830,10 @@ class _EditProfilePageState extends State<EditProfilePage>
 }
 
 class _ImageCropperPage extends StatelessWidget {
-  final File imageFile;
+  final XFile image;
   final bool isBanner;
 
-  const _ImageCropperPage({required this.imageFile, required this.isBanner});
+  const _ImageCropperPage({required this.image, required this.isBanner});
 
   @override
   Widget build(BuildContext context) {
@@ -639,34 +855,53 @@ class _ImageCropperPage extends StatelessWidget {
               showDialog(
                 context: context,
                 barrierDismissible: false,
-                builder: (context) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                builder: (context) => const Center(
+                    child: CircularProgressIndicator(color: Colors.white)),
               );
 
               try {
                 // --- 👇 PERBAIKAN UTAMA DAN FINAL DI SINI 👇 ---
                 // Menggunakan method croppedBitmap() yang lebih stabil
                 final result = await controller.croppedBitmap();
-                final data = await result.toByteData(format: ui.ImageByteFormat.png);
+                final data =
+                    await result.toByteData(format: ui.ImageByteFormat.png);
 
                 if (data == null) {
                   throw Exception("Gagal mengonversi gambar yang di-crop.");
                 }
 
                 final bytes = data.buffer.asUint8List();
-                final tempDir = await getTemporaryDirectory();
                 final fileName = '${DateTime.now().millisecondsSinceEpoch}.png';
-                final File tempFile = File('${tempDir.path}/$fileName');
-                await tempFile.writeAsBytes(bytes);
+                final XFile croppedImage;
+                if (kIsWeb) {
+                  croppedImage = XFile.fromData(
+                    bytes,
+                    name: fileName,
+                    mimeType: 'image/png',
+                  );
+                } else {
+                  final tempDir = await getTemporaryDirectory();
+                  final File tempFile = File('${tempDir.path}/$fileName');
+                  await tempFile.writeAsBytes(bytes);
+                  croppedImage = XFile(
+                    tempFile.path,
+                    name: fileName,
+                    mimeType: 'image/png',
+                  );
+                }
 
                 if (context.mounted) Navigator.pop(context); // Tutup loading
-                if (context.mounted) Navigator.pop(context, tempFile); // Kembali dengan hasil
-
+                if (context.mounted)
+                  Navigator.pop(context, croppedImage); // Kembali dengan hasil
               } catch (e) {
                 if (context.mounted) Navigator.pop(context); // Tutup loading
-                if (context.mounted) Navigator.pop(context, null); // Kembali tanpa hasil
+                if (context.mounted)
+                  Navigator.pop(context, null); // Kembali tanpa hasil
               }
             },
-            child: const Text('SELESAI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('SELESAI',
+                style: TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -680,19 +915,37 @@ class _ImageCropperPage extends StatelessWidget {
   }
 
   Widget _buildCropper(CropController controller) {
-    final cropper = CropImage(
-      controller: controller,
-      image: Image.file(imageFile),
-      gridColor: Colors.white54,
-      scrimColor: Colors.black.withOpacity(0.7),
-      paddingSize: 20,
-      alwaysShowThirdLines: true,
-    );
+    Widget buildCropper(Image imageWidget) {
+      final cropper = CropImage(
+        controller: controller,
+        image: imageWidget,
+        gridColor: Colors.white54,
+        scrimColor: Colors.black.withOpacity(0.7),
+        paddingSize: 20,
+        alwaysShowThirdLines: true,
+      );
 
-    if (!isBanner) {
-      return ClipOval(child: cropper);
+      if (!isBanner) {
+        return ClipOval(child: cropper);
+      }
+      return cropper;
     }
-    return cropper;
+
+    if (kIsWeb) {
+      return FutureBuilder<Uint8List>(
+        future: image.readAsBytes(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            );
+          }
+          return buildCropper(Image.memory(snapshot.data!));
+        },
+      );
+    }
+
+    return buildCropper(Image.file(File(image.path)));
   }
 }
 
@@ -721,7 +974,8 @@ class _BackgroundPainter extends CustomPainter {
       ..color = Colors.amber.shade100.withOpacity(0.6)
       ..style = PaintingStyle.fill
       ..imageFilter = ui.ImageFilter.blur(sigmaX: 120, sigmaY: 120);
-    canvas.drawCircle(Offset(size.width * 0.9, size.height * 0.85), 120, paint2);
+    canvas.drawCircle(
+        Offset(size.width * 0.9, size.height * 0.85), 120, paint2);
   }
 
   @override

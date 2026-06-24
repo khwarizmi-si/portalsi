@@ -3,6 +3,7 @@
 import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -43,7 +44,8 @@ class GroupService {
 
   // --- 👇 PERBAIKAN: Kembalikan fungsi ini agar me-return Map ---
   /// Mencari pengguna berdasarkan query dengan paginasi.
-  Future<Map<String, dynamic>> searchUsers({int page = 1, required String query}) async {
+  Future<Map<String, dynamic>> searchUsers(
+      {int page = 1, required String query}) async {
     if (query.trim().isEmpty) {
       // Jika query kosong, kita panggil getMutuals saja
       return getMutuals(page: page);
@@ -51,7 +53,8 @@ class GroupService {
     try {
       final headers = await _getHeaders();
       // Asumsi endpoint search Anda adalah /users/search
-      final uri = Uri.parse('$_baseUrl/users/search?page=$page&username=$query&fullname=$query');
+      final uri = Uri.parse(
+          '$_baseUrl/users/search?page=$page&username=$query&fullname=$query');
       final response = await http.get(uri, headers: headers);
 
       if (response.statusCode == 200) {
@@ -70,6 +73,8 @@ class GroupService {
     required String name,
     String? description,
     File? avatarFile,
+    Uint8List? avatarBytes,
+    String? avatarFilename,
   }) async {
     final token = await SecureStorage.getToken();
     if (token == null) {
@@ -96,12 +101,22 @@ class GroupService {
     // request.fields['_method'] = 'PATCH'; // Contoh jika diperlukan
 
     // Tambahkan file avatar jika ada
-    if (avatarFile != null) {
+    if (avatarBytes != null) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'avatar',
+          avatarBytes,
+          filename: avatarFilename ?? 'avatar.png',
+          contentType: MediaType('image', 'png'),
+        ),
+      );
+    } else if (avatarFile != null) {
       request.files.add(
         await http.MultipartFile.fromPath(
           'avatar', // 'name' dari field file di API
           avatarFile.path,
-          contentType: MediaType('image', 'jpeg'), // Sesuaikan tipe konten jika perlu
+          contentType:
+              MediaType('image', 'jpeg'), // Sesuaikan tipe konten jika perlu
         ),
       );
     }
@@ -211,10 +226,12 @@ class GroupService {
 
       if (response.statusCode == 200) {
         final decodedBody = jsonDecode(response.body);
-        if (decodedBody is Map<String, dynamic> && decodedBody.containsKey('group')) {
+        if (decodedBody is Map<String, dynamic> &&
+            decodedBody.containsKey('group')) {
           return decodedBody['group'] as Map<String, dynamic>;
         } else {
-          throw Exception("Respons API untuk getGroupDetails tidak memiliki key 'group'.");
+          throw Exception(
+              "Respons API untuk getGroupDetails tidak memiliki key 'group'.");
         }
       } else {
         throw Exception('Gagal memuat detail grup: ${response.body}');
@@ -270,12 +287,15 @@ class GroupService {
         },
         // Body API Anda kemungkinan mengharapkan sebuah List,
         // jadi kita kirim satu ID di dalam list.
-        body: jsonEncode({'user_ids': [userId]}),
+        body: jsonEncode({
+          'user_ids': [userId]
+        }),
       );
 
       // Sukses jika status code 200 (OK) atau 201 (Created)
       if (response.statusCode == 200 || response.statusCode == 201) {
-        debugPrint('✅ Anggota dengan ID $userId berhasil ditambahkan ke grup $groupId');
+        debugPrint(
+            '✅ Anggota dengan ID $userId berhasil ditambahkan ke grup $groupId');
         return true;
       } else {
         // Coba decode error message dari API jika ada
@@ -381,7 +401,8 @@ class GroupService {
         // Parsing setiap kategori dari API
         final meList = parseMemberList(responseData['me'] ?? []);
         final followingList = parseMemberList(responseData['following'] ?? []);
-        final notFollowingList = parseMemberList(responseData['not_following'] ?? []);
+        final notFollowingList =
+            parseMemberList(responseData['not_following'] ?? []);
 
         // Kembalikan dalam bentuk Map agar mudah diakses di UI
         return {
@@ -397,7 +418,8 @@ class GroupService {
     }
   }
 
-  Future<bool> addMemberByIdentifier({required int groupId, required String identifier}) async {
+  Future<bool> addMemberByIdentifier(
+      {required int groupId, required String identifier}) async {
     final token = await SecureStorage.getToken();
     if (token == null) {
       throw Exception('Autentikasi gagal: Token tidak ditemukan.');
@@ -420,10 +442,10 @@ class GroupService {
         }),
       );
 
-      debugPrint("Respons dari API addMember (identifier: $identifier): ${response.body}");
+      debugPrint(
+          "Respons dari API addMember (identifier: $identifier): ${response.body}");
 
       return response.statusCode == 200 || response.statusCode == 201;
-
     } catch (e) {
       debugPrint("Error saat menambahkan anggota '$identifier': $e");
       return false;
@@ -491,10 +513,12 @@ class GroupService {
       log('API Response Body: ${response.body}');
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        return jsonDecode(response.body) as Map<String, dynamic>; // Pastikan ini Map
+        return jsonDecode(response.body)
+            as Map<String, dynamic>; // Pastikan ini Map
       } else {
         // Jika terjadi error (misalnya 4xx atau 5xx), throw exception dengan body.
-        final responseBody = response.body.isNotEmpty ? response.body : 'No response body.';
+        final responseBody =
+            response.body.isNotEmpty ? response.body : 'No response body.';
         log('API Error: $responseBody');
         throw Exception('Gagal mengirim pesan. Status: ${response.statusCode}');
       }
@@ -503,7 +527,6 @@ class GroupService {
       throw Exception('Error koneksi saat mengirim pesan: $e');
     }
   }
-
 
   /// Menambah satu atau lebih anggota baru ke dalam grup.
   Future<void> addMembers(int groupId, List<int> userIds) async {

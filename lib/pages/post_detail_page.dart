@@ -36,12 +36,14 @@ class PostDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final navProvider = Provider.of<NavigationProvider>(context, listen: false);
+
     // --- PERUBAHAN 1: Bungkus dengan PopScope ---
     return PopScope(
-      canPop: false,
+      canPop: navProvider.overlayPage == null,
       onPopInvoked: (bool didPop) {
         if (!didPop) {
-          Provider.of<NavigationProvider>(context, listen: false).hideOverlay();
+          navProvider.hideOverlay();
         }
       },
       child: ChangeNotifierProvider(
@@ -62,8 +64,13 @@ class PostDetailPage extends StatelessWidget {
             leading: IconButton(
               icon: const Icon(Icons.arrow_back),
               onPressed: () {
-                Provider.of<NavigationProvider>(context, listen: false)
-                    .hideOverlay();
+                if (navProvider.overlayPage != null) {
+                  navProvider.hideOverlay();
+                } else if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                } else {
+                  Navigator.of(context).pushReplacementNamed('/home');
+                }
               },
             ),
           ),
@@ -90,7 +97,8 @@ class PostDetailPage extends StatelessWidget {
                       onComment: () => _showCommentSheet(context, mainPost),
                       onProfileTap: () {
                         // Cukup panggil helper, ia akan menangani sisanya
-                        NavigationHelper.navigateToProfile(context, mainPost.user);
+                        NavigationHelper.navigateToProfile(
+                            context, mainPost.user);
                       },
                     ),
                   ),
@@ -106,12 +114,12 @@ class PostDetailPage extends StatelessWidget {
                     const SliverToBoxAdapter(
                         child: Center(
                             child: Padding(
-                              padding: EdgeInsets.all(16.0),
-                              child: CircularProgressIndicator(),
-                            ))),
+                      padding: EdgeInsets.all(16.0),
+                      child: CircularProgressIndicator(),
+                    ))),
                   SliverList(
                     delegate: SliverChildBuilderDelegate(
-                          (context, index) {
+                      (context, index) {
                         final relatedPost = controller.relatedPosts[index];
                         return PostCard(
                           post: relatedPost,
@@ -121,8 +129,11 @@ class PostDetailPage extends StatelessWidget {
                           onComment: () =>
                               _showCommentSheet(context, relatedPost),
                           onProfileTap: () {
-                            Provider.of<NavigationProvider>(context, listen: false).hideOverlay();
-                            Future.delayed(const Duration(milliseconds: 100), () {
+                            Provider.of<NavigationProvider>(context,
+                                    listen: false)
+                                .hideOverlay();
+                            Future.delayed(const Duration(milliseconds: 100),
+                                () {
                               NavigationHelper.navigateToProfile(
                                   context, relatedPost.user);
                             });

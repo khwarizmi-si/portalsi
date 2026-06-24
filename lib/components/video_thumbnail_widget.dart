@@ -2,14 +2,18 @@
 
 import 'dart:developer';
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 
 class VideoThumbnailWidget extends StatefulWidget {
   final String videoUrl;
+  final String? thumbnailUrl;
 
-  const VideoThumbnailWidget({super.key, required this.videoUrl});
+  const VideoThumbnailWidget(
+      {super.key, required this.videoUrl, this.thumbnailUrl});
 
   @override
   State<VideoThumbnailWidget> createState() => _VideoThumbnailWidgetState();
@@ -21,7 +25,7 @@ class _VideoThumbnailWidgetState extends State<VideoThumbnailWidget> {
   @override
   void initState() {
     super.initState();
-    _thumbnailFuture = _generateThumbnail();
+    _thumbnailFuture = kIsWeb ? Future.value(null) : _generateThumbnail();
   }
 
   Future<String?> _generateThumbnail() async {
@@ -42,10 +46,23 @@ class _VideoThumbnailWidgetState extends State<VideoThumbnailWidget> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.thumbnailUrl != null && widget.thumbnailUrl!.isNotEmpty) {
+      return CachedNetworkImage(
+        imageUrl: widget.thumbnailUrl!,
+        fit: BoxFit.cover,
+        placeholder: (context, url) => _placeholder(),
+        errorWidget: (context, url, error) => _placeholder(),
+      );
+    }
+
+    if (kIsWeb) return _placeholder();
+
     return FutureBuilder<String?>(
       future: _thumbnailFuture,
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.done && snapshot.hasData && snapshot.data != null) {
+        if (snapshot.connectionState == ConnectionState.done &&
+            snapshot.hasData &&
+            snapshot.data != null) {
           return Image.file(
             File(snapshot.data!),
             fit: BoxFit.cover,
@@ -60,13 +77,19 @@ class _VideoThumbnailWidgetState extends State<VideoThumbnailWidget> {
             },
           );
         } else if (snapshot.hasError) {
-          return Container(
-            color: Colors.grey[300],
-            child: Icon(Icons.error_outline, color: Colors.grey[500]),
-          );
+          return _placeholder();
         }
-        return Container(color: Colors.grey[300]);
+        return _placeholder();
       },
+    );
+  }
+
+  Widget _placeholder() {
+    return Container(
+      color: Colors.grey[300],
+      child: Center(
+        child: Icon(Icons.play_circle_fill, color: Colors.grey[600], size: 42),
+      ),
     );
   }
 }

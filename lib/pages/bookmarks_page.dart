@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:portal_si/components/video_thumbnail_widget.dart'; // Pastikan path ini benar
 import 'package:portal_si/models/post_model.dart';
 import 'package:portal_si/pages/post_detail_page.dart';
@@ -63,10 +64,12 @@ class _BookmarksPageState extends State<BookmarksPage> {
                     return const Center(child: CircularProgressIndicator());
                   }
                   if (snapshot.hasError) {
-                    return Center(child: Text('Gagal memuat data: ${snapshot.error}'));
+                    return Center(
+                        child: Text('Gagal memuat data: ${snapshot.error}'));
                   }
                   if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return const Center(child: Text('Anda belum menyimpan postingan apapun.'));
+                    return const Center(
+                        child: Text('Anda belum menyimpan postingan apapun.'));
                   }
 
                   final posts = snapshot.data!;
@@ -139,15 +142,26 @@ class _GridItem extends StatelessWidget {
       children: [
         // Tampilkan media (gambar atau thumbnail video)
         post.isVideo
-            ? VideoThumbnailWidget(videoUrl: post.mediaUrl!)
-            : Image.network(post.mediaUrl!, fit: BoxFit.cover),
+            ? VideoThumbnailWidget(
+                videoUrl: post.mediaUrl!,
+                thumbnailUrl: post.thumbnailUrl,
+              )
+            : CachedNetworkImage(
+                imageUrl: post.mediaUrl!,
+                fit: BoxFit.cover,
+                placeholder: (context, url) =>
+                    Container(color: Colors.grey[200]),
+                errorWidget: (context, url, error) =>
+                    Container(color: Colors.grey[200]),
+              ),
 
         // Tambahkan ikon di pojok kanan atas jika ini adalah video
         if (post.isVideo)
           const Positioned(
             top: 8,
             right: 8,
-            child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 24),
+            child:
+                Icon(Icons.play_arrow_rounded, color: Colors.white, size: 24),
           ),
       ],
     );

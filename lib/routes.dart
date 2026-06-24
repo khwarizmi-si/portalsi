@@ -13,7 +13,11 @@ final Map<String, WidgetBuilder> appRoutes = {
   '/register': (context) => RegisterPage(),
   '/feed': (context) => FeedPage(),
   '/home': (context) => MainScaffold(),
+  '/profile': (context) => const MainScaffold(initialNavIndex: 4),
   '/welcome': (context) => WelcomePage(),
-  '/updater': (context) => UpdateScreenPage(onUpdateNow: () {  }, onUpdateLater: () {  },),
+  '/updater': (context) => UpdateScreenPage(
+        onUpdateNow: () {},
+        onUpdateLater: () {},
+      ),
   // PostDetailPage biasanya butuh parameter, jadi jangan didaftarkan langsung kecuali pakai onGenerateRoute
 };

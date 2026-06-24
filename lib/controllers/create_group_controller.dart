@@ -4,6 +4,8 @@ import 'package:portal_si/config/api_endpoint.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
@@ -22,6 +24,10 @@ class CreateGroupController with ChangeNotifier {
   String? _errorMessage;
   File? _avatarFile;
   File? _coverFile;
+  Uint8List? _avatarBytes;
+  Uint8List? _coverBytes;
+  String? _avatarFilename;
+  String? _coverFilename;
   bool _isCreatingGroup = false;
 
   int _currentPage = 1;
@@ -38,6 +44,8 @@ class CreateGroupController with ChangeNotifier {
   String? get errorMessage => _errorMessage;
   File? get avatarFile => _avatarFile;
   File? get coverFile => _coverFile;
+  Uint8List? get avatarBytes => _avatarBytes;
+  Uint8List? get coverBytes => _coverBytes;
   bool get isCreatingGroup => _isCreatingGroup;
   bool get isLoadingMore => _isLoadingMore;
   bool get hasNextPage => _hasNextPage;
@@ -59,7 +67,8 @@ class CreateGroupController with ChangeNotifier {
   }
 
   void _onScroll() {
-    if (scrollController.position.pixels >= scrollController.position.maxScrollExtent - 200) {
+    if (scrollController.position.pixels >=
+        scrollController.position.maxScrollExtent - 200) {
       fetchMoreData();
     }
   }
@@ -88,7 +97,8 @@ class CreateGroupController with ChangeNotifier {
       if (_currentQuery.trim().isEmpty) {
         response = await _groupService.getMutuals(page: 1);
       } else {
-        response = await _groupService.searchUsers(page: 1, query: _currentQuery);
+        response =
+            await _groupService.searchUsers(page: 1, query: _currentQuery);
       }
 
       final List<dynamic> userListJson = response['data'] ?? [];
@@ -115,7 +125,8 @@ class CreateGroupController with ChangeNotifier {
       if (_currentQuery.trim().isEmpty) {
         response = await _groupService.getMutuals(page: _currentPage);
       } else {
-        response = await _groupService.searchUsers(page: _currentPage, query: _currentQuery);
+        response = await _groupService.searchUsers(
+            page: _currentPage, query: _currentQuery);
       }
 
       final List<dynamic> userListJson = response['data'] ?? [];
@@ -161,9 +172,23 @@ class CreateGroupController with ChangeNotifier {
 
       if (pickedFile != null) {
         if (isAvatar) {
-          _avatarFile = File(pickedFile.path);
+          _avatarFilename = pickedFile.name;
+          if (kIsWeb) {
+            _avatarBytes = await pickedFile.readAsBytes();
+            _avatarFile = null;
+          } else {
+            _avatarFile = File(pickedFile.path);
+            _avatarBytes = null;
+          }
         } else {
-          _coverFile = File(pickedFile.path);
+          _coverFilename = pickedFile.name;
+          if (kIsWeb) {
+            _coverBytes = await pickedFile.readAsBytes();
+            _coverFile = null;
+          } else {
+            _coverFile = File(pickedFile.path);
+            _coverBytes = null;
+          }
         }
         notifyListeners();
       }
@@ -191,23 +216,41 @@ class CreateGroupController with ChangeNotifier {
 
       request.fields['name'] = groupNameController.text.trim();
 
-      final memberIds = _selectedUsers.map((user) => user.id.toString()).toList();
+      final memberIds =
+          _selectedUsers.map((user) => user.id.toString()).toList();
       for (int i = 0; i < memberIds.length; i++) {
         request.fields['members[$i]'] = memberIds[i];
       }
 
-      if (_avatarFile != null) {
-        request.files.add(await http.MultipartFile.fromPath('avatar', _avatarFile!.path));
+      if (kIsWeb && _avatarBytes != null) {
+        request.files.add(http.MultipartFile.fromBytes(
+          'avatar',
+          _avatarBytes!,
+          filename: _avatarFilename ?? 'avatar.jpg',
+        ));
+      } else if (_avatarFile != null) {
+        request.files.add(
+            await http.MultipartFile.fromPath('avatar', _avatarFile!.path));
       }
-      if (_coverFile != null) {
-        request.files.add(await http.MultipartFile.fromPath('cover', _coverFile!.path));
+
+      if (kIsWeb && _coverBytes != null) {
+        request.files.add(http.MultipartFile.fromBytes(
+          'cover',
+          _coverBytes!,
+          filename: _coverFilename ?? 'cover.jpg',
+        ));
+      } else if (_coverFile != null) {
+        request.files
+            .add(await http.MultipartFile.fromPath('cover', _coverFile!.path));
       }
 
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
 
-      if (response.statusCode == 201) {
-        return jsonDecode(response.body)['data'] as Map<String, dynamic>;
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final responseData = jsonDecode(response.body) as Map<String, dynamic>;
+        return (responseData['group'] ?? responseData['data'])
+            as Map<String, dynamic>?;
       } else {
         final errorData = jsonDecode(response.body);
         _errorMessage = errorData['message'] ?? 'Gagal membuat grup.';

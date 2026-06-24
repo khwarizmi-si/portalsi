@@ -43,6 +43,23 @@ class HomeController with ChangeNotifier {
 
   static const int _cacheDurationMinutes = 10;
 
+  Future<void> prependPost(Post post) async {
+    final postJson = post.toJson()
+      ..['type'] = 'post'
+      ..['is_liked'] = post.isLikedByUser
+      ..['is_bookmarked'] = post.isBookmarked
+      ..['likes_count'] = post.likesCount
+      ..['comments_count'] = post.commentsCount;
+
+    _feedItems.removeWhere((item) =>
+        item is Map<String, dynamic> &&
+        (item['post_id']?.toString() == post.id.toString() ||
+            item['id']?.toString() == post.id.toString()));
+    _feedItems.insert(0, postJson);
+    notifyListeners();
+    await _saveToCache('posts', _feedItems);
+  }
+
   HomeController() {
     _initializeServices();
   }
@@ -51,7 +68,7 @@ class HomeController with ChangeNotifier {
     // _likeService.connect();
     _likeUpdatesSubscription = _likeService.likeUpdates.listen((update) {
       final index = _feedItems.indexWhere((item) =>
-      item is Map<String, dynamic> &&
+          item is Map<String, dynamic> &&
           item['type'] == 'post' &&
           item['post_id'] == update.postId);
 
@@ -68,18 +85,23 @@ class HomeController with ChangeNotifier {
   Future<void> _saveToCache(String key, List<dynamic> data) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(key, jsonEncode(data));
-    await prefs.setInt('${key}_timestamp', DateTime.now().millisecondsSinceEpoch);
+    await prefs.setInt(
+        '${key}_timestamp', DateTime.now().millisecondsSinceEpoch);
   }
 
-  Future<List<T>> _loadFromCache<T>(String key, T Function(Map<String, dynamic>) fromJson) async {
+  Future<List<T>> _loadFromCache<T>(
+      String key, T Function(Map<String, dynamic>) fromJson) async {
     final prefs = await SharedPreferences.getInstance();
     final cachedData = prefs.getString(key);
     final cachedTimestamp = prefs.getInt('${key}_timestamp');
     if (cachedData != null && cachedTimestamp != null) {
       final cacheTime = DateTime.fromMillisecondsSinceEpoch(cachedTimestamp);
-      if (DateTime.now().difference(cacheTime).inMinutes < _cacheDurationMinutes) {
+      if (DateTime.now().difference(cacheTime).inMinutes <
+          _cacheDurationMinutes) {
         final List<dynamic> jsonData = jsonDecode(cachedData);
-        return jsonData.map((item) => fromJson(item as Map<String, dynamic>)).toList();
+        return jsonData
+            .map((item) => fromJson(item as Map<String, dynamic>))
+            .toList();
       }
     }
     return [];
@@ -91,7 +113,8 @@ class HomeController with ChangeNotifier {
     final cachedTimestamp = prefs.getInt('${key}_timestamp');
     if (cachedData != null && cachedTimestamp != null) {
       final cacheTime = DateTime.fromMillisecondsSinceEpoch(cachedTimestamp);
-      if (DateTime.now().difference(cacheTime).inMinutes < _cacheDurationMinutes) {
+      if (DateTime.now().difference(cacheTime).inMinutes <
+          _cacheDurationMinutes) {
         return jsonDecode(cachedData) as List<dynamic>;
       }
     }
@@ -152,7 +175,8 @@ class HomeController with ChangeNotifier {
       await _saveToCache('posts', _feedItems);
       // --- 👇 PERUBAHAN 2: PENYIMPANAN CACHE STORY DINONAKTIFKAN 👇 ---
       // await _saveToCache('stories', _stories.map((s) => s.toJson()).toList());
-      await _saveToCache('announcements', _pinnedAnnouncements.map((a) => a.toJson()).toList());
+      await _saveToCache('announcements',
+          _pinnedAnnouncements.map((a) => a.toJson()).toList());
 
       _errorMessage = null;
     } catch (e) {
@@ -173,7 +197,16 @@ class HomeController with ChangeNotifier {
     _currentPage++;
     try {
       final response = await _postService.fetchPosts(page: _currentPage);
-      _feedItems.addAll(response.feedItems);
+      final existingIds = _feedItems
+          .whereType<Map>()
+          .map((item) => (item['post_id'] ?? item['id'])?.toString())
+          .whereType<String>()
+          .toSet();
+      _feedItems.addAll(response.feedItems.where((item) {
+        if (item is! Map) return true;
+        final id = (item['post_id'] ?? item['id'])?.toString();
+        return id == null || !existingIds.contains(id);
+      }));
       _hasNextPage = response.hasNextPage;
     } catch (e) {
       _currentPage--;
@@ -187,7 +220,7 @@ class HomeController with ChangeNotifier {
 
   Future<void> toggleLike(int postId) async {
     final index = _feedItems.indexWhere((item) =>
-    item is Map<String, dynamic> &&
+        item is Map<String, dynamic> &&
         item['type'] == 'post' &&
         item['post_id'] == postId);
 
@@ -208,16 +241,16 @@ class HomeController with ChangeNotifier {
     try {
       await _likeService.toggleLikeHttp(
         postId,
-        isCurrentlyLiked: originalLiked,     // <-- Menggunakan 'originalLiked'
-        currentLikesCount: originalCount,   // <-- Menggunakan 'originalCount'
+        isCurrentlyLiked: originalLiked, // <-- Menggunakan 'originalLiked'
+        currentLikesCount: originalCount, // <-- Menggunakan 'originalCount'
       );
     } catch (e) {
       // 4. Jika Gagal: Rollback (kembalikan ke data asli)
 
       // --- PERBAIKAN DI SINI ---
       // Pastikan Anda menggunakan nama yang sama dengan yang didefinisikan di atas
-      postMap['is_liked'] = originalLiked;     // <-- HARUS 'originalLiked'
-      postMap['likes_count'] = originalCount;  // <-- HARUS 'originalCount'
+      postMap['is_liked'] = originalLiked; // <-- HARUS 'originalLiked'
+      postMap['likes_count'] = originalCount; // <-- HARUS 'originalCount'
       // --- AKHIR PERBAIKAN ---
 
       _feedItems[index] = postMap;
@@ -227,7 +260,8 @@ class HomeController with ChangeNotifier {
   }
 
   Future<void> toggleBookmark(int postId) async {
-    final itemIndex = feedItems.indexWhere((item) => item is Map && item['type'] == 'post' && item['post_id'] == postId);
+    final itemIndex = feedItems.indexWhere((item) =>
+        item is Map && item['type'] == 'post' && item['post_id'] == postId);
     if (itemIndex == -1) return;
     final postMap = Map<String, dynamic>.from(feedItems[itemIndex] as Map);
     final currentStatus = postMap['is_bookmarked'] ?? false;

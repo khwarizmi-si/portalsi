@@ -118,13 +118,18 @@ class _PostCardState extends State<PostCard>
 
     GlobalAudioState.instance.addListener(_onGlobalMuteStateChanged);
 
-    _bookmarkAnimationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 350));
-    _bookmarkScaleAnimation = Tween<double>(begin: 1.0, end: 1.4).animate(CurvedAnimation(parent: _bookmarkAnimationController, curve: Curves.elasticOut));
-    _heartAnimationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _bookmarkAnimationController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 350));
+    _bookmarkScaleAnimation = Tween<double>(begin: 1.0, end: 1.4).animate(
+        CurvedAnimation(
+            parent: _bookmarkAnimationController, curve: Curves.elasticOut));
+    _heartAnimationController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 600));
     _heartAnimation = TweenSequence<double>([
       TweenSequenceItem(tween: Tween<double>(begin: 0.0, end: 1.4), weight: 50),
       TweenSequenceItem(tween: Tween<double>(begin: 1.4, end: 1.0), weight: 50),
-    ]).animate(CurvedAnimation(parent: _heartAnimationController, curve: Curves.easeOut));
+    ]).animate(CurvedAnimation(
+        parent: _heartAnimationController, curve: Curves.easeOut));
     _heartAnimationController.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
         setState(() => _isHeartVisible = false);
@@ -183,7 +188,8 @@ class _PostCardState extends State<PostCard>
       // Kita perlu memastikan video di PostCard tidak otomatis berputar
       // jika tidak terlihat. VisibilityDetector akan menanganinya.
       if (mounted) {
-        setState(() {}); // Memaksa refresh UI jika perlu (misal: update ikon mute)
+        setState(
+            () {}); // Memaksa refresh UI jika perlu (misal: update ikon mute)
       }
     });
   }
@@ -194,7 +200,8 @@ class _PostCardState extends State<PostCard>
     // Terapkan status mute ke semua player
     _audioPlayer.setVolume(isMuted ? 0.0 : 1.0);
 
-    final bool hasMusic = widget.post.musicPreviewUrl != null && widget.post.musicPreviewUrl!.isNotEmpty;
+    final bool hasMusic = widget.post.musicPreviewUrl != null &&
+        widget.post.musicPreviewUrl!.isNotEmpty;
     if (_videoController != null && !hasMusic) {
       _videoController!.setVolume(isMuted ? 0.0 : 1.0);
     }
@@ -248,7 +255,9 @@ class _PostCardState extends State<PostCard>
   }
 
   void _openImageZoom(BuildContext context) {
-    if (widget.post.isVideo || widget.post.mediaUrl == null || widget.post.mediaUrl!.isEmpty) return;
+    if (widget.post.isVideo ||
+        widget.post.mediaUrl == null ||
+        widget.post.mediaUrl!.isEmpty) return;
     Navigator.of(context).push(
       PageRouteBuilder(
         opaque: false,
@@ -265,7 +274,9 @@ class _PostCardState extends State<PostCard>
 
   void _onBookmarkTap() {
     widget.onBookmark();
-    _bookmarkAnimationController.forward().then((_) => _bookmarkAnimationController.reverse());
+    _bookmarkAnimationController
+        .forward()
+        .then((_) => _bookmarkAnimationController.reverse());
   }
 
   void _onDoubleTap() {
@@ -285,7 +296,10 @@ class _PostCardState extends State<PostCard>
         _isWidgetVisible = isVisible; // (3) Update status visibilitas widget
 
         // Logika untuk Video Player
-        if (_videoController != null && _videoController!.value.isInitialized && !_videoEnded && !_showContinueWatchingOverlay) {
+        if (_videoController != null &&
+            _videoController!.value.isInitialized &&
+            !_videoEnded &&
+            !_showContinueWatchingOverlay) {
           if (isVisible && _isAppInForeground) {
             if (!_videoController!.value.isPlaying) _videoController!.play();
           } else {
@@ -298,15 +312,32 @@ class _PostCardState extends State<PostCard>
         }
       },
       child: Container(
-        margin: widget.hasCardDecoration ? const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0) : EdgeInsets.zero,
-        decoration: widget.hasCardDecoration ? BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade200, width: 0.5)) : null,
+        margin: widget.hasCardDecoration
+            ? const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0)
+            : EdgeInsets.zero,
+        decoration: widget.hasCardDecoration
+            ? BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.grey.shade200, width: 0.5))
+            : null,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(padding: const EdgeInsets.all(12), child: PostHeader(post: widget.post, onProfileTap: widget.onProfileTap)),
-            if (widget.post.mediaUrl != null && widget.post.mediaUrl!.isNotEmpty) _buildMediaWidget(),
+            Padding(
+                padding: const EdgeInsets.all(12),
+                child: PostHeader(
+                    post: widget.post, onProfileTap: widget.onProfileTap)),
+            if (widget.post.mediaUrl != null &&
+                widget.post.mediaUrl!.isNotEmpty)
+              _buildMediaWidget(),
             _buildMusicInfo(),
-            PostActionCounts(post: widget.post, onLike: widget.onLike, onComment: widget.onComment, onShare: widget.onShare, onBookmark: _onBookmarkTap),
+            PostActionCounts(
+                post: widget.post,
+                onLike: widget.onLike,
+                onComment: widget.onComment,
+                onShare: widget.onShare,
+                onBookmark: _onBookmarkTap),
             PostInfoSection(post: widget.post),
           ],
         ),
@@ -332,7 +363,8 @@ class _PostCardState extends State<PostCard>
               child: SizedBox(
                 height: 20,
                 child: Marquee(
-                  text: '${widget.post.musicTrackName} - ${widget.post.musicArtistName ?? 'Unknown Artist'}',
+                  text:
+                      '${widget.post.musicTrackName} - ${widget.post.musicArtistName ?? 'Unknown Artist'}',
                   style: const TextStyle(fontWeight: FontWeight.w500),
                   scrollAxis: Axis.horizontal,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -351,19 +383,42 @@ class _PostCardState extends State<PostCard>
   Widget _buildMediaWidget() {
     Widget mediaContent;
     final heroTag = 'post-image-hero-${widget.post.id}';
-    final bool hasMusic = widget.post.musicPreviewUrl != null && widget.post.musicPreviewUrl!.isNotEmpty;
+    final bool hasMusic = widget.post.musicPreviewUrl != null &&
+        widget.post.musicPreviewUrl!.isNotEmpty;
 
     if (widget.post.isVideo) {
       mediaContent = FutureBuilder(
         future: _initializeVideoPlayerFuture,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done && _videoController != null && _videoController!.value.isInitialized) {
+          if (snapshot.connectionState == ConnectionState.done &&
+              _videoController != null &&
+              _videoController!.value.isInitialized) {
             return AspectRatio(
               aspectRatio: _videoController!.value.aspectRatio,
               child: VideoPlayer(_videoController!),
             );
           }
-          return AspectRatio(aspectRatio: 16.0 / 9.0, child: Container(color: Colors.grey.shade200, child: const Center(child: CircularProgressIndicator(strokeWidth: 2))));
+          return AspectRatio(
+            aspectRatio: 16.0 / 9.0,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (widget.post.thumbnailUrl != null &&
+                    widget.post.thumbnailUrl!.isNotEmpty)
+                  CachedNetworkImage(
+                    imageUrl: widget.post.thumbnailUrl!,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) =>
+                        Container(color: Colors.grey.shade200),
+                    errorWidget: (context, url, error) =>
+                        Container(color: Colors.grey.shade200),
+                  )
+                else
+                  Container(color: Colors.grey.shade200),
+                const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              ],
+            ),
+          );
         },
       );
     } else {
@@ -371,8 +426,14 @@ class _PostCardState extends State<PostCard>
         tag: heroTag,
         child: CachedNetworkImage(
           imageUrl: widget.post.mediaUrl!,
-          placeholder: (context, url) => AspectRatio(aspectRatio: 1.0, child: Container(color: Colors.grey.shade200)),
-          errorWidget: (context, url, error) => AspectRatio(aspectRatio: 1.0, child: Container(color: Colors.grey.shade200, child: Icon(Icons.broken_image, color: Colors.grey.shade400))),
+          placeholder: (context, url) => AspectRatio(
+              aspectRatio: 1.0, child: Container(color: Colors.grey.shade200)),
+          errorWidget: (context, url, error) => AspectRatio(
+              aspectRatio: 1.0,
+              child: Container(
+                  color: Colors.grey.shade200,
+                  child:
+                      Icon(Icons.broken_image, color: Colors.grey.shade400))),
         ),
       );
     }
@@ -383,7 +444,9 @@ class _PostCardState extends State<PostCard>
         children: [
           GestureDetector(
             onDoubleTap: _onDoubleTap,
-            onTap: widget.post.isVideo ? _navigateToClipsViewer : () => _openImageZoom(context),
+            onTap: widget.post.isVideo
+                ? _navigateToClipsViewer
+                : () => _openImageZoom(context),
             child: mediaContent,
           ),
           if (widget.post.isVideo && !hasMusic)
@@ -394,8 +457,15 @@ class _PostCardState extends State<PostCard>
                 onTap: _toggleMute,
                 child: Container(
                   padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), shape: BoxShape.circle),
-                  child: Icon(GlobalAudioState.instance.isMuted ? Icons.volume_off : Icons.volume_up, color: Colors.white, size: 18),
+                  decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.5),
+                      shape: BoxShape.circle),
+                  child: Icon(
+                      GlobalAudioState.instance.isMuted
+                          ? Icons.volume_off
+                          : Icons.volume_up,
+                      color: Colors.white,
+                      size: 18),
                 ),
               ),
             ),
@@ -407,17 +477,28 @@ class _PostCardState extends State<PostCard>
                 onTap: _toggleMute,
                 child: Container(
                   padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), shape: BoxShape.circle),
-                  child: Icon(GlobalAudioState.instance.isMuted ? Icons.music_off_outlined : Icons.music_note_outlined, color: Colors.white, size: 18),
+                  decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.5),
+                      shape: BoxShape.circle),
+                  child: Icon(
+                      GlobalAudioState.instance.isMuted
+                          ? Icons.music_off_outlined
+                          : Icons.music_note_outlined,
+                      color: Colors.white,
+                      size: 18),
                 ),
               ),
             ),
           if (_isHeartVisible)
-            ScaleTransition(scale: _heartAnimation, child: const Icon(Icons.favorite, color: Colors.white, size: 80, shadows: [Shadow(color: Colors.black38, blurRadius: 12)])),
-          if (_showContinueWatchingOverlay)
-            _buildContinueWatchingOverlay(),
-
-          if (_videoEnded && !_showContinueWatchingOverlay) // Pastikan hanya satu overlay yang tampil
+            ScaleTransition(
+                scale: _heartAnimation,
+                child: const Icon(Icons.favorite,
+                    color: Colors.white,
+                    size: 80,
+                    shadows: [Shadow(color: Colors.black38, blurRadius: 12)])),
+          if (_showContinueWatchingOverlay) _buildContinueWatchingOverlay(),
+          if (_videoEnded &&
+              !_showContinueWatchingOverlay) // Pastikan hanya satu overlay yang tampil
             _buildReplayOverlay(),
         ],
       ),
@@ -425,17 +506,22 @@ class _PostCardState extends State<PostCard>
   }
 
   void _initVideoPlayer() {
-    if (widget.post.isVideo && widget.post.mediaUrl != null && widget.post.mediaUrl!.isNotEmpty) {
+    if (widget.post.isVideo &&
+        widget.post.mediaUrl != null &&
+        widget.post.mediaUrl!.isNotEmpty) {
       // --- PERUBAHAN: Reset state overlay saat inisialisasi ---
       _videoEnded = false;
       _showContinueWatchingOverlay = false;
 
       _musicPlaybackAllowed = false;
-      _videoController = VideoPlayerController.networkUrl(Uri.parse(widget.post.mediaUrl!));
+      _videoController =
+          VideoPlayerController.networkUrl(Uri.parse(widget.post.mediaUrl!));
 
       _initializeVideoPlayerFuture = _videoController!.initialize().then((_) {
-        final bool hasMusic = widget.post.musicPreviewUrl != null && widget.post.musicPreviewUrl!.isNotEmpty;
-        _videoController!.setVolume(hasMusic ? 0.0 : (GlobalAudioState.instance.isMuted ? 0.0 : 1.0));
+        final bool hasMusic = widget.post.musicPreviewUrl != null &&
+            widget.post.musicPreviewUrl!.isNotEmpty;
+        _videoController!.setVolume(
+            hasMusic ? 0.0 : (GlobalAudioState.instance.isMuted ? 0.0 : 1.0));
 
         if (mounted) {
           setState(() {});
@@ -448,7 +534,9 @@ class _PostCardState extends State<PostCard>
   }
 
   void _videoListener() {
-    if (_videoController == null || !_videoController!.value.isInitialized || !mounted) return;
+    if (_videoController == null ||
+        !_videoController!.value.isInitialized ||
+        !mounted) return;
 
     final position = _videoController!.value.position;
     final totalDuration = _videoController!.value.duration;
@@ -458,7 +546,9 @@ class _PostCardState extends State<PostCard>
     // Cek durasi langsung dari controller untuk keandalan
     final bool isLongVideo = totalDuration > feedDurationLimit;
 
-    if (isLongVideo && position >= feedDurationLimit && !_showContinueWatchingOverlay) {
+    if (isLongVideo &&
+        position >= feedDurationLimit &&
+        !_showContinueWatchingOverlay) {
       _videoController!.pause();
       if (_audioPlayer.playing) _audioPlayer.pause();
       setState(() {
@@ -519,16 +609,23 @@ class _PostCardState extends State<PostCard>
           children: [
             const Text(
               'Lanjutkan menonton',
-              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             TextButton.icon(
-              icon: const Icon(Icons.movie_filter_outlined, color: Colors.black, size: 20),
-              label: const Text('Buka Clips', style: TextStyle(color: Colors.black)),
+              icon: const Icon(Icons.movie_filter_outlined,
+                  color: Colors.black, size: 20),
+              label: const Text('Buka Clips',
+                  style: TextStyle(color: Colors.black)),
               style: TextButton.styleFrom(
                 backgroundColor: Colors.white.withOpacity(0.8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
               onPressed: _navigateToClipsViewer,
             ),
@@ -546,35 +643,47 @@ class _PostCardState extends State<PostCard>
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Text('Pemutaran selesai', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            const Text('Pemutaran selesai',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 TextButton.icon(
                   icon: const Icon(Icons.replay, color: Colors.white, size: 20),
-                  label: const Text('Putar Lagi', style: TextStyle(color: Colors.white)),
+                  label: const Text('Putar Lagi',
+                      style: TextStyle(color: Colors.white)),
                   style: TextButton.styleFrom(
                     backgroundColor: Colors.white.withOpacity(0.2),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
                   ),
                   onPressed: _replayVideo,
                 ),
                 const SizedBox(width: 12),
                 TextButton.icon(
-                  icon: const Icon(Icons.movie_filter_outlined, color: Colors.black, size: 20),
-                  label: const Text('Lainnya di Clips', style: TextStyle(color: Colors.black)),
+                  icon: const Icon(Icons.movie_filter_outlined,
+                      color: Colors.black, size: 20),
+                  label: const Text('Lainnya di Clips',
+                      style: TextStyle(color: Colors.black)),
                   style: TextButton.styleFrom(
                     backgroundColor: Colors.white.withOpacity(0.8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
                   ),
                   onPressed: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => ClipsViewerPage(initialClip: widget.post),
+                        builder: (_) =>
+                            ClipsViewerPage(initialClip: widget.post),
                       ),
                     );
                   },

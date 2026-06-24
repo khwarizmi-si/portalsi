@@ -191,17 +191,17 @@ class _TransientPostPreviewState extends State<TransientPostPreview> {
     // --- 👇 TAMBAHAN: Inisialisasi video player jika ini video 👇 ---
     if (widget.post.isVideo) {
       _videoController =
-      VideoPlayerController.networkUrl(Uri.parse(widget.post.mediaUrl))
-        ..initialize().then((_) {
-          // Pastikan widget masih ada sebelum setState
-          if (mounted) {
-            setState(() {
-              _isVideoInitialized = true;
+          VideoPlayerController.networkUrl(Uri.parse(widget.post.mediaUrl))
+            ..initialize().then((_) {
+              // Pastikan widget masih ada sebelum setState
+              if (mounted) {
+                setState(() {
+                  _isVideoInitialized = true;
+                });
+                _videoController!.setLooping(true); // Putar berulang
+                _videoController!.play(); // Mulai putar
+              }
             });
-            _videoController!.setLooping(true); // Putar berulang
-            _videoController!.play(); // Mulai putar
-          }
-        });
     }
     // --- 👆 AKHIR TAMBAHAN 👆 ---
   }
@@ -282,9 +282,10 @@ class _TransientPostPreviewState extends State<TransientPostPreview> {
                             imageUrl: widget.user.profilePictureUrl ?? '',
                             fit: BoxFit.cover,
                             placeholder: (context, url) =>
-                            const ImagePlaceholder(),
+                                const ImagePlaceholder(),
                             errorWidget: (context, url, error) =>
-                            const CircleAvatar(backgroundColor: Colors.grey),
+                                const CircleAvatar(
+                                    backgroundColor: Colors.grey),
                           ),
                         ),
                       ),
@@ -295,7 +296,9 @@ class _TransientPostPreviewState extends State<TransientPostPreview> {
                           color: textColor,
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
-                          shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
+                          shadows: [
+                            Shadow(color: Colors.black54, blurRadius: 4)
+                          ],
                         ),
                       ),
                     ],
@@ -331,7 +334,8 @@ class _TransientPostPreviewState extends State<TransientPostPreview> {
                     const SizedBox(width: 8),
                     HoverableButton(
                       key: widget.buttonKeys['comment'],
-                      isHoveredNotifier: widget.buttonHoverNotifiers['comment']!,
+                      isHoveredNotifier:
+                          widget.buttonHoverNotifiers['comment']!,
                       icon: Icons.chat_bubble_outline,
                     ),
                   ],
@@ -353,7 +357,6 @@ class _TransientPostPreviewState extends State<TransientPostPreview> {
   }
 }
 // --- 👆 AKHIR PERUBAHAN STATEFUL WIDGET 👆 ---
-
 
 // WIDGET UTAMA
 class PressableGridItem extends StatefulWidget {
@@ -528,7 +531,7 @@ class _PressableGridItemState extends State<PressableGridItem> {
   void _handleLongPressMoveUpdate(LongPressMoveUpdateDetails details) {
     _buttonKeys.forEach((key, globalKey) {
       final RenderBox? buttonRenderBox =
-      globalKey.currentContext?.findRenderObject() as RenderBox?;
+          globalKey.currentContext?.findRenderObject() as RenderBox?;
       if (buttonRenderBox == null) return;
 
       final buttonRect = Rect.fromPoints(
@@ -566,14 +569,18 @@ class _PressableGridItemState extends State<PressableGridItem> {
     Widget mediaDisplay;
     if (_post.isVideo) {
       // 1. JIKA INI VIDEO, TAMPILKAN THUMBNAIL VIDEO
-      mediaDisplay = VideoThumbnailWidget(videoUrl: _post.mediaUrl);
+      mediaDisplay = VideoThumbnailWidget(
+        videoUrl: _post.mediaUrl,
+        thumbnailUrl: _post.thumbnailUrl,
+      );
     } else {
       // 2. JIKA BUKAN VIDEO, TAMPILKAN GAMBAR
       mediaDisplay = CachedNetworkImage(
         imageUrl: _post.mediaUrl,
         fit: BoxFit.cover,
         placeholder: (context, url) => const ImagePlaceholder(),
-        errorWidget: (context, url, error) => Container(color: Colors.grey[300]),
+        errorWidget: (context, url, error) =>
+            Container(color: Colors.grey[300]),
       );
     }
 
@@ -601,7 +608,8 @@ class _PressableGridItemState extends State<PressableGridItem> {
               if (_post.isVideo)
                 mediaDisplay // Menampilkan VideoThumbnailWidget
               else
-                Hero( // Menampilkan CachedNetworkImage
+                Hero(
+                  // Menampilkan CachedNetworkImage
                   tag: 'post-hero-${_post.postId}',
                   child: mediaDisplay,
                 ),

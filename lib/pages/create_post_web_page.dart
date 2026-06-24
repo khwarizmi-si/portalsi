@@ -2,13 +2,13 @@
 //
 // ponytail: the mobile create-post page is built on PhotoManager/AssetEntity,
 // which don't exist on web. This is a small web-only flow: pick a file via the
-// browser dialog (image_picker works on web) and upload the bytes directly,
+// browser dialog and upload the bytes directly,
 // skipping the native upload queue.
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../controllers/home_controller.dart';
 import '../services/post_service.dart';
@@ -21,7 +21,6 @@ class CreatePostWebPage extends StatefulWidget {
 }
 
 class _CreatePostWebPageState extends State<CreatePostWebPage> {
-  final _picker = ImagePicker();
   final _captionController = TextEditingController();
   final _postService = PostService();
   final _cropKey = GlobalKey();
@@ -31,6 +30,8 @@ class _CreatePostWebPageState extends State<CreatePostWebPage> {
   String? _filename;
   bool _isVideo = false;
   bool _isUploading = false;
+  double? _uploadProgress;
+  String? _pickError;
 
   @override
   void dispose() {
@@ -40,16 +41,28 @@ class _CreatePostWebPageState extends State<CreatePostWebPage> {
   }
 
   Future<void> _pick({required bool video}) async {
-    final XFile? file = video
-        ? await _picker.pickVideo(source: ImageSource.gallery)
-        : await _picker.pickImage(source: ImageSource.gallery);
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowMultiple: false,
+      withData: true,
+      allowedExtensions: video
+          ? const ['mp4', 'mov', 'webm', 'avi', '3gp', 'mkv']
+          : const ['jpg', 'jpeg', 'png'],
+    );
+    final file = result?.files.single;
+    final bytes = file?.bytes;
     if (file == null) return;
-    final bytes = await file.readAsBytes();
     if (!mounted) return;
+    if (bytes == null || bytes.isEmpty) {
+      setState(() => _pickError = 'File tidak bisa dibaca oleh browser.');
+      return;
+    }
     setState(() {
       _bytes = bytes;
-      _filename = file.name;
+      _filename =
+          file.name.isNotEmpty ? file.name : (video ? 'video.mp4' : 'post.png');
       _isVideo = video;
+      _pickError = null;
     });
   }
 
@@ -59,7 +72,9 @@ class _CreatePostWebPageState extends State<CreatePostWebPage> {
     try {
       final boundary =
           _cropKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-      if (boundary == null) return (bytes: _bytes!, name: _filename ?? 'post.png');
+      if (boundary == null) {
+        return (bytes: _bytes!, name: _filename ?? 'post.png');
+      }
       final image = await boundary.toImage(pixelRatio: 2.0);
       final data = await image.toByteData(format: ui.ImageByteFormat.png);
       if (data == null) return (bytes: _bytes!, name: _filename ?? 'post.png');
@@ -71,23 +86,33 @@ class _CreatePostWebPageState extends State<CreatePostWebPage> {
 
   Future<void> _submit() async {
     if (_bytes == null) return;
-    setState(() => _isUploading = true);
+    setState(() {
+      _isUploading = true;
+      _uploadProgress = 0;
+    });
     try {
       final media = _isVideo
           ? (bytes: _bytes!, name: _filename ?? 'video.mp4')
           : await _composedImage();
-      await _postService.createPost(
+      final createdPost = await _postService.createPost(
         {
           'caption': _captionController.text.trim(),
           'is_video': _isVideo ? '1' : '0',
         },
         mediaBytes: media.bytes,
         mediaFilename: media.name,
+        onProgress: (sent, total) {
+          if (!mounted || total <= 0) return;
+          setState(() => _uploadProgress = (sent / total).clamp(0.0, 1.0));
+        },
       );
       if (!mounted) return;
-      // Refresh the home feed so the new post shows up immediately.
+      // Put the new post at the top immediately; the backend feed can shuffle
+      // and paginate, so a plain refresh may not include it on page 1.
       try {
-        await context.read<HomeController>().refreshDashboardData();
+        if (createdPost != null) {
+          await context.read<HomeController>().prependPost(createdPost);
+        }
       } catch (_) {}
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -96,7 +121,10 @@ class _CreatePostWebPageState extends State<CreatePostWebPage> {
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _isUploading = false);
+      setState(() {
+        _isUploading = false;
+        _uploadProgress = null;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Gagal mengunggah: $e'),
@@ -120,11 +148,8 @@ class _CreatePostWebPageState extends State<CreatePostWebPage> {
           TextButton(
             onPressed: (hasMedia && !_isUploading) ? _submit : null,
             child: _isUploading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? Text('${((_uploadProgress ?? 0) * 100).round()}%',
+                    style: const TextStyle(fontWeight: FontWeight.bold))
                 : const Text('Bagikan',
                     style: TextStyle(
                         color: Colors.blue,
@@ -185,6 +210,15 @@ class _CreatePostWebPageState extends State<CreatePostWebPage> {
                   textAlign: TextAlign.center),
             ),
           const SizedBox(height: 16),
+          if (_pickError != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                _pickError!,
+                style: const TextStyle(color: Colors.red),
+                textAlign: TextAlign.center,
+              ),
+            ),
           Row(
             children: [
               Expanded(
@@ -205,13 +239,31 @@ class _CreatePostWebPageState extends State<CreatePostWebPage> {
             ],
           ),
           const SizedBox(height: 16),
+          if (_isUploading)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Column(
+                children: [
+                  LinearProgressIndicator(
+                    value: (_uploadProgress ?? 0) == 0 ? null : _uploadProgress,
+                    minHeight: 8,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Mengunggah ${((_uploadProgress ?? 0) * 100).round()}%',
+                    style: TextStyle(color: Colors.grey[700]),
+                  ),
+                ],
+              ),
+            ),
           TextField(
             controller: _captionController,
             maxLines: 4,
             decoration: InputDecoration(
               hintText: 'Tulis caption…',
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12)),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
         ],

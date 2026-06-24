@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import '../components/circular_avatar_fetcher.dart'; // <-- 1. TAMBAHKAN IMPORT
 import '../components/video_thumbnail_widget.dart';
@@ -56,13 +57,15 @@ class _NotificationPageState extends State<NotificationPage> {
                 duration: const Duration(milliseconds: 200),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  boxShadow: _isScrolled ? [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ] : [],
+                  boxShadow: _isScrolled
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : [],
                 ),
                 child: AppBar(
                   title: const Text('Aktivitas',
@@ -87,7 +90,8 @@ class _NotificationPageState extends State<NotificationPage> {
     );
   }
 
-  Widget _buildBody(BuildContext context, NotificationController controller, ScrollController scrollController) {
+  Widget _buildBody(BuildContext context, NotificationController controller,
+      ScrollController scrollController) {
     if (controller.isLoading) {
       return const Center(child: CircularProgressIndicator(strokeWidth: 3));
     }
@@ -97,14 +101,16 @@ class _NotificationPageState extends State<NotificationPage> {
     if (controller.notifications.isEmpty) {
       return const Center(child: Text('Tidak ada aktivitas terbaru.'));
     }
-    return _NotificationList(controller: controller, scrollController: scrollController);
+    return _NotificationList(
+        controller: controller, scrollController: scrollController);
   }
 }
 
 class _NotificationList extends StatelessWidget {
   final NotificationController controller;
   final ScrollController scrollController;
-  const _NotificationList({required this.controller, required this.scrollController});
+  const _NotificationList(
+      {required this.controller, required this.scrollController});
 
   @override
   Widget build(BuildContext context) {
@@ -126,7 +132,8 @@ class _NotificationList extends StatelessWidget {
         controller: scrollController,
         padding: const EdgeInsets.symmetric(vertical: 8.0),
         children: groupOrder.map((groupName) {
-          if (grouped.containsKey(groupName) && grouped[groupName]!.isNotEmpty) {
+          if (grouped.containsKey(groupName) &&
+              grouped[groupName]!.isNotEmpty) {
             return _NotificationGroupSection(
               title: groupName,
               notifications: grouped[groupName]!,
@@ -160,7 +167,7 @@ class _NotificationGroupSection extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: Text(title,
               style:
-              const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         ),
         ...notifications.map((notification) {
           final relatedPost = controller.postCache[notification.relatedPostId];
@@ -212,9 +219,7 @@ class _NotificationItem extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-        color: notification.isRead
-            ? Colors.transparent
-            : Color(0xFFFFF3DC),
+        color: notification.isRead ? Colors.transparent : Color(0xFFFFF3DC),
         child: Row(
           children: [
             // =================================================================
@@ -225,7 +230,8 @@ class _NotificationItem extends StatelessWidget {
               userId: notification.sender.id ?? 0, // Ambil id dari sender
               onTap: () {
                 // Navigasi ke profil saat avatar diklik
-                NavigationHelper.navigateToProfile(context, notification.sender);
+                NavigationHelper.navigateToProfile(
+                    context, notification.sender);
               },
             ),
             // =================================================================
@@ -257,14 +263,22 @@ class _NotificationItem extends StatelessWidget {
   }
 
   Widget _buildTrailingWidget() {
-    if ((notification.type == 'like' || notification.type == 'comment') && relatedPost != null) {
+    if ((notification.type == 'like' || notification.type == 'comment') &&
+        relatedPost != null) {
       Widget mediaDisplay;
       if (relatedPost!.isVideo && relatedPost!.mediaUrl != null) {
-        mediaDisplay = VideoThumbnailWidget(videoUrl: relatedPost!.mediaUrl!);
-      } else if (relatedPost!.mediaUrl != null && relatedPost!.mediaUrl!.isNotEmpty) {
-        mediaDisplay = Image.network(
-          relatedPost!.mediaUrl!,
+        mediaDisplay = VideoThumbnailWidget(
+          videoUrl: relatedPost!.mediaUrl!,
+          thumbnailUrl: relatedPost!.thumbnailUrl,
+        );
+      } else if (relatedPost!.mediaUrl != null &&
+          relatedPost!.mediaUrl!.isNotEmpty) {
+        mediaDisplay = CachedNetworkImage(
+          imageUrl: relatedPost!.mediaUrl!,
           fit: BoxFit.cover,
+          placeholder: (context, url) => Container(color: Colors.grey.shade200),
+          errorWidget: (context, url, error) =>
+              Container(color: Colors.grey.shade200),
         );
       } else {
         mediaDisplay = Container(color: Colors.grey.shade200);
@@ -279,18 +293,22 @@ class _NotificationItem extends StatelessWidget {
       );
     }
     if (notification.type == 'follow') {
-      final isFollowing = controller.followStatus[notification.sender.username] ?? false;
+      final isFollowing =
+          controller.followStatus[notification.sender.username] ?? false;
       return SizedBox(
           height: 32,
           width: 100,
           child: ElevatedButton(
             onPressed: () => controller.toggleFollow(notification),
             style: ElevatedButton.styleFrom(
-              backgroundColor: isFollowing ? Colors.grey.shade200 : Colors.transparent,
+              backgroundColor:
+                  isFollowing ? Colors.grey.shade200 : Colors.transparent,
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
-                side: isFollowing ? BorderSide(color: Colors.grey.shade300) : BorderSide.none,
+                side: isFollowing
+                    ? BorderSide(color: Colors.grey.shade300)
+                    : BorderSide.none,
               ),
               padding: EdgeInsets.zero,
               shadowColor: Colors.transparent,
@@ -301,14 +319,15 @@ class _NotificationItem extends StatelessWidget {
                 gradient: isFollowing
                     ? null
                     : LinearGradient(
-                  colors: [
-                    Colors.amber.shade600,
-                    Colors.orange.shade800,
-                  ],
-                ),
+                        colors: [
+                          Colors.amber.shade600,
+                          Colors.orange.shade800,
+                        ],
+                      ),
               ),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 alignment: Alignment.center,
                 child: Text(
                   isFollowing ? 'Diikuti' : 'Ikuti Balik',
@@ -320,8 +339,7 @@ class _NotificationItem extends StatelessWidget {
                 ),
               ),
             ),
-          )
-      );
+          ));
     }
     return const SizedBox(width: 44, height: 44);
   }

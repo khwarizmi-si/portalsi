@@ -26,7 +26,6 @@ import '../utils/secure_storage.dart';
 import 'clips_viewer_page.dart';
 import 'post_detail_page.dart';
 
-
 class FeedPage extends StatefulWidget {
   const FeedPage({super.key});
 
@@ -34,7 +33,8 @@ class FeedPage extends StatefulWidget {
   State<FeedPage> createState() => _FeedPageState();
 }
 
-class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<FeedPage> {
+class _FeedPageState extends State<FeedPage>
+    with AutomaticKeepAliveClientMixin<FeedPage> {
   final ScrollController _scrollController = ScrollController();
   List<Post> _posts = [];
   int _currentPage = 1;
@@ -108,14 +108,16 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
         log('❌ GAGAL: Token tidak ditemukan untuk pencarian.');
         return;
       }
-      final url = Uri.parse('${ApiEndpoints.apiUrl}/users/search?username=$query');
+      final url =
+          Uri.parse('${ApiEndpoints.apiUrl}/users/search?username=$query');
       final response = await http.get(url, headers: {
         'Accept': 'application/json',
         'Authorization': 'Bearer $token',
       });
       if (response.statusCode == 200) {
         final dynamic decodedData = json.decode(response.body);
-        final List usersJson = decodedData is List ? decodedData : decodedData['data'];
+        final List usersJson =
+            decodedData is List ? decodedData : decodedData['data'];
         if (mounted) {
           setState(() {
             _searchResults = usersJson.map((u) => User.fromJson(u)).toList();
@@ -136,7 +138,10 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
   }
 
   Future<void> _fetchPosts({bool isRefresh = false}) async {
-    if (_currentPage == 1 && !isRefresh && _cachedPosts != null && _cacheTimestamp != null) {
+    if (_currentPage == 1 &&
+        !isRefresh &&
+        _cachedPosts != null &&
+        _cacheTimestamp != null) {
       final Duration cacheAge = DateTime.now().difference(_cacheTimestamp!);
       if (cacheAge < const Duration(minutes: 3)) {
         if (mounted) {
@@ -174,7 +179,9 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
         log('❌ GAGAL: Token tidak ditemukan. Pengguna mungkin belum login.');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Sesi Anda telah berakhir. Silakan login kembali.')),
+            const SnackBar(
+                content:
+                    Text('Sesi Anda telah berakhir. Silakan login kembali.')),
           );
         }
         if (mounted) {
@@ -185,7 +192,8 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
         }
         return;
       }
-      final url = Uri.parse('${ApiEndpoints.apiUrl}/explore?page=$_currentPage');
+      final url =
+          Uri.parse('${ApiEndpoints.apiUrl}/explore?page=$_currentPage');
       final response = await http.get(url, headers: {
         'Accept': 'application/json',
         'Authorization': 'Bearer $token',
@@ -194,7 +202,8 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
         log('✅ SUKSES: Respons diterima dengan status 200.');
         final data = json.decode(response.body);
         final List postsJson = data['data'];
-        final List<Post> newPosts = postsJson.map((p) => Post.fromJson(p)).toList();
+        final List<Post> newPosts =
+            postsJson.map((p) => Post.fromJson(p)).toList();
 
         if (_currentPage == 1) {
           _cachedPosts = newPosts;
@@ -248,7 +257,8 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
     } else if (direction == ScrollDirection.forward) {
       scrollProvider.setScrolled(true);
     }
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
       if (_hasNextPage && !_isFetchingMore) {
         _fetchPosts();
       }
@@ -314,7 +324,8 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
           child: TextField(
             controller: _searchController,
             focusNode: _searchFocusNode,
-            decoration: InputDecoration( // Ubah menjadi InputDecoration
+            decoration: InputDecoration(
+              // Ubah menjadi InputDecoration
               hintText: 'Cari pengguna...',
               border: InputBorder.none,
               prefixIcon: const Icon(Icons.search, color: Colors.grey),
@@ -322,23 +333,23 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
               // --- PERUBAHAN UTAMA ADA DI SINI ---
               suffixIcon: _searchController.text.isNotEmpty
                   ? IconButton(
-                icon: const Icon(Icons.close, color: Colors.grey),
-                onPressed: () {
-                  // Membersihkan teks, menyembunyikan hasil, dan menghapus fokus
-                  _searchController.clear();
-                  if (_searchFocusNode.hasFocus) {
-                    _searchFocusNode.unfocus();
-                  }
-                  if (mounted) {
-                    setState(() {
-                      // setState akan dipanggil juga oleh _onSearchChanged,
-                      // tetapi ini memastikan tampilan segera diperbarui.
-                      _showSearchResults = false;
-                      _searchResults = [];
-                    });
-                  }
-                },
-              )
+                      icon: const Icon(Icons.close, color: Colors.grey),
+                      onPressed: () {
+                        // Membersihkan teks, menyembunyikan hasil, dan menghapus fokus
+                        _searchController.clear();
+                        if (_searchFocusNode.hasFocus) {
+                          _searchFocusNode.unfocus();
+                        }
+                        if (mounted) {
+                          setState(() {
+                            // setState akan dipanggil juga oleh _onSearchChanged,
+                            // tetapi ini memastikan tampilan segera diperbarui.
+                            _showSearchResults = false;
+                            _searchResults = [];
+                          });
+                        }
+                      },
+                    )
                   : null,
               // ------------------------------------
             ),
@@ -375,7 +386,8 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverPadding(
-            padding: const EdgeInsets.only(left: 8.0, right: 8.0, bottom: 104.0, top: 8.0),
+            padding: const EdgeInsets.only(
+                left: 8.0, right: 8.0, bottom: 104.0, top: 8.0),
             sliver: SliverGrid(
               gridDelegate: SliverQuiltedGridDelegate(
                 crossAxisCount: 3,
@@ -395,7 +407,7 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
                 ],
               ),
               delegate: SliverChildBuilderDelegate(
-                    (context, index) {
+                (context, index) {
                   final post = _posts[index];
                   return _buildPostItem(post);
                 },
@@ -406,9 +418,9 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
           SliverToBoxAdapter(
             child: _isFetchingMore && _posts.isNotEmpty
                 ? const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Center(child: CircularProgressIndicator()),
-            )
+                    padding: EdgeInsets.all(16.0),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
                 : const SizedBox.shrink(),
           ),
         ],
@@ -462,7 +474,8 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
       // Mengatur warna latar belakang lingkaran
       backgroundColor: Colors.orange.shade50,
       onRefresh: _onRefresh,
-      child: LayoutBuilder( // Menggunakan LayoutBuilder agar bisa scroll
+      child: LayoutBuilder(
+        // Menggunakan LayoutBuilder agar bisa scroll
         builder: (context, constraints) {
           return SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -509,7 +522,10 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
                           decoration: BoxDecoration(
                             // 1. Membuat background gradien
                             gradient: LinearGradient(
-                              colors: [Colors.amber.shade600, Colors.orange.shade800],
+                              colors: [
+                                Colors.amber.shade600,
+                                Colors.orange.shade800
+                              ],
                               begin: Alignment.centerLeft,
                               end: Alignment.centerRight,
                             ),
@@ -525,7 +541,8 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
                             ],
                           ),
                           child: const Row(
-                            mainAxisSize: MainAxisSize.min, // Agar container menyesuaikan ukuran konten
+                            mainAxisSize: MainAxisSize
+                                .min, // Agar container menyesuaikan ukuran konten
                             children: [
                               Icon(
                                 Icons.refresh,
@@ -563,16 +580,21 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
     return GestureDetector(
       onTap: () {
         if (post.isVideo) {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => ClipsViewerPage(initialClip: post)));
+          Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (context) => ClipsViewerPage(initialClip: post)));
         } else {
-          NavigationHelper.navigateToPostDetail(context, post.id, initialPost: post);
+          NavigationHelper.navigateToPostDetail(context, post.id,
+              initialPost: post);
         }
       },
       child: Hero(
         tag: heroTag,
         child: Card(
           clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           elevation: 3,
           child: Stack(
             alignment: Alignment.center,
@@ -580,23 +602,29 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
             children: [
               if (post.isVideo)
                 (post.mediaUrl != null && post.mediaUrl!.isNotEmpty
-                    ? VideoThumbnailWidget(videoUrl: post.mediaUrl!)
+                    ? VideoThumbnailWidget(
+                        videoUrl: post.mediaUrl!,
+                        thumbnailUrl: post.thumbnailUrl,
+                      )
                     : Container(color: Colors.grey[300]))
               else
                 (post.mediaUrl != null && post.mediaUrl!.isNotEmpty
                     ? CachedNetworkImage(
-                  imageUrl: post.mediaUrl!,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(color: Colors.grey[200]),
-                  errorWidget: (context, url, error) => Container(
-                    color: Colors.grey[200],
-                    child: Icon(Icons.broken_image, color: Colors.grey[400]),
-                  ),
-                )
+                        imageUrl: post.mediaUrl!,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) =>
+                            Container(color: Colors.grey[200]),
+                        errorWidget: (context, url, error) => Container(
+                          color: Colors.grey[200],
+                          child:
+                              Icon(Icons.broken_image, color: Colors.grey[400]),
+                        ),
+                      )
                     : Container(
-                  color: Colors.grey[200],
-                  child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
-                )),
+                        color: Colors.grey[200],
+                        child: Icon(Icons.image_not_supported,
+                            color: Colors.grey[400]),
+                      )),
               if (post.isVideo)
                 const Positioned(
                   top: 8.0,
@@ -614,15 +642,18 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
       ),
     );
   }
+
   Widget _buildSkeletonLoader() {
     return Shimmer.fromColors(
       baseColor: Colors.grey[300]!,
       highlightColor: Colors.grey[100]!,
       child: CustomScrollView(
-        physics: const NeverScrollableScrollPhysics(), // Non-aktifkan scroll saat loading
+        physics:
+            const NeverScrollableScrollPhysics(), // Non-aktifkan scroll saat loading
         slivers: [
           SliverPadding(
-            padding: const EdgeInsets.only(left: 8.0, right: 8.0, bottom: 104.0, top: 8.0),
+            padding: const EdgeInsets.only(
+                left: 8.0, right: 8.0, bottom: 104.0, top: 8.0),
             sliver: SliverGrid(
               gridDelegate: SliverQuiltedGridDelegate(
                 crossAxisCount: 3,
@@ -643,14 +674,16 @@ class _FeedPageState extends State<FeedPage> with AutomaticKeepAliveClientMixin<
                 ],
               ),
               delegate: SliverChildBuilderDelegate(
-                    (context, index) {
+                (context, index) {
                   // Ini adalah placeholder untuk setiap item grid
                   return Card(
                     clipBehavior: Clip.antiAlias,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     elevation: 0, // Tidak perlu shadow untuk skeleton
                     child: Container(
-                      color: Colors.white, // Warna ini akan ditimpa oleh shimmer
+                      color:
+                          Colors.white, // Warna ini akan ditimpa oleh shimmer
                     ),
                   );
                 },

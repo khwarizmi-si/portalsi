@@ -6,6 +6,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:mime/mime.dart';
 import 'package:path/path.dart' as path;
 import '../models/paginated_story_feed.dart';
 import '../models/story_model.dart';
@@ -14,7 +16,8 @@ import '../config/api_endpoint.dart';
 import '../utils/secure_storage.dart';
 
 // Fungsi helper yang sama dari PostService untuk stream dengan progress
-Stream<List<int>> _createUploadStream(File file, void Function(int, int) onProgress) {
+Stream<List<int>> _createUploadStream(
+    File file, void Function(int, int) onProgress) {
   final fileStream = file.openRead();
   final totalBytes = file.lengthSync();
   int bytesSent = 0;
@@ -36,17 +39,55 @@ Stream<List<int>> _createUploadStream(File file, void Function(int, int) onProgr
   );
 }
 
+Future<http.Response> _sendMultipartWithProgress(
+  http.MultipartRequest request,
+  Function(int sent, int total)? onProgress,
+) async {
+  final client = http.Client();
+  try {
+    final total = request.contentLength;
+    var sent = 0;
+    final streamedRequest = http.StreamedRequest(request.method, request.url)
+      ..headers.addAll(request.headers)
+      ..contentLength = total
+      ..followRedirects = request.followRedirects
+      ..maxRedirects = request.maxRedirects
+      ..persistentConnection = request.persistentConnection;
+
+    request.finalize().listen(
+      (chunk) {
+        sent += chunk.length;
+        onProgress?.call(sent, total);
+        streamedRequest.sink.add(chunk);
+      },
+      onError: streamedRequest.sink.addError,
+      onDone: streamedRequest.sink.close,
+      cancelOnError: true,
+    );
+
+    final streamedResponse = await client.send(streamedRequest);
+    return http.Response.fromStream(streamedResponse);
+  } finally {
+    client.close();
+  }
+}
+
 class StoryService {
   final baseUrl = ApiEndpoints.apiUrl;
 
+  MediaType? _mediaTypeFor(String? filename, Uint8List bytes) {
+    final mime = lookupMimeType(filename ?? '', headerBytes: bytes);
+    final parts = mime?.split('/');
+    if (parts == null || parts.length != 2) return null;
+    return MediaType(parts[0], parts[1]);
+  }
+
   /// --- FUNGSI BARU UNTUK MENGUNGGAH STORY DENGAN PROGRESS ---
-  Future<void> createStory(
-      Map<String, String> fields,
+  Future<void> createStory(Map<String, String> fields,
       {File? mediaFile,
       Uint8List? mediaBytes,
       String? mediaFilename,
-      Function(int sent, int total)? onProgress}
-      ) async {
+      Function(int sent, int total)? onProgress}) async {
     final token = await SecureStorage.getToken();
     var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/stories'));
 
@@ -57,7 +98,8 @@ class StoryService {
     // Web has no file paths — upload raw bytes.
     if (mediaBytes != null) {
       request.files.add(http.MultipartFile.fromBytes('media', mediaBytes,
-          filename: mediaFilename ?? 'story.png'));
+          filename: mediaFilename ?? 'story.png',
+          contentType: _mediaTypeFor(mediaFilename, mediaBytes)));
     } else if (mediaFile != null) {
       if (onProgress != null) {
         final stream = _createUploadStream(mediaFile, onProgress);
@@ -81,16 +123,13 @@ class StoryService {
     }
 
     try {
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
+      final response = await _sendMultipartWithProgress(request, onProgress);
 
       if (response.statusCode == 201 || response.statusCode == 200) {
         log("✅ Story berhasil diunggah:\n${response.body}");
       } else {
-        if (streamedResponse.request == null) {
-          throw Exception('Upload Story dibatalkan oleh pengguna.');
-        }
-        throw Exception('Gagal membuat story. Status: ${response.statusCode}, Body: ${response.body}');
+        throw Exception(
+            'Gagal membuat story. Status: ${response.statusCode}, Body: ${response.body}');
       }
     } on http.ClientException catch (e) {
       log("Upload Story dibatalkan: $e");

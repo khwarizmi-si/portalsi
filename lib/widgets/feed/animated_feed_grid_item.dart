@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../components/video_thumbnail_widget.dart';
 import '../../models/post_model.dart';
 import 'feed_post_preview.dart';
@@ -78,29 +79,27 @@ class _AnimatedFeedGridItemState extends State<AnimatedFeedGridItem>
     }
   }
 
-
   // --- [PERUBAHAN UTAMA ADA DI FUNGSI build()] ---
   @override
   Widget build(BuildContext context) {
     Widget mediaDisplay;
 
     // Cek apakah URL media valid
-    final bool hasMediaUrl = widget.post.mediaUrl != null && widget.post.mediaUrl!.isNotEmpty;
+    final bool hasMediaUrl =
+        widget.post.mediaUrl != null && widget.post.mediaUrl!.isNotEmpty;
 
     if (hasMediaUrl) {
       if (widget.post.isVideo) {
-        mediaDisplay = VideoThumbnailWidget(videoUrl: widget.post.mediaUrl!);
+        mediaDisplay = VideoThumbnailWidget(
+          videoUrl: widget.post.mediaUrl!,
+          thumbnailUrl: widget.post.thumbnailUrl,
+        );
       } else {
-        mediaDisplay = Image.network(
-          widget.post.mediaUrl!,
+        mediaDisplay = CachedNetworkImage(
+          imageUrl: widget.post.mediaUrl!,
           fit: BoxFit.cover,
-          // Selama loading, tampilkan placeholder abu-abu
-          loadingBuilder: (context, child, progress) {
-            if (progress == null) return child;
-            return Container(color: Colors.grey[200]);
-          },
-          // Jika gambar gagal di-load, tampilkan ikon broken image
-          errorBuilder: (context, error, stackTrace) => Container(
+          placeholder: (context, url) => Container(color: Colors.grey[200]),
+          errorWidget: (context, error, stackTrace) => Container(
             color: Colors.grey[200],
             child: Icon(Icons.broken_image, color: Colors.grey[400]),
           ),
@@ -111,7 +110,6 @@ class _AnimatedFeedGridItemState extends State<AnimatedFeedGridItem>
       mediaDisplay = Container(
         color: Colors.grey[200],
         child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
-
       );
     }
 
@@ -122,7 +120,8 @@ class _AnimatedFeedGridItemState extends State<AnimatedFeedGridItem>
         onLongPress: _onLongPress,
         child: Card(
           clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           elevation: 3,
           child: Stack(
             fit: StackFit.expand,
@@ -160,7 +159,11 @@ class _AnimatedFeedGridItemState extends State<AnimatedFeedGridItem>
                           children: [
                             CircleAvatar(
                               radius: 12,
-                              backgroundImage: NetworkImage(widget.post.user.profilePictureUrl ?? ''),
+                              backgroundImage:
+                                  widget.post.user.profilePictureUrl != null
+                                      ? CachedNetworkImageProvider(
+                                          widget.post.user.profilePictureUrl!)
+                                      : null,
                             ),
                             const SizedBox(width: 6),
                             Expanded(
