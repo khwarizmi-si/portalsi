@@ -71,10 +71,13 @@ class GroupMessage {
   factory GroupMessage.fromJson(Map<String, dynamic> json) {
     // [MODIFIKASI] Tambahkan logika untuk event 'member_added'
     if (json['event_type'] == 'member_added') {
+      final memberAddedAt =
+          DateTime.tryParse(json['timestamp']?.toString() ?? '') ??
+              DateTime.now();
       return GroupMessage(
         // Kita bisa gunakan timestamp atau buat ID unik dari timestamp
-        id: DateTime.parse(json['timestamp']).millisecondsSinceEpoch,
-        sentAt: DateTime.parse(json['timestamp']),
+        id: memberAddedAt.millisecondsSinceEpoch,
+        sentAt: memberAddedAt,
         type: MessageType.memberAddedNotification,
         // Isi dengan data dari event
         addedByUser: User.fromJson(json['adder']),
@@ -88,7 +91,8 @@ class GroupMessage {
       id: json['id'],
       content: json['content'],
       sender: User.fromJson(json['sender']),
-      sentAt: DateTime.parse(json['sent_at']),
+      sentAt: DateTime.tryParse(json['sent_at']?.toString() ?? '') ??
+          DateTime.now(),
       status: MessageStatus.sent,
       repliedTo: json['reply_to'] != null
           ? ReplyInfo.fromJson(json['reply_to'])

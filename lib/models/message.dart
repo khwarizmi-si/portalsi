@@ -21,8 +21,10 @@ class MessageModel {
       id: json['id'],
       senderId: json['sender_id'],
       receiverId: json['receiver_id'],
-      message: json['message'],
-      createdAt: DateTime.parse(json['created_at']),
+      message: json['message'] ?? '',
+      createdAt:
+          DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+              DateTime.now(),
       isRead: json['is_read'] ?? false,
     );
   }
