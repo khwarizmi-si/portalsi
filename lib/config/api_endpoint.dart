@@ -4,7 +4,7 @@ class ApiEndpoints {
   /// to point at a local backend (e.g. http://127.0.0.1:8000).
   static const String baseUrl = bool.hasEnvironment('API_BASE_URL')
       ? String.fromEnvironment('API_BASE_URL')
-      : 'https://api-new.portalsi.com';
+      : 'https://api.portalsi.com';
 
   /// Convenience: baseUrl + /api suffix used by every service.
   static const String apiUrl = '$baseUrl/api';
@@ -17,8 +17,7 @@ class ApiEndpoints {
 
   /// Single canonical WebSocket endpoint used by [WebSocketService].
   /// Reverb runs on a dedicated host, separate from the REST [baseUrl].
-  static const String wsBaseUrl =
-      'wss://ws.portalsi.com:443/app/$reverbAppKey';
+  static const String wsBaseUrl = 'wss://ws.portalsi.com:443/app/$reverbAppKey';
 
   // Laravel Broadcast + Reverb Endpoints
   static const String broadcastAuth = '/broadcasting/auth';

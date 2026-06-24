@@ -47,6 +47,7 @@ Future<http.Response> _sendMultipartWithProgress(
   try {
     final total = request.contentLength;
     var sent = 0;
+    final stream = request.finalize();
     final streamedRequest = http.StreamedRequest(request.method, request.url)
       ..headers.addAll(request.headers)
       ..contentLength = total
@@ -54,7 +55,7 @@ Future<http.Response> _sendMultipartWithProgress(
       ..maxRedirects = request.maxRedirects
       ..persistentConnection = request.persistentConnection;
 
-    request.finalize().listen(
+    stream.listen(
       (chunk) {
         sent += chunk.length;
         onProgress?.call(sent, total);

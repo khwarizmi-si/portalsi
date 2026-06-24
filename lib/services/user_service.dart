@@ -13,8 +13,6 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 // --- IMPORT TAMBAHAN YANG DIBUTUHKAN ---
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
-// Catatan: import 'dart:io' tidak lagi dibutuhkan untuk fungsi upload & pick.
-import 'dart:io';
 
 Future<http.Response> _sendMultipartWithProgress(
   http.MultipartRequest request,
@@ -24,6 +22,7 @@ Future<http.Response> _sendMultipartWithProgress(
   try {
     final total = request.contentLength;
     var sent = 0;
+    final stream = request.finalize();
     final streamedRequest = http.StreamedRequest(request.method, request.url)
       ..headers.addAll(request.headers)
       ..contentLength = total
@@ -31,7 +30,7 @@ Future<http.Response> _sendMultipartWithProgress(
       ..maxRedirects = request.maxRedirects
       ..persistentConnection = request.persistentConnection;
 
-    request.finalize().listen(
+    stream.listen(
       (chunk) {
         sent += chunk.length;
         onUploadProgress?.call(sent, total);
