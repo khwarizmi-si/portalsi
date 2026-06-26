@@ -52,9 +52,14 @@ class GroupService {
     }
     try {
       final headers = await _getHeaders();
-      // Asumsi endpoint search Anda adalah /users/search
-      final uri = Uri.parse(
-          '$_baseUrl/users/search?page=$page&username=$query&fullname=$query');
+      // Asumsi endpoint search Anda adalah /users/search.
+      // Backend expects 'full_name' (not 'fullname'); send both params and let
+      // Uri encode spaces in real names.
+      final uri = Uri.parse('$_baseUrl/users/search').replace(queryParameters: {
+        'page': '$page',
+        'username': query,
+        'full_name': query,
+      });
       final response = await http.get(uri, headers: headers);
 
       if (response.statusCode == 200) {

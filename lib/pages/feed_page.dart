@@ -108,8 +108,10 @@ class _FeedPageState extends State<FeedPage>
         log('❌ GAGAL: Token tidak ditemukan untuk pencarian.');
         return;
       }
-      final url =
-          Uri.parse('${ApiEndpoints.apiUrl}/users/search?username=$query');
+      // Search both username and full_name so people are findable by their
+      // real name, not just their handle. queryParameters URL-encodes spaces.
+      final url = Uri.parse('${ApiEndpoints.apiUrl}/users/search')
+          .replace(queryParameters: {'username': query, 'full_name': query});
       final response = await http.get(url, headers: {
         'Accept': 'application/json',
         'Authorization': 'Bearer $token',

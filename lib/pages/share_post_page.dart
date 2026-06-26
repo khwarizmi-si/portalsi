@@ -128,7 +128,12 @@ class _SharePostPageState extends State<SharePostPage> {
         final token = await SecureStorage.getToken();
         if (token == null) throw Exception("Token tidak ditemukan");
 
-        final url = Uri.parse('${ApiEndpoints.apiUrl}/users/search?username=$query&page=$_mentionCurrentPage');
+        final url = Uri.parse('${ApiEndpoints.apiUrl}/users/search').replace(
+            queryParameters: {
+              'username': query,
+              'full_name': query,
+              'page': '$_mentionCurrentPage',
+            });
         final response = await http.get(url, headers: {'Accept': 'application/json', 'Authorization': 'Bearer $token'});
 
         if (response.statusCode == 200) {

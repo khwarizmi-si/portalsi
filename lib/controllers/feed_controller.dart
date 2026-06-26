@@ -94,7 +94,7 @@ class FeedController extends ChangeNotifier {
     try {
       final authToken = await SecureStorage.getToken();
       final uri = Uri.parse('${ApiEndpoints.apiUrl}/users/search')
-          .replace(queryParameters: {'username': query}); // Diubah dari 'q'
+          .replace(queryParameters: {'username': query, 'full_name': query});
 
 
       final response = await http.get(
