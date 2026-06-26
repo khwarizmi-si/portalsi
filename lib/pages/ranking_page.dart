@@ -794,7 +794,7 @@ class _RankingPageState extends State<RankingPage> with SingleTickerProviderStat
               ...List.generate(rankings.length, (index) {
                 return _buildPlpRankItem(
                   rank: index + 1,
-                  name: rankings[index]['name']!,
+                  name: rankings[index]['name'] ?? '',
                   detail1: rankings[index]['detail1'] ?? '',
                   detail2: rankings[index]['detail2'] ?? '',
                 );

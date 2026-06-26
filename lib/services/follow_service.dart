@@ -7,6 +7,18 @@ import '../models/user_model.dart';
 import '../config/api_endpoint.dart';
 import '../utils/secure_storage.dart';
 
+/// Thrown when an action (e.g. follow) is rejected because the account's email
+/// is not yet verified. Lets the UI show a specific, actionable message instead
+/// of silently reverting.
+class EmailNotVerifiedException implements Exception {
+  const EmailNotVerifiedException([this.message =
+      'Verifikasi email kamu dulu untuk bisa follow.']);
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 class FollowService {
   final String _baseUrl = ApiEndpoints.apiUrl;
 
@@ -227,6 +239,8 @@ class FollowService {
         }
       }
       return false;
+    } on EmailNotVerifiedException {
+      rethrow;
     } catch (e) {
       print('Error in followUser: $e');
       return false;
@@ -239,7 +253,12 @@ class FollowService {
       print('🌐 Trying URL: $url');
       final res = await http.post(Uri.parse(url), headers: headers);
       print('📥 Follow response: ${res.statusCode} - ${res.body}');
+      if (res.statusCode == 403 && res.body.contains('diverifikasi')) {
+        throw const EmailNotVerifiedException();
+      }
       return res.statusCode == 200 || res.statusCode == 201 || (res.statusCode == 409 && res.body.contains('Sudah di-follow'));
+    } on EmailNotVerifiedException {
+      rethrow;
     } catch (e) {
       print('❌ Follow attempt failed: $e');
       return false;

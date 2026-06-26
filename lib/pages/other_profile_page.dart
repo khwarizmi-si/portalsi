@@ -262,6 +262,18 @@ class _OtherProfilePageState extends State<OtherProfilePage>
               _profileData!.copyWith(followersCount: originalFollowersCount);
         });
       }
+    } on EmailNotVerifiedException catch (e) {
+      // Account not verified yet — revert the optimistic update and tell the
+      // user exactly why the follow did not go through.
+      if (mounted) {
+        setState(_loadAllData);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } catch (e) {
       // Revert on error
       if (mounted) {
