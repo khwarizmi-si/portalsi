@@ -1,0 +1,1159 @@
+<script lang="ts">
+	import { goto } from '$app/navigation';
+	import {
+		ImagePlus,
+		LoaderCircle,
+		MapPin,
+		Music2,
+		Save,
+		Sparkles,
+		Upload,
+		Video,
+		X
+	} from '@lucide/svelte';
+	import { onMount } from 'svelte';
+	import { createdPostResponseSchema } from '$lib/schemas/post';
+	import { createdStoryResponseSchema } from '$lib/schemas/story';
+	import { confirmAction } from '$lib/ui/confirm';
+	import { finishProgress, startProgress } from '$lib/ui/progress';
+
+	type Kind = 'post' | 'story' | 'clips';
+	let { kind }: { kind: Kind } = $props();
+	const copy = $derived(
+		{
+			post: {
+				eyebrow: 'Bagikan momen',
+				title: 'Buat postingan',
+				description: 'Foto atau video tunggal dengan caption dan lokasi.'
+			},
+			story: {
+				eyebrow: 'Cerita 24 jam',
+				title: 'Buat cerita',
+				description: 'Bagikan foto, video, atau audio yang ringan dan spontan.'
+			},
+			clips: {
+				eyebrow: 'Video vertikal',
+				title: 'Upload Clips',
+				description: 'Pilih satu video vertikal untuk dibagikan sebagai postingan.'
+			}
+		}[kind]
+	);
+	let file = $state<File | null>(null);
+	let caption = $state('');
+	let location = $state('');
+	let previewUrl = $state('');
+	let submitting = $state(false);
+	let dragging = $state(false);
+	let message = $state('');
+	let uploadProgress = $state(0);
+	let activeUpload = $state<XMLHttpRequest | null>(null);
+	let cropMode = $state<'original' | 'square' | 'portrait'>('original');
+	let filter = $state<'normal' | 'bright' | 'warm' | 'mono' | 'contrast'>('normal');
+	let locationResults = $state<Array<{ id: number; label: string }>>([]);
+	let locationSearching = $state(false);
+	let musicSearching = $state(false);
+	let musicQuery = $state('');
+	let musicResults = $state<
+		Array<{
+			id: number;
+			title: string;
+			artist: string;
+			previewUrl: string | null;
+			artworkUrl: string | null;
+		}>
+	>([]);
+	let selectedMusic = $state<(typeof musicResults)[number] | null>(null);
+	let musicStartSeconds = $state(0);
+	let musicDurationSeconds = $state(15);
+	const filterOptions = [
+		{ id: 'normal' as const, label: 'Normal', css: 'none' },
+		{ id: 'bright' as const, label: 'Cerah', css: 'brightness(1.12) saturate(1.08)' },
+		{ id: 'warm' as const, label: 'Hangat', css: 'sepia(.18) saturate(1.18) hue-rotate(-8deg)' },
+		{ id: 'mono' as const, label: 'Mono', css: 'grayscale(1) contrast(1.08)' },
+		{ id: 'contrast' as const, label: 'Kontras', css: 'contrast(1.18) saturate(1.12)' }
+	];
+	const activeFilter = $derived(filterOptions.find((item) => item.id === filter)?.css ?? 'none');
+
+	const acceptedTypes = $derived(
+		kind === 'clips' ? 'video/*' : kind === 'story' ? 'image/*,video/*,audio/*' : 'image/*,video/*'
+	);
+
+	$effect(() => {
+		if (!file) {
+			previewUrl = '';
+			return;
+		}
+		const url = URL.createObjectURL(file);
+		previewUrl = url;
+		return () => URL.revokeObjectURL(url);
+	});
+
+	$effect(() => {
+		const query = location.trim();
+		if (kind === 'story' || query.length < 3) {
+			locationResults = [];
+			locationSearching = false;
+			return;
+		}
+		locationSearching = true;
+		const controller = new AbortController();
+		const timer = window.setTimeout(async () => {
+			try {
+				const response = await fetch(`/api/external/locations?q=${encodeURIComponent(query)}`, {
+					signal: controller.signal
+				});
+				if (!response.ok) throw new Error();
+				const payload = (await response.json()) as {
+					locations?: Array<{ id: number; label: string }>;
+				};
+				locationResults = payload.locations ?? [];
+			} catch (error) {
+				if (!(error instanceof DOMException && error.name === 'AbortError')) locationResults = [];
+			} finally {
+				if (!controller.signal.aborted) locationSearching = false;
+			}
+		}, 280);
+		return () => {
+			window.clearTimeout(timer);
+			controller.abort();
+		};
+	});
+
+	$effect(() => {
+		const query = musicQuery.trim();
+		if (query.length < 2 || selectedMusic?.title === query) {
+			musicResults = [];
+			musicSearching = false;
+			return;
+		}
+		musicSearching = true;
+		const controller = new AbortController();
+		const timer = window.setTimeout(async () => {
+			try {
+				const response = await fetch(`/api/external/music?q=${encodeURIComponent(query)}`, {
+					signal: controller.signal
+				});
+				if (!response.ok) throw new Error();
+				const payload = (await response.json()) as { tracks?: typeof musicResults };
+				musicResults = payload.tracks ?? [];
+			} catch (error) {
+				if (!(error instanceof DOMException && error.name === 'AbortError')) musicResults = [];
+			} finally {
+				if (!controller.signal.aborted) musicSearching = false;
+			}
+		}, 280);
+		return () => {
+			window.clearTimeout(timer);
+			controller.abort();
+		};
+	});
+
+	onMount(() => {
+		void readDraft()
+			.then(async (draft) => {
+				if (!draft) return;
+				const restore = await confirmAction({
+					title: 'Lanjutkan draft terakhir?',
+					description:
+						'Kami menemukan konten yang belum sempat Anda bagikan. Foto atau video beserta detailnya masih tersimpan di perangkat ini.',
+					confirmLabel: 'Lanjutkan mengedit',
+					cancelLabel: 'Mulai dari awal'
+				});
+				if (!restore) {
+					await deleteDraft();
+					return;
+				}
+				caption = draft.caption ?? '';
+				location = draft.location ?? '';
+				file = draft.file instanceof File ? draft.file : null;
+				selectedMusic = draft.music ?? null;
+				musicQuery = selectedMusic?.title ?? '';
+				cropMode = draft.cropMode ?? 'original';
+				filter = draft.filter ?? 'normal';
+				musicStartSeconds = draft.musicStartSeconds ?? 0;
+				musicDurationSeconds = draft.musicDurationSeconds ?? 15;
+			})
+			.catch(() => undefined);
+	});
+
+	function selectFile(candidate?: File) {
+		if (!candidate) return;
+		message = '';
+		const allowed =
+			kind === 'clips'
+				? candidate.type.startsWith('video/')
+				: kind === 'story'
+					? /^(image|video|audio)\//.test(candidate.type)
+					: /^(image|video)\//.test(candidate.type);
+		if (!allowed) {
+			message = 'Jenis file tidak didukung untuk konten ini.';
+			return;
+		}
+		if (candidate.size > 500 * 1024 * 1024) {
+			message = 'Ukuran file melebihi batas 500 MB.';
+			return;
+		}
+		file = candidate;
+		cropMode = 'original';
+		filter = 'normal';
+	}
+
+	function onDrop(event: DragEvent) {
+		event.preventDefault();
+		dragging = false;
+		selectFile(event.dataTransfer?.files[0]);
+	}
+
+	async function saveDraft() {
+		try {
+			await writeDraft({
+				caption,
+				location,
+				file,
+				music: selectedMusic,
+				cropMode,
+				filter,
+				musicStartSeconds,
+				musicDurationSeconds,
+				savedAt: new Date().toISOString()
+			});
+			message = 'Draft dan media disimpan di perangkat ini.';
+		} catch {
+			message = 'Draft belum dapat disimpan di perangkat ini.';
+		}
+	}
+
+	async function publish() {
+		if (!file || submitting) return;
+		const confirmed = await confirmAction({
+			title:
+				kind === 'story'
+					? 'Bagikan cerita sekarang?'
+					: kind === 'clips'
+						? 'Bagikan clips sekarang?'
+						: 'Bagikan postingan sekarang?',
+			description:
+				'Periksa kembali media, caption, lokasi, dan musik. Konten akan langsung terlihat oleh audiens Anda.',
+			confirmLabel: 'Ya, bagikan'
+		});
+		if (!confirmed) return;
+		submitting = true;
+		uploadProgress = 0;
+		message = '';
+		startProgress();
+		try {
+			const body = new FormData();
+			const uploadFile = file.type.startsWith('image/')
+				? await cropImage(file, cropMode, filter)
+				: file;
+			body.set('media', uploadFile);
+			body.set('caption', caption.trim());
+			if (selectedMusic) {
+				body.set('music_track_name', selectedMusic.title);
+				body.set('music_artist_name', selectedMusic.artist);
+				if (selectedMusic.previewUrl) body.set('music_preview_url', selectedMusic.previewUrl);
+				if (selectedMusic.artworkUrl) body.set('music_album_art_url', selectedMusic.artworkUrl);
+				body.set('music_start_position_ms', String(musicStartSeconds * 1000));
+				body.set('music_clip_duration_ms', String(musicDurationSeconds * 1000));
+			}
+			if (kind === 'story') {
+				body.set(
+					'type',
+					file.type.startsWith('video/')
+						? 'video'
+						: file.type.startsWith('audio/')
+							? 'music'
+							: 'image'
+				);
+				await upload('stories', body, (payload) => createdStoryResponseSchema.parse(payload));
+				await deleteDraft();
+				await goto('/home');
+			} else {
+				if (file.type.startsWith('video/')) {
+					const thumbnail = await generateVideoThumbnail(file);
+					if (thumbnail) body.set('thumbnail', thumbnail);
+				}
+				if (location.trim()) body.set('location', location.trim());
+				body.set('is_video', String(file.type.startsWith('video/') ? 1 : 0));
+				body.set('is_archived', '0');
+				const response = await upload('posts', body, (payload) =>
+					createdPostResponseSchema.parse(payload)
+				);
+				await deleteDraft();
+				await goto(`/posts/${response.post.post_id}`);
+			}
+		} catch (error) {
+			message = error instanceof Error ? error.message : 'Konten belum dapat dibagikan.';
+			finishProgress(false);
+		} finally {
+			submitting = false;
+			activeUpload = null;
+			finishProgress(true);
+		}
+	}
+
+	function upload<T>(path: string, body: FormData, parse: (payload: unknown) => T) {
+		return new Promise<T>((resolve, reject) => {
+			const xhr = new XMLHttpRequest();
+			activeUpload = xhr;
+			xhr.open('POST', `/api/${path}`);
+			xhr.setRequestHeader('Accept', 'application/json');
+			xhr.upload.onprogress = (event) => {
+				if (event.lengthComputable) uploadProgress = Math.round((event.loaded / event.total) * 100);
+			};
+			xhr.onload = () => {
+				let payload: unknown;
+				try {
+					payload = JSON.parse(xhr.responseText);
+				} catch {
+					reject(new Error('Server mengembalikan respons yang tidak valid.'));
+					return;
+				}
+				if (xhr.status < 200 || xhr.status >= 300) {
+					const detail = payload as { message?: string };
+					reject(new Error(detail.message || 'Unggahan ditolak server.'));
+					return;
+				}
+				try {
+					resolve(parse(payload));
+				} catch {
+					reject(new Error('Respons unggahan tidak sesuai kontrak.'));
+				}
+			};
+			xhr.onerror = () => reject(new Error('Koneksi unggahan terputus.'));
+			xhr.onabort = () => reject(new Error('Unggahan dibatalkan.'));
+			xhr.send(body);
+		});
+	}
+
+	function cancelUpload() {
+		activeUpload?.abort();
+	}
+
+	function updateMusicStart(event: Event) {
+		musicStartSeconds = Number((event.currentTarget as HTMLInputElement).value);
+		musicDurationSeconds = Math.min(musicDurationSeconds, 30 - musicStartSeconds);
+	}
+
+	function startMusicPreview(event: Event) {
+		const audio = event.currentTarget as HTMLAudioElement;
+		if (
+			audio.currentTime < musicStartSeconds ||
+			audio.currentTime >= musicStartSeconds + musicDurationSeconds
+		)
+			audio.currentTime = musicStartSeconds;
+	}
+
+	function limitMusicPreview(event: Event) {
+		const audio = event.currentTarget as HTMLAudioElement;
+		if (audio.currentTime >= musicStartSeconds + musicDurationSeconds) {
+			audio.pause();
+			audio.currentTime = musicStartSeconds;
+		}
+	}
+
+	async function cropImage(source: File, mode: typeof cropMode, selectedFilter: typeof filter) {
+		if (mode === 'original' && selectedFilter === 'normal') return source;
+		const bitmap = await createImageBitmap(source);
+		const targetRatio =
+			mode === 'square' ? 1 : mode === 'portrait' ? 4 / 5 : bitmap.width / bitmap.height;
+		let sourceWidth = bitmap.width;
+		let sourceHeight = bitmap.height;
+		if (sourceWidth / sourceHeight > targetRatio) sourceWidth = sourceHeight * targetRatio;
+		else sourceHeight = sourceWidth / targetRatio;
+		const scale = Math.min(1, 2048 / Math.max(sourceWidth, sourceHeight));
+		const canvas = document.createElement('canvas');
+		canvas.width = Math.round(sourceWidth * scale);
+		canvas.height = Math.round(sourceHeight * scale);
+		const context = canvas.getContext('2d');
+		if (context) {
+			context.filter = filterOptions.find((item) => item.id === selectedFilter)?.css ?? 'none';
+			context.drawImage(
+				bitmap,
+				(bitmap.width - sourceWidth) / 2,
+				(bitmap.height - sourceHeight) / 2,
+				sourceWidth,
+				sourceHeight,
+				0,
+				0,
+				canvas.width,
+				canvas.height
+			);
+		}
+		bitmap.close();
+		const type = source.type === 'image/png' ? 'image/png' : 'image/jpeg';
+		const blob = await new Promise<Blob>((resolve, reject) =>
+			canvas.toBlob(
+				(value) => (value ? resolve(value) : reject(new Error('Crop gagal.'))),
+				type,
+				0.9
+			)
+		);
+		return new File([blob], source.name, { type, lastModified: Date.now() });
+	}
+
+	async function generateVideoThumbnail(source: File): Promise<File | null> {
+		const url = URL.createObjectURL(source);
+		try {
+			const video = document.createElement('video');
+			video.preload = 'metadata';
+			video.muted = true;
+			video.playsInline = true;
+			video.src = url;
+			await new Promise<void>((resolve, reject) => {
+				video.onloadeddata = () => resolve();
+				video.onerror = () => reject(new Error('Frame video tidak dapat dibaca.'));
+			});
+			video.currentTime = Math.min(0.1, Math.max(0, video.duration / 20));
+			await new Promise<void>((resolve) => {
+				video.onseeked = () => resolve();
+				setTimeout(resolve, 500);
+			});
+			const scale = Math.min(1, 1280 / Math.max(video.videoWidth, video.videoHeight));
+			const canvas = document.createElement('canvas');
+			canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+			canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+			canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
+			const blob = await new Promise<Blob | null>((resolve) =>
+				canvas.toBlob(resolve, 'image/jpeg', 0.84)
+			);
+			return blob
+				? new File([blob], `${source.name.replace(/\.[^.]+$/, '')}-thumb.jpg`, {
+						type: 'image/jpeg'
+					})
+				: null;
+		} catch {
+			return null;
+		} finally {
+			URL.revokeObjectURL(url);
+		}
+	}
+
+	type Draft = {
+		caption?: string;
+		location?: string;
+		file?: File | null;
+		music?: (typeof musicResults)[number] | null;
+		cropMode?: typeof cropMode;
+		filter?: typeof filter;
+		musicStartSeconds?: number;
+		musicDurationSeconds?: number;
+		savedAt?: string;
+	};
+	function draftDatabase() {
+		return new Promise<IDBDatabase>((resolve, reject) => {
+			const request = indexedDB.open('portal-si-composer', 1);
+			request.onupgradeneeded = () => request.result.createObjectStore('drafts');
+			request.onsuccess = () => resolve(request.result);
+			request.onerror = () => reject(request.error);
+		});
+	}
+	async function writeDraft(draft: Draft) {
+		const db = await draftDatabase();
+		await new Promise<void>((resolve, reject) => {
+			const tx = db.transaction('drafts', 'readwrite');
+			tx.objectStore('drafts').put(draft, kind);
+			tx.oncomplete = () => resolve();
+			tx.onerror = () => reject(tx.error);
+		});
+		db.close();
+	}
+	async function readDraft() {
+		const db = await draftDatabase();
+		const value = await new Promise<Draft | undefined>((resolve, reject) => {
+			const request = db.transaction('drafts').objectStore('drafts').get(kind);
+			request.onsuccess = () => resolve(request.result as Draft | undefined);
+			request.onerror = () => reject(request.error);
+		});
+		db.close();
+		return value;
+	}
+	async function deleteDraft() {
+		const db = await draftDatabase();
+		await new Promise<void>((resolve, reject) => {
+			const tx = db.transaction('drafts', 'readwrite');
+			tx.objectStore('drafts').delete(kind);
+			tx.oncomplete = () => resolve();
+			tx.onerror = () => reject(tx.error);
+		});
+		db.close();
+	}
+</script>
+
+<svelte:head
+	><title>{copy.title} — Portal SI</title><meta name="robots" content="noindex" /></svelte:head
+>
+
+<div class="composer-page">
+	<header>
+		<a href="/home" aria-label="Tutup composer"><X size={21} /></a>
+		<div>
+			<p class="eyebrow">{copy.eyebrow}</p>
+			<h1>{copy.title}</h1>
+		</div>
+		<button onclick={publish} disabled={!file || submitting}
+			>{submitting ? `Mengunggah ${uploadProgress}%` : 'Bagikan'}</button
+		>
+	</header>
+	<div class="composer-grid">
+		<section
+			aria-label="Unggah media"
+			class:dragging
+			class="upload surface"
+			ondragover={(event) => {
+				event.preventDefault();
+				dragging = true;
+			}}
+			ondragleave={() => (dragging = false)}
+			ondrop={onDrop}
+		>
+			{#if previewUrl}
+				<div
+					class="preview"
+					class:square={cropMode === 'square'}
+					class:portrait={cropMode === 'portrait'}
+				>
+					{#if file?.type.startsWith('image/')}<img
+							src={previewUrl}
+							alt="Pratinjau media"
+							style:filter={activeFilter}
+						/>
+					{:else if file?.type.startsWith('video/')}<video src={previewUrl} controls muted></video>
+					{:else}<audio src={previewUrl} controls></audio>{/if}
+					<button onclick={() => (file = null)} aria-label="Hapus media"><X size={18} /></button>
+				</div>
+				{#if file?.type.startsWith('image/')}<div class="crop-controls" aria-label="Framing gambar">
+						<span>Framing</span><button
+							class:active={cropMode === 'original'}
+							onclick={() => (cropMode = 'original')}>Asli</button
+						><button class:active={cropMode === 'square'} onclick={() => (cropMode = 'square')}
+							>1:1</button
+						><button class:active={cropMode === 'portrait'} onclick={() => (cropMode = 'portrait')}
+							>4:5</button
+						>
+					</div>
+					<div class="filter-controls" aria-label="Filter gambar">
+						{#each filterOptions as item (item.id)}<button
+								class:active={filter === item.id}
+								onclick={() => (filter = item.id)}
+								><span style:filter={item.css}><img src={previewUrl} alt="" /></span
+								>{item.label}</button
+							>{/each}
+					</div>{/if}
+			{:else}
+				<div class="upload-art">
+					{#if kind === 'clips'}<Video size={32} />{:else}<ImagePlus size={32} />{/if}<span
+						><Sparkles size={14} /></span
+					>
+				</div>
+				<h2>{kind === 'clips' ? 'Pilih video vertikal' : 'Tarik media ke sini'}</h2>
+				<p>{copy.description}</p>
+			{/if}
+			<label
+				><Upload size={17} />
+				{file ? 'Ganti media' : 'Pilih dari perangkat'}<input
+					type="file"
+					accept={acceptedTypes}
+					onchange={(event) => selectFile(event.currentTarget.files?.[0])}
+				/></label
+			>
+			<small
+				>{file
+					? `${file.name} · ${(file.size / 1024 / 1024).toFixed(1)} MB`
+					: 'Batas unggahan 500 MB'}</small
+			>
+		</section>
+		<aside class="details surface">
+			<h2>Detail {kind === 'story' ? 'cerita' : 'konten'}</h2>
+			<label
+				><span>Caption</span><textarea
+					bind:value={caption}
+					maxlength="5000"
+					rows="5"
+					placeholder="Tulis sesuatu yang bermakna…"></textarea><small
+					>{caption.length.toLocaleString('id-ID')} karakter</small
+				></label
+			>
+			{#if kind !== 'story'}<label class="field"
+					><span><MapPin size={17} /> Lokasi</span><input
+						bind:value={location}
+						maxlength="255"
+						placeholder="Contoh: Denpasar"
+						onkeydown={(event) => {
+							if (event.key === 'Enter') event.preventDefault();
+						}}
+					/>{#if locationSearching}<LoaderCircle class="field-spinner" size={16} />{/if}</label
+				><small class="attribution"
+					>Pencarian © <a
+						href="https://www.openstreetmap.org/copyright"
+						target="_blank"
+						rel="noreferrer">OpenStreetMap contributors</a
+					></small
+				>{#if locationResults.length}<div class="suggestions" aria-label="Saran lokasi">
+						{#each locationResults as place (place.id)}<button
+								onclick={() => {
+									location = place.label;
+									locationResults = [];
+								}}><MapPin size={13} /> {place.label}</button
+							>{/each}
+					</div>{/if}{/if}
+			<label class="field"
+				><span><Music2 size={17} /> Musik</span><input
+					bind:value={musicQuery}
+					maxlength="80"
+					placeholder="Cari judul lagu atau artis"
+					onkeydown={(event) => {
+						if (event.key === 'Enter') event.preventDefault();
+					}}
+				/>{#if musicSearching}<LoaderCircle class="field-spinner" size={16} />{/if}</label
+			>
+			<small class="music-help"
+				>Pilih dari katalog musik dan dengarkan pratinjau sebelum digunakan.</small
+			>
+			{#if musicResults.length}<div class="suggestions music" aria-label="Hasil musik">
+					{#each musicResults as track (track.id)}<button
+							onclick={() => {
+								selectedMusic = track;
+								musicQuery = track.title;
+								musicResults = [];
+							}}
+							>{#if track.artworkUrl}<img src={track.artworkUrl} alt="" />{:else}<Music2
+									size={28}
+								/>{/if}<span><strong>{track.title}</strong><small>{track.artist}</small></span
+							></button
+						>{/each}
+				</div>{/if}
+			{#if selectedMusic}<div class="selected-music">
+					<Music2 size={17} /><span
+						><strong>{selectedMusic.title}</strong><small>{selectedMusic.artist}</small></span
+					>{#if selectedMusic.previewUrl}<audio
+							src={selectedMusic.previewUrl}
+							controls
+							onplay={startMusicPreview}
+							ontimeupdate={limitMusicPreview}
+						></audio>{/if}<button
+						onclick={() => {
+							selectedMusic = null;
+							musicQuery = '';
+						}}
+						aria-label="Hapus musik"><X size={14} /></button
+					>
+				</div>
+				<div class="music-trim">
+					<label
+						><span>Mulai pada {musicStartSeconds} detik</span><input
+							type="range"
+							min="0"
+							max="25"
+							step="1"
+							value={musicStartSeconds}
+							oninput={updateMusicStart}
+						/></label
+					><label
+						><span>Durasi {musicDurationSeconds} detik</span><input
+							type="range"
+							min="5"
+							max={30 - musicStartSeconds}
+							step="1"
+							bind:value={musicDurationSeconds}
+						/></label
+					>
+				</div>{/if}
+			<button class="draft" onclick={saveDraft}
+				><Save size={18} /><span>Simpan draft<small>Teks, media, lokasi, dan musik</small></span
+				></button
+			>
+			{#if submitting}<div class="upload-progress">
+					<div><span style:width={`${uploadProgress}%`}></span></div>
+					<button onclick={cancelUpload}>Batalkan unggahan</button>
+				</div>{/if}
+			{#if message}<p class="message" aria-live="polite">{message}</p>{/if}
+		</aside>
+	</div>
+</div>
+
+<style>
+	.composer-page {
+		width: min(100% - 32px, 1040px);
+		margin: 0 auto;
+		padding: 20px 0 50px;
+	}
+	.composer-page > header {
+		display: grid;
+		grid-template-columns: 44px 1fr auto;
+		align-items: center;
+		gap: 12px;
+		padding: 0 0 22px;
+	}
+	.composer-page > header > a {
+		display: grid;
+		width: 42px;
+		height: 42px;
+		place-items: center;
+		background: white;
+		border: 1px solid var(--color-border);
+		border-radius: 12px;
+	}
+	.composer-page > header p {
+		margin-bottom: 2px;
+	}
+	.composer-page > header h1 {
+		margin: 0;
+		font-size: 1.4rem;
+		letter-spacing: -0.03em;
+	}
+	.composer-page > header > button {
+		height: 42px;
+		padding: 0 18px;
+		background: var(--color-primary);
+		border: 0;
+		border-radius: 11px;
+		color: white;
+		font-weight: 720;
+	}
+	.composer-page > header > button:disabled {
+		opacity: 0.45;
+	}
+	.composer-grid {
+		display: grid;
+		grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
+		gap: 18px;
+	}
+	.upload {
+		display: grid;
+		min-height: 610px;
+		align-content: center;
+		justify-items: center;
+		padding: 30px;
+		background: linear-gradient(145deg, #fff, #fff8ea);
+		text-align: center;
+		transition:
+			border-color 0.2s,
+			background 0.2s;
+	}
+	.upload.dragging {
+		background: var(--color-primary-soft);
+		border-color: var(--color-primary);
+	}
+	.upload-art {
+		position: relative;
+		display: grid;
+		width: 78px;
+		height: 78px;
+		place-items: center;
+		background: var(--color-primary-soft);
+		border-radius: 24px;
+		color: var(--color-primary-strong);
+	}
+	.upload-art span {
+		position: absolute;
+		right: -6px;
+		top: -6px;
+		display: grid;
+		width: 29px;
+		height: 29px;
+		place-items: center;
+		background: var(--color-secondary);
+		border: 3px solid white;
+		border-radius: 50%;
+		color: white;
+	}
+	.upload h2 {
+		margin: 20px 0 5px;
+		font-size: 1.15rem;
+	}
+	.upload p {
+		max-width: 26rem;
+		margin: 0;
+		color: var(--color-muted);
+		font-size: 0.83rem;
+	}
+	.upload > label {
+		display: flex;
+		height: 45px;
+		align-items: center;
+		gap: 8px;
+		margin-top: 20px;
+		padding: 0 16px;
+		background: var(--color-primary);
+		border-radius: 12px;
+		color: white;
+		font-size: 0.8rem;
+		font-weight: 720;
+		cursor: pointer;
+	}
+	.upload input[type='file'] {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		opacity: 0;
+	}
+	.upload > small {
+		margin-top: 10px;
+		color: var(--color-subtle);
+		font-size: 0.68rem;
+	}
+	.preview {
+		position: relative;
+		display: grid;
+		width: min(100%, 540px);
+		max-height: 470px;
+		place-items: center;
+		overflow: hidden;
+		border-radius: 16px;
+		background: #1d1915;
+	}
+	.preview.square {
+		aspect-ratio: 1;
+	}
+	.preview.portrait {
+		aspect-ratio: 4/5;
+	}
+	.preview.square img,
+	.preview.portrait img {
+		height: 100%;
+		object-fit: cover;
+	}
+	.preview img,
+	.preview video {
+		width: 100%;
+		max-height: 470px;
+		object-fit: contain;
+	}
+	.preview audio {
+		margin: 80px 30px;
+	}
+	.preview button {
+		position: absolute;
+		top: 10px;
+		right: 10px;
+		display: grid;
+		width: 38px;
+		height: 38px;
+		place-items: center;
+		background: rgb(0 0 0 / 55%);
+		border: 0;
+		border-radius: 50%;
+		color: white;
+	}
+	.crop-controls {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		margin-top: 12px;
+	}
+	.crop-controls span {
+		margin-right: 4px;
+		color: var(--color-muted);
+		font-size: 0.68rem;
+	}
+	.crop-controls button {
+		min-height: 32px;
+		padding: 0 10px;
+		background: white;
+		border: 1px solid var(--color-border);
+		border-radius: 8px;
+		color: var(--color-muted);
+		font-size: 0.68rem;
+	}
+	.crop-controls button.active {
+		background: var(--color-text);
+		color: white;
+	}
+	.filter-controls {
+		display: flex;
+		width: min(100%, 540px);
+		gap: 8px;
+		margin-top: 10px;
+		overflow-x: auto;
+		padding-bottom: 4px;
+	}
+	.filter-controls button {
+		display: grid;
+		min-width: 58px;
+		justify-items: center;
+		gap: 4px;
+		padding: 0;
+		background: transparent;
+		border: 0;
+		color: var(--color-muted);
+		font-size: 0.62rem;
+	}
+	.filter-controls button span {
+		display: block;
+		width: 48px;
+		height: 48px;
+		overflow: hidden;
+		border: 2px solid transparent;
+		border-radius: 10px;
+	}
+	.filter-controls button.active span {
+		border-color: var(--color-primary);
+	}
+	.filter-controls img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.details {
+		align-self: start;
+		padding: 19px;
+	}
+	.details > h2 {
+		margin: 0 0 16px;
+		font-size: 0.96rem;
+	}
+	.details label {
+		position: relative;
+		display: grid;
+		gap: 7px;
+	}
+	:global(.field-spinner) {
+		position: absolute;
+		right: 12px;
+		bottom: 15px;
+		color: var(--color-primary);
+		animation: spin 0.75s linear infinite;
+	}
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+	.details label > span {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		font-size: 0.78rem;
+		font-weight: 680;
+	}
+	.details textarea,
+	.details input {
+		padding: 12px;
+		background: var(--color-surface-soft);
+		border: 1px solid var(--color-border);
+		border-radius: 12px;
+		outline: 0;
+	}
+	.details textarea {
+		resize: vertical;
+	}
+	.details textarea:focus,
+	.details input:focus {
+		border-color: var(--color-primary);
+		box-shadow: var(--focus-ring);
+	}
+	.details label small {
+		color: var(--color-subtle);
+		font-size: 0.66rem;
+		text-align: right;
+	}
+	.field {
+		margin-top: 14px;
+	}
+	.attribution {
+		display: block;
+		margin-top: 4px;
+		color: var(--color-subtle);
+		font-size: 0.6rem;
+	}
+	.attribution a {
+		text-decoration: underline;
+	}
+	.music-help {
+		display: block;
+		margin-top: 4px;
+		color: var(--color-subtle);
+		font-size: 0.62rem;
+	}
+	.suggestions {
+		display: grid;
+		max-height: 220px;
+		overflow-y: auto;
+		margin-top: 5px;
+		background: white;
+		border: 1px solid var(--color-border);
+		border-radius: 11px;
+		box-shadow: var(--shadow-sm);
+	}
+	.suggestions button {
+		display: flex;
+		align-items: flex-start;
+		gap: 7px;
+		padding: 9px 10px;
+		background: transparent;
+		border: 0;
+		border-bottom: 1px solid var(--color-border);
+		color: var(--color-muted);
+		font-size: 0.68rem;
+		text-align: left;
+	}
+	.suggestions.music button {
+		align-items: center;
+	}
+	.suggestions.music img {
+		width: 36px;
+		height: 36px;
+		border-radius: 6px;
+	}
+	.suggestions.music span,
+	.selected-music span {
+		display: grid;
+		min-width: 0;
+		flex: 1;
+	}
+	.suggestions.music strong,
+	.selected-music strong {
+		overflow: hidden;
+		font-size: 0.72rem;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.suggestions.music small,
+	.selected-music small {
+		color: var(--color-muted);
+		font-size: 0.64rem;
+	}
+	.selected-music {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin-top: 8px;
+		padding: 9px;
+		background: var(--color-secondary-soft);
+		border-radius: 10px;
+		color: var(--color-secondary);
+	}
+	.selected-music audio {
+		width: 90px;
+		height: 28px;
+	}
+	.selected-music > button {
+		display: grid;
+		place-items: center;
+		padding: 3px;
+		background: transparent;
+		border: 0;
+	}
+	.music-trim {
+		display: grid;
+		gap: 8px;
+		margin-top: 8px;
+		padding: 11px;
+		background: var(--color-canvas);
+		border-radius: 10px;
+	}
+	.music-trim label {
+		gap: 3px;
+	}
+	.music-trim label > span {
+		color: var(--color-muted);
+		font-size: 0.64rem;
+	}
+	.music-trim input[type='range'] {
+		height: 24px;
+		padding: 0;
+		accent-color: var(--color-primary);
+	}
+	.draft {
+		display: grid;
+		width: 100%;
+		grid-template-columns: auto 1fr;
+		align-items: center;
+		gap: 11px;
+		margin-top: 14px;
+		padding: 12px 0;
+		background: transparent;
+		border: 0;
+		border-block: 1px solid var(--color-border);
+		text-align: left;
+	}
+	.draft > span {
+		display: grid;
+		font-size: 0.78rem;
+		font-weight: 670;
+	}
+	.draft small {
+		color: var(--color-muted);
+		font-size: 0.67rem;
+		font-weight: 500;
+	}
+	.message {
+		margin: 16px 0 0;
+		padding: 11px;
+		background: var(--color-secondary-soft);
+		border-radius: 10px;
+		color: #33635e;
+		font-size: 0.72rem;
+	}
+	.upload-progress {
+		display: grid;
+		gap: 6px;
+		margin-top: 12px;
+	}
+	.upload-progress > div {
+		height: 7px;
+		overflow: hidden;
+		background: var(--color-border);
+		border-radius: 99px;
+	}
+	.upload-progress span {
+		display: block;
+		height: 100%;
+		background: var(--color-primary);
+		transition: width 0.2s;
+	}
+	.upload-progress button {
+		justify-self: end;
+		padding: 0;
+		background: transparent;
+		border: 0;
+		color: var(--color-danger);
+		font-size: 0.68rem;
+		font-weight: 700;
+	}
+	@media (max-width: 820px) {
+		.composer-grid {
+			grid-template-columns: 1fr;
+		}
+		.upload {
+			min-height: 430px;
+		}
+		.details {
+			width: 100%;
+		}
+	}
+	@media (max-width: 767px) {
+		.composer-page {
+			width: 100%;
+			padding-top: 0;
+		}
+		.composer-page > header {
+			position: sticky;
+			z-index: 10;
+			top: 64px;
+			padding: 10px 12px;
+			background: rgb(255 253 248 / 94%);
+			border-bottom: 1px solid var(--color-border);
+			backdrop-filter: blur(16px);
+		}
+		.composer-page > header p {
+			display: none;
+		}
+		.composer-page > header h1 {
+			font-size: 1rem;
+		}
+		.composer-grid {
+			gap: 10px;
+		}
+		.upload,
+		.details {
+			border-inline: 0;
+			border-radius: 0;
+		}
+		.upload {
+			min-height: 390px;
+		}
+	}
+</style>

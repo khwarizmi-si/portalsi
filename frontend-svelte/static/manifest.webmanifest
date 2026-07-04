@@ -1,0 +1,19 @@
+{
+	"name": "Portal SI",
+	"short_name": "Portal SI",
+	"description": "Ruang komunitas dan pembelajaran Portal SI.",
+	"start_url": "/",
+	"scope": "/",
+	"display": "standalone",
+	"background_color": "#fffaf0",
+	"theme_color": "#fffaf0",
+	"lang": "id",
+	"icons": [
+		{
+			"src": "/assets/logo-mark.png",
+			"sizes": "734x734",
+			"type": "image/png",
+			"purpose": "any maskable"
+		}
+	]
+}

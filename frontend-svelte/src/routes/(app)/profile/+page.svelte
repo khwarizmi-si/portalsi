@@ -1,0 +1,349 @@
+<script lang="ts">
+	import { env } from '$env/dynamic/public';
+	import { Bookmark, Grid3X3, Play, Settings, Share2 } from '@lucide/svelte';
+	import { untrack } from 'svelte';
+	import { clientRequest } from '$lib/api/client';
+	import StoryAvatarLink from '$lib/components/story/StoryAvatarLink.svelte';
+	import VerifiedBadge from '$lib/components/ui/VerifiedBadge.svelte';
+	import { profileResponseSchema, type ProfileResponse } from '$lib/schemas/profile';
+	import { normalizeMediaUrl } from '$lib/utils/media';
+	import type { PageProps } from './$types';
+
+	let { data }: PageProps = $props();
+	const mediaBaseUrl = env.PUBLIC_MEDIA_BASE_URL?.trim() || 'https://api.portalsi.com/storage';
+	const roleLabels = {
+		student: 'Siswa',
+		parent: 'Orang tua',
+		teacher: 'Guru',
+		dev: 'Pengembang',
+		other: 'Anggota'
+	};
+	let posts = $state(untrack(() => [...data.posts]));
+	let hasMore = $state(untrack(() => data.hasMore));
+	let nextPage = $state(2);
+	let loading = $state(false);
+	let loadError = $state('');
+	async function shareProfile() {
+		try {
+			const url = new URL(`/u/${data.profile.username}`, window.location.origin).toString();
+			if (navigator.share) await navigator.share({ title: data.profile.fullName, url });
+			else await navigator.clipboard.writeText(url);
+		} catch {
+			loadError = 'Profil belum dapat dibagikan.';
+		}
+	}
+
+	function toGridPosts(profile: ProfileResponse) {
+		return profile.recent_posts.map((post) => ({
+			id: post.post_id,
+			caption: post.caption?.trim() || `Postingan ${profile.username}`,
+			mediaUrl: normalizeMediaUrl(post.media_url, mediaBaseUrl) || '/assets/logo.png',
+			thumbnailUrl: normalizeMediaUrl(post.thumbnail_url, mediaBaseUrl),
+			isVideo: post.is_video
+		}));
+	}
+
+	async function loadMore() {
+		if (!hasMore || loading) return;
+		loading = true;
+		loadError = '';
+		try {
+			const response = await clientRequest(`user?page=${nextPage}`, {
+				schema: profileResponseSchema
+			});
+			const known = new Set(posts.map((post) => post.id));
+			posts.push(...toGridPosts(response).filter((post) => !known.has(post.id)));
+			hasMore = Boolean(
+				response.pagination && response.pagination.current_page < response.pagination.last_page
+			);
+			nextPage = (response.pagination?.current_page ?? nextPage) + 1;
+		} catch {
+			loadError = 'Postingan berikutnya belum dapat dimuat.';
+		} finally {
+			loading = false;
+		}
+	}
+</script>
+
+<svelte:head><title>Profil — Portal SI</title><meta name="robots" content="noindex" /></svelte:head>
+
+<div class="profile-page">
+	<section class="profile-hero surface">
+		<div class="banner">
+			{#if data.profile.bannerUrl}<img src={data.profile.bannerUrl} alt="Banner profil" />{/if}
+		</div>
+		<div class="profile-main">
+			<StoryAvatarLink
+				userId={data.profile.id}
+				username={data.profile.username}
+				name={data.profile.fullName}
+				avatarUrl={data.profile.avatarUrl ?? undefined}
+				size="xl"
+				hasStory={data.profile.hasStory}
+				seen={data.profile.storyViewed}
+				profileHref="/profile"
+			/>
+			<div class="profile-actions">
+				<a href="/profile/edit">Edit profil</a>
+				<a href="/settings" aria-label="Pengaturan"><Settings size={19} /></a>
+				<button onclick={shareProfile} aria-label="Bagikan profil"><Share2 size={19} /></button>
+			</div>
+			<div class="identity">
+				<h1>
+					{data.profile.fullName}{#if data.profile.badgeVerified}<VerifiedBadge />{/if}
+				</h1>
+				<p>@{data.profile.username} · {roleLabels[data.profile.role]}</p>
+			</div>
+			<p class="bio">{data.profile.bio || 'Belum ada bio.'}</p>
+			<div class="stats">
+				<a href="/profile/followers">
+					<strong>{data.profile.followersCount.toLocaleString('id-ID')}</strong><span>Pengikut</span
+					>
+				</a>
+				<a href="/profile/following">
+					<strong>{data.profile.followingCount.toLocaleString('id-ID')}</strong><span
+						>Mengikuti</span
+					>
+				</a>
+				<span>
+					<strong>{data.profile.postsCount.toLocaleString('id-ID')}</strong><span>Postingan</span>
+				</span>
+			</div>
+		</div>
+	</section>
+
+	<nav class="profile-tabs" aria-label="Konten profil">
+		<a class="active" href="/profile"><Grid3X3 size={17} /> Postingan</a>
+		<a href={`/u/${data.profile.username}/portfolio`}>Portfolio</a>
+		<a href="/settings/saved"><Bookmark size={17} /> Tersimpan</a>
+	</nav>
+
+	{#if posts.length > 0}
+		<section class="profile-grid" aria-label={`Postingan ${data.profile.fullName}`}>
+			{#each posts as post (post.id)}
+				<a href={`/posts/${post.id}`}>
+					{#if post.isVideo && !post.thumbnailUrl}<video
+							src={post.mediaUrl}
+							muted
+							playsinline
+							preload="metadata"
+						></video>{:else}<img src={post.thumbnailUrl ?? post.mediaUrl} alt={post.caption} />{/if}
+					{#if post.isVideo}<span><Play size={15} fill="currentColor" /> Video</span>{/if}
+				</a>
+			{/each}
+		</section>
+		{#if hasMore}
+			<div class="load-more">
+				<button onclick={loadMore} disabled={loading}>{loading ? 'Memuat…' : 'Muat lainnya'}</button
+				>
+				{#if loadError}<span aria-live="polite">{loadError}</span>{/if}
+			</div>
+		{/if}
+	{:else}
+		<section class="empty-profile surface">
+			<strong>Belum ada postingan</strong><span>Karya yang Anda bagikan akan muncul di sini.</span>
+		</section>
+	{/if}
+</div>
+
+<style>
+	.profile-page {
+		width: min(100% - 32px, 920px);
+		margin: 0 auto;
+		padding: 28px 0 50px;
+	}
+	.profile-hero {
+		overflow: hidden;
+	}
+	.banner {
+		height: 190px;
+		background:
+			radial-gradient(circle at 78% 25%, rgb(255 255 255 / 50%), transparent 12rem),
+			linear-gradient(125deg, #f5c875, #86cfc3 62%, #3c9188);
+	}
+	.banner img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.profile-main {
+		position: relative;
+		padding: 0 28px 25px;
+	}
+	.profile-main > :global(.avatar-wrap) {
+		margin-top: -42px;
+		box-shadow: 0 0 0 5px white;
+	}
+	.profile-actions {
+		position: absolute;
+		top: 14px;
+		right: 24px;
+		display: flex;
+		gap: 7px;
+	}
+	.profile-actions a,
+	.profile-actions button {
+		display: grid;
+		min-width: 42px;
+		height: 42px;
+		place-items: center;
+		padding: 0 14px;
+		background: white;
+		border: 1px solid var(--color-border);
+		border-radius: 12px;
+		font-size: 0.8rem;
+		font-weight: 700;
+	}
+	.identity h1 {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		margin: 14px 0 0;
+		font-size: 1.35rem;
+		letter-spacing: -0.03em;
+	}
+	.identity p {
+		margin: 2px 0 0;
+		color: var(--color-muted);
+		font-size: 0.8rem;
+	}
+	.bio {
+		max-width: 38rem;
+		margin: 14px 0 7px;
+		font-size: 0.88rem;
+	}
+	.stats {
+		display: flex;
+		gap: 28px;
+		margin-top: 22px;
+		padding-top: 18px;
+		border-top: 1px solid var(--color-border);
+	}
+	.stats > a,
+	.stats > span {
+		display: grid;
+	}
+	.stats strong {
+		font-size: 0.94rem;
+	}
+	.stats span {
+		color: var(--color-muted);
+		font-size: 0.7rem;
+	}
+	.profile-tabs {
+		display: flex;
+		justify-content: center;
+		gap: 8px;
+		margin-top: 18px;
+		border-bottom: 1px solid var(--color-border);
+	}
+	.profile-tabs a {
+		display: flex;
+		min-height: 48px;
+		align-items: center;
+		gap: 7px;
+		padding: 0 20px;
+		color: var(--color-muted);
+		font-size: 0.78rem;
+		font-weight: 680;
+	}
+	.profile-tabs a.active {
+		border-bottom: 2px solid var(--color-primary);
+		color: var(--color-primary-strong);
+	}
+	.profile-grid {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 4px;
+		margin-top: 4px;
+		overflow: hidden;
+		border-radius: var(--radius-lg);
+	}
+	.profile-grid a {
+		position: relative;
+		aspect-ratio: 1;
+		overflow: hidden;
+		background: var(--color-canvas-deep);
+	}
+	.profile-grid img,
+	.profile-grid video {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.profile-grid a span {
+		position: absolute;
+		right: 8px;
+		bottom: 8px;
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 3px 7px;
+		background: rgb(22 17 12 / 60%);
+		border-radius: 7px;
+		color: white;
+		font-size: 0.66rem;
+	}
+	.load-more,
+	.empty-profile {
+		display: grid;
+		justify-items: center;
+		gap: 6px;
+		text-align: center;
+	}
+	.load-more {
+		padding: 18px;
+	}
+	.load-more button {
+		min-height: 42px;
+		padding: 0 18px;
+		background: white;
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+		color: var(--color-primary-strong);
+		font-weight: 720;
+		cursor: pointer;
+	}
+	.load-more span,
+	.empty-profile span {
+		color: var(--color-muted);
+		font-size: 0.78rem;
+	}
+	.empty-profile {
+		margin-top: 18px;
+		padding: 48px 20px;
+	}
+	@media (max-width: 767px) {
+		.profile-page {
+			width: 100%;
+			padding-top: 0;
+		}
+		.profile-hero {
+			border-inline: 0;
+			border-radius: 0;
+		}
+		.banner {
+			height: 132px;
+		}
+		.profile-main {
+			padding-inline: 16px;
+		}
+		.profile-actions {
+			right: 14px;
+		}
+		.profile-actions a:first-child {
+			padding-inline: 12px;
+		}
+		.stats {
+			justify-content: space-between;
+			gap: 8px;
+		}
+		.profile-tabs {
+			overflow-x: auto;
+			justify-content: flex-start;
+		}
+		.profile-grid {
+			border-radius: 0;
+		}
+	}
+</style>

@@ -1,0 +1,55 @@
+import { env } from '$env/dynamic/public';
+import { chatListSchema, specialGroupsSchema } from '$lib/schemas/chat';
+import { backendRequest } from '$lib/server/api';
+import { normalizeMediaUrl } from '$lib/utils/media';
+import { relativeTimeId } from '$lib/utils/time';
+import { error } from '@sveltejs/kit';
+import type { PageServerLoad } from './$types';
+
+export const load: PageServerLoad = async ({ locals }) => {
+	if (!locals.token) error(401, 'Sesi Anda tidak tersedia.');
+	const response = await backendRequest('messages/chat-list', {
+		token: locals.token,
+		requestId: locals.requestId,
+		schema: chatListSchema
+	});
+	const mediaBaseUrl = env.PUBLIC_MEDIA_BASE_URL?.trim() || 'https://api.portalsi.com/storage';
+	const specialGroups = ['parent', 'teacher'].includes(locals.user?.role ?? '')
+		? await backendRequest('special-groups', {
+				token: locals.token,
+				requestId: locals.requestId,
+				schema: specialGroupsSchema
+			}).catch(() => [])
+		: [];
+	return {
+		specialGroups: specialGroups.map((group) => ({
+			...group,
+			avatarUrl: normalizeMediaUrl(group.avatar_url, mediaBaseUrl)
+		})),
+		chats: response.map((item) =>
+			item.type === 'user'
+				? {
+						type: 'direct' as const,
+						id: item.conversation.id,
+						name: item.conversation.name || item.conversation.username || 'Pengguna Portal SI',
+						handle: item.conversation.username
+							? `@${item.conversation.username}`
+							: 'Pesan langsung',
+						avatarUrl: normalizeMediaUrl(item.conversation.profile_picture_url, mediaBaseUrl),
+						text: item.last_chat.content || (item.last_chat.media ? 'Media' : 'Belum ada pesan'),
+						time: item.last_chat.sent_at ? relativeTimeId(item.last_chat.sent_at) : '',
+						unread: !item.last_chat.is_read
+					}
+				: {
+						type: 'group' as const,
+						id: item.id,
+						name: item.name,
+						handle: item.description || 'Grup Portal SI',
+						avatarUrl: normalizeMediaUrl(item.avatar_url, mediaBaseUrl),
+						text: item.last_message || (item.last_media ? 'Media' : 'Belum ada pesan'),
+						time: item.sent_at ? relativeTimeId(item.sent_at) : '',
+						unread: false
+					}
+		)
+	};
+};

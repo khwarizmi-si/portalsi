@@ -1,0 +1,39 @@
+name: Frontend CI
+
+on:
+  push:
+    paths:
+      - 'frontend-svelte/**'
+      - '.github/workflows/frontend-ci.yml'
+  pull_request:
+    paths:
+      - 'frontend-svelte/**'
+      - '.github/workflows/frontend-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend-svelte
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend-svelte/package-lock.json
+      - run: npm ci
+      - run: npm run check
+      - run: npm run lint
+      - run: npm run test:unit -- --run
+      - run: npm audit --omit=dev
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e:ci
+        env:
+          API_BASE_URL: https://api.portalsi.com
