@@ -9,6 +9,7 @@
 	import { profileResponseSchema, type ProfileResponse } from '$lib/schemas/profile';
 	import { normalizeMediaUrl } from '$lib/utils/media';
 	import type { PageProps } from './$types';
+	import MentionText from '$lib/components/ui/MentionText.svelte';
 
 	let { data }: PageProps = $props();
 	const mediaBaseUrl = env.PUBLIC_MEDIA_BASE_URL?.trim() || 'https://api.portalsi.com/storage';
@@ -98,7 +99,7 @@
 				</h1>
 				<p>@{data.profile.username} · {roleLabels[data.profile.role]}</p>
 			</div>
-			<p class="bio">{data.profile.bio || 'Belum ada bio.'}</p>
+			<p class="bio"><MentionText text={data.profile.bio || 'Belum ada bio.'} /></p>
 			<div class="stats">
 				<a href="/profile/followers">
 					<strong>{data.profile.followersCount.toLocaleString('id-ID')}</strong><span>Pengikut</span
@@ -118,7 +119,7 @@
 
 	<nav class="profile-tabs" aria-label="Konten profil">
 		<a class="active" href="/profile"><Grid3X3 size={17} /> Postingan</a>
-		<a href={`/u/${data.profile.username}/portfolio`}>Portfolio</a>
+		<a href={`/portfolio?user_id=${data.profile.id}`}>Portfolio</a>
 		<a href="/settings/saved"><Bookmark size={17} /> Tersimpan</a>
 	</nav>
 

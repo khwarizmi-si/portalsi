@@ -21,6 +21,7 @@
 	import { storyViewersResponseSchema } from '$lib/schemas/story';
 	import type { PageProps } from './$types';
 	import { confirmAction } from '$lib/ui/confirm';
+	import MentionText from '$lib/components/ui/MentionText.svelte';
 
 	let { data }: PageProps = $props();
 	let stories = $state(untrack(() => structuredClone(data.stories)));
@@ -311,7 +312,9 @@
 			</div>{:else if mediaError}<div class="media-loading error">
 				<span>Media cerita belum dapat dimuat.</span>
 			</div>{/if}
-		{#if story?.caption}<div class="story-caption"><p>{story.caption}</p></div>{/if}
+		{#if story?.caption}<div class="story-caption">
+				<p><MentionText text={story.caption} /></p>
+			</div>{/if}
 		<footer>
 			{#if data.isOwn}<button
 					onclick={(event) => {

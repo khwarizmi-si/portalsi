@@ -30,7 +30,8 @@ export async function backendRequest<T = unknown>(
 	let lastError: unknown;
 
 	for (let attempt = 0; attempt < attempts; attempt += 1) {
-		const timeout = AbortSignal.timeout(options.timeoutMs ?? 8_000);
+		const defaultTimeout = body instanceof FormData ? 10 * 60_000 : 8_000;
+		const timeout = AbortSignal.timeout(options.timeoutMs ?? defaultTimeout);
 		const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
 
 		try {

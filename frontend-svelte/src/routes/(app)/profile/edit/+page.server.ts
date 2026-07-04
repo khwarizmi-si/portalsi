@@ -18,8 +18,11 @@ export const actions: Actions = {
 		] as const) {
 			const file = source.get(field);
 			if (file instanceof File && file.size > 0) {
-				if (!file.type.startsWith('image/'))
-					return fail(422, { message: 'Foto dan banner harus berupa gambar.' });
+				const allowed =
+					field === 'banner'
+						? ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)
+						: file.type.startsWith('image/');
+				if (!allowed) return fail(422, { message: 'Foto dan banner harus berupa gambar.' });
 				if (file.size > limit * 1024 * 1024)
 					return fail(422, {
 						message: `${field === 'banner' ? 'Banner' : 'Foto'} maksimal ${limit} MB.`

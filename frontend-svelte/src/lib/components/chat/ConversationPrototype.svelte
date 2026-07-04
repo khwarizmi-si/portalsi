@@ -26,6 +26,8 @@
 	import { relativeTimeId } from '$lib/utils/time';
 	import Avatar from '$lib/components/ui/Avatar.svelte';
 	import { confirmAction } from '$lib/ui/confirm';
+	import MentionText from '$lib/components/ui/MentionText.svelte';
+	import MentionTextarea from '$lib/components/ui/MentionTextarea.svelte';
 
 	type ChatMessage = {
 		id: number;
@@ -127,9 +129,9 @@
 	onMount(() => {
 		void scrollToBottom('auto');
 		if (mode === 'direct')
-			void clientRequest(`messages/user/${targetId}/read`, { method: 'PATCH' }).catch(
-				() => undefined
-			);
+			void clientRequest(`messages/user/${targetId}/read`, { method: 'PATCH' })
+				.then(() => window.dispatchEvent(new Event('portal:messages-read')))
+				.catch(() => undefined);
 		else
 			for (const message of messages)
 				void clientRequest(`groups/${targetId}/messages/${message.id}/read`, {
@@ -142,7 +144,13 @@
 		const unsubscribe = subscribePrivate(
 			channelName,
 			mode === 'direct' ? 'dm.new' : 'group.new',
-			() => void refresh(),
+			() =>
+				void refresh().then(() => {
+					if (mode === 'direct')
+						void clientRequest(`messages/user/${targetId}/read`, { method: 'PATCH' })
+							.then(() => window.dispatchEvent(new Event('portal:messages-read')))
+							.catch(() => undefined);
+				}),
 			(status) => {
 				realtimeConnected = status === 'connected';
 				if (status === 'connected') statusMessage = '';
@@ -290,7 +298,7 @@
 				<div>
 					{#if !message.mine && mode === 'group'}<strong>{message.senderName}</strong>{/if}
 					{#if message.isPinned}<span class="pinned"><Pin size={11} /> Disematkan</span>{/if}
-					{#if message.text}<p>{message.text}</p>{/if}
+					{#if message.text}<p><MentionText text={message.text} /></p>{/if}
 					{#if message.mediaUrl}
 						{#if mediaKind(message.mediaUrl) === 'image'}<a
 								href={message.mediaUrl}
@@ -351,11 +359,13 @@
 			/></label
 		>
 		<label
-			><span class="sr-only">Tulis pesan</span><textarea
+			><span class="sr-only">Tulis pesan</span><MentionTextarea
 				bind:value={content}
-				maxlength="5000"
-				rows="1"
-				placeholder="Tulis pesan…"></textarea></label
+				name="content"
+				maxlength={5000}
+				rows={1}
+				placeholder="Tulis pesan…"
+			/></label
 		>
 		<button
 			type="submit"
@@ -582,16 +592,15 @@
 		height: 1px;
 		opacity: 0;
 	}
-	.composer textarea {
+	.composer :global(.mention-field textarea) {
 		width: 100%;
 		height: 42px;
 		max-height: 100px;
-		resize: none;
 		padding: 10px 12px;
-		background: var(--color-canvas);
+		resize: none;
+		background: var(--color-surface-soft);
 		border: 1px solid var(--color-border);
 		border-radius: 12px;
-		outline: 0;
 	}
 	.composer .send {
 		background: var(--color-primary);

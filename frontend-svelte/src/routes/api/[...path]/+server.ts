@@ -26,13 +26,14 @@ const proxy: RequestHandler = async ({ request, params, url, locals, cookies }) 
 	if (locals.token) headers.set('Authorization', `Bearer ${locals.token}`);
 	const contentType = request.headers.get('content-type');
 	if (contentType) headers.set('Content-Type', contentType);
+	const isUpload = contentType?.toLowerCase().startsWith('multipart/form-data') ?? false;
 
 	let backendResponse: Response;
 	try {
 		const requestInit: RequestInit & { duplex?: 'half' } = {
 			method: request.method,
 			headers,
-			signal: AbortSignal.timeout(30_000),
+			signal: AbortSignal.timeout(isUpload ? 10 * 60_000 : 30_000),
 			redirect: 'manual'
 		};
 		if (!['GET', 'HEAD'].includes(request.method) && request.body) {

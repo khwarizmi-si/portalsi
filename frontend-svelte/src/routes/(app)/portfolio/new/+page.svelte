@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
-	let { form }: PageProps = $props();
+	let { data, form }: PageProps = $props();
 </script>
 
 <svelte:head><title>Tambah portfolio — Portal SI</title></svelte:head>
@@ -8,6 +8,16 @@
 	<a href="/portfolio">← Portfolio</a>
 	<h1>Tambah karya</h1>
 	<form method="POST" enctype="multipart/form-data">
+		<label
+			><span>Untuk pengguna</span><input
+				name="target_username"
+				required
+				value={data.username}
+				placeholder="username pemilik portfolio"
+			/><small
+				>Guru, dev, dan akun terverifikasi dapat menerbitkan portfolio untuk pengguna mana pun.</small
+			></label
+		>
 		<label
 			><span>Aspek</span><select name="aspect" required
 				><option value="quran">Al-Qur’an</option><option value="it">Teknologi</option><option
@@ -61,6 +71,10 @@
 	label span {
 		font-size: 0.77rem;
 		font-weight: 700;
+	}
+	label small {
+		color: var(--color-muted);
+		font-size: 0.68rem;
 	}
 	input,
 	textarea,

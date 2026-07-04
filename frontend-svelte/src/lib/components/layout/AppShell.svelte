@@ -17,11 +17,14 @@
 	import Avatar from '$lib/components/ui/Avatar.svelte';
 	import BackButton from '$lib/components/ui/BackButton.svelte';
 	import { clientRequest } from '$lib/api/client';
-	import { notificationsResponseSchema } from '$lib/schemas/notification';
 	import type { SessionUser } from '$lib/schemas/user';
+	import { subscribePrivate } from '$lib/realtime/client';
+	import { z } from 'zod';
 
 	let { children, user }: { children: Snippet; user: SessionUser } = $props();
 	let unreadCount = $state(0);
+	let unreadMessages = $state(0);
+	const unreadCountSchema = z.object({ count: z.coerce.number().int().nonnegative() });
 	const topLevel = new Set([
 		'/home',
 		'/explore',
@@ -37,19 +40,42 @@
 	const showBack = $derived(!topLevel.has(page.url.pathname) && !hasOwnBack);
 
 	onMount(() => {
+		let active = true;
+		const refreshCounts = async () => {
+			const [notifications, messages] = await Promise.allSettled([
+				clientRequest('notifications/unread-count', { schema: unreadCountSchema }),
+				clientRequest('messages/unread-count', { schema: unreadCountSchema })
+			]);
+			if (!active) return;
+			if (notifications.status === 'fulfilled') unreadCount = notifications.value.count;
+			if (messages.status === 'fulfilled') unreadMessages = messages.value.count;
+		};
 		const updateUnread = (event: Event) => {
 			const detail = (event as CustomEvent<{ count: number }>).detail;
 			unreadCount = Math.max(0, detail.count);
 		};
 		window.addEventListener('portal:notifications-read', updateUnread);
-		void clientRequest('notifications?page=1&per_page=50', {
-			schema: notificationsResponseSchema
-		})
-			.then((response) => {
-				unreadCount = response.notifications.filter((item) => !item.is_read).length;
-			})
-			.catch(() => undefined);
-		return () => window.removeEventListener('portal:notifications-read', updateUnread);
+		window.addEventListener('portal:messages-read', refreshCounts);
+		void refreshCounts();
+		const stopNotifications = subscribePrivate(
+			`user.${user.id}`,
+			'notification.created',
+			refreshCounts
+		);
+		const stopMessages = subscribePrivate(
+			`App.Models.User.${user.id}`,
+			'chat.updated',
+			refreshCounts
+		);
+		const poll = window.setInterval(refreshCounts, 15_000);
+		return () => {
+			active = false;
+			window.clearInterval(poll);
+			stopNotifications();
+			stopMessages();
+			window.removeEventListener('portal:notifications-read', updateUnread);
+			window.removeEventListener('portal:messages-read', refreshCounts);
+		};
 	});
 
 	const primary = [
@@ -94,6 +120,10 @@
 							aria-label={`${unreadCount} notifikasi belum dibaca`}
 							>{unreadCount > 99 ? '99+' : unreadCount}</i
 						>{/if}
+					{#if item.label === 'Pesan' && unreadMessages > 0}<i
+							aria-label={`${unreadMessages} pesan belum dibaca`}
+							>{unreadMessages > 99 ? '99+' : unreadMessages}</i
+						>{/if}
 				</a>
 			{/each}
 		</nav>
@@ -121,7 +151,9 @@
 			<a href="/notifications" aria-label="Notifikasi" class:has-dot={unreadCount > 0}
 				><Bell size={21} /></a
 			>
-			<a href="/messages" aria-label="Pesan"><MessageCircle size={21} /></a>
+			<a href="/messages" aria-label="Pesan" class:has-dot={unreadMessages > 0}
+				><MessageCircle size={21} /></a
+			>
 		</div>
 	</header>
 

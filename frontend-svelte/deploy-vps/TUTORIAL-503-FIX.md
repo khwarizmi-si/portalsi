@@ -6,7 +6,7 @@ berikutnya. Semua perintah dijalankan sebagai `root` (atau `sudo`) di VPS.
 
 Domain: `app.portalsi.com` · Root aplikasi: `/home/app.portalsi.com/public_html`
 Frontend: SvelteKit `adapter-node` (BUKAN static hosting) yang berjalan sebagai proses
-Node di `127.0.0.1:3100`, dan OpenLiteSpeed mem-*proxy* semua request ke port itu.
+Node di `127.0.0.1:3100`, dan OpenLiteSpeed mem-_proxy_ semua request ke port itu.
 
 ---
 
@@ -281,9 +281,9 @@ mati — pagination saat scroll, live/smart search, upload file, dan progress ba
 
 Penyebab: **Content-Security-Policy** produksi di `src/hooks.server.ts`. Di mode production
 `script-src` sebelumnya hanya `'self'`, sedangkan SvelteKit menyuntik **`<script>` inline**
-untuk mem-*bootstrap* hydration klien. Browser memblokir script inline itu (Anda bisa lihat
-di DevTools → Console: *"Refused to execute inline script ... violates ... script-src 'self'"*),
-sehingga aplikasi hanya ter-*render* SSR tapi **tidak pernah hydrate** → semua interaksi
+untuk mem-_bootstrap_ hydration klien. Browser memblokir script inline itu (Anda bisa lihat
+di DevTools → Console: _"Refused to execute inline script ... violates ... script-src 'self'"_),
+sehingga aplikasi hanya ter-_render_ SSR tapi **tidak pernah hydrate** → semua interaksi
 sisi-klien mati. Di dev tidak terlihat karena `script-src` dev sudah memuat `'unsafe-inline'`.
 
 Ini **bukan** akibat patch CSRF maupun build yang rusak — murni aturan CSP dev vs produksi.
@@ -293,7 +293,7 @@ Perbaikan (sudah diterapkan di `hooks.server.ts`): izinkan script inline SvelteK
 ```ts
 const scriptSource = isDevelopment
 	? "'self' 'unsafe-inline' 'unsafe-eval'"
-	: "'self' 'unsafe-inline' https://static.cloudflareinsights.com";   // sebelumnya: "'self'"
+	: "'self' 'unsafe-inline' https://static.cloudflareinsights.com"; // sebelumnya: "'self'"
 ```
 
 Domain `static.cloudflareinsights.com` (+ `https://cloudflareinsights.com` di `connect-src`)

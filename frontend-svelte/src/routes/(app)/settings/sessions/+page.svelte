@@ -2,18 +2,47 @@
 	import { MonitorSmartphone, Trash2 } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { clientRequest } from '$lib/api/client';
+	import { confirmAction } from '$lib/ui/confirm';
 	import SectionPage from '$lib/components/layout/SectionPage.svelte';
 	import type { PageProps } from './$types';
 	let { data }: PageProps = $props();
 	let sessions = $state(untrack(() => [...data.sessions]));
 	let message = $state('');
 	async function remove(id: number) {
+		if (
+			!(await confirmAction({
+				title: 'Cabut sesi ini?',
+				description: 'Perangkat tersebut akan langsung keluar dari Portal SI.',
+				confirmLabel: 'Cabut sesi',
+				tone: 'danger'
+			}))
+		)
+			return;
 		message = '';
 		try {
 			await clientRequest(`login-histories/${id}`, { method: 'DELETE' });
+			const wasCurrent = sessions.find((item) => item.id === id)?.is_current;
 			sessions = sessions.filter((item) => item.id !== id);
+			if (wasCurrent) window.location.assign('/logout');
 		} catch (error) {
 			message = error instanceof Error ? error.message : 'Riwayat belum dapat dihapus.';
+		}
+	}
+	async function removeAll() {
+		if (
+			!(await confirmAction({
+				title: 'Keluar dari semua perangkat?',
+				description: 'Semua sesi, termasuk perangkat ini, akan dicabut sekarang.',
+				confirmLabel: 'Logout semua',
+				tone: 'danger'
+			}))
+		)
+			return;
+		try {
+			await clientRequest('login-histories', { method: 'DELETE' });
+			window.location.assign('/logout');
+		} catch (error) {
+			message = error instanceof Error ? error.message : 'Semua sesi belum dapat dicabut.';
 		}
 	}
 </script>
@@ -22,8 +51,11 @@
 <SectionPage
 	eyebrow="Keamanan"
 	title="Riwayat login"
-	description="Sesi lebih baru dari tujuh hari tidak dapat dicabut oleh backend."
+	description="Periksa perangkat yang masuk dan cabut sesi kapan saja."
 	><div class="sessions surface">
+		<div class="session-actions">
+			<button onclick={removeAll} disabled={sessions.length === 0}>Logout semua perangkat</button>
+		</div>
 		{#each sessions as item (item.id)}<article>
 				<span><MonitorSmartphone size={20} /></span>
 				<div>
@@ -53,6 +85,25 @@
 		gap: 12px;
 		padding: 14px 16px;
 		border-bottom: 1px solid var(--color-border);
+	}
+	.session-actions {
+		display: flex;
+		justify-content: flex-end;
+		padding: 12px 16px;
+		border-bottom: 1px solid var(--color-border);
+	}
+	.session-actions button {
+		min-height: 38px;
+		padding: 0 13px;
+		border: 0;
+		border-radius: 10px;
+		background: var(--color-danger);
+		color: white;
+		font-size: 0.72rem;
+		font-weight: 720;
+	}
+	.session-actions button:disabled {
+		opacity: 0.5;
 	}
 	article > span {
 		display: grid;

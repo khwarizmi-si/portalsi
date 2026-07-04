@@ -12,15 +12,19 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		error(403, 'Verifikasi email diperlukan untuk membuka portfolio.');
 	const requested = url.searchParams.get('aspect') || '';
 	const aspect = aspects.has(requested) ? requested : '';
+	const requestedUserId = Number.parseInt(url.searchParams.get('user_id') || '', 10);
+	const userId =
+		Number.isSafeInteger(requestedUserId) && requestedUserId > 0 ? requestedUserId : null;
 	const response = await backendRequest('portfolios', {
 		token: locals.token,
 		requestId: locals.requestId,
-		query: aspect ? { aspect } : undefined,
+		query: { ...(aspect ? { aspect } : {}), ...(userId ? { user_id: userId } : {}) },
 		schema: portfoliosResponseSchema
 	});
 	const media = env.PUBLIC_MEDIA_BASE_URL?.trim() || 'https://api.portalsi.com/storage';
 	return {
 		aspect,
+		userId,
 		canCreate: ['teacher', 'dev'].includes(locals.user.role) || locals.user.badgeVerified,
 		items: response.portfolios.map((item) => ({
 			...item,

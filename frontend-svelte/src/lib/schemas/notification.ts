@@ -20,6 +20,7 @@ export const notificationsResponseSchema = z.object({
 				})
 				.nullable(),
 			related_post_id: z.coerce.number().int().positive().nullish(),
+			related_story_id: z.coerce.number().int().positive().nullish(),
 			is_read: booleanish.catch(false),
 			created_at: z.string()
 		})

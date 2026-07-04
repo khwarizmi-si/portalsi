@@ -9,6 +9,8 @@
 	import { createdCommentResponseSchema } from '$lib/schemas/comment';
 	import type { PageProps } from './$types';
 	import { confirmAction, confirmButtonAction } from '$lib/ui/confirm';
+	import MentionText from '$lib/components/ui/MentionText.svelte';
+	import MentionTextarea from '$lib/components/ui/MentionTextarea.svelte';
 
 	let { data, form }: PageProps = $props();
 	let comments = $state(untrack(() => structuredClone(data.comments)));
@@ -184,7 +186,7 @@
 										role={comment.user.role}
 									/></strong
 								>
-								{comment.text}
+								<MentionText text={comment.text} />
 							</p>
 							<footer>
 								<time>{comment.createdLabel}</time><button
@@ -214,7 +216,7 @@
 													role={reply.user.role}
 												/></strong
 											>
-											{reply.text}
+											<MentionText text={reply.text} />
 										</p>
 										<footer>
 											<time>{reply.createdLabel}</time><button
@@ -244,9 +246,11 @@
 			<form class="comment-form" onsubmit={submitComment}>
 				<Avatar name={data.currentUser.fullName} src={data.currentUser.avatarUrl} size="sm" />
 				<label
-					><span class="sr-only">Tulis komentar</span><input
+					><span class="sr-only">Tulis komentar</span><MentionTextarea
 						bind:value={content}
-						maxlength="2000"
+						name="comment"
+						maxlength={2000}
+						rows={1}
 						placeholder={replyTo ? 'Tulis balasan…' : 'Tulis komentar…'}
 					/></label
 				>
@@ -469,7 +473,7 @@
 	.comment-form label {
 		height: 40px;
 	}
-	.comment-form input {
+	.comment-form :global(.mention-field textarea) {
 		width: 100%;
 		height: 100%;
 		padding: 0 12px;

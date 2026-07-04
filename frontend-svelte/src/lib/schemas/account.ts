@@ -7,7 +7,8 @@ export const loginHistorySchema = z.object({
 	device: z.string().nullish(),
 	browser: z.string().nullish(),
 	platform: z.string().nullish(),
-	login_at: z.string()
+	login_at: z.string(),
+	is_current: z.boolean().optional().default(false)
 });
 
 export const loginHistoriesSchema = z.array(loginHistorySchema);

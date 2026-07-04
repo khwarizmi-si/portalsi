@@ -2,6 +2,15 @@ import { z } from 'zod';
 
 const booleanish = z.union([z.boolean(), z.literal(0), z.literal(1)]).transform(Boolean);
 
+export const directPeerSchema = z.object({
+	user_id: z.coerce.number().int().positive(),
+	username: z.string().min(1),
+	full_name: z.string().nullish(),
+	profile_picture_url: z.string().nullish(),
+	is_verified: booleanish.catch(false),
+	role: z.enum(['student', 'parent', 'teacher', 'dev', 'other']).catch('other')
+});
+
 export const directChatListItemSchema = z.object({
 	type: z.literal('user'),
 	conversation: z.object({

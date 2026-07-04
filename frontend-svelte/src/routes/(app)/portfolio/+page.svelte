@@ -37,6 +37,11 @@
 					<h2>{item.title}</h2>
 					<p>{item.description || 'Tanpa deskripsi.'}</p>
 					{#if item.user_name}<a href={`/u/${item.user_name}`}>@{item.user_name}</a>{/if}
+					{#if item.signed_by}<p class="signature">
+							Ditandatangani oleh <a href={`/u/${item.signed_by.username}`}
+								>{item.signed_by.full_name || `@${item.signed_by.username}`}</a
+							>{item.signed_by.role === 'teacher' ? ' · Teacher' : ''}
+						</p>{/if}
 					{#if data.canCreate}<details class="manage">
 							<summary><Pencil size={13} /> Kelola</summary>
 							<form method="POST" action={`?/update&id=${item.id}`} enctype="multipart/form-data">
@@ -186,6 +191,17 @@
 		margin-top: 10px;
 		color: var(--color-secondary);
 		font-size: 0.7rem;
+	}
+	.signature {
+		margin-top: 9px !important;
+		padding: 7px 9px;
+		background: var(--color-secondary-soft);
+		border-radius: 8px;
+		color: var(--color-secondary) !important;
+		font-size: 0.66rem !important;
+	}
+	.signature a {
+		font-weight: 750;
 	}
 	.manage {
 		margin-top: 12px;

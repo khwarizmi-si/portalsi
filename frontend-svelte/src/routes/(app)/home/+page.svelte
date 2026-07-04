@@ -13,6 +13,7 @@
 	import { feedResponseSchema, userSearchResponseSchema } from '$lib/schemas/post';
 	import { untrack } from 'svelte';
 	import type { PageProps } from './$types';
+	import FriendSuggestionCard from '$lib/components/feed/FriendSuggestionCard.svelte';
 
 	let { data }: PageProps = $props();
 	const firstName = $derived(data.user.fullName.split(' ')[0]);
@@ -169,7 +170,9 @@
 		</div>
 
 		<div class="feed-list">
-			{#each posts as post (post.id)}<PostCard {post} />{/each}
+			{#each posts as post, index (post.id)}<PostCard
+					{post}
+				/>{#if (index + 1) % 10 === 0}<FriendSuggestionCard users={data.suggestions} />{/if}{/each}
 		</div>
 		<InfiniteScrollTrigger
 			{hasMore}

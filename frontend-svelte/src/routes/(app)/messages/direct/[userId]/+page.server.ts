@@ -1,5 +1,5 @@
 import { env } from '$env/dynamic/public';
-import { chatListSchema, directConversationSchema } from '$lib/schemas/chat';
+import { chatListSchema, directConversationSchema, directPeerSchema } from '$lib/schemas/chat';
 import { backendRequest } from '$lib/server/api';
 import { normalizeMediaUrl } from '$lib/utils/media';
 import { relativeTimeId } from '$lib/utils/time';
@@ -11,7 +11,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const peerId = Number.parseInt(params.userId, 10);
 	if (!Number.isSafeInteger(peerId) || peerId < 1 || peerId === locals.user.id)
 		error(404, 'Percakapan tidak ditemukan.');
-	const [messages, chatList] = await Promise.all([
+	const [messages, chatList, peer] = await Promise.all([
 		backendRequest(`messages/conversation/${peerId}`, {
 			token: locals.token,
 			requestId: locals.requestId,
@@ -21,6 +21,11 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 			token: locals.token,
 			requestId: locals.requestId,
 			schema: chatListSchema
+		}),
+		backendRequest(`users/${peerId}`, {
+			token: locals.token,
+			requestId: locals.requestId,
+			schema: directPeerSchema
 		})
 	]);
 	const existing = chatList.find((item) => item.type === 'user' && item.conversation.id === peerId);
@@ -29,7 +34,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const title =
 		existing?.type === 'user'
 			? existing.conversation.name || existing.conversation.username
-			: queryName;
+			: peer.full_name?.trim() || peer.username || queryName;
 	return {
 		mode: 'direct' as const,
 		targetId: peerId,
@@ -37,11 +42,11 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		subtitle:
 			existing?.type === 'user' && existing.conversation.username
 				? `@${existing.conversation.username}`
-				: 'Pesan langsung',
+				: `@${peer.username}`,
 		avatarUrl:
 			existing?.type === 'user'
 				? normalizeMediaUrl(existing.conversation.profile_picture_url, mediaBaseUrl)
-				: null,
+				: normalizeMediaUrl(peer.profile_picture_url, mediaBaseUrl),
 		currentUserId: locals.user.id,
 		messages: messages.map((message) => ({
 			id: message.message_id,

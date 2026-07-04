@@ -21,6 +21,7 @@
 	import { cropImageToRegion, type CropRegion } from '$lib/utils/image-crop';
 	import { confirmAction } from '$lib/ui/confirm';
 	import { finishProgress, startProgress } from '$lib/ui/progress';
+	import MentionTextarea from '$lib/components/ui/MentionTextarea.svelte';
 
 	type Kind = 'post' | 'story' | 'clips';
 	let { kind }: { kind: Kind } = $props();
@@ -510,7 +511,11 @@
 			<h1>{copy.title}</h1>
 		</div>
 		<button onclick={publish} disabled={!file || submitting}
-			>{submitting ? `Mengunggah ${uploadProgress}%` : 'Bagikan'}</button
+			>{submitting
+				? uploadProgress >= 100
+					? 'Memproses di server…'
+					: `Mengunggah ${uploadProgress}%`
+				: 'Bagikan'}</button
 		>
 	</header>
 	<div class="composer-grid">
@@ -595,13 +600,13 @@
 		<aside class="details surface">
 			<h2>Detail {kind === 'story' ? 'cerita' : 'konten'}</h2>
 			<label
-				><span>Caption</span><textarea
+				><span>Caption</span><MentionTextarea
 					bind:value={caption}
-					maxlength="5000"
-					rows="5"
-					placeholder="Tulis sesuatu yang bermakna…"></textarea><small
-					>{caption.length.toLocaleString('id-ID')} karakter</small
-				></label
+					name="caption"
+					maxlength={5000}
+					rows={5}
+					placeholder="Tulis sesuatu yang bermakna…"
+				/><small>{caption.length.toLocaleString('id-ID')} karakter</small></label
 			>
 			{#if kind !== 'story'}<label class="field"
 					><span><MapPin size={17} /> Lokasi</span><input
@@ -725,6 +730,11 @@
 			>
 			{#if submitting}<div class="upload-progress">
 					<div><span style:width={`${uploadProgress}%`}></span></div>
+					<small
+						>{uploadProgress >= 100
+							? 'Berkas selesai dikirim, server sedang menyimpan media.'
+							: `${uploadProgress}% terkirim ke server`}</small
+					>
 					<button onclick={cancelUpload}>Batalkan unggahan</button>
 				</div>{/if}
 			{#if message}<p class="message" aria-live="polite">{message}</p>{/if}
@@ -996,7 +1006,6 @@
 		font-size: 0.78rem;
 		font-weight: 680;
 	}
-	.details textarea,
 	.details input {
 		padding: 12px;
 		background: var(--color-surface-soft);
@@ -1004,10 +1013,14 @@
 		border-radius: 12px;
 		outline: 0;
 	}
-	.details textarea {
+	.details :global(.mention-field textarea) {
+		padding: 12px;
+		background: var(--color-surface-soft);
+		border: 1px solid var(--color-border);
+		border-radius: 12px;
+		outline: 0;
 		resize: vertical;
 	}
-	.details textarea:focus,
 	.details input:focus {
 		border-color: var(--color-primary);
 		box-shadow: var(--focus-ring);
@@ -1266,6 +1279,10 @@
 		color: var(--color-danger);
 		font-size: 0.68rem;
 		font-weight: 700;
+	}
+	.upload-progress small {
+		color: var(--color-muted);
+		font-size: 0.66rem;
 	}
 	@media (max-width: 820px) {
 		.composer-grid {

@@ -39,6 +39,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			read: item.is_read,
 			time: relativeTimeId(item.created_at),
 			postId: item.related_post_id,
+			storyId: item.related_story_id,
 			user: item.sender
 				? {
 						id: item.sender.user_id,

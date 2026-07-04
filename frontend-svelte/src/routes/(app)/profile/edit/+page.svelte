@@ -5,6 +5,7 @@
 	import ImageCropper from '$lib/components/media/ImageCropper.svelte';
 	import { cropImageToRegion, type CropRegion } from '$lib/utils/image-crop';
 	import type { PageProps } from './$types';
+	import MentionTextarea from '$lib/components/ui/MentionTextarea.svelte';
 	let { data, form }: PageProps = $props();
 	let profilePreview = $state(untrack(() => data.user?.avatarUrl ?? ''));
 	let bannerPreview = $state(untrack(() => data.user?.bannerUrl ?? ''));
@@ -12,6 +13,7 @@
 	let bannerFile = $state<File | null>(null);
 	let profileRegion = $state<CropRegion | null>(null);
 	let bannerRegion = $state<CropRegion | null>(null);
+	let bio = $state(untrack(() => data.user?.bio ?? ''));
 	function previewFile(event: Event, target: 'profile' | 'banner') {
 		const file = (event.currentTarget as HTMLInputElement).files?.[0];
 		if (!file) return;
@@ -45,7 +47,7 @@
 		use:enhance={async ({ formData }) => {
 			if (profileFile && profileRegion)
 				formData.set('profile_picture', await cropImageToRegion(profileFile, profileRegion, 1024));
-			if (bannerFile && bannerRegion)
+			if (bannerFile && bannerRegion && bannerFile.type !== 'image/gif')
 				formData.set('banner', await cropImageToRegion(bannerFile, bannerRegion, 2000));
 			return async ({ update }) => update({ reset: false });
 		}}
@@ -86,15 +88,20 @@
 				value={data.user?.fullName}
 			/></label
 		>
-		{#if bannerFile}<ImageCropper
+		{#if bannerFile && bannerFile.type !== 'image/gif'}<ImageCropper
 				src={bannerPreview}
 				aspect={5}
 				label="Crop banner profil"
 				onregion={(region) => (bannerRegion = region)}
 			/>{/if}
 		<label
-			><span>Bio</span><textarea name="bio" maxlength="1000" rows="5">{data.user?.bio}</textarea
-			></label
+			><span>Bio</span><MentionTextarea
+				bind:value={bio}
+				name="bio"
+				maxlength={1000}
+				rows={5}
+				placeholder="Ceritakan tentang diri Anda…"
+			/></label
 		>
 		<label
 			><span>Foto profil <small>maks. 10 MB</small></span><input
@@ -108,7 +115,7 @@
 			><span>Banner <small>maks. 20 MB</small></span><input
 				name="banner"
 				type="file"
-				accept="image/*"
+				accept="image/jpeg,image/png,image/webp,image/gif"
 				onchange={(event) => previewFile(event, 'banner')}
 			/></label
 		>
@@ -203,15 +210,18 @@
 		color: var(--color-muted);
 		font-weight: 500;
 	}
-	input,
-	textarea {
+	input {
 		width: 100%;
 		padding: 11px 12px;
 		background: var(--color-surface-soft);
 		border: 1px solid var(--color-border);
 		border-radius: 11px;
 	}
-	textarea {
+	:global(.mention-field textarea) {
+		padding: 11px 12px;
+		background: var(--color-surface-soft);
+		border: 1px solid var(--color-border);
+		border-radius: 11px;
 		resize: vertical;
 	}
 	form > button {

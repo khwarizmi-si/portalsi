@@ -55,6 +55,7 @@
 
 	function destination(item: (typeof items)[number]) {
 		if (item.postId) return `/posts/${item.postId}`;
+		if (item.storyId && item.user) return `/stories/${item.user.id}`;
 		if (item.user) return `/u/${item.user.username}`;
 		return '/notifications';
 	}
@@ -117,6 +118,7 @@
 						read: item.is_read,
 						time: relativeTimeId(item.created_at),
 						postId: item.related_post_id,
+						storyId: item.related_story_id,
 						user: item.sender
 							? {
 									id: item.sender.user_id,

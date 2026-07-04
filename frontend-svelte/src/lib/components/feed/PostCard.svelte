@@ -7,6 +7,7 @@
 	import MediaLightbox from '$lib/components/media/MediaLightbox.svelte';
 	import { clientRequest } from '$lib/api/client';
 	import type { PostPreview } from '$lib/types/domain';
+	import MentionText from '$lib/components/ui/MentionText.svelte';
 
 	let { post, zoomable = false }: { post: PostPreview; zoomable?: boolean } = $props();
 	let lightboxOpen = $state(false);
@@ -162,7 +163,7 @@
 		</p>
 		<p class="caption">
 			<a href={`/u/${post.user.username}`}>@{post.user.username}</a>
-			{post.caption}
+			<MentionText text={post.caption} />
 		</p>
 		<a class="comments" href={`/posts/${post.id}#comments`}>Lihat percakapan</a>
 	</div>

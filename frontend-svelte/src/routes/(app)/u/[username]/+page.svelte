@@ -22,6 +22,7 @@
 	import { normalizeMediaUrl } from '$lib/utils/media';
 	import { confirmAction } from '$lib/ui/confirm';
 	import type { PageProps } from './$types';
+	import MentionText from '$lib/components/ui/MentionText.svelte';
 
 	let { data }: PageProps = $props();
 	const mediaBaseUrl = env.PUBLIC_MEDIA_BASE_URL?.trim() || 'https://api.portalsi.com/storage';
@@ -95,6 +96,14 @@
 				following = false;
 				statusMessage = 'Berhenti mengikuti.';
 			} else {
+				const confirmed = await confirmAction({
+					title: `Ikuti ${data.profile.fullName}?`,
+					description: data.profile.isPrivate
+						? 'Akun ini privat. Permintaan Anda akan menunggu persetujuan.'
+						: `Postingan ${data.profile.fullName} akan mulai muncul di beranda Anda.`,
+					confirmLabel: data.profile.isPrivate ? 'Kirim permintaan' : 'Ikuti sekarang'
+				});
+				if (!confirmed) return;
 				const response = await clientRequest<{ status?: string; message?: string }>(
 					`follow/${data.profile.id}`,
 					{ method: 'POST' }
@@ -189,7 +198,7 @@
 				/>
 			</h1>
 			<p class="handle">@{data.profile.username} · {roleLabels[data.profile.role]}</p>
-			<p class="bio">{data.profile.bio || 'Belum ada bio.'}</p>
+			<p class="bio"><MentionText text={data.profile.bio || 'Belum ada bio.'} /></p>
 			<div class="stats">
 				<span><strong>{data.profile.postsCount.toLocaleString('id-ID')}</strong> Postingan</span>
 				<a href={`/u/${data.profile.username}/followers`}
@@ -256,6 +265,12 @@
 						<small>{portfolioLabels[item.aspect]} · {item.year || '—'}</small>
 						<h2>{item.title}</h2>
 						<p>{item.description || 'Tanpa deskripsi.'}</p>
+						{#if item.signed_by}<small class="signature"
+								>Signed by {item.signed_by.full_name || `@${item.signed_by.username}`}{item
+									.signed_by.role === 'teacher'
+									? ' · Teacher'
+									: ''}</small
+							>{/if}
 					</div>
 				</article>
 			{/each}
@@ -451,6 +466,14 @@
 		margin: 0;
 		color: var(--color-muted);
 		font-size: 0.74rem;
+	}
+	.portfolio-grid .signature {
+		display: block;
+		margin-top: 8px;
+		padding: 6px 8px;
+		background: var(--color-secondary-soft);
+		border-radius: 7px;
+		color: var(--color-secondary);
 	}
 	.empty {
 		display: grid;
