@@ -32,8 +32,7 @@
 	<a href="/settings">← Pengaturan</a>
 	<h1>Preferensi notifikasi</h1>
 	<p>
-		Backend belum menyediakan endpoint preferensi. Pilihan ini mengatur tampilan lokal dan diberi
-		label jelas agar tidak berpura-pura tersinkron.
+		Saat ini preferensi notifikasi hanya disimpan di perangkat ini. Sinkronisasi ke akun akan tersedia setelah didukung oleh server.
 	</p>
 	<form
 		onsubmit={(e) => {

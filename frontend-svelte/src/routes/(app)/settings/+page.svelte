@@ -119,8 +119,8 @@
 		<aside class="surface">
 			<img src="/assets/logo-mark.png" alt="" />
 			<h2>Portal SI Web</h2>
-			<p>Preferensi lokal diberi label terpisah dari pengaturan yang disimpan di server.</p>
-			<small>Build 0.0.1 · Light mode</small>
+			<p>Terkoneksi dengan iman, menginspirasi dalam kebaikan.</p>
+			<small>Build 2.1 · Stable</small>
 		</aside>
 	</div>
 </SectionPage>
