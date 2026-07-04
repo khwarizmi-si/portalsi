@@ -25,7 +25,11 @@ fi
 
 cd "${FRONTEND_DIR}"
 echo "==> Install dependency dari lockfile"
-npm ci --no-audit --no-fund
+# --include=dev WAJIB: build butuh vite & svelte-kit (devDependencies). Tanpa flag ini,
+# jika NODE_ENV=production ter-export di shell, npm ci melewati devDependencies dan build
+# gagal ("vite: not found"). NODE_ENV untuk runtime di-set setelah build (lihat bawah).
+unset NODE_ENV
+npm ci --include=dev --no-audit --no-fund
 echo "==> Build SvelteKit production"
 npm run build
 test -f build/index.js

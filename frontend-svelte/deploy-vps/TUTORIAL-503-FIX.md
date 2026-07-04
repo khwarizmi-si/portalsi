@@ -325,3 +325,42 @@ kembali ke `script-src 'self'` tanpa mematahkan hydration.
 Catatan upload besar: bila file KECIL sudah bisa di-upload tapi file BESAR gagal (413),
 itu batas body OpenLiteSpeed, bukan CSP. Naikkan **Max Request Body Size** di
 CyberPanel/OLS (Server/Vhost) agar sesuai dengan `BODY_SIZE_LIMIT=512M` dan batas Laravel.
+
+---
+
+## 10. Dua jebakan umum saat `git pull` + deploy
+
+### 10a. `git pull` ditolak: "local changes would be overwritten"
+
+Terjadi bila working tree di VPS punya perubahan lokal pada file yang dilacak git (mis.
+`deploy-vps/setup-vps.sh`). Pull dibatalkan dan kode baru tidak masuk. Buang perubahan lokal
+(versi repo yang dipakai), lalu pull:
+
+```bash
+cd /home/app.portalsi.com/public_html
+git checkout -- .        # buang SEMUA perubahan lokal pada file terlacak (aman: .env & build/ di-gitignore)
+git pull --ff-only
+```
+
+Jika perubahan lokal itu ingin disimpan: `git stash` → `git pull --ff-only` → `git stash pop`
+(selesaikan konflik bila ada).
+
+### 10b. Build gagal `vite: not found` / `svelte-kit: not found`
+
+Penyebab: `NODE_ENV=production` ter-export di shell (mis. sesudah menjalankan
+`set -a; . ./.env.production; set +a` secara manual). Dengan `NODE_ENV=production`, `npm ci`
+**melewati devDependencies** — padahal `vite` dan `svelte-kit` ada di sana (gejala lain:
+"added 26 packages", jumlah paket jauh lebih sedikit dari seharusnya).
+
+Perbaikan cepat:
+
+```bash
+unset NODE_ENV
+cd /home/app.portalsi.com/public_html
+frontend-svelte/deploy-vps/deploy-after-pull.sh
+```
+
+Pencegahan permanen sudah dipasang di `deploy-after-pull.sh`: `unset NODE_ENV` +
+`npm ci --include=dev` sebelum build, sehingga devDependencies selalu terpasang tanpa
+tergantung environment shell. `NODE_ENV=production` untuk runtime tetap di-set setelah build,
+sebelum PM2 start.
