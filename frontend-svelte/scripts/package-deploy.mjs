@@ -74,7 +74,7 @@ set -a
 [ -f .env ] && . ./.env
 set +a
 export HOST="\${HOST:-0.0.0.0}"
-export PORT="\${PORT:-3000}"
+export PORT="\${PORT:-3100}"
 exec node build/index.js
 `
 );
@@ -84,7 +84,7 @@ writeFileSync(
 	path.join(deployDir, 'start.bat'),
 	`@echo off
 if not defined HOST set HOST=0.0.0.0
-if not defined PORT set PORT=3000
+if not defined PORT set PORT=3100
 node build\\index.js
 `
 );
@@ -95,8 +95,8 @@ writeFileSync(
 FROM node:24-slim
 WORKDIR /app
 COPY . .
-ENV HOST=0.0.0.0 PORT=3000 NODE_ENV=production
-EXPOSE 3000
+ENV HOST=0.0.0.0 PORT=3100 NODE_ENV=production
+EXPOSE 3100
 CMD ["node", "build/index.js"]
 `
 );
@@ -120,10 +120,10 @@ Folder ini mandiri. Isi: build adapter-node (\`build/\`), dependency produksi
    ./start.sh          # Linux/macOS
    start.bat           # Windows
    # atau langsung:
-   HOST=0.0.0.0 PORT=3000 ORIGIN=https://web.portalsi.com node build/index.js
+   HOST=0.0.0.0 PORT=3100 ORIGIN=https://web.portalsi.com node build/index.js
    \`\`\`
 
-Butuh Node.js 24+. Server default mendengarkan di 0.0.0.0:3000.
+Butuh Node.js 24+. Server default mendengarkan di 0.0.0.0:3100.
 
 ## Reverse proxy (produksi)
 
@@ -134,7 +134,7 @@ WebSocket (Reverb), dan samakan batas upload dengan Laravel.
 
 \`\`\`sh
 docker build -t portalsi-web .
-docker run --env-file .env -p 3000:3000 portalsi-web
+docker run --env-file .env -p 3100:3100 portalsi-web
 \`\`\`
 `
 );
@@ -159,4 +159,4 @@ if (existsSync(vpsDir)) {
 }
 
 console.log('\n✔ Folder deploy siap: ' + deployDir);
-console.log('  Uji lokal: cd deploy && HOST=127.0.0.1 PORT=3000 node build/index.js');
+console.log('  Uji lokal: cd deploy && HOST=127.0.0.1 PORT=3100 node build/index.js');

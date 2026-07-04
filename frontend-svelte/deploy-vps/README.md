@@ -1,7 +1,7 @@
 # Deploy Portal SI di Contabo + CyberPanel
 
 Frontend ini memakai SvelteKit `adapter-node`, bukan static hosting. Semua request domain
-harus diteruskan OpenLiteSpeed ke proses Node di `127.0.0.1:3000`.
+harus diteruskan OpenLiteSpeed ke proses Node di `127.0.0.1:3100`.
 
 ## Instalasi pertama
 
@@ -19,7 +19,7 @@ Nilai production minimum:
 API_BASE_URL=https://api.portalsi.com
 PUBLIC_MEDIA_BASE_URL=https://api.portalsi.com/storage
 HOST=127.0.0.1
-PORT=3000
+PORT=3100
 ORIGIN=https://app.portalsi.com
 BODY_SIZE_LIMIT=512M
 NODE_ENV=production

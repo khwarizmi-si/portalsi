@@ -5,7 +5,7 @@
 #   sudo bash setup-vps.sh
 #
 # Override opsional lewat environment:
-#   DOMAIN=app.portalsi.com PORT=3000 APP_NAME=portalsi-web sudo -E bash setup-vps.sh
+#   DOMAIN=app.portalsi.com PORT=3100 APP_NAME=portalsi-web sudo -E bash setup-vps.sh
 set -euo pipefail
 
 # ==== Konfigurasi default — boleh diubah lewat env ====

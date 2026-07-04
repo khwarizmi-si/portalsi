@@ -3,7 +3,7 @@
 ## Runtime
 
 - Node.js 24/LTS, `npm ci`, lalu `npm run build`.
-- Jalankan `node build/index.js` di belakang reverse proxy HTTPS. Contoh environment runtime: `HOST=127.0.0.1`, `PORT=3000`, `ORIGIN=https://portalsi.com`.
+- Jalankan `node build/index.js` di belakang reverse proxy HTTPS. Contoh environment runtime: `HOST=127.0.0.1`, `PORT=3100`, `ORIGIN=https://portalsi.com`.
 - Health check dapat memakai `GET /welcome`; jangan memakai route authenticated karena route tersebut memanggil Laravel.
 
 ## Environment

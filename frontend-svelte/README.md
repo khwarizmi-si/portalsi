@@ -80,7 +80,7 @@ Build adapter Node menghasilkan server di `build/index.js`:
 ```sh
 npm ci
 npm run build
-HOST=127.0.0.1 PORT=3000 node build/index.js
+HOST=127.0.0.1 PORT=3100 node build/index.js
 ```
 
 Reverse proxy production harus menangani HTTPS, `X-Forwarded-*`, WebSocket upgrade, batas upload yang konsisten dengan Laravel, dan health/readiness. Lihat [deployment](docs/deployment.md), [security](docs/security.md), dan [definition of done](docs/definition-of-done.md).
