@@ -10,11 +10,11 @@
 	</header>
 	<section class="hero">
 		<div>
-			<p class="eyebrow">Ruang digital komunitas sekolah</p>
-			<h1>Berbagi kabar.<br /><em>Menjaga kedekatan.</em></h1>
+			<p class="eyebrow">Portal Sekolah Impian</p>
+			<h1>Satu langkah.<br /><em>Menjaga kedekatan.</em></h1>
 			<p>
-				Portal SI mempertemukan siswa, guru, dan orang tua dalam satu ruang yang hangat untuk
-				belajar dan bertumbuh.
+				Setiap kabar membawa arti, dan setiap hubungan layak untuk tetap terjaga. Karena komunikasi
+				yang baik selalu melahirkan pembelajaran yang lebih terbaik.
 			</p>
 			<div class="hero-actions">
 				<a href="/register">Mulai sekarang <ArrowRight size={18} /></a><a href="/login"
@@ -22,8 +22,8 @@
 				>
 			</div>
 			<div class="trust">
-				<span><ShieldCheck size={16} /> Sesi aman</span><span
-					><Users size={16} /> Komunitas terverifikasi</span
+				<span><ShieldCheck size={16} /> Privasi terjaga</span><span
+					><Users size={16} /> Untuk seluruh keluarga sekolah</span
 				>
 			</div>
 		</div>

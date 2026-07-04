@@ -1,13 +1,15 @@
 <script lang="ts">
-	import { Bookmark, Heart, MapPin, MessageCircle, Send } from '@lucide/svelte';
+	import { Bookmark, Heart, MapPin, Maximize2, MessageCircle, Send } from '@lucide/svelte';
 	import StoryAvatarLink from '$lib/components/story/StoryAvatarLink.svelte';
 	import UserBadges from '$lib/components/ui/UserBadges.svelte';
 	import SmartVideo from '$lib/components/media/SmartVideo.svelte';
 	import ViewportMusic from '$lib/components/media/ViewportMusic.svelte';
+	import MediaLightbox from '$lib/components/media/MediaLightbox.svelte';
 	import { clientRequest } from '$lib/api/client';
 	import type { PostPreview } from '$lib/types/domain';
 
-	let { post }: { post: PostPreview } = $props();
+	let { post, zoomable = false }: { post: PostPreview; zoomable?: boolean } = $props();
+	let lightboxOpen = $state(false);
 	function initialInteractionState() {
 		return {
 			liked: post.isLiked,
@@ -104,9 +106,21 @@
 		</div>
 	{/if}
 
-	{#if post.isVideo}<div class="media">
+	{#if post.isVideo}<div class="media" class:zoomable>
 			<SmartVideo src={post.mediaUrl} poster={post.thumbnailUrl} label={post.mediaAlt} />
-		</div>{:else}<a
+			{#if zoomable}<button
+					class="expand-media"
+					onclick={() => (lightboxOpen = true)}
+					aria-label="Perbesar video"><Maximize2 size={19} /></button
+				>{/if}
+		</div>{:else if zoomable}<button
+			class="media zoomable"
+			onclick={() => (lightboxOpen = true)}
+			aria-label={`Perbesar postingan ${post.user.fullName}`}
+			><img src={post.mediaUrl} alt={post.mediaAlt} /><span class="zoom-cue"
+				><Maximize2 size={20} /> Perbesar</span
+			></button
+		>{:else}<a
 			class="media"
 			href={`/posts/${post.id}`}
 			aria-label={`Buka postingan ${post.user.fullName}`}
@@ -153,6 +167,15 @@
 		<a class="comments" href={`/posts/${post.id}#comments`}>Lihat percakapan</a>
 	</div>
 </article>
+
+<MediaLightbox
+	open={lightboxOpen}
+	src={post.mediaUrl}
+	alt={post.mediaAlt}
+	isVideo={post.isVideo}
+	poster={post.thumbnailUrl}
+	onClose={() => (lightboxOpen = false)}
+/>
 
 <style>
 	.post-card {
@@ -232,9 +255,56 @@
 	}
 
 	.media {
+		position: relative;
 		display: block;
+		width: 100%;
+		padding: 0;
 		overflow: hidden;
 		background: var(--color-canvas-deep);
+		border: 0;
+	}
+	.media.zoomable {
+		cursor: zoom-in;
+	}
+	.media.zoomable img {
+		transition: transform 220ms ease;
+	}
+	.media.zoomable:hover img {
+		transform: scale(1.018);
+	}
+	.expand-media,
+	.zoom-cue {
+		position: absolute;
+		z-index: 3;
+		right: 14px;
+		bottom: 14px;
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 9px 11px;
+		background: rgb(0 0 0 / 58%);
+		border: 1px solid rgb(255 255 255 / 20%);
+		border-radius: 999px;
+		color: white;
+		font-size: 0.68rem;
+		font-weight: 700;
+		backdrop-filter: blur(8px);
+	}
+	.expand-media {
+		width: 42px;
+		height: 42px;
+		justify-content: center;
+		padding: 0;
+	}
+	.zoom-cue {
+		opacity: 0;
+		transform: translateY(5px);
+		transition: 170ms ease;
+	}
+	.media.zoomable:hover .zoom-cue,
+	.media.zoomable:focus-visible .zoom-cue {
+		opacity: 1;
+		transform: translateY(0);
 	}
 
 	.media img {

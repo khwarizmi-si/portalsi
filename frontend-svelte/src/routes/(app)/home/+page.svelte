@@ -174,22 +174,23 @@
 		<InfiniteScrollTrigger
 			{hasMore}
 			loading={loadingMore}
+			itemCount={posts.length}
 			onLoad={loadMore}
 			label="Memuat postingan berikutnya…"
 		/>
 		{#if loadMoreError}<p class="load-error" aria-live="polite">{loadMoreError}</p>{/if}
 
-		<div class="feed-end" class:empty={posts.length === 0}>
-			<img src="/assets/logo-mark.png" alt="" />
-			{#if posts.length === 0}
-				<strong>Belum ada postingan untuk ditampilkan</strong>
-				<span>Ikuti teman atau kembali beberapa saat lagi.</span>
-			{:else}
-				<strong>Anda sudah sampai di sini</strong>
-				<span>Temukan lebih banyak cerita dari komunitas Portal SI.</span>
-			{/if}
-			<a href="/explore">Buka Jelajah</a>
-		</div>
+		{#if !hasMore && !loadingMore}<div class="feed-end" class:empty={posts.length === 0}>
+				<img src="/assets/logo-mark.png" alt="" />
+				{#if posts.length === 0}
+					<strong>Belum ada postingan untuk ditampilkan</strong>
+					<span>Ikuti teman atau kembali beberapa saat lagi.</span>
+				{:else}
+					<strong>Anda sudah sampai di sini</strong>
+					<span>Temukan lebih banyak cerita dari komunitas Portal SI.</span>
+				{/if}
+				<a href="/explore">Buka Jelajah</a>
+			</div>{/if}
 	</section>
 
 	<RightRail
@@ -415,6 +416,8 @@
 
 	.feed-end {
 		display: grid;
+		width: 100%;
+		justify-self: stretch;
 		place-items: center;
 		padding: 34px 16px 44px;
 		text-align: center;

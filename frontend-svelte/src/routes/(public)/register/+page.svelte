@@ -11,7 +11,7 @@
 	<div class="heading">
 		<p class="eyebrow">Mulai perjalanan Anda</p>
 		<h1>Buat akun Portal SI</h1>
-		<p>Akun baru otomatis terdaftar sebagai siswa Portal SI.</p>
+		<p>Karena seribu langkah dimulai dari satu langkah.</p>
 	</div>
 	{#if form?.message}<div class="form-alert" role="alert">{form.message}</div>{/if}
 	<form method="POST">
@@ -21,7 +21,7 @@
 					><span>Nama lengkap</span><input
 						name="full_name"
 						autocomplete="name"
-						placeholder="Nama lengkap"
+						placeholder="Fulan Abdullah"
 						value={form?.values?.full_name ?? ''}
 					/>{#if form?.errors?.full_name}<small class="field-error"
 							>{form.errors.full_name[0]}</small
@@ -31,7 +31,7 @@
 					><span>Username</span><input
 						name="username"
 						autocomplete="username"
-						placeholder="nama.pengguna"
+						placeholder="fulan123"
 						value={form?.values?.username ?? ''}
 					/>{#if form?.errors?.username}<small class="field-error">{form.errors.username[0]}</small
 						>{/if}</label

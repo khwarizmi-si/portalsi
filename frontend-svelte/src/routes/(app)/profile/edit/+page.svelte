@@ -3,19 +3,15 @@
 	import { ArrowLeft, Save } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import ImageCropper from '$lib/components/media/ImageCropper.svelte';
-	import { cropImageFile } from '$lib/utils/image-crop';
+	import { cropImageToRegion, type CropRegion } from '$lib/utils/image-crop';
 	import type { PageProps } from './$types';
 	let { data, form }: PageProps = $props();
 	let profilePreview = $state(untrack(() => data.user?.avatarUrl ?? ''));
 	let bannerPreview = $state(untrack(() => data.user?.bannerUrl ?? ''));
 	let profileFile = $state<File | null>(null);
 	let bannerFile = $state<File | null>(null);
-	let profileZoom = $state(1),
-		profileX = $state(0),
-		profileY = $state(0);
-	let bannerZoom = $state(1),
-		bannerX = $state(0),
-		bannerY = $state(0);
+	let profileRegion = $state<CropRegion | null>(null);
+	let bannerRegion = $state<CropRegion | null>(null);
 	function previewFile(event: Event, target: 'profile' | 'banner') {
 		const file = (event.currentTarget as HTMLInputElement).files?.[0];
 		if (!file) return;
@@ -23,15 +19,11 @@
 		if (target === 'profile') {
 			profileFile = file;
 			profilePreview = url;
-			profileZoom = 1;
-			profileX = 0;
-			profileY = 0;
+			profileRegion = null;
 		} else {
 			bannerFile = file;
 			bannerPreview = url;
-			bannerZoom = 1;
-			bannerX = 0;
-			bannerY = 0;
+			bannerRegion = null;
 		}
 	}
 </script>
@@ -51,28 +43,10 @@
 		method="POST"
 		enctype="multipart/form-data"
 		use:enhance={async ({ formData }) => {
-			if (profileFile)
-				formData.set(
-					'profile_picture',
-					await cropImageFile(profileFile, {
-						aspect: 1,
-						zoom: profileZoom,
-						x: profileX,
-						y: profileY,
-						maxWidth: 1024
-					})
-				);
-			if (bannerFile)
-				formData.set(
-					'banner',
-					await cropImageFile(bannerFile, {
-						aspect: 5,
-						zoom: bannerZoom,
-						x: bannerX,
-						y: bannerY,
-						maxWidth: 2000
-					})
-				);
+			if (profileFile && profileRegion)
+				formData.set('profile_picture', await cropImageToRegion(profileFile, profileRegion, 1024));
+			if (bannerFile && bannerRegion)
+				formData.set('banner', await cropImageToRegion(bannerFile, bannerRegion, 2000));
 			return async ({ update }) => update({ reset: false });
 		}}
 	>
@@ -102,9 +76,7 @@
 				aspect={1}
 				label="Crop foto profil"
 				round
-				bind:zoom={profileZoom}
-				bind:x={profileX}
-				bind:y={profileY}
+				onregion={(region) => (profileRegion = region)}
 			/>{/if}
 		<label
 			><span>Nama lengkap</span><input
@@ -118,9 +90,7 @@
 				src={bannerPreview}
 				aspect={5}
 				label="Crop banner profil"
-				bind:zoom={bannerZoom}
-				bind:x={bannerX}
-				bind:y={bannerY}
+				onregion={(region) => (bannerRegion = region)}
 			/>{/if}
 		<label
 			><span>Bio</span><textarea name="bio" maxlength="1000" rows="5">{data.user?.bio}</textarea

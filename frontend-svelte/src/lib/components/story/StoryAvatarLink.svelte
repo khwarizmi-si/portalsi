@@ -12,6 +12,7 @@
 		hasStory = false,
 		seen = false,
 		size = 'md',
+		storyOrder = [],
 		profileHref = `/u/${username}`
 	}: {
 		userId: number;
@@ -21,12 +22,17 @@
 		hasStory?: boolean;
 		seen?: boolean;
 		size?: 'sm' | 'md' | 'lg' | 'xl';
+		storyOrder?: number[];
 		profileHref?: string;
 	} = $props();
 
 	let loading = $state(false);
 	let locallySeen = $state(false);
-	const href = $derived(hasStory ? `/stories/${userId}` : profileHref);
+	const href = $derived(
+		hasStory
+			? `/stories/${userId}${storyOrder.length > 0 ? `?order=${storyOrder.join(',')}` : ''}`
+			: profileHref
+	);
 	$effect(() => {
 		if (seen) locallySeen = true;
 	});

@@ -13,7 +13,7 @@
 	<div class="heading">
 		<p class="eyebrow">Selamat datang kembali</p>
 		<h1>Masuk ke Portal SI</h1>
-		<p>Lanjutkan percakapan dan lihat kabar terbaru dari komunitas Anda.</p>
+		<p>Lanjutkan percakapan dan lihat kabar terbaru dari komunitas.</p>
 	</div>
 	{#if form?.message}<div class="form-alert" role="alert">
 			{form.message}{#if 'retryAfterSeconds' in form && form.retryAfterSeconds}

@@ -139,6 +139,7 @@
 		<InfiniteScrollTrigger
 			{hasMore}
 			{loading}
+			itemCount={posts.length}
 			onLoad={loadMore}
 			label="Memuat postingan berikutnya…"
 		/>

@@ -1,21 +1,22 @@
 import { env } from '$env/dynamic/public';
 import { followingResponseSchema, profileResponseSchema } from '$lib/schemas/profile';
 import { storyFeedResponseSchema } from '$lib/schemas/story';
+import { portfoliosResponseSchema } from '$lib/schemas/portfolio';
 import { backendRequest } from '$lib/server/api';
 import { normalizeMediaUrl } from '$lib/utils/media';
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals, params }) => {
+export const load: PageServerLoad = async ({ locals, params, url }) => {
 	if (locals.user && params.username.toLowerCase() === locals.user.username.toLowerCase())
 		redirect(303, '/profile');
 
-	const [profileResult, followingResult, storyResult] = await Promise.allSettled([
-		backendRequest(`profile/${encodeURIComponent(params.username)}`, {
-			token: locals.token ?? undefined,
-			requestId: locals.requestId,
-			schema: profileResponseSchema
-		}),
+	const profile = await backendRequest(`profile/${encodeURIComponent(params.username)}`, {
+		token: locals.token ?? undefined,
+		requestId: locals.requestId,
+		schema: profileResponseSchema
+	});
+	const [followingResult, storyResult, portfolioResult] = await Promise.allSettled([
 		locals.token && locals.user
 			? backendRequest(`users/${locals.user.id}/following`, {
 					token: locals.token,
@@ -30,11 +31,16 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 					requestId: locals.requestId,
 					schema: storyFeedResponseSchema
 				})
+			: Promise.resolve(null),
+		locals.token
+			? backendRequest('portfolios', {
+					token: locals.token,
+					requestId: locals.requestId,
+					query: { user_id: profile.user_id },
+					schema: portfoliosResponseSchema
+				})
 			: Promise.resolve(null)
 	]);
-	if (profileResult.status === 'rejected') throw profileResult.reason;
-
-	const profile = profileResult.value;
 	const profileStory =
 		storyResult.status === 'fulfilled'
 			? storyResult.value?.stories.find((group) => group.user_id === profile.user_id)
@@ -65,6 +71,15 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			thumbnailUrl: normalizeMediaUrl(post.thumbnail_url, mediaBaseUrl),
 			isVideo: post.is_video
 		})),
+		portfolio:
+			portfolioResult.status === 'fulfilled'
+				? (portfolioResult.value?.portfolios ?? []).map((item) => ({
+						...item,
+						mediaUrl: normalizeMediaUrl(item.media_url, mediaBaseUrl)
+					}))
+				: [],
+		initialTab:
+			url.searchParams.get('tab') === 'portfolio' ? ('portfolio' as const) : ('posts' as const),
 		hasMore: Boolean(
 			profile.pagination && profile.pagination.current_page < profile.pagination.last_page
 		),

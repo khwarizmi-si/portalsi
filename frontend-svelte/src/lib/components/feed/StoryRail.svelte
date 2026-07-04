@@ -4,6 +4,9 @@
 	import UserBadges from '$lib/components/ui/UserBadges.svelte';
 	import type { StoryPreview } from '$lib/types/domain';
 	let { stories }: { stories: StoryPreview[] } = $props();
+	const storyOrder = $derived(
+		stories.filter((story) => story.user.hasStory).map((story) => story.user.id)
+	);
 </script>
 
 <section class="story-section" aria-labelledby="story-title">
@@ -24,6 +27,7 @@
 						avatarUrl={story.user.avatarUrl}
 						size="lg"
 						hasStory={story.user.hasStory}
+						{storyOrder}
 						seen={story.user.storyViewed}
 						profileHref={story.isOwn ? '/create/story' : `/u/${story.user.username}`}
 					/>

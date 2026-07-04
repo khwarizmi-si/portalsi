@@ -1,6 +1,18 @@
 <script lang="ts">
 	import { env } from '$env/dynamic/public';
-	import { Grid3X3, Lock, MessageCircle, Share2, Play, UserCheck, UserPlus } from '@lucide/svelte';
+	import {
+		FileText,
+		FolderKanban,
+		Grid3X3,
+		Image,
+		Lock,
+		MessageCircle,
+		Share2,
+		Play,
+		UserCheck,
+		UserPlus
+	} from '@lucide/svelte';
+	import { replaceState } from '$app/navigation';
 	import { untrack } from 'svelte';
 	import { ClientApiError, clientRequest } from '$lib/api/client';
 	import StoryAvatarLink from '$lib/components/story/StoryAvatarLink.svelte';
@@ -30,6 +42,22 @@
 	let hasMore = $state(untrack(() => data.hasMore));
 	let nextPage = $state(2);
 	let loadingPosts = $state(false);
+	let activeTab = $state<'posts' | 'portfolio'>(untrack(() => data.initialTab));
+	const portfolioLabels = {
+		quran: 'Al-Qur’an',
+		it: 'Teknologi',
+		bahasa: 'Bahasa',
+		karakter: 'Karakter'
+	};
+
+	function selectTab(tab: typeof activeTab) {
+		activeTab = tab;
+		const target =
+			tab === 'portfolio'
+				? `/u/${data.profile.username}?tab=portfolio`
+				: `/u/${data.profile.username}`;
+		replaceState(target, {});
+	}
 	async function shareProfile() {
 		try {
 			const url = window.location.href;
@@ -177,11 +205,16 @@
 			{#if statusMessage}<p class="status" aria-live="polite">{statusMessage}</p>{/if}
 		</div>
 	</section>
-	<nav>
-		<a class="active" href={`/u/${data.profile.username}`}><Grid3X3 size={17} /> Postingan</a>
-		{#if data.isAuthenticated}<a href={`/u/${data.profile.username}/portfolio`}>Portfolio</a>{/if}
+	<nav aria-label="Konten profil">
+		<button class:active={activeTab === 'posts'} onclick={() => selectTab('posts')}
+			><Grid3X3 size={17} /> Postingan</button
+		>
+		{#if data.isAuthenticated}<button
+				class:active={activeTab === 'portfolio'}
+				onclick={() => selectTab('portfolio')}><FolderKanban size={17} /> Portfolio</button
+			>{/if}
 	</nav>
-	{#if posts.length > 0}
+	{#if activeTab === 'posts' && posts.length > 0}
 		<section class="grid">
 			{#each posts as post (post.id)}<a href={`/posts/${post.id}`}
 					>{#if post.isVideo && !post.thumbnailUrl}<video
@@ -198,14 +231,40 @@
 		<InfiniteScrollTrigger
 			{hasMore}
 			loading={loadingPosts}
+			itemCount={posts.length}
 			onLoad={loadMore}
 			label="Memuat postingan berikutnya…"
 		/>
-	{:else}
+	{:else if activeTab === 'posts'}
 		<section class="empty surface">
-			<Lock size={24} /><strong
+			{#if data.profile.isPrivate}<Lock size={24} />{:else}<Image size={24} />{/if}<strong
 				>{data.profile.isPrivate ? 'Akun ini privat' : 'Belum ada postingan'}</strong
 			><span>{data.profile.message || 'Postingan akan muncul di sini.'}</span>
+		</section>
+	{:else if data.portfolio.length > 0}
+		<section class="portfolio-grid">
+			{#each data.portfolio as item (item.id)}
+				<article class="surface">
+					{#if item.mediaUrl}
+						{#if item.mediaUrl.toLowerCase().includes('.pdf')}
+							<a class="portfolio-media pdf" href={item.mediaUrl} target="_blank" rel="noreferrer"
+								><FileText size={30} /><span>Buka PDF</span></a
+							>
+						{:else}<img src={item.mediaUrl} alt={item.title} />{/if}
+					{/if}
+					<div>
+						<small>{portfolioLabels[item.aspect]} · {item.year || '—'}</small>
+						<h2>{item.title}</h2>
+						<p>{item.description || 'Tanpa deskripsi.'}</p>
+					</div>
+				</article>
+			{/each}
+		</section>
+	{:else}
+		<section class="empty surface">
+			<FolderKanban size={24} /><strong>Belum ada portfolio</strong><span
+				>Karya dan pencapaian pengguna ini akan muncul di sini.</span
+			>
 		</section>
 	{/if}
 </div>
@@ -312,16 +371,22 @@
 		margin-top: 14px;
 		border-bottom: 1px solid var(--color-border);
 	}
-	nav a {
+	nav button {
 		display: flex;
 		min-height: 48px;
 		align-items: center;
 		gap: 6px;
 		padding: 0 20px;
-		border-bottom: 2px solid var(--color-primary);
-		color: var(--color-primary-strong);
+		background: transparent;
+		border: 0;
+		border-bottom: 2px solid transparent;
+		color: var(--color-muted);
 		font-size: 0.76rem;
 		font-weight: 680;
+	}
+	nav button.active {
+		border-bottom-color: var(--color-primary);
+		color: var(--color-primary-strong);
 	}
 	.grid {
 		display: grid;
@@ -349,6 +414,43 @@
 		right: 8px;
 		color: white;
 		filter: drop-shadow(0 1px 2px #000);
+	}
+	.portfolio-grid {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 12px;
+		margin-top: 14px;
+	}
+	.portfolio-grid article {
+		overflow: hidden;
+	}
+	.portfolio-grid img,
+	.portfolio-media {
+		display: grid;
+		width: 100%;
+		aspect-ratio: 4 / 3;
+		place-content: center;
+		justify-items: center;
+		gap: 6px;
+		object-fit: cover;
+		background: var(--color-secondary-soft);
+		color: var(--color-secondary);
+	}
+	.portfolio-grid article > div {
+		padding: 13px;
+	}
+	.portfolio-grid small {
+		color: var(--color-primary-strong);
+		font-size: 0.66rem;
+	}
+	.portfolio-grid h2 {
+		margin: 5px 0;
+		font-size: 0.92rem;
+	}
+	.portfolio-grid p {
+		margin: 0;
+		color: var(--color-muted);
+		font-size: 0.74rem;
 	}
 	.empty {
 		display: grid;
@@ -392,6 +494,10 @@
 		}
 		.grid {
 			border-radius: 0;
+		}
+		.portfolio-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			padding-inline: 12px;
 		}
 	}
 </style>

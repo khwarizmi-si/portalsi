@@ -4,19 +4,29 @@
 		hasMore,
 		loading,
 		onLoad,
+		itemCount = 0,
 		label = 'Memuat konten berikutnya…'
 	}: {
 		hasMore: boolean;
 		loading: boolean;
 		onLoad: () => void | Promise<void>;
+		itemCount?: number;
 		label?: string;
 	} = $props();
 	let trigger: HTMLDivElement;
+	let intersecting = $state(false);
+	let lastRequestedCount = $state(-1);
+
+	$effect(() => {
+		if (!intersecting || !hasMore || loading || itemCount === lastRequestedCount) return;
+		lastRequestedCount = itemCount;
+		void onLoad();
+	});
 
 	onMount(() => {
 		const observer = new IntersectionObserver(
 			(entries) => {
-				if (entries[0]?.isIntersecting && hasMore && !loading) void onLoad();
+				intersecting = Boolean(entries[0]?.isIntersecting);
 			},
 			{ rootMargin: '500px 0px' }
 		);

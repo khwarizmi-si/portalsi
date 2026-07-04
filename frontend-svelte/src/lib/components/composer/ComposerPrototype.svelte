@@ -14,9 +14,11 @@
 		Video,
 		X
 	} from '@lucide/svelte';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { createdPostResponseSchema } from '$lib/schemas/post';
 	import { createdStoryResponseSchema } from '$lib/schemas/story';
+	import ImageCropper from '$lib/components/media/ImageCropper.svelte';
+	import { cropImageToRegion, type CropRegion } from '$lib/utils/image-crop';
 	import { confirmAction } from '$lib/ui/confirm';
 	import { finishProgress, startProgress } from '$lib/ui/progress';
 
@@ -50,10 +52,11 @@
 	let message = $state('');
 	let uploadProgress = $state(0);
 	let activeUpload = $state<XMLHttpRequest | null>(null);
-	let cropMode = $state<'original' | 'square' | 'portrait'>('original');
-	let cropZoom = $state(1);
-	let cropX = $state(0);
-	let cropY = $state(0);
+	let cropMode = $state<'original' | 'square' | 'portrait' | 'story'>(
+		untrack(() => (kind === 'story' ? 'story' : 'original'))
+	);
+	let sourceAspect = $state(1);
+	let cropRegion = $state<CropRegion | null>(null);
 	let filter = $state<'normal' | 'bright' | 'warm' | 'mono' | 'contrast'>('normal');
 	let locationResults = $state<Array<{ id: number; label: string }>>([]);
 	let locationSearching = $state(false);
@@ -83,6 +86,15 @@
 		{ id: 'contrast' as const, label: 'Kontras', css: 'contrast(1.18) saturate(1.12)' }
 	];
 	const activeFilter = $derived(filterOptions.find((item) => item.id === filter)?.css ?? 'none');
+	const cropAspect = $derived(
+		cropMode === 'square'
+			? 1
+			: cropMode === 'portrait'
+				? 4 / 5
+				: cropMode === 'story'
+					? 9 / 16
+					: sourceAspect
+	);
 
 	const acceptedTypes = $derived(
 		kind === 'clips' ? 'video/*' : kind === 'story' ? 'image/*,video/*,audio/*' : 'image/*,video/*'
@@ -179,9 +191,7 @@
 				selectedMusic = draft.music ?? null;
 				musicQuery = selectedMusic?.title ?? '';
 				cropMode = draft.cropMode ?? 'original';
-				cropZoom = draft.cropZoom ?? 1;
-				cropX = draft.cropX ?? 0;
-				cropY = draft.cropY ?? 0;
+				cropRegion = draft.cropRegion ?? null;
 				filter = draft.filter ?? 'normal';
 				musicStartSeconds = draft.musicStartSeconds ?? 0;
 				musicEndSeconds = musicStartSeconds + (draft.musicDurationSeconds ?? 15);
@@ -207,10 +217,9 @@
 			return;
 		}
 		file = candidate;
-		cropMode = 'original';
-		cropZoom = 1;
-		cropX = 0;
-		cropY = 0;
+		cropMode = kind === 'story' ? 'story' : 'original';
+		sourceAspect = 1;
+		cropRegion = null;
 		filter = 'normal';
 	}
 
@@ -218,6 +227,11 @@
 		event.preventDefault();
 		dragging = false;
 		selectFile(event.dataTransfer?.files[0]);
+	}
+
+	function setCropMode(mode: typeof cropMode) {
+		cropMode = mode;
+		cropRegion = null;
 	}
 
 	async function saveDraft() {
@@ -228,9 +242,7 @@
 				file,
 				music: selectedMusic,
 				cropMode,
-				cropZoom,
-				cropX,
-				cropY,
+				cropRegion,
 				filter,
 				musicStartSeconds,
 				musicDurationSeconds,
@@ -262,9 +274,10 @@
 		startProgress();
 		try {
 			const body = new FormData();
-			const uploadFile = file.type.startsWith('image/')
-				? await cropImage(file, cropMode, filter, cropZoom, cropX, cropY)
-				: file;
+			const uploadFile =
+				file.type.startsWith('image/') && cropRegion
+					? await cropImageToRegion(file, cropRegion, 2048, activeFilter)
+					: file;
 			body.set('media', uploadFile);
 			body.set('caption', caption.trim());
 			if (selectedMusic) {
@@ -396,64 +409,6 @@
 		}
 	}
 
-	async function cropImage(
-		source: File,
-		mode: typeof cropMode,
-		selectedFilter: typeof filter,
-		zoom: number,
-		offsetX: number,
-		offsetY: number
-	) {
-		if (
-			mode === 'original' &&
-			selectedFilter === 'normal' &&
-			zoom === 1 &&
-			offsetX === 0 &&
-			offsetY === 0
-		)
-			return source;
-		const bitmap = await createImageBitmap(source);
-		const targetRatio =
-			mode === 'square' ? 1 : mode === 'portrait' ? 4 / 5 : bitmap.width / bitmap.height;
-		let sourceWidth = bitmap.width;
-		let sourceHeight = bitmap.height;
-		if (sourceWidth / sourceHeight > targetRatio) sourceWidth = sourceHeight * targetRatio;
-		else sourceHeight = sourceWidth / targetRatio;
-		sourceWidth /= zoom;
-		sourceHeight /= zoom;
-		const sourceX = ((bitmap.width - sourceWidth) * (offsetX + 50)) / 100;
-		const sourceY = ((bitmap.height - sourceHeight) * (offsetY + 50)) / 100;
-		const scale = Math.min(1, 2048 / Math.max(sourceWidth, sourceHeight));
-		const canvas = document.createElement('canvas');
-		canvas.width = Math.round(sourceWidth * scale);
-		canvas.height = Math.round(sourceHeight * scale);
-		const context = canvas.getContext('2d');
-		if (context) {
-			context.filter = filterOptions.find((item) => item.id === selectedFilter)?.css ?? 'none';
-			context.drawImage(
-				bitmap,
-				sourceX,
-				sourceY,
-				sourceWidth,
-				sourceHeight,
-				0,
-				0,
-				canvas.width,
-				canvas.height
-			);
-		}
-		bitmap.close();
-		const type = source.type === 'image/png' ? 'image/png' : 'image/jpeg';
-		const blob = await new Promise<Blob>((resolve, reject) =>
-			canvas.toBlob(
-				(value) => (value ? resolve(value) : reject(new Error('Crop gagal.'))),
-				type,
-				0.9
-			)
-		);
-		return new File([blob], source.name, { type, lastModified: Date.now() });
-	}
-
 	async function generateVideoThumbnail(source: File): Promise<File | null> {
 		const url = URL.createObjectURL(source);
 		try {
@@ -497,9 +452,7 @@
 		file?: File | null;
 		music?: (typeof musicResults)[number] | null;
 		cropMode?: typeof cropMode;
-		cropZoom?: number;
-		cropX?: number;
-		cropY?: number;
+		cropRegion?: CropRegion | null;
 		filter?: typeof filter;
 		musicStartSeconds?: number;
 		musicDurationSeconds?: number;
@@ -573,61 +526,40 @@
 			ondrop={onDrop}
 		>
 			{#if previewUrl}
-				<div
-					class="preview"
-					class:square={cropMode === 'square'}
-					class:portrait={cropMode === 'portrait'}
-				>
-					{#if file?.type.startsWith('image/')}<img
-							src={previewUrl}
-							alt="Pratinjau media"
-							style:filter={activeFilter}
-							style:object-position={`${50 + cropX}% ${50 + cropY}%`}
-							style:transform={`scale(${cropZoom})`}
-						/>
-					{:else if file?.type.startsWith('video/')}<video src={previewUrl} controls muted></video>
-					{:else}<audio src={previewUrl} controls></audio>{/if}
-					<button onclick={() => (file = null)} aria-label="Hapus media"><X size={18} /></button>
-				</div>
+				{#if file?.type.startsWith('image/')}
+					<div class="crop-editor">
+						{#key `${previewUrl}:${cropMode}`}
+							<ImageCropper
+								src={previewUrl}
+								aspect={cropAspect}
+								label="Atur potongan gambar"
+								filterCss={activeFilter}
+								onready={(aspect) => (sourceAspect = aspect)}
+								onregion={(region) => (cropRegion = region)}
+							/>
+						{/key}
+						<button class="crop-remove" onclick={() => (file = null)} aria-label="Hapus media"
+							><X size={18} /></button
+						>
+					</div>
+				{:else}<div class="preview">
+						{#if file?.type.startsWith('video/')}<video src={previewUrl} controls muted></video>
+						{:else}<audio src={previewUrl} controls></audio>{/if}
+						<button onclick={() => (file = null)} aria-label="Hapus media"><X size={18} /></button>
+					</div>{/if}
 				{#if file?.type.startsWith('image/')}<div class="crop-controls" aria-label="Framing gambar">
 						<span>Framing</span><button
 							class:active={cropMode === 'original'}
-							onclick={() => (cropMode = 'original')}>Asli</button
-						><button class:active={cropMode === 'square'} onclick={() => (cropMode = 'square')}
+							onclick={() => setCropMode('original')}>Asli</button
+						><button class:active={cropMode === 'square'} onclick={() => setCropMode('square')}
 							>1:1</button
-						><button class:active={cropMode === 'portrait'} onclick={() => (cropMode = 'portrait')}
+						><button class:active={cropMode === 'portrait'} onclick={() => setCropMode('portrait')}
 							>4:5</button
 						>
-					</div>
-					<div class="crop-adjust" aria-label="Atur crop gambar">
-						<strong><Scissors size={14} /> Atur potongan</strong>
-						<label
-							><span>Zoom</span><input
-								type="range"
-								min="1"
-								max="2.5"
-								step="0.05"
-								bind:value={cropZoom}
-							/></label
-						>
-						<label
-							><span>Horizontal</span><input
-								type="range"
-								min="-50"
-								max="50"
-								step="1"
-								bind:value={cropX}
-							/></label
-						>
-						<label
-							><span>Vertikal</span><input
-								type="range"
-								min="-50"
-								max="50"
-								step="1"
-								bind:value={cropY}
-							/></label
-						>
+						{#if kind === 'story'}<button
+								class:active={cropMode === 'story'}
+								onclick={() => setCropMode('story')}>9:16</button
+							>{/if}
 					</div>
 					<div class="filter-controls" aria-label="Filter gambar">
 						{#each filterOptions as item (item.id)}<button
@@ -932,25 +864,10 @@
 		border-radius: 16px;
 		background: #1d1915;
 	}
-	.preview.square {
-		aspect-ratio: 1;
-	}
-	.preview.portrait {
-		aspect-ratio: 4/5;
-	}
-	.preview.square img,
-	.preview.portrait img {
-		height: 100%;
-		object-fit: cover;
-	}
-	.preview img,
 	.preview video {
 		width: 100%;
 		max-height: 470px;
 		object-fit: contain;
-		transition:
-			transform 120ms ease,
-			object-position 120ms ease;
 	}
 	.preview audio {
 		margin: 80px 30px;
@@ -967,6 +884,26 @@
 		border: 0;
 		border-radius: 50%;
 		color: white;
+	}
+	.crop-editor {
+		position: relative;
+		width: min(100%, 540px);
+	}
+	.crop-remove {
+		position: absolute;
+		z-index: 4;
+		top: 10px;
+		right: 10px;
+		display: grid;
+		width: 38px;
+		height: 38px;
+		place-items: center;
+		padding: 0;
+		background: rgb(0 0 0 / 62%);
+		border: 1px solid rgb(255 255 255 / 20%);
+		border-radius: 50%;
+		color: white;
+		backdrop-filter: blur(8px);
 	}
 	.crop-controls {
 		display: flex;
@@ -991,38 +928,6 @@
 	.crop-controls button.active {
 		background: var(--color-text);
 		color: white;
-	}
-	.crop-adjust {
-		display: grid;
-		width: min(100%, 540px);
-		gap: 7px;
-		margin-top: 10px;
-		padding: 12px;
-		background: var(--color-canvas);
-		border-radius: 12px;
-		text-align: left;
-	}
-	.crop-adjust > strong {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		font-size: 0.7rem;
-	}
-	.crop-adjust label {
-		display: grid;
-		grid-template-columns: 72px 1fr;
-		align-items: center;
-		gap: 8px;
-	}
-	.crop-adjust label span {
-		color: var(--color-muted);
-		font-size: 0.62rem;
-	}
-	.crop-adjust input {
-		width: 100%;
-		height: 22px;
-		padding: 0;
-		accent-color: var(--color-primary);
 	}
 	.filter-controls {
 		display: flex;

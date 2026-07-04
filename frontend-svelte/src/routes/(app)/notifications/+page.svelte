@@ -213,6 +213,7 @@
 			<InfiniteScrollTrigger
 				{hasMore}
 				loading={loadingMore}
+				itemCount={items.length}
 				onLoad={loadMore}
 				label="Memuat notifikasi berikutnya…"
 			/>

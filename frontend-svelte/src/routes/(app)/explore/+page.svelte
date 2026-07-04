@@ -172,6 +172,7 @@
 	<InfiniteScrollTrigger
 		{hasMore}
 		loading={loadingMore}
+		itemCount={posts.length}
 		onLoad={loadMore}
 		label="Memuat jelajah berikutnya…"
 	/>

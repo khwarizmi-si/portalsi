@@ -37,27 +37,82 @@
 	let mediaError = $state(false);
 	const effectivePaused = $derived(paused || holding || viewersOpen);
 	const story = $derived(stories[index]);
+	const storyOrderSuffix = $derived(data.storyOrder ? `?order=${data.storyOrder}` : '');
+	const storyHref = (userId: number) => `/stories/${userId}${storyOrderSuffix}`;
+
+	// Ukuran viewport untuk membingkai cerita mengikuti rasio media (mirip Instagram).
+	let vw = $state(430);
+	let vh = $state(900);
+	let frameAspect = $state(9 / 16);
+	let segmentDuration = $state(7_000);
+	const frame = $derived.by(() => {
+		const mobile = vw > 0 && vw < 768;
+		const maxW = mobile ? vw : Math.min(500, vw - 40);
+		const maxH = mobile ? vh : vh - 40;
+		const aspect = Math.min(1.91, Math.max(0.42, frameAspect));
+		let width = maxW;
+		let height = width / aspect;
+		if (height > maxH) {
+			height = maxH;
+			width = height * aspect;
+		}
+		return { width: Math.round(width), height: Math.round(height) };
+	});
+
+	$effect(() => {
+		const sync = () => {
+			vw = window.innerWidth;
+			vh = window.innerHeight;
+		};
+		sync();
+		window.addEventListener('resize', sync);
+		return () => window.removeEventListener('resize', sync);
+	});
+
+	// Resync ketika berpindah ke cerita user lain (goto tetap memakai komponen yang sama).
+	$effect(() => {
+		const nextStories = data.stories;
+		void data.user.id;
+		untrack(() => {
+			stories = structuredClone(nextStories);
+			index = 0;
+			viewersOpen = false;
+			paused = false;
+		});
+	});
+
+	function captureAspect(width: number, height: number) {
+		if (width > 0 && height > 0) frameAspect = width / height;
+	}
 
 	function next() {
 		viewersOpen = false;
 		if (index < stories.length - 1) index += 1;
-		else if (data.nextUserId) void goto(`/stories/${data.nextUserId}`);
+		else if (data.nextUserId) void goto(storyHref(data.nextUserId));
 		else void goto('/home');
 	}
 
 	function previous() {
 		viewersOpen = false;
 		if (index > 0) index -= 1;
-		else if (data.previousUserId) void goto(`/stories/${data.previousUserId}`);
+		else if (data.previousUserId) void goto(storyHref(data.previousUserId));
 	}
 
+	// Reset media state hanya saat cerita berganti (bukan saat pause).
 	$effect(() => {
-		const storyId = story.id;
-		mediaLoading = story.type === 'music' ? Boolean(story.musicPreviewUrl) : true;
+		const current = story;
+		if (!current) return;
+		mediaLoading = current.type === 'music' ? Boolean(current.musicPreviewUrl) : true;
 		mediaError = false;
-		void clientRequest(`stories/${storyId}/view`, { method: 'POST' }).catch(() => undefined);
-		if (effectivePaused || story.type === 'video') return;
-		const timer = window.setTimeout(next, 7_000);
+		frameAspect = 9 / 16;
+		segmentDuration = 7_000;
+		void clientRequest(`stories/${current.id}/view`, { method: 'POST' }).catch(() => undefined);
+	});
+
+	// Timer maju otomatis; gambar/musik memakai durasi tetap, video memakai event onended.
+	$effect(() => {
+		if (!story || effectivePaused || story.type === 'video') return;
+		const timer = window.setTimeout(next, segmentDuration);
 		return () => window.clearTimeout(timer);
 	});
 
@@ -100,15 +155,18 @@
 	}
 
 	async function deleteStory() {
-		if (
-			!(await confirmAction({
-				title: 'Hapus cerita ini?',
-				description: 'Cerita akan langsung dihapus dan tidak dapat dipulihkan dari arsip.',
-				confirmLabel: 'Hapus cerita',
-				tone: 'danger'
-			}))
-		)
+		const wasPaused = paused;
+		paused = true;
+		const confirmed = await confirmAction({
+			title: 'Hapus cerita ini?',
+			description: 'Cerita akan langsung dihapus dan tidak dapat dipulihkan dari arsip.',
+			confirmLabel: 'Hapus cerita',
+			tone: 'danger'
+		});
+		if (!confirmed) {
+			paused = wasPaused;
 			return;
+		}
 		try {
 			await clientRequest(`stories/${story.id}`, { method: 'DELETE' });
 			stories.splice(index, 1);
@@ -139,14 +197,9 @@
 >
 
 <div class="story-viewer">
-	<a class="close" href="/home" aria-label="Tutup cerita"><X size={22} /></a>
-	<button
-		class="previous"
-		onclick={previous}
-		disabled={index === 0 && !data.previousUserId}
-		aria-label="Cerita sebelumnya"><ChevronLeft size={26} /></button
-	>
 	<article
+		style:width={`${frame.width}px`}
+		style:height={`${frame.height}px`}
 		onpointerdown={() => (holding = true)}
 		onpointerup={() => (holding = false)}
 		onpointercancel={() => (holding = false)}
@@ -158,10 +211,12 @@
 			><ChevronRight size={28} /></button
 		>
 		<div class="progress">
-			{#each stories as item, itemIndex (item.id)}<span
-					class:complete={itemIndex < index}
-					class:current={itemIndex === index}
-				></span>{/each}
+			{#each stories as item, itemIndex (item.id)}<span class:complete={itemIndex < index}
+					>{#if itemIndex === index}<i
+							style:animation-duration={`${segmentDuration}ms`}
+							class:paused={effectivePaused}
+						></i>{/if}</span
+				>{/each}
 		</div>
 		<header>
 			<Avatar name={data.user.username} src={data.user.avatarUrl ?? undefined} size="sm" />
@@ -171,7 +226,7 @@
 						verified={data.user.badgeVerified}
 						role={data.user.role}
 					/></strong
-				><small>@{data.user.username} · {story.createdLabel}</small></span
+				><small>@{data.user.username} · {story?.createdLabel ?? ''}</small></span
 			>
 			<button onclick={() => (paused = !paused)} aria-label={paused ? 'Lanjutkan' : 'Jeda'}
 				>{#if paused}<Play size={18} />{:else}<Pause size={18} />{/if}</button
@@ -179,9 +234,11 @@
 			<button onclick={() => (muted = !muted)} aria-label={muted ? 'Aktifkan suara' : 'Bisukan'}
 				>{#if muted}<VolumeX size={17} />{:else}<Volume2 size={17} />{/if}</button
 			>
+			<a class="close" href="/home" aria-label="Tutup cerita"><X size={19} /></a>
 		</header>
-		{#if story.type === 'video' && story.mediaUrl}
+		{#if story && story.type === 'video' && story.mediaUrl}
 			<video
+				class="story-media"
 				bind:this={mediaElement}
 				src={story.mediaUrl}
 				autoplay
@@ -189,23 +246,35 @@
 				playsinline
 				onended={next}
 				onwaiting={() => (mediaLoading = true)}
+				onloadedmetadata={(event) => {
+					const video = event.currentTarget;
+					captureAspect(video.videoWidth, video.videoHeight);
+					if (Number.isFinite(video.duration) && video.duration > 0)
+						segmentDuration = Math.round(video.duration * 1000);
+				}}
 				oncanplay={() => (mediaLoading = false)}
 				onerror={() => {
 					mediaLoading = false;
 					mediaError = true;
 				}}
 			></video>
-		{:else if story.mediaUrl}
+		{:else if story && story.mediaUrl}
+			<div class="story-backdrop" style:background-image={`url('${story.mediaUrl}')`}></div>
 			<img
+				class="story-media"
 				src={story.mediaUrl}
 				alt={story.caption || `Cerita @${data.user.username}`}
-				onload={() => (mediaLoading = false)}
+				onload={(event) => {
+					const image = event.currentTarget as HTMLImageElement;
+					captureAspect(image.naturalWidth, image.naturalHeight);
+					mediaLoading = false;
+				}}
 				onerror={() => {
 					mediaLoading = false;
 					mediaError = true;
 				}}
 			/>
-		{:else}
+		{:else if story}
 			<div
 				class="music-story"
 				style:background-image={story.albumArtUrl
@@ -229,7 +298,7 @@
 					></audio>{/if}
 			</div>
 		{/if}
-		{#if story.musicPreviewUrl && story.type !== 'music'}<audio
+		{#if story?.musicPreviewUrl && story.type !== 'music'}<audio
 				class="story-audio"
 				bind:this={musicElement}
 				src={story.musicPreviewUrl}
@@ -242,7 +311,7 @@
 			</div>{:else if mediaError}<div class="media-loading error">
 				<span>Media cerita belum dapat dimuat.</span>
 			</div>{/if}
-		{#if story.caption}<div class="story-caption"><p>{story.caption}</p></div>{/if}
+		{#if story?.caption}<div class="story-caption"><p>{story.caption}</p></div>{/if}
 		<footer>
 			{#if data.isOwn}<button
 					onclick={(event) => {
@@ -274,9 +343,6 @@
 				</div>
 			</aside>{/if}
 	</article>
-	<button class="next" onclick={next} aria-label="Cerita berikutnya"
-		><ChevronRight size={26} /></button
-	>
 </div>
 
 <style>
@@ -284,37 +350,47 @@
 		position: fixed;
 		z-index: 1000;
 		inset: 0;
-		display: grid;
+		display: flex;
 		min-height: 100dvh;
-		grid-template-columns: auto minmax(300px, 430px) auto;
-		place-content: center;
-		gap: 20px;
+		align-items: center;
+		justify-content: center;
 		padding: 20px;
-		background: #17130f;
+		background:
+			radial-gradient(circle at 50% 44%, rgb(115 81 47 / 22%), transparent 34rem), #100e0c;
 	}
 	.story-viewer > article {
 		position: relative;
-		width: min(430px, calc((100dvh - 40px) * 9 / 16));
-		height: min(calc(100dvh - 40px), calc(100vw * 16 / 9));
 		overflow: hidden;
-		background: #33271e;
-		border-radius: 18px;
+		isolation: isolate;
+		background: #090807;
+		border: 1px solid rgb(255 255 255 / 10%);
+		border-radius: 22px;
 		box-shadow: 0 30px 80px rgb(0 0 0 / 45%);
 		color: white;
 	}
-	.story-viewer article > img,
-	.story-viewer article > video {
+	.story-viewer article > .story-media {
+		position: relative;
+		z-index: 0;
 		width: 100%;
 		height: 100%;
 		object-fit: contain;
-		background: #0d0c0b;
+	}
+	.story-backdrop {
+		position: absolute;
+		z-index: -1;
+		inset: -34px;
+		background-position: center;
+		background-size: cover;
+		filter: blur(28px) saturate(0.82);
+		opacity: 0.42;
+		transform: scale(1.08);
 	}
 	.story-viewer article > button.story-zone {
 		position: absolute;
 		z-index: 2;
-		top: 92px;
-		bottom: 72px;
-		width: 30%;
+		top: 80px;
+		bottom: 68px;
+		width: 34%;
 		height: auto;
 		border-radius: 0;
 		background: transparent;
@@ -352,29 +428,51 @@
 		gap: 4px;
 	}
 	.progress span {
+		position: relative;
 		height: 3px;
 		flex: 1;
+		overflow: hidden;
 		background: rgb(255 255 255 / 35%);
 		border-radius: 99px;
 	}
 	.progress .complete {
 		background: white;
 	}
-	.progress .current {
-		background: linear-gradient(90deg, white 58%, rgb(255 255 255 / 35%) 58%);
+	.progress span i {
+		display: block;
+		width: 0;
+		height: 100%;
+		background: white;
+		border-radius: 99px;
+		animation-name: story-progress;
+		animation-timing-function: linear;
+		animation-fill-mode: forwards;
+	}
+	.progress span i.paused {
+		animation-play-state: paused;
+	}
+	@keyframes story-progress {
+		from {
+			width: 0;
+		}
+		to {
+			width: 100%;
+		}
 	}
 	article > header {
 		position: absolute;
 		z-index: 2;
-		top: 22px;
+		top: 20px;
 		right: 10px;
 		left: 10px;
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 8px;
-		background: linear-gradient(rgb(0 0 0 / 45%), transparent);
-		border-radius: 12px;
+		padding: 8px 9px;
+		background: rgb(12 10 8 / 48%);
+		border: 1px solid rgb(255 255 255 / 10%);
+		border-radius: 14px;
+		backdrop-filter: blur(12px);
 	}
 	article > header > span {
 		display: grid;
@@ -387,7 +485,9 @@
 		color: rgb(255 255 255 / 70%);
 		font-size: 0.65rem;
 	}
-	article button {
+	article > header button,
+	article > button.story-zone,
+	.viewer-panel > header button {
 		display: grid;
 		width: 36px;
 		height: 36px;
@@ -395,6 +495,16 @@
 		padding: 0;
 		background: rgb(0 0 0 / 25%);
 		border: 0;
+		border-radius: 50%;
+		color: white;
+	}
+	article > header .close {
+		display: grid;
+		width: 36px;
+		height: 36px;
+		flex: none;
+		place-items: center;
+		background: rgb(0 0 0 / 25%);
 		border-radius: 50%;
 		color: white;
 	}
@@ -447,11 +557,18 @@
 		right: 20px;
 		bottom: 74px;
 		left: 20px;
+		display: flex;
+		justify-content: center;
 		text-shadow: 0 2px 8px #000;
 	}
 	.story-caption p {
+		max-width: 100%;
 		margin: 0;
+		padding: 8px 12px;
+		background: rgb(0 0 0 / 38%);
+		border-radius: 12px;
 		font-size: 0.92rem;
+		backdrop-filter: blur(8px);
 	}
 	article > footer {
 		position: absolute;
@@ -459,8 +576,9 @@
 		bottom: 12px;
 		left: 12px;
 		display: flex;
-		gap: 8px;
+		gap: 10px;
 		justify-content: center;
+		padding-inline: 8px;
 	}
 	article > footer a,
 	article > footer button {
@@ -477,9 +595,23 @@
 		font-weight: 700;
 	}
 	article > footer button {
-		padding: 0 13px;
+		width: auto;
+		height: 44px;
+		min-width: 122px;
+		justify-content: center;
+		padding: 0 17px;
+		white-space: nowrap;
+		backdrop-filter: blur(12px);
+		transition:
+			transform 160ms ease,
+			background 160ms ease;
+	}
+	article > footer button:hover {
+		background: rgb(0 0 0 / 52%);
+		transform: translateY(-2px);
 	}
 	article > footer .delete-story {
+		background: rgb(87 27 25 / 48%);
 		border-color: rgb(255 150 145 / 65%);
 		color: #ffd2ce;
 	}
@@ -525,64 +657,24 @@
 		font-size: 0.72rem;
 		text-align: center;
 	}
-	.close {
-		position: absolute;
-		z-index: 4;
-		top: 24px;
-		right: 24px;
-		display: grid;
-		width: 44px;
-		height: 44px;
-		place-items: center;
-		background: rgb(255 255 255 / 10%);
-		border-radius: 50%;
-		color: white;
-	}
-	.previous,
-	.next {
-		display: grid;
-		width: 48px;
-		height: 48px;
-		align-self: center;
-		place-items: center;
-		background: rgb(255 255 255 / 10%);
-		border: 0;
-		border-radius: 50%;
-		color: white;
-	}
-	.previous:disabled {
-		opacity: 0.25;
-	}
 	@media (max-width: 767px) {
 		.story-viewer {
-			display: block;
+			gap: 0;
 			padding: 0;
 		}
 		.story-viewer > article {
-			width: 100%;
-			height: 100dvh;
-			max-height: none;
 			border-radius: 0;
 		}
-		.previous,
-		.next {
-			display: none;
-		}
-		.close {
-			top: 22px;
-			right: 8px;
-			background: rgb(0 0 0 / 25%);
-		}
-		article > header {
-			right: 52px;
-		}
-		.story-viewer article > img,
-		.story-viewer article > video {
+		.story-viewer article > .story-media {
 			position: absolute;
 			inset: 0;
 		}
 		.story-viewer article > button.story-zone {
 			display: flex;
+		}
+		article > footer button {
+			min-width: 0;
+			flex: 1;
 		}
 	}
 </style>

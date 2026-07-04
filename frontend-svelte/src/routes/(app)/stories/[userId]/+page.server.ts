@@ -6,14 +6,24 @@ import { relativeTimeId } from '$lib/utils/time';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals, params }) => {
+export const load: PageServerLoad = async ({ locals, params, url }) => {
 	if (!locals.token || !locals.user) error(401, 'Sesi Anda tidak tersedia.');
 	const userId = Number.parseInt(params.userId, 10);
 	if (!Number.isSafeInteger(userId) || userId < 1) error(404, 'Cerita tidak ditemukan.');
+	const storyOrder = [
+		...new Set(
+			(url.searchParams.get('order') ?? '')
+				.split(',')
+				.map((value) => Number.parseInt(value, 10))
+				.filter((value) => Number.isSafeInteger(value) && value > 0)
+		)
+	].slice(0, 30);
+	const validOrder = storyOrder.includes(userId) ? storyOrder : [];
 	const response = await backendRequest(`stories/feed/user/${userId}`, {
 		token: locals.token,
 		requestId: locals.requestId,
-		schema: storyViewerResponseSchema
+		schema: storyViewerResponseSchema,
+		query: validOrder.length > 0 ? { order: validOrder.join(',') } : undefined
 	});
 	const mediaBaseUrl = env.PUBLIC_MEDIA_BASE_URL?.trim() || 'https://api.portalsi.com/storage';
 	return {
@@ -40,6 +50,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			musicDurationSeconds: (story.music_clip_duration_ms ?? 15_000) / 1000
 		})),
 		previousUserId: response.prev_user_id,
-		nextUserId: response.next_user_id
+		nextUserId: response.next_user_id,
+		storyOrder: validOrder.join(',')
 	};
 };
