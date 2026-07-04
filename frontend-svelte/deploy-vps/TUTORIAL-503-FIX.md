@@ -271,3 +271,48 @@ Uji: buka situs, lakukan login/submit form — tidak boleh muncul lagi pesan CSR
 Catatan versi Node: proyek menargetkan Node 24, sedangkan PM2 Anda berjalan di Node 20
 (via nvm). Build & run tetap jalan, tetapi untuk konsisten sebaiknya pakai Node 24 sistem
 (lihat bagian 5.3) agar `pm2 startup` dan `npm ci` memakai runtime yang sama.
+
+---
+
+## 9. Fitur klien hilang (infinite scroll, live search, upload, loading bar)
+
+Gejala: situs tampil normal, navigasi & form dasar jalan, TETAPI fitur berbasis JavaScript
+mati — pagination saat scroll, live/smart search, upload file, dan progress bar di atas.
+
+Penyebab: **Content-Security-Policy** produksi di `src/hooks.server.ts`. Di mode production
+`script-src` sebelumnya hanya `'self'`, sedangkan SvelteKit menyuntik **`<script>` inline**
+untuk mem-*bootstrap* hydration klien. Browser memblokir script inline itu (Anda bisa lihat
+di DevTools → Console: *"Refused to execute inline script ... violates ... script-src 'self'"*),
+sehingga aplikasi hanya ter-*render* SSR tapi **tidak pernah hydrate** → semua interaksi
+sisi-klien mati. Di dev tidak terlihat karena `script-src` dev sudah memuat `'unsafe-inline'`.
+
+Ini **bukan** akibat patch CSRF maupun build yang rusak — murni aturan CSP dev vs produksi.
+
+Perbaikan (sudah diterapkan di `hooks.server.ts`): izinkan script inline SvelteKit di produksi.
+
+```ts
+const scriptSource = isDevelopment
+	? "'self' 'unsafe-inline' 'unsafe-eval'"
+	: "'self' 'unsafe-inline'";   // sebelumnya: "'self'"
+```
+
+Karena `hooks.server.ts` ikut dikompilasi ke `build/`, perubahan ini **wajib di-build ulang**
+(bukan sekadar patch runtime). Deploy ulang:
+
+```bash
+cd /home/app.portalsi.com/public_html
+git pull --ff-only
+frontend-svelte/deploy-vps/deploy-after-pull.sh
+```
+
+Uji di browser (hard refresh / Ctrl+Shift+R), buka DevTools → Console: tidak boleh ada lagi
+pelanggaran CSP, dan fitur scroll/search/upload/loading bar kembali berfungsi.
+
+Catatan keamanan: `'unsafe-inline'` pada `script-src` sedikit melonggarkan proteksi XSS
+(sejajar dengan `style-src` yang memang sudah `'unsafe-inline'`). Untuk pengerasan di
+kemudian hari, gunakan CSP berbasis **hash/nonce** bawaan SvelteKit (`kit.csp`) agar bisa
+kembali ke `script-src 'self'` tanpa mematahkan hydration.
+
+Catatan upload besar: bila file KECIL sudah bisa di-upload tapi file BESAR gagal (413),
+itu batas body OpenLiteSpeed, bukan CSP. Naikkan **Max Request Body Size** di
+CyberPanel/OLS (Server/Vhost) agar sesuai dengan `BODY_SIZE_LIMIT=512M` dan batas Laravel.

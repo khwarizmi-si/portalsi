@@ -47,7 +47,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 };
 
 function contentSecurityPolicy(isDevelopment: boolean): string {
-	const scriptSource = isDevelopment ? "'self' 'unsafe-inline' 'unsafe-eval'" : "'self'";
+	// Produksi tetap butuh 'unsafe-inline' karena SvelteKit menyuntik <script> bootstrap
+	// inline untuk hydration. Tanpa ini, script-src 'self' memblokir hydration sehingga
+	// fitur klien (infinite scroll, live search, upload, loading bar) mati.
+	const scriptSource = isDevelopment
+		? "'self' 'unsafe-inline' 'unsafe-eval'"
+		: "'self' 'unsafe-inline'";
 	const connectSource = isDevelopment
 		? "'self' ws: wss: http: https:"
 		: "'self' https://api.portalsi.com wss://ws.portalsi.com";
