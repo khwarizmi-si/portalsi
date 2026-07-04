@@ -19,7 +19,9 @@ chmod +x "${DEPLOY_SCRIPT}"
 cat >"${HOOK}" <<EOF
 #!/usr/bin/env bash
 set -e
-APP_ROOT="${APP_ROOT}" "${DEPLOY_SCRIPT}"
+# Panggil lewat 'bash' agar tidak bergantung pada bit executable skrip (git tidak selalu
+# menyimpannya), sehingga hook tetap jalan setelah git pull/reset.
+APP_ROOT="${APP_ROOT}" bash "${DEPLOY_SCRIPT}"
 EOF
 chmod +x "${HOOK}"
 echo "Hook aktif: ${HOOK}"

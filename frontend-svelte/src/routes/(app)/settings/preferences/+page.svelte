@@ -32,7 +32,7 @@
 	<a href="/settings">← Pengaturan</a>
 	<h1>Preferensi notifikasi</h1>
 	<p>
-		Saat ini preferensi notifikasi hanya disimpan di perangkat ini. Sinkronisasi ke akun akan tersedia setelah didukung oleh server.
+		Saat ini preferensi notifikasi hanya disimpan di perangkat ini. Sinkronisasi ke akun akan tersedia setelah didukung oleh server di update mendatang.
 	</p>
 	<form
 		onsubmit={(e) => {
