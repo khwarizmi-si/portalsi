@@ -50,12 +50,14 @@ function contentSecurityPolicy(isDevelopment: boolean): string {
 	// Produksi tetap butuh 'unsafe-inline' karena SvelteKit menyuntik <script> bootstrap
 	// inline untuk hydration. Tanpa ini, script-src 'self' memblokir hydration sehingga
 	// fitur klien (infinite scroll, live search, upload, loading bar) mati.
+	// static.cloudflareinsights.com = beacon Cloudflare Web Analytics (disuntik otomatis
+	// karena domain di belakang Cloudflare). Hapus jika Cloudflare Web Analytics dimatikan.
 	const scriptSource = isDevelopment
 		? "'self' 'unsafe-inline' 'unsafe-eval'"
-		: "'self' 'unsafe-inline'";
+		: "'self' 'unsafe-inline' https://static.cloudflareinsights.com";
 	const connectSource = isDevelopment
 		? "'self' ws: wss: http: https:"
-		: "'self' https://api.portalsi.com wss://ws.portalsi.com";
+		: "'self' https://api.portalsi.com wss://ws.portalsi.com https://cloudflareinsights.com";
 	return [
 		"default-src 'self'",
 		`script-src ${scriptSource}`,

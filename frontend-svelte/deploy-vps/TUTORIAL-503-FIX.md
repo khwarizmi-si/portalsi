@@ -293,8 +293,17 @@ Perbaikan (sudah diterapkan di `hooks.server.ts`): izinkan script inline SvelteK
 ```ts
 const scriptSource = isDevelopment
 	? "'self' 'unsafe-inline' 'unsafe-eval'"
-	: "'self' 'unsafe-inline'";   // sebelumnya: "'self'"
+	: "'self' 'unsafe-inline' https://static.cloudflareinsights.com";   // sebelumnya: "'self'"
 ```
+
+Domain `static.cloudflareinsights.com` (+ `https://cloudflareinsights.com` di `connect-src`)
+ditambahkan karena Cloudflare menyuntik beacon **Web Analytics** yang tadinya juga diblokir
+CSP. Hapus keduanya jika Anda mematikan Cloudflare Web Analytics.
+
+Catatan console lain: error `unsafe-eval` / `alert is not defined` dari sumber `content.js`
+berasal dari **ekstensi browser**, bukan aplikasi — abaikan. Jika setelah deploy masih ada
+error `unsafe-eval` yang menunjuk file di `/_app/...` (bukan `content.js`), barulah tambahkan
+`'unsafe-eval'` ke `scriptSource` produksi.
 
 Karena `hooks.server.ts` ikut dikompilasi ke `build/`, perubahan ini **wajib di-build ulang**
 (bukan sekadar patch runtime). Deploy ulang:
