@@ -100,6 +100,19 @@
 	const acceptedTypes = $derived(
 		kind === 'clips' ? 'video/*' : kind === 'story' ? 'image/*,video/*,audio/*' : 'image/*,video/*'
 	);
+	type MediaKind = 'image' | 'video' | 'audio' | 'unknown';
+	const selectedFileKind = $derived(file ? mediaKind(file) : null);
+
+	function mediaKind(candidate: File): MediaKind {
+		if (candidate.type.startsWith('image/')) return 'image';
+		if (candidate.type.startsWith('video/')) return 'video';
+		if (candidate.type.startsWith('audio/')) return 'audio';
+		const extension = candidate.name.split('.').pop()?.toLowerCase() ?? '';
+		if (['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(extension)) return 'image';
+		if (['mp4', 'mov', 'webm', 'avi', '3gp', 'mkv', 'm4v'].includes(extension)) return 'video';
+		if (['mp3', 'wav', 'm4a', 'aac', 'ogg'].includes(extension)) return 'audio';
+		return 'unknown';
+	}
 
 	$effect(() => {
 		if (!file) {
@@ -203,12 +216,13 @@
 	function selectFile(candidate?: File) {
 		if (!candidate) return;
 		message = '';
+		const detectedKind = mediaKind(candidate);
 		const allowed =
 			kind === 'clips'
-				? candidate.type.startsWith('video/')
+				? detectedKind === 'video'
 				: kind === 'story'
-					? /^(image|video|audio)\//.test(candidate.type)
-					: /^(image|video)\//.test(candidate.type);
+					? detectedKind !== 'unknown'
+					: detectedKind === 'image' || detectedKind === 'video';
 		if (!allowed) {
 			message = 'Jenis file tidak didukung untuk konten ini.';
 			return;
@@ -276,7 +290,7 @@
 		try {
 			const body = new FormData();
 			const uploadFile =
-				file.type.startsWith('image/') && cropRegion
+				selectedFileKind === 'image' && cropRegion
 					? await cropImageToRegion(file, cropRegion, 2048, activeFilter)
 					: file;
 			body.set('media', uploadFile);
@@ -292,22 +306,18 @@
 			if (kind === 'story') {
 				body.set(
 					'type',
-					file.type.startsWith('video/')
-						? 'video'
-						: file.type.startsWith('audio/')
-							? 'music'
-							: 'image'
+					selectedFileKind === 'video' ? 'video' : selectedFileKind === 'audio' ? 'music' : 'image'
 				);
 				await upload('stories', body, (payload) => createdStoryResponseSchema.parse(payload));
 				await deleteDraft();
 				await goto('/home');
 			} else {
-				if (file.type.startsWith('video/')) {
+				if (selectedFileKind === 'video') {
 					const thumbnail = await generateVideoThumbnail(file);
 					if (thumbnail) body.set('thumbnail', thumbnail);
 				}
 				if (location.trim()) body.set('location', location.trim());
-				body.set('is_video', String(file.type.startsWith('video/') ? 1 : 0));
+				body.set('is_video', String(selectedFileKind === 'video' ? 1 : 0));
 				body.set('is_archived', '0');
 				const response = await upload('posts', body, (payload) =>
 					createdPostResponseSchema.parse(payload)
@@ -531,7 +541,7 @@
 			ondrop={onDrop}
 		>
 			{#if previewUrl}
-				{#if file?.type.startsWith('image/')}
+				{#if selectedFileKind === 'image'}
 					<div class="crop-editor">
 						{#key `${previewUrl}:${cropMode}`}
 							<ImageCropper
@@ -548,11 +558,11 @@
 						>
 					</div>
 				{:else}<div class="preview">
-						{#if file?.type.startsWith('video/')}<video src={previewUrl} controls muted></video>
+						{#if selectedFileKind === 'video'}<video src={previewUrl} controls muted></video>
 						{:else}<audio src={previewUrl} controls></audio>{/if}
 						<button onclick={() => (file = null)} aria-label="Hapus media"><X size={18} /></button>
 					</div>{/if}
-				{#if file?.type.startsWith('image/')}<div class="crop-controls" aria-label="Framing gambar">
+				{#if selectedFileKind === 'image'}<div class="crop-controls" aria-label="Framing gambar">
 						<span>Framing</span><button
 							class:active={cropMode === 'original'}
 							onclick={() => setCropMode('original')}>Asli</button

@@ -183,7 +183,10 @@
 						{#if following}<UserCheck size={17} /> Mengikuti{:else}<UserPlus size={17} />
 							{pending ? 'Menunggu' : 'Ikuti'}{/if}
 					</button>
-					<a href={`/messages/direct/${data.profile.id}`}><MessageCircle size={17} /> Pesan</a>
+					<a
+						href={`/messages/direct/${data.profile.id}?name=${encodeURIComponent(data.profile.fullName)}&username=${encodeURIComponent(data.profile.username)}${data.profile.avatarUrl ? `&avatar=${encodeURIComponent(data.profile.avatarUrl)}` : ''}`}
+						><MessageCircle size={17} /> Pesan</a
+					>
 				{:else}
 					<a href={`/login?next=${encodeURIComponent(`/u/${data.profile.username}`)}`}
 						><UserPlus size={17} /> Masuk untuk mengikuti</a

@@ -83,7 +83,9 @@
 					hasStory={user.hasStory}
 					seen={user.storyViewed}
 				/>
-				<a href={`/messages/direct/${user.id}?name=${encodeURIComponent(user.fullName)}`}>
+				<a
+					href={`/messages/direct/${user.id}?name=${encodeURIComponent(user.fullName)}&username=${encodeURIComponent(user.username)}${user.avatarUrl ? `&avatar=${encodeURIComponent(user.avatarUrl)}` : ''}`}
+				>
 					<strong
 						>{user.fullName}<UserBadges verified={user.badgeVerified} role={user.role} /></strong
 					><small>@{user.username}</small>
