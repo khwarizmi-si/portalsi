@@ -17,6 +17,7 @@
 	import { untrack } from 'svelte';
 	import { clientRequest } from '$lib/api/client';
 	import Avatar from '$lib/components/ui/Avatar.svelte';
+	import UserBadges from '$lib/components/ui/UserBadges.svelte';
 	import { storyViewersResponseSchema } from '$lib/schemas/story';
 	import type { PageProps } from './$types';
 	import { confirmAction } from '$lib/ui/confirm';
@@ -28,6 +29,7 @@
 	let holding = $state(false);
 	let muted = $state(true);
 	let mediaElement = $state<HTMLMediaElement>();
+	let musicElement = $state<HTMLAudioElement>();
 	let viewers = $state<Array<{ id: number; username: string; avatarUrl: string | null }>>([]);
 	let viewersOpen = $state(false);
 	let viewerStatus = $state('');
@@ -61,10 +63,24 @@
 
 	$effect(() => {
 		const element = mediaElement;
-		if (!element) return;
-		if (effectivePaused) element.pause();
-		else void element.play().catch(() => undefined);
+		const music = musicElement;
+		if (effectivePaused) {
+			element?.pause();
+			music?.pause();
+		} else {
+			if (element) void element.play().catch(() => undefined);
+			if (music) void music.play().catch(() => undefined);
+		}
 	});
+
+	function loopStoryMusic(event: Event) {
+		const audio = event.currentTarget as HTMLAudioElement;
+		const end = story.musicStartSeconds + story.musicDurationSeconds;
+		if (audio.currentTime < story.musicStartSeconds || audio.currentTime >= end) {
+			audio.currentTime = story.musicStartSeconds;
+			if (!effectivePaused) void audio.play().catch(() => undefined);
+		}
+	}
 
 	async function openViewers() {
 		viewersOpen = true;
@@ -135,6 +151,12 @@
 		onpointerup={() => (holding = false)}
 		onpointercancel={() => (holding = false)}
 	>
+		<button class="story-zone story-zone-left" onclick={previous} aria-label="Cerita sebelumnya"
+			><ChevronLeft size={28} /></button
+		>
+		<button class="story-zone story-zone-right" onclick={next} aria-label="Cerita berikutnya"
+			><ChevronRight size={28} /></button
+		>
 		<div class="progress">
 			{#each stories as item, itemIndex (item.id)}<span
 					class:complete={itemIndex < index}
@@ -143,7 +165,14 @@
 		</div>
 		<header>
 			<Avatar name={data.user.username} src={data.user.avatarUrl ?? undefined} size="sm" />
-			<span><strong>@{data.user.username}</strong><small>{story.createdLabel}</small></span>
+			<span
+				><strong
+					>{data.user.fullName}<UserBadges
+						verified={data.user.badgeVerified}
+						role={data.user.role}
+					/></strong
+				><small>@{data.user.username} · {story.createdLabel}</small></span
+			>
 			<button onclick={() => (paused = !paused)} aria-label={paused ? 'Lanjutkan' : 'Jeda'}
 				>{#if paused}<Play size={18} />{:else}<Pause size={18} />{/if}</button
 			>
@@ -187,10 +216,11 @@
 					>{story.musicArtist || 'Portal SI'}</span
 				>
 				{#if story.musicPreviewUrl}<audio
-						bind:this={mediaElement}
+						bind:this={musicElement}
 						src={story.musicPreviewUrl}
 						autoplay
-						onended={next}
+						onplay={loopStoryMusic}
+						ontimeupdate={loopStoryMusic}
 						oncanplay={() => (mediaLoading = false)}
 						onerror={() => {
 							mediaLoading = false;
@@ -199,6 +229,14 @@
 					></audio>{/if}
 			</div>
 		{/if}
+		{#if story.musicPreviewUrl && story.type !== 'music'}<audio
+				class="story-audio"
+				bind:this={musicElement}
+				src={story.musicPreviewUrl}
+				autoplay
+				onplay={loopStoryMusic}
+				ontimeupdate={loopStoryMusic}
+			></audio>{/if}
 		{#if mediaLoading}<div class="media-loading">
 				<LoaderCircle size={28} /><span>Menyiapkan cerita…</span>
 			</div>{:else if mediaError}<div class="media-loading error">
@@ -243,9 +281,11 @@
 
 <style>
 	.story-viewer {
-		position: relative;
+		position: fixed;
+		z-index: 1000;
+		inset: 0;
 		display: grid;
-		min-height: 100vh;
+		min-height: 100dvh;
 		grid-template-columns: auto minmax(300px, 430px) auto;
 		place-content: center;
 		gap: 20px;
@@ -254,8 +294,8 @@
 	}
 	.story-viewer > article {
 		position: relative;
-		aspect-ratio: 9/16;
-		max-height: calc(100vh - 40px);
+		width: min(430px, calc((100dvh - 40px) * 9 / 16));
+		height: min(calc(100dvh - 40px), calc(100vw * 16 / 9));
 		overflow: hidden;
 		background: #33271e;
 		border-radius: 18px;
@@ -266,7 +306,41 @@
 	.story-viewer article > video {
 		width: 100%;
 		height: 100%;
-		object-fit: cover;
+		object-fit: contain;
+		background: #0d0c0b;
+	}
+	.story-viewer article > button.story-zone {
+		position: absolute;
+		z-index: 2;
+		top: 92px;
+		bottom: 72px;
+		width: 30%;
+		height: auto;
+		border-radius: 0;
+		background: transparent;
+		opacity: 0;
+		transition:
+			opacity 160ms ease,
+			background 160ms ease;
+	}
+	.story-viewer article > button.story-zone:hover,
+	.story-viewer article > button.story-zone:focus-visible {
+		background: linear-gradient(90deg, rgb(0 0 0 / 24%), transparent);
+		opacity: 1;
+	}
+	.story-viewer article > button.story-zone-left {
+		left: 0;
+		justify-items: start;
+		padding-left: 12px;
+	}
+	.story-viewer article > button.story-zone-right {
+		right: 0;
+		justify-items: end;
+		padding-right: 12px;
+	}
+	.story-viewer article > button.story-zone-right:hover,
+	.story-viewer article > button.story-zone-right:focus-visible {
+		background: linear-gradient(-90deg, rgb(0 0 0 / 24%), transparent);
 	}
 	.progress {
 		position: absolute;
@@ -385,6 +459,7 @@
 		bottom: 12px;
 		left: 12px;
 		display: flex;
+		gap: 8px;
 		justify-content: center;
 	}
 	article > footer a,
@@ -485,8 +560,8 @@
 		}
 		.story-viewer > article {
 			width: 100%;
+			height: 100dvh;
 			max-height: none;
-			min-height: calc(100vh - 64px);
 			border-radius: 0;
 		}
 		.previous,
@@ -494,14 +569,20 @@
 			display: none;
 		}
 		.close {
-			top: 14px;
-			right: 12px;
+			top: 22px;
+			right: 8px;
 			background: rgb(0 0 0 / 25%);
+		}
+		article > header {
+			right: 52px;
 		}
 		.story-viewer article > img,
 		.story-viewer article > video {
 			position: absolute;
 			inset: 0;
+		}
+		.story-viewer article > button.story-zone {
+			display: flex;
 		}
 	}
 </style>

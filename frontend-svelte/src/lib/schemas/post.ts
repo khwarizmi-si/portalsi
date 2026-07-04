@@ -32,6 +32,9 @@ export const postSchema = z
 		is_bookmarked: booleanish.catch(false),
 		music_track_name: z.string().nullish(),
 		music_artist_name: z.string().nullish(),
+		music_preview_url: z.string().nullish(),
+		music_start_position_ms: z.coerce.number().int().nonnegative().nullish(),
+		music_clip_duration_ms: z.coerce.number().int().positive().nullish(),
 		user: compactUserSchema
 	})
 	.passthrough();

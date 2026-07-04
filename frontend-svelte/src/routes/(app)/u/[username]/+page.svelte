@@ -4,7 +4,8 @@
 	import { untrack } from 'svelte';
 	import { ClientApiError, clientRequest } from '$lib/api/client';
 	import StoryAvatarLink from '$lib/components/story/StoryAvatarLink.svelte';
-	import VerifiedBadge from '$lib/components/ui/VerifiedBadge.svelte';
+	import UserBadges from '$lib/components/ui/UserBadges.svelte';
+	import InfiniteScrollTrigger from '$lib/components/ui/InfiniteScrollTrigger.svelte';
 	import { profileResponseSchema, type ProfileResponse } from '$lib/schemas/profile';
 	import { normalizeMediaUrl } from '$lib/utils/media';
 	import { confirmAction } from '$lib/ui/confirm';
@@ -154,7 +155,10 @@
 				<button onclick={shareProfile} aria-label="Bagikan profil"><Share2 size={18} /></button>
 			</div>
 			<h1>
-				{data.profile.fullName}{#if data.profile.badgeVerified}<VerifiedBadge />{/if}
+				{data.profile.fullName}<UserBadges
+					verified={data.profile.badgeVerified}
+					role={data.profile.role}
+				/>
 			</h1>
 			<p class="handle">@{data.profile.username} · {roleLabels[data.profile.role]}</p>
 			<p class="bio">{data.profile.bio || 'Belum ada bio.'}</p>
@@ -191,11 +195,12 @@
 						/>{/if}{#if post.isVideo}<span><Play size={16} fill="currentColor" /></span>{/if}</a
 				>{/each}
 		</section>
-		{#if hasMore}<div class="load-more">
-				<button onclick={loadMore} disabled={loadingPosts}
-					>{loadingPosts ? 'Memuat…' : 'Muat lainnya'}</button
-				>
-			</div>{/if}
+		<InfiniteScrollTrigger
+			{hasMore}
+			loading={loadingPosts}
+			onLoad={loadMore}
+			label="Memuat postingan berikutnya…"
+		/>
 	{:else}
 		<section class="empty surface">
 			<Lock size={24} /><strong
@@ -214,7 +219,7 @@
 		overflow: hidden;
 	}
 	.banner {
-		height: 175px;
+		aspect-ratio: 5 / 1;
 		background: linear-gradient(125deg, #f7d694, #4da99c);
 	}
 	.banner img {
@@ -345,22 +350,9 @@
 		color: white;
 		filter: drop-shadow(0 1px 2px #000);
 	}
-	.load-more,
 	.empty {
 		display: grid;
 		justify-items: center;
-	}
-	.load-more {
-		padding: 18px;
-	}
-	.load-more button {
-		min-height: 42px;
-		padding: 0 18px;
-		background: white;
-		border: 1px solid var(--color-border);
-		border-radius: 999px;
-		color: var(--color-primary-strong);
-		font-weight: 720;
 	}
 	.empty {
 		gap: 6px;
@@ -380,9 +372,6 @@
 		.hero {
 			border-inline: 0;
 			border-radius: 0;
-		}
-		.banner {
-			height: 125px;
 		}
 		.body {
 			padding-inline: 16px;

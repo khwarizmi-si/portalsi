@@ -8,6 +8,8 @@
 	import StoryRail from '$lib/components/feed/StoryRail.svelte';
 	import RightRail from '$lib/components/layout/RightRail.svelte';
 	import StoryAvatarLink from '$lib/components/story/StoryAvatarLink.svelte';
+	import UserBadges from '$lib/components/ui/UserBadges.svelte';
+	import InfiniteScrollTrigger from '$lib/components/ui/InfiniteScrollTrigger.svelte';
 	import { feedResponseSchema, userSearchResponseSchema } from '$lib/schemas/post';
 	import { untrack } from 'svelte';
 	import type { PageProps } from './$types';
@@ -23,6 +25,7 @@
 	let homeQuery = $state('');
 	let searchResults = $state<typeof data.suggestions>([]);
 	let searching = $state(false);
+	let showSearchOptions = $state(false);
 
 	$effect(() => {
 		const query = homeQuery.trim();
@@ -107,8 +110,21 @@
 						}}
 					/>
 					{#if searching}<LoaderCircle class="search-spin" size={16} />{/if}
-					<a href="/explore" aria-label="Buka filter jelajah"><SlidersHorizontal size={17} /></a>
+					<button
+						class:active={showSearchOptions}
+						aria-pressed={showSearchOptions}
+						type="button"
+						aria-label="Atur pencarian"
+						onclick={() => (showSearchOptions = !showSearchOptions)}
+						><SlidersHorizontal size={17} /></button
+					>
 				</div>
+				{#if showSearchOptions}<div class="search-options surface">
+						<span>Pencarian langsung menampilkan pengguna.</span><a
+							href={`/explore${homeQuery.trim() ? `?q=${encodeURIComponent(homeQuery.trim())}` : ''}`}
+							>Cari konten di Jelajah</a
+						>
+					</div>{/if}
 				{#if homeQuery.trim().length >= 2}<div class="home-results surface">
 						{#each searchResults as user (user.id)}<div>
 								<StoryAvatarLink
@@ -120,7 +136,12 @@
 									hasStory={user.hasStory}
 									seen={user.storyViewed}
 								/><a href={`/u/${user.username}`}
-									><strong>{user.fullName}</strong><small>@{user.username}</small></a
+									><strong
+										>{user.fullName}<UserBadges
+											verified={user.badgeVerified}
+											role={user.role}
+										/></strong
+									><small>@{user.username}</small></a
 								>
 							</div>{/each}{#if !searching && searchResults.length === 0}<p>
 								Tidak ada pengguna yang cocok.
@@ -150,14 +171,13 @@
 		<div class="feed-list">
 			{#each posts as post (post.id)}<PostCard {post} />{/each}
 		</div>
-		{#if hasMore}
-			<div class="load-more">
-				<button onclick={loadMore} disabled={loadingMore}>
-					{loadingMore ? 'Memuat…' : 'Muat postingan lainnya'}
-				</button>
-				{#if loadMoreError}<span aria-live="polite">{loadMoreError}</span>{/if}
-			</div>
-		{/if}
+		<InfiniteScrollTrigger
+			{hasMore}
+			loading={loadingMore}
+			onLoad={loadMore}
+			label="Memuat postingan berikutnya…"
+		/>
+		{#if loadMoreError}<p class="load-error" aria-live="polite">{loadMoreError}</p>{/if}
 
 		<div class="feed-end" class:empty={posts.length === 0}>
 			<img src="/assets/logo-mark.png" alt="" />
@@ -256,6 +276,9 @@
 		display: grid;
 	}
 	.home-results strong {
+		display: flex;
+		align-items: center;
+		gap: 3px;
 		font-size: 0.72rem;
 	}
 	.home-results small,
@@ -283,15 +306,20 @@
 		font-size: 0.83rem;
 	}
 
-	.search-box a {
+	.search-box > button {
 		display: grid;
 		width: 32px;
 		height: 32px;
 		place-items: center;
 		border-radius: 9px;
+		padding: 0;
+		background: transparent;
+		border: 0;
+		color: inherit;
 	}
 
-	.search-box a:hover {
+	.search-box > button:hover,
+	.search-box > button.active {
 		background: var(--color-primary-soft);
 		color: var(--color-primary-strong);
 	}
@@ -334,32 +362,37 @@
 		gap: 16px;
 	}
 
-	.load-more {
+	.search-options {
+		position: absolute;
+		z-index: 31;
+		top: 50px;
+		right: 0;
 		display: grid;
-		justify-items: center;
+		width: 280px;
 		gap: 7px;
-		padding: 4px 16px;
+		padding: 11px;
+		box-shadow: var(--shadow-md);
 	}
-
-	.load-more button {
-		min-height: 42px;
-		padding: 0 18px;
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: 999px;
+	.search-options span {
+		color: var(--color-muted);
+		font-size: 0.68rem;
+	}
+	.search-options a {
+		padding: 8px 10px;
+		background: var(--color-primary-soft);
+		border-radius: 9px;
 		color: var(--color-primary-strong);
-		font-weight: 740;
-		cursor: pointer;
+		font-size: 0.72rem;
+		font-weight: 720;
 	}
-
-	.load-more button:disabled {
-		cursor: wait;
-		opacity: 0.65;
+	.search-options + .home-results {
+		top: 112px;
 	}
-
-	.load-more span {
+	.load-error {
+		margin: 0;
 		color: var(--color-danger);
 		font-size: 0.75rem;
+		text-align: center;
 	}
 
 	.partial-error {

@@ -99,15 +99,15 @@
 		</nav>
 
 		<a class="create-button" href="/create/post">
-			<Plus size={20} strokeWidth={2.5} />
-			<span>Buat konten</span>
+			<i><Plus size={20} strokeWidth={2.8} /></i>
+			<span><b>Buat</b><small>Bagikan karya baru</small></span>
 		</a>
 
 		<div class="side-spacer"></div>
 		<a class="saved-link" href="/settings/saved"><Bookmark size={19} /> Tersimpan</a>
 		<a class="profile-switch" href="/settings">
 			<Avatar name={user.fullName} src={user.avatarUrl ?? undefined} size="sm" />
-			<span><strong>{user.fullName}</strong><small>@{user.username}</small></span>
+			<span><strong>{user.username}</strong></span>
 			<Settings size={17} class="settings-icon" />
 		</a>
 	</aside>
@@ -230,22 +230,72 @@
 	}
 
 	.create-button {
+		position: relative;
 		display: flex;
-		min-height: 48px;
+		min-height: 58px;
 		align-items: center;
-		justify-content: center;
-		gap: 9px;
-		margin-top: 20px;
-		background: var(--color-primary);
-		border-radius: 13px;
-		box-shadow: 0 8px 20px rgb(232 117 11 / 20%);
+		gap: 11px;
+		margin-top: 22px;
+		padding: 7px 11px;
+		overflow: hidden;
+		background: linear-gradient(120deg, #ef7d18, #f59f2f 58%, #178f72 150%);
+		border: 1px solid rgb(255 255 255 / 35%);
+		border-radius: 17px;
+		box-shadow:
+			0 10px 24px rgb(215 105 12 / 25%),
+			inset 0 1px rgb(255 255 255 / 32%);
 		color: white;
-		font-weight: 730;
+		font-weight: 750;
+	}
+
+	.create-button::after {
+		position: absolute;
+		top: -28px;
+		right: -20px;
+		width: 72px;
+		height: 72px;
+		background: rgb(24 143 114 / 42%);
+		border-radius: 50%;
+		content: '';
+	}
+
+	.create-button > i {
+		position: relative;
+		z-index: 1;
+		display: grid;
+		width: 40px;
+		height: 40px;
+		flex: none;
+		place-items: center;
+		background: rgb(255 255 255 / 20%);
+		border: 1px solid rgb(255 255 255 / 30%);
+		border-radius: 12px;
+		font-style: normal;
+		backdrop-filter: blur(6px);
+	}
+
+	.create-button > span {
+		position: relative;
+		z-index: 1;
+		display: grid;
+		line-height: 1.15;
+	}
+
+	.create-button > span b {
+		font-size: 0.86rem;
+	}
+	.create-button > span small {
+		color: rgb(255 255 255 / 78%);
+		font-size: 0.62rem;
+		font-weight: 560;
 	}
 
 	.create-button:hover {
-		background: var(--color-primary-strong);
-		transform: translateY(-1px);
+		filter: saturate(1.08) brightness(1.03);
+		transform: translateY(-2px);
+		box-shadow:
+			0 14px 28px rgb(215 105 12 / 29%),
+			inset 0 1px rgb(255 255 255 / 35%);
 	}
 
 	.side-spacer {
@@ -274,8 +324,7 @@
 		margin-right: auto;
 	}
 
-	.profile-switch strong,
-	.profile-switch small {
+	.profile-switch strong {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -283,11 +332,6 @@
 
 	.profile-switch strong {
 		font-size: 0.82rem;
-	}
-
-	.profile-switch small {
-		color: var(--color-muted);
-		font-size: 0.72rem;
 	}
 
 	.mobile-header {
@@ -407,11 +451,13 @@
 	}
 
 	.bottom-nav a.create > span {
-		width: 45px;
-		height: 38px;
-		margin-top: -14px;
-		background: var(--color-primary);
-		box-shadow: 0 8px 18px rgb(232 117 11 / 28%);
+		width: 49px;
+		height: 42px;
+		margin-top: -18px;
+		background: linear-gradient(135deg, #f18821, #e76e12 68%, #198d72);
+		border: 3px solid white;
+		border-radius: 15px;
+		box-shadow: 0 9px 20px rgb(214 99 8 / 32%);
 		color: white;
 	}
 
@@ -428,7 +474,7 @@
 
 		.brand span,
 		.side-nav span,
-		.create-button span,
+		.create-button > span,
 		.saved-link:not(svg),
 		.profile-switch > span:nth-child(2),
 		:global(.settings-icon) {
@@ -447,9 +493,15 @@
 		}
 
 		.create-button {
-			width: 48px;
-			height: 48px;
+			width: 54px;
+			height: 54px;
+			min-height: 54px;
+			padding: 6px;
 			margin-inline: auto;
+		}
+		.create-button > i {
+			width: 40px;
+			height: 40px;
 		}
 
 		.profile-switch {
@@ -480,10 +532,12 @@
 
 		.brand span,
 		.side-nav span,
-		.create-button span,
 		.profile-switch > span:nth-child(2),
 		:global(.settings-icon) {
 			display: initial;
+		}
+		.create-button > span {
+			display: grid;
 		}
 
 		.side-nav a,

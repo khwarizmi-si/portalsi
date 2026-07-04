@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { confirmFormSubmit } from '$lib/ui/confirm';
 	import type { PageProps } from './$types';
 	let { form }: PageProps = $props();
 </script>
@@ -11,12 +12,24 @@
 		Semua profil, konten, relasi, dan media Anda akan dihapus oleh backend. Tindakan ini tidak dapat
 		dibatalkan.
 	</p>
-	<form method="POST">
+	<form
+		method="POST"
+		onsubmit={(event) =>
+			confirmFormSubmit(event, {
+				title: 'Hapus akun secara permanen?',
+				description:
+					'Semua profil, postingan, pesan, dan relasi akun akan dihapus dan tidak dapat dipulihkan.',
+				confirmLabel: 'Ya, hapus akun',
+				tone: 'danger'
+			})}
+	>
 		<label
-			><span>Ketik <strong>HAPUS</strong> untuk melanjutkan</span><input
-				name="confirmation"
+			><span>Masukkan password untuk mengonfirmasi</span><input
+				name="password"
+				type="password"
 				required
-				autocomplete="off"
+				autocomplete="current-password"
+				placeholder="Password akun Anda"
 			/></label
 		>{#if form?.message}<p role="alert">{form.message}</p>{/if}<button>Hapus akun saya</button>
 	</form>

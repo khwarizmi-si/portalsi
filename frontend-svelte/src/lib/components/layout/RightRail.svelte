@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { ChevronRight, Circle } from '@lucide/svelte';
 	import StoryAvatarLink from '$lib/components/story/StoryAvatarLink.svelte';
-	import VerifiedBadge from '$lib/components/ui/VerifiedBadge.svelte';
+	import UserBadges from '$lib/components/ui/UserBadges.svelte';
 	import type { PortalUser } from '$lib/types/domain';
 	let {
 		suggestions,
@@ -57,7 +57,7 @@
 				/>
 				<a href={`/u/${user.username}`} class="user-copy">
 					<strong
-						>{user.fullName}{#if user.badgeVerified}<VerifiedBadge />{/if}</strong
+						>{user.fullName}<UserBadges verified={user.badgeVerified} role={user.role} /></strong
 					>
 					<small>@{user.username}</small>
 				</a>

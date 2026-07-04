@@ -1,13 +1,16 @@
 <script lang="ts">
 	import { Plus } from '@lucide/svelte';
 	import StoryAvatarLink from '$lib/components/story/StoryAvatarLink.svelte';
+	import UserBadges from '$lib/components/ui/UserBadges.svelte';
 	import type { StoryPreview } from '$lib/types/domain';
 	let { stories }: { stories: StoryPreview[] } = $props();
 </script>
 
 <section class="story-section" aria-labelledby="story-title">
 	<div class="section-title">
-		<h2 id="story-title">Cerita hari ini</h2>
+		<h2 id="story-title">
+			{stories.some((story) => story.recommended) ? 'Cerita & rekomendasi' : 'Cerita hari ini'}
+		</h2>
 		<a href="/create/story">Buat cerita</a>
 	</div>
 	<div class="story-rail">
@@ -28,7 +31,13 @@
 							><i><Plus size={13} strokeWidth={3} /></i></a
 						>{/if}
 				</span>
-				<span>{story.isOwn ? 'Cerita Anda' : story.user.fullName.split(' ')[0]}</span>
+				<span class="story-name"
+					>{story.isOwn ? 'Cerita Anda' : story.user.fullName.split(' ')[0]}<UserBadges
+						verified={story.user.badgeVerified}
+						role={story.user.role}
+					/></span
+				>
+				{#if story.recommended}<small class="recommended">Rekomendasi</small>{/if}
 			</div>
 		{/each}
 	</div>
@@ -82,6 +91,23 @@
 		gap: 6px;
 		font-size: 0.72rem;
 		font-weight: 620;
+	}
+	.story-name {
+		display: flex;
+		max-width: 86px;
+		align-items: center;
+		gap: 3px;
+		overflow: hidden;
+		white-space: nowrap;
+	}
+	.story-name :global(.dev-badge) {
+		display: none;
+	}
+	.recommended {
+		margin-top: -5px;
+		color: #1687e8;
+		font-size: 0.53rem;
+		font-weight: 750;
 	}
 
 	.avatar-place {

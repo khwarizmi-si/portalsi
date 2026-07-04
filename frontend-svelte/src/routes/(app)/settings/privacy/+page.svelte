@@ -1,6 +1,9 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
+	import { untrack } from 'svelte';
 	import type { PageProps } from './$types';
 	let { data, form }: PageProps = $props();
+	let isPrivate = $state(untrack(() => data.isPrivate));
 </script>
 
 <svelte:head><title>Privasi akun — Portal SI</title></svelte:head>
@@ -8,9 +11,14 @@
 	<a href="/settings">← Pengaturan</a>
 	<h1>Privasi akun</h1>
 	<p>Akun privat memerlukan persetujuan Anda sebelum orang lain dapat melihat postingan.</p>
-	<form method="POST">
+	<form
+		method="POST"
+		use:enhance={() =>
+			async ({ update }) =>
+				update({ reset: false, invalidateAll: false })}
+	>
 		<label
-			><input type="checkbox" name="is_private" checked={data.isPrivate} /><span
+			><input type="checkbox" name="is_private" bind:checked={isPrivate} /><span
 				><strong>Jadikan akun privat</strong><small>Pengikut baru harus Anda setujui.</small></span
 			></label
 		>{#if form?.message}<p class:success={form.success}>{form.message}</p>{/if}<button

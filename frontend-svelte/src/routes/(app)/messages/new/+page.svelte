@@ -5,6 +5,7 @@
 	import { clientRequest } from '$lib/api/client';
 	import { mapCompactUser } from '$lib/api/mappers';
 	import StoryAvatarLink from '$lib/components/story/StoryAvatarLink.svelte';
+	import UserBadges from '$lib/components/ui/UserBadges.svelte';
 	import { userSearchResponseSchema } from '$lib/schemas/post';
 	import type { PageProps } from './$types';
 	import type { PortalUser } from '$lib/types/domain';
@@ -83,7 +84,9 @@
 					seen={user.storyViewed}
 				/>
 				<a href={`/messages/direct/${user.id}?name=${encodeURIComponent(user.fullName)}`}>
-					<strong>{user.fullName}</strong><small>@{user.username}</small>
+					<strong
+						>{user.fullName}<UserBadges verified={user.badgeVerified} role={user.role} /></strong
+					><small>@{user.username}</small>
 				</a>
 			</div>{/each}
 		{#if message}<p aria-live="polite">{message}</p>{/if}

@@ -5,7 +5,10 @@
 		LoaderCircle,
 		MapPin,
 		Music2,
+		Pause,
+		Play,
 		Save,
+		Scissors,
 		Sparkles,
 		Upload,
 		Video,
@@ -48,6 +51,9 @@
 	let uploadProgress = $state(0);
 	let activeUpload = $state<XMLHttpRequest | null>(null);
 	let cropMode = $state<'original' | 'square' | 'portrait'>('original');
+	let cropZoom = $state(1);
+	let cropX = $state(0);
+	let cropY = $state(0);
 	let filter = $state<'normal' | 'bright' | 'warm' | 'mono' | 'contrast'>('normal');
 	let locationResults = $state<Array<{ id: number; label: string }>>([]);
 	let locationSearching = $state(false);
@@ -64,7 +70,11 @@
 	>([]);
 	let selectedMusic = $state<(typeof musicResults)[number] | null>(null);
 	let musicStartSeconds = $state(0);
-	let musicDurationSeconds = $state(15);
+	let musicEndSeconds = $state(15);
+	let musicTotalSeconds = $state(30);
+	let musicPreviewPlaying = $state(false);
+	let musicAudio = $state<HTMLAudioElement>();
+	const musicDurationSeconds = $derived(Math.max(0, musicEndSeconds - musicStartSeconds));
 	const filterOptions = [
 		{ id: 'normal' as const, label: 'Normal', css: 'none' },
 		{ id: 'bright' as const, label: 'Cerah', css: 'brightness(1.12) saturate(1.08)' },
@@ -169,9 +179,12 @@
 				selectedMusic = draft.music ?? null;
 				musicQuery = selectedMusic?.title ?? '';
 				cropMode = draft.cropMode ?? 'original';
+				cropZoom = draft.cropZoom ?? 1;
+				cropX = draft.cropX ?? 0;
+				cropY = draft.cropY ?? 0;
 				filter = draft.filter ?? 'normal';
 				musicStartSeconds = draft.musicStartSeconds ?? 0;
-				musicDurationSeconds = draft.musicDurationSeconds ?? 15;
+				musicEndSeconds = musicStartSeconds + (draft.musicDurationSeconds ?? 15);
 			})
 			.catch(() => undefined);
 	});
@@ -195,6 +208,9 @@
 		}
 		file = candidate;
 		cropMode = 'original';
+		cropZoom = 1;
+		cropX = 0;
+		cropY = 0;
 		filter = 'normal';
 	}
 
@@ -212,6 +228,9 @@
 				file,
 				music: selectedMusic,
 				cropMode,
+				cropZoom,
+				cropX,
+				cropY,
 				filter,
 				musicStartSeconds,
 				musicDurationSeconds,
@@ -244,7 +263,7 @@
 		try {
 			const body = new FormData();
 			const uploadFile = file.type.startsWith('image/')
-				? await cropImage(file, cropMode, filter)
+				? await cropImage(file, cropMode, filter, cropZoom, cropX, cropY)
 				: file;
 			body.set('media', uploadFile);
 			body.set('caption', caption.trim());
@@ -331,8 +350,33 @@
 	}
 
 	function updateMusicStart(event: Event) {
-		musicStartSeconds = Number((event.currentTarget as HTMLInputElement).value);
-		musicDurationSeconds = Math.min(musicDurationSeconds, 30 - musicStartSeconds);
+		const value = Number((event.currentTarget as HTMLInputElement).value);
+		musicStartSeconds = Math.min(value, musicEndSeconds - 5);
+		if (musicAudio) musicAudio.currentTime = musicStartSeconds;
+	}
+
+	function updateMusicEnd(event: Event) {
+		const value = Number((event.currentTarget as HTMLInputElement).value);
+		musicEndSeconds = Math.max(value, musicStartSeconds + 5);
+	}
+
+	function selectMusic(track: (typeof musicResults)[number]) {
+		selectedMusic = track;
+		musicQuery = track.title;
+		musicResults = [];
+		musicStartSeconds = 0;
+		musicEndSeconds = 15;
+		musicTotalSeconds = 30;
+		musicPreviewPlaying = false;
+	}
+
+	function toggleMusicPreview() {
+		if (!musicAudio) return;
+		if (musicAudio.paused) {
+			if (musicAudio.currentTime < musicStartSeconds || musicAudio.currentTime >= musicEndSeconds)
+				musicAudio.currentTime = musicStartSeconds;
+			void musicAudio.play();
+		} else musicAudio.pause();
 	}
 
 	function startMusicPreview(event: Event) {
@@ -346,14 +390,28 @@
 
 	function limitMusicPreview(event: Event) {
 		const audio = event.currentTarget as HTMLAudioElement;
-		if (audio.currentTime >= musicStartSeconds + musicDurationSeconds) {
-			audio.pause();
+		if (audio.currentTime >= musicEndSeconds) {
 			audio.currentTime = musicStartSeconds;
+			void audio.play().catch(() => undefined);
 		}
 	}
 
-	async function cropImage(source: File, mode: typeof cropMode, selectedFilter: typeof filter) {
-		if (mode === 'original' && selectedFilter === 'normal') return source;
+	async function cropImage(
+		source: File,
+		mode: typeof cropMode,
+		selectedFilter: typeof filter,
+		zoom: number,
+		offsetX: number,
+		offsetY: number
+	) {
+		if (
+			mode === 'original' &&
+			selectedFilter === 'normal' &&
+			zoom === 1 &&
+			offsetX === 0 &&
+			offsetY === 0
+		)
+			return source;
 		const bitmap = await createImageBitmap(source);
 		const targetRatio =
 			mode === 'square' ? 1 : mode === 'portrait' ? 4 / 5 : bitmap.width / bitmap.height;
@@ -361,6 +419,10 @@
 		let sourceHeight = bitmap.height;
 		if (sourceWidth / sourceHeight > targetRatio) sourceWidth = sourceHeight * targetRatio;
 		else sourceHeight = sourceWidth / targetRatio;
+		sourceWidth /= zoom;
+		sourceHeight /= zoom;
+		const sourceX = ((bitmap.width - sourceWidth) * (offsetX + 50)) / 100;
+		const sourceY = ((bitmap.height - sourceHeight) * (offsetY + 50)) / 100;
 		const scale = Math.min(1, 2048 / Math.max(sourceWidth, sourceHeight));
 		const canvas = document.createElement('canvas');
 		canvas.width = Math.round(sourceWidth * scale);
@@ -370,8 +432,8 @@
 			context.filter = filterOptions.find((item) => item.id === selectedFilter)?.css ?? 'none';
 			context.drawImage(
 				bitmap,
-				(bitmap.width - sourceWidth) / 2,
-				(bitmap.height - sourceHeight) / 2,
+				sourceX,
+				sourceY,
 				sourceWidth,
 				sourceHeight,
 				0,
@@ -435,6 +497,9 @@
 		file?: File | null;
 		music?: (typeof musicResults)[number] | null;
 		cropMode?: typeof cropMode;
+		cropZoom?: number;
+		cropX?: number;
+		cropY?: number;
 		filter?: typeof filter;
 		musicStartSeconds?: number;
 		musicDurationSeconds?: number;
@@ -517,6 +582,8 @@
 							src={previewUrl}
 							alt="Pratinjau media"
 							style:filter={activeFilter}
+							style:object-position={`${50 + cropX}% ${50 + cropY}%`}
+							style:transform={`scale(${cropZoom})`}
 						/>
 					{:else if file?.type.startsWith('video/')}<video src={previewUrl} controls muted></video>
 					{:else}<audio src={previewUrl} controls></audio>{/if}
@@ -530,6 +597,36 @@
 							>1:1</button
 						><button class:active={cropMode === 'portrait'} onclick={() => (cropMode = 'portrait')}
 							>4:5</button
+						>
+					</div>
+					<div class="crop-adjust" aria-label="Atur crop gambar">
+						<strong><Scissors size={14} /> Atur potongan</strong>
+						<label
+							><span>Zoom</span><input
+								type="range"
+								min="1"
+								max="2.5"
+								step="0.05"
+								bind:value={cropZoom}
+							/></label
+						>
+						<label
+							><span>Horizontal</span><input
+								type="range"
+								min="-50"
+								max="50"
+								step="1"
+								bind:value={cropX}
+							/></label
+						>
+						<label
+							><span>Vertikal</span><input
+								type="range"
+								min="-50"
+								max="50"
+								step="1"
+								bind:value={cropY}
+							/></label
 						>
 					</div>
 					<div class="filter-controls" aria-label="Filter gambar">
@@ -611,12 +708,7 @@
 				>Pilih dari katalog musik dan dengarkan pratinjau sebelum digunakan.</small
 			>
 			{#if musicResults.length}<div class="suggestions music" aria-label="Hasil musik">
-					{#each musicResults as track (track.id)}<button
-							onclick={() => {
-								selectedMusic = track;
-								musicQuery = track.title;
-								musicResults = [];
-							}}
+					{#each musicResults as track (track.id)}<button onclick={() => selectMusic(track)}
 							>{#if track.artworkUrl}<img src={track.artworkUrl} alt="" />{:else}<Music2
 									size={28}
 								/>{/if}<span><strong>{track.title}</strong><small>{track.artist}</small></span
@@ -624,15 +716,36 @@
 						>{/each}
 				</div>{/if}
 			{#if selectedMusic}<div class="selected-music">
-					<Music2 size={17} /><span
+					{#if selectedMusic.artworkUrl}<img src={selectedMusic.artworkUrl} alt="" />{:else}<Music2
+							size={21}
+						/>{/if}<span
 						><strong>{selectedMusic.title}</strong><small>{selectedMusic.artist}</small></span
 					>{#if selectedMusic.previewUrl}<audio
+							bind:this={musicAudio}
 							src={selectedMusic.previewUrl}
-							controls
-							onplay={startMusicPreview}
+							preload="metadata"
+							onloadedmetadata={(event) => {
+								musicTotalSeconds = Math.max(5, Math.floor(event.currentTarget.duration || 30));
+								musicEndSeconds = Math.min(musicEndSeconds, musicTotalSeconds);
+							}}
+							onplay={(event) => {
+								startMusicPreview(event);
+								musicPreviewPlaying = true;
+							}}
+							onpause={() => (musicPreviewPlaying = false)}
 							ontimeupdate={limitMusicPreview}
-						></audio>{/if}<button
+						></audio><button
+							class="music-play"
+							onclick={toggleMusicPreview}
+							aria-label={musicPreviewPlaying ? 'Jeda pratinjau' : 'Putar pratinjau'}
+							>{#if musicPreviewPlaying}<Pause size={16} fill="currentColor" />{:else}<Play
+									size={16}
+									fill="currentColor"
+								/>{/if}</button
+						>{/if}<button
 						onclick={() => {
+							musicAudio?.pause();
+							musicPreviewPlaying = false;
 							selectedMusic = null;
 							musicQuery = '';
 						}}
@@ -640,24 +753,39 @@
 					>
 				</div>
 				<div class="music-trim">
-					<label
-						><span>Mulai pada {musicStartSeconds} detik</span><input
+					<header>
+						<span><Scissors size={14} /> Potong musik</span><strong
+							>{musicDurationSeconds} detik</strong
+						>
+					</header>
+					<div class="trim-times">
+						<span>{musicStartSeconds}s</span><span>{musicEndSeconds}s</span>
+					</div>
+					<div
+						class="dual-range"
+						style={`--start:${(musicStartSeconds / musicTotalSeconds) * 100}%;--end:${(musicEndSeconds / musicTotalSeconds) * 100}%`}
+					>
+						<div></div>
+						<input
+							aria-label="Awal potongan musik"
 							type="range"
 							min="0"
-							max="25"
+							max={musicTotalSeconds}
 							step="1"
 							value={musicStartSeconds}
 							oninput={updateMusicStart}
-						/></label
-					><label
-						><span>Durasi {musicDurationSeconds} detik</span><input
+						/>
+						<input
+							aria-label="Akhir potongan musik"
 							type="range"
-							min="5"
-							max={30 - musicStartSeconds}
+							min="0"
+							max={musicTotalSeconds}
 							step="1"
-							bind:value={musicDurationSeconds}
-						/></label
-					>
+							value={musicEndSeconds}
+							oninput={updateMusicEnd}
+						/>
+					</div>
+					<small>Bagian ini akan diputar berulang saat postingan atau cerita dilihat.</small>
 				</div>{/if}
 			<button class="draft" onclick={saveDraft}
 				><Save size={18} /><span>Simpan draft<small>Teks, media, lokasi, dan musik</small></span
@@ -820,6 +948,9 @@
 		width: 100%;
 		max-height: 470px;
 		object-fit: contain;
+		transition:
+			transform 120ms ease,
+			object-position 120ms ease;
 	}
 	.preview audio {
 		margin: 80px 30px;
@@ -860,6 +991,38 @@
 	.crop-controls button.active {
 		background: var(--color-text);
 		color: white;
+	}
+	.crop-adjust {
+		display: grid;
+		width: min(100%, 540px);
+		gap: 7px;
+		margin-top: 10px;
+		padding: 12px;
+		background: var(--color-canvas);
+		border-radius: 12px;
+		text-align: left;
+	}
+	.crop-adjust > strong {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 0.7rem;
+	}
+	.crop-adjust label {
+		display: grid;
+		grid-template-columns: 72px 1fr;
+		align-items: center;
+		gap: 8px;
+	}
+	.crop-adjust label span {
+		color: var(--color-muted);
+		font-size: 0.62rem;
+	}
+	.crop-adjust input {
+		width: 100%;
+		height: 22px;
+		padding: 0;
+		accent-color: var(--color-primary);
 	}
 	.filter-controls {
 		display: flex;
@@ -1020,14 +1183,16 @@
 		align-items: center;
 		gap: 8px;
 		margin-top: 8px;
-		padding: 9px;
+		padding: 10px;
 		background: var(--color-secondary-soft);
 		border-radius: 10px;
 		color: var(--color-secondary);
 	}
-	.selected-music audio {
-		width: 90px;
-		height: 28px;
+	.selected-music > img {
+		width: 42px;
+		height: 42px;
+		border-radius: 9px;
+		object-fit: cover;
 	}
 	.selected-music > button {
 		display: grid;
@@ -1036,25 +1201,109 @@
 		background: transparent;
 		border: 0;
 	}
+	.selected-music > button.music-play {
+		width: 36px;
+		height: 36px;
+		margin-left: auto;
+		background: white;
+		border-radius: 50%;
+		color: var(--color-primary-strong);
+	}
 	.music-trim {
 		display: grid;
-		gap: 8px;
+		gap: 10px;
 		margin-top: 8px;
-		padding: 11px;
-		background: var(--color-canvas);
-		border-radius: 10px;
+		padding: 14px;
+		background: linear-gradient(145deg, #fff9ed, #f5fbf8);
+		border: 1px solid var(--color-border);
+		border-radius: 14px;
 	}
-	.music-trim label {
-		gap: 3px;
+	.music-trim header,
+	.music-trim header span,
+	.trim-times {
+		display: flex;
+		align-items: center;
 	}
-	.music-trim label > span {
+	.music-trim header {
+		justify-content: space-between;
+	}
+	.music-trim header span {
+		gap: 6px;
+		font-size: 0.7rem;
+		font-weight: 720;
+	}
+	.music-trim header strong {
+		padding: 4px 8px;
+		background: var(--color-primary-soft);
+		border-radius: 99px;
+		color: var(--color-primary-strong);
+		font-size: 0.62rem;
+	}
+	.trim-times {
+		justify-content: space-between;
 		color: var(--color-muted);
-		font-size: 0.64rem;
+		font-size: 0.6rem;
+		font-variant-numeric: tabular-nums;
 	}
-	.music-trim input[type='range'] {
-		height: 24px;
+	.dual-range {
+		position: relative;
+		height: 30px;
+	}
+	.dual-range > div {
+		position: absolute;
+		top: 13px;
+		right: 0;
+		left: 0;
+		height: 5px;
+		background: linear-gradient(
+			to right,
+			#ddd4c5 0 var(--start),
+			var(--color-primary) var(--start) var(--end),
+			#ddd4c5 var(--end)
+		);
+		border-radius: 99px;
+	}
+	.dual-range input {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 30px;
 		padding: 0;
-		accent-color: var(--color-primary);
+		background: transparent;
+		pointer-events: none;
+		appearance: none;
+	}
+	.dual-range input::-webkit-slider-runnable-track {
+		height: 5px;
+		background: transparent;
+	}
+	.dual-range input::-webkit-slider-thumb {
+		width: 20px;
+		height: 20px;
+		margin-top: -8px;
+		background: white;
+		border: 3px solid var(--color-primary);
+		border-radius: 50%;
+		box-shadow: 0 2px 7px rgb(82 46 15 / 20%);
+		pointer-events: auto;
+		appearance: none;
+	}
+	.dual-range input::-moz-range-track {
+		height: 5px;
+		background: transparent;
+	}
+	.dual-range input::-moz-range-thumb {
+		width: 16px;
+		height: 16px;
+		background: white;
+		border: 3px solid var(--color-primary);
+		border-radius: 50%;
+		pointer-events: auto;
+	}
+	.music-trim > small {
+		color: var(--color-muted);
+		font-size: 0.6rem;
+		line-height: 1.4;
 	}
 	.draft {
 		display: grid;
@@ -1132,7 +1381,7 @@
 		.composer-page > header {
 			position: sticky;
 			z-index: 10;
-			top: 64px;
+			top: 0;
 			padding: 10px 12px;
 			background: rgb(255 253 248 / 94%);
 			border-bottom: 1px solid var(--color-border);

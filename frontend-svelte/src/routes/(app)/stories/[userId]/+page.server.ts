@@ -20,6 +20,9 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		user: {
 			id: response.current_user.user_id,
 			username: response.current_user.username,
+			fullName: response.current_user.full_name?.trim() || response.current_user.username,
+			role: response.current_user.role,
+			badgeVerified: response.current_user.is_verified,
 			avatarUrl: normalizeMediaUrl(response.current_user.profile_picture_url, mediaBaseUrl)
 		},
 		isOwn: locals.user.id === response.current_user.user_id,
@@ -32,7 +35,9 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			musicTitle: story.music_track_name ?? null,
 			musicArtist: story.music_artist_name ?? null,
 			musicPreviewUrl: normalizeMediaUrl(story.music_preview_url, mediaBaseUrl),
-			albumArtUrl: normalizeMediaUrl(story.music_album_art_url, mediaBaseUrl)
+			albumArtUrl: normalizeMediaUrl(story.music_album_art_url, mediaBaseUrl),
+			musicStartSeconds: (story.music_start_position_ms ?? 0) / 1000,
+			musicDurationSeconds: (story.music_clip_duration_ms ?? 15_000) / 1000
 		})),
 		previousUserId: response.prev_user_id,
 		nextUserId: response.next_user_id

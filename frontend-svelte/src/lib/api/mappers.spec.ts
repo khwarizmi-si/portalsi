@@ -53,6 +53,38 @@ describe('API view-model mappers', () => {
 		expect(post.isLiked).toBe(true);
 	});
 
+	it('uses the media extension to prevent images being marked as video', () => {
+		const image = mapPost(
+			{
+				type: 'post',
+				post_id: 5,
+				caption: null,
+				media_url: 'posts/photo.webp',
+				thumbnail_url: null,
+				location: null,
+				is_video: true,
+				created_at: '2026-07-03T00:00:00Z',
+				likes_count: 0,
+				comments_count: 0,
+				is_liked: false,
+				is_bookmarked: false,
+				music_track_name: null,
+				music_artist_name: null,
+				user: {
+					user_id: 2,
+					username: 'hana',
+					full_name: 'Hana',
+					profile_picture_url: null,
+					role: 'student',
+					is_verified: false,
+					is_private: false
+				}
+			},
+			'https://cdn.example.com/storage'
+		);
+		expect(image.isVideo).toBe(false);
+	});
+
 	it('always puts the current user first in the story rail', () => {
 		const stories = mapStoryGroups(
 			{
@@ -60,6 +92,9 @@ describe('API view-model mappers', () => {
 					{
 						user_id: 2,
 						username: 'hana',
+						role: 'student',
+						is_verified: false,
+						is_recommended: false,
 						profile_picture_url: null,
 						is_viewed: false,
 						stories: [

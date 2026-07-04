@@ -63,7 +63,10 @@ export const pendingFollowersResponseSchema = z.object({
 		z.object({
 			user_id: z.coerce.number().int().positive(),
 			username: z.string().min(1),
-			full_name: z.string().nullish()
+			full_name: z.string().nullish(),
+			profile_picture_url: z.string().nullish(),
+			role: z.enum(['student', 'parent', 'teacher', 'dev', 'other']).catch('other'),
+			is_verified: booleanish.catch(false)
 		})
 	)
 });

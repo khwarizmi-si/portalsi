@@ -5,6 +5,7 @@
 	import Avatar from '$lib/components/ui/Avatar.svelte';
 	import PostCard from '$lib/components/feed/PostCard.svelte';
 	import SectionPage from '$lib/components/layout/SectionPage.svelte';
+	import UserBadges from '$lib/components/ui/UserBadges.svelte';
 	import { createdCommentResponseSchema } from '$lib/schemas/comment';
 	import type { PageProps } from './$types';
 	import { confirmAction, confirmButtonAction } from '$lib/ui/confirm';
@@ -122,14 +123,10 @@
 		<div class="post-column">
 			{#if data.post.user.id === data.currentUser.id}<details class="owner-tools surface">
 					<summary><Pencil size={15} /> Kelola postingan</summary>
-					<form method="POST" action="?/update" enctype="multipart/form-data">
+					<form method="POST" action="?/update">
 						<label>Caption <textarea name="caption" rows="4">{data.post.caption}</textarea></label
-						><label>Lokasi <input name="location" value={data.post.location ?? ''} /></label><label
-							>Ganti media <input
-								name="media"
-								type="file"
-								accept="image/jpeg,image/png,video/*"
-							/></label
+						><small
+							>Media, musik, dan lokasi tidak dapat diganti setelah postingan diterbitkan.</small
 						>
 						<div>
 							<button type="submit">Simpan</button><button
@@ -159,9 +156,12 @@
 				<div>
 					{#each data.likers as user (user.id)}<a href={`/u/${user.username}`}
 							><Avatar name={user.fullName} src={user.avatarUrl} size="sm" /><span
-								><strong>{user.fullName}</strong><small
-									>@{user.username}{user.isFollowing ? ' · Diikuti' : ''}</small
-								></span
+								><strong
+									>{user.fullName}<UserBadges
+										verified={user.badgeVerified}
+										role={user.role}
+									/></strong
+								><small>@{user.username}{user.isFollowing ? ' · Diikuti' : ''}</small></span
 							></a
 						>{/each}{#if data.likers.length === 0}<p>Belum ada yang menyukai.</p>{/if}
 				</div>
@@ -177,7 +177,15 @@
 					<article>
 						<Avatar name={comment.user.fullName} src={comment.user.avatarUrl} size="sm" />
 						<div>
-							<p><strong>{comment.user.fullName}</strong> {comment.text}</p>
+							<p>
+								<strong
+									>{comment.user.fullName}<UserBadges
+										verified={comment.user.badgeVerified}
+										role={comment.user.role}
+									/></strong
+								>
+								{comment.text}
+							</p>
 							<footer>
 								<time>{comment.createdLabel}</time><button
 									class:active={comment.isLiked}
@@ -199,7 +207,15 @@
 										size="sm"
 									/>
 									<div>
-										<p><strong>{reply.user.fullName}</strong> {reply.text}</p>
+										<p>
+											<strong
+												>{reply.user.fullName}<UserBadges
+													verified={reply.user.badgeVerified}
+													role={reply.user.role}
+												/></strong
+											>
+											{reply.text}
+										</p>
 										<footer>
 											<time>{reply.createdLabel}</time><button
 												class:active={reply.isLiked}
@@ -274,8 +290,11 @@
 		font-size: 0.7rem;
 		font-weight: 680;
 	}
-	.owner-tools textarea,
-	.owner-tools input {
+	.owner-tools form > small {
+		color: var(--color-muted);
+		font-size: 0.68rem;
+	}
+	.owner-tools textarea {
 		width: 100%;
 		padding: 9px 10px;
 		background: var(--color-canvas);

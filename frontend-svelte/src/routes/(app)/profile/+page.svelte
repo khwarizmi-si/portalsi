@@ -4,7 +4,8 @@
 	import { untrack } from 'svelte';
 	import { clientRequest } from '$lib/api/client';
 	import StoryAvatarLink from '$lib/components/story/StoryAvatarLink.svelte';
-	import VerifiedBadge from '$lib/components/ui/VerifiedBadge.svelte';
+	import UserBadges from '$lib/components/ui/UserBadges.svelte';
+	import InfiniteScrollTrigger from '$lib/components/ui/InfiniteScrollTrigger.svelte';
 	import { profileResponseSchema, type ProfileResponse } from '$lib/schemas/profile';
 	import { normalizeMediaUrl } from '$lib/utils/media';
 	import type { PageProps } from './$types';
@@ -90,7 +91,10 @@
 			</div>
 			<div class="identity">
 				<h1>
-					{data.profile.fullName}{#if data.profile.badgeVerified}<VerifiedBadge />{/if}
+					{data.profile.fullName}<UserBadges
+						verified={data.profile.badgeVerified}
+						role={data.profile.role}
+					/>
 				</h1>
 				<p>@{data.profile.username} · {roleLabels[data.profile.role]}</p>
 			</div>
@@ -132,13 +136,13 @@
 				</a>
 			{/each}
 		</section>
-		{#if hasMore}
-			<div class="load-more">
-				<button onclick={loadMore} disabled={loading}>{loading ? 'Memuat…' : 'Muat lainnya'}</button
-				>
-				{#if loadError}<span aria-live="polite">{loadError}</span>{/if}
-			</div>
-		{/if}
+		<InfiniteScrollTrigger
+			{hasMore}
+			{loading}
+			onLoad={loadMore}
+			label="Memuat postingan berikutnya…"
+		/>
+		{#if loadError}<p class="load-error" aria-live="polite">{loadError}</p>{/if}
 	{:else}
 		<section class="empty-profile surface">
 			<strong>Belum ada postingan</strong><span>Karya yang Anda bagikan akan muncul di sini.</span>
@@ -156,7 +160,7 @@
 		overflow: hidden;
 	}
 	.banner {
-		height: 190px;
+		aspect-ratio: 5 / 1;
 		background:
 			radial-gradient(circle at 78% 25%, rgb(255 255 255 / 50%), transparent 12rem),
 			linear-gradient(125deg, #f5c875, #86cfc3 62%, #3c9188);
@@ -284,27 +288,12 @@
 		color: white;
 		font-size: 0.66rem;
 	}
-	.load-more,
 	.empty-profile {
 		display: grid;
 		justify-items: center;
 		gap: 6px;
 		text-align: center;
 	}
-	.load-more {
-		padding: 18px;
-	}
-	.load-more button {
-		min-height: 42px;
-		padding: 0 18px;
-		background: white;
-		border: 1px solid var(--color-border);
-		border-radius: 999px;
-		color: var(--color-primary-strong);
-		font-weight: 720;
-		cursor: pointer;
-	}
-	.load-more span,
 	.empty-profile span {
 		color: var(--color-muted);
 		font-size: 0.78rem;
@@ -321,9 +310,6 @@
 		.profile-hero {
 			border-inline: 0;
 			border-radius: 0;
-		}
-		.banner {
-			height: 132px;
 		}
 		.profile-main {
 			padding-inline: 16px;

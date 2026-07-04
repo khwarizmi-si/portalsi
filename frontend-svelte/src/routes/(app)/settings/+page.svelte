@@ -9,7 +9,6 @@
 		ShieldCheck,
 		Smartphone,
 		Trash2,
-		UserPlus,
 		UserRound
 	} from '@lucide/svelte';
 	import SectionPage from '$lib/components/layout/SectionPage.svelte';
@@ -29,12 +28,6 @@
 					desc: 'Atur siapa yang dapat mengikuti Anda',
 					href: '/settings/privacy',
 					icon: ShieldCheck
-				},
-				{
-					label: 'Permintaan pengikut',
-					desc: 'Terima atau tolak permintaan akun privat',
-					href: '/settings/follow-requests',
-					icon: UserPlus
 				},
 				{
 					label: 'Ubah kata sandi',

@@ -17,6 +17,10 @@ export const storySchema = z
 export const storyGroupSchema = z.object({
 	user_id: z.coerce.number().int().positive(),
 	username: z.string().min(1),
+	full_name: z.string().nullish(),
+	role: z.enum(['student', 'parent', 'teacher', 'dev', 'other']).catch('other'),
+	is_verified: booleanish.catch(false),
+	is_recommended: booleanish.catch(false),
 	profile_picture_url: z.string().nullish(),
 	is_viewed: booleanish.catch(false),
 	stories: z.array(storySchema).min(1)
@@ -29,6 +33,9 @@ export const storyFeedResponseSchema = z.object({
 			.object({
 				user_id: z.coerce.number().int().positive(),
 				username: z.string().min(1),
+				full_name: z.string().nullish(),
+				role: z.enum(['student', 'parent', 'teacher', 'dev', 'other']).catch('other'),
+				is_verified: booleanish.catch(false),
 				profile_picture_url: z.string().nullish()
 			})
 			.passthrough()
@@ -39,13 +46,18 @@ export const storyViewerItemSchema = storySchema.extend({
 	music_track_name: z.string().nullish(),
 	music_artist_name: z.string().nullish(),
 	music_preview_url: z.string().nullish(),
-	music_album_art_url: z.string().nullish()
+	music_album_art_url: z.string().nullish(),
+	music_start_position_ms: z.coerce.number().int().nonnegative().nullish(),
+	music_clip_duration_ms: z.coerce.number().int().positive().nullish()
 });
 
 export const storyViewerResponseSchema = z.object({
 	current_user: z.object({
 		user_id: z.coerce.number().int().positive(),
 		username: z.string().min(1),
+		full_name: z.string().nullish(),
+		role: z.enum(['student', 'parent', 'teacher', 'dev', 'other']).catch('other'),
+		is_verified: booleanish.catch(false),
 		profile_picture_url: z.string().nullish()
 	}),
 	stories: z.array(storyViewerItemSchema).min(1),

@@ -7,13 +7,16 @@ export const actions: Actions = {
 	default: async ({ request, locals, cookies }) => {
 		if (!locals.token) return fail(401, { message: 'Sesi tidak tersedia.' });
 		const data = await request.formData();
-		if (String(data.get('confirmation') ?? '') !== 'HAPUS')
-			return fail(422, { message: 'Ketik HAPUS untuk mengonfirmasi.' });
+		const password = String(data.get('password') ?? '');
+		if (!password) return fail(422, { message: 'Password wajib dimasukkan.' });
+		const body = new FormData();
+		body.set('password', password);
 		try {
 			await backendRequest('account/delete', {
 				method: 'DELETE',
 				token: locals.token,
-				requestId: locals.requestId
+				requestId: locals.requestId,
+				body
 			});
 			clearSessionCookie(cookies);
 		} catch (error) {

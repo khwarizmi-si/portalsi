@@ -3,10 +3,12 @@
 	import { untrack } from 'svelte';
 	import { Image, LoaderCircle, Play, Search, SlidersHorizontal, Users, X } from '@lucide/svelte';
 	import { clientRequest } from '$lib/api/client';
-	import { mapCompactUser } from '$lib/api/mappers';
+	import { mapCompactUser, mapPost } from '$lib/api/mappers';
 	import SectionPage from '$lib/components/layout/SectionPage.svelte';
 	import StoryAvatarLink from '$lib/components/story/StoryAvatarLink.svelte';
-	import { userSearchResponseSchema } from '$lib/schemas/post';
+	import UserBadges from '$lib/components/ui/UserBadges.svelte';
+	import InfiniteScrollTrigger from '$lib/components/ui/InfiniteScrollTrigger.svelte';
+	import { exploreResponseSchema, userSearchResponseSchema } from '$lib/schemas/post';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -15,6 +17,12 @@
 	let livePeople = $state(untrack(() => [...data.people]));
 	let searching = $state(false);
 	let searchMessage = $state('');
+	let showFilters = $state(false);
+	let posts = $state(untrack(() => [...data.posts]));
+	let nextPage = $state(untrack(() => data.page + 1));
+	let hasMore = $state(untrack(() => data.hasNext));
+	let loadingMore = $state(false);
+	let loadError = $state('');
 	const visiblePeople = $derived(searchQuery.trim().length >= 2 ? livePeople : data.people);
 
 	$effect(() => {
@@ -55,6 +63,29 @@
 		if (data.query) params.push(`q=${encodeURIComponent(data.query)}`);
 		return `/explore?${params.join('&')}`;
 	}
+	async function loadMore() {
+		if (!hasMore || loadingMore) return;
+		loadingMore = true;
+		loadError = '';
+		try {
+			const response = await clientRequest(
+				`explore?sort=${encodeURIComponent(data.sort)}&page=${nextPage}&per_page=15`,
+				{ schema: exploreResponseSchema }
+			);
+			const known = new Set(posts.map((post) => post.id));
+			posts.push(
+				...response.data
+					.map((post) => mapPost(post, mediaBaseUrl))
+					.filter((post) => !known.has(post.id))
+			);
+			nextPage = response.current_page + 1;
+			hasMore = response.current_page < response.last_page;
+		} catch {
+			loadError = 'Konten berikutnya belum dapat dimuat.';
+		} finally {
+			loadingMore = false;
+		}
+	}
 </script>
 
 <svelte:head><title>Jelajah — Portal SI</title><meta name="robots" content="noindex" /></svelte:head
@@ -77,7 +108,13 @@
 					aria-label="Hapus pencarian"><X size={16} /></button
 				>{/if}</label
 		>
-		<a class="filter-action" href="#filters"><SlidersHorizontal size={18} /> Filter</a>
+		<button
+			class="filter-action"
+			type="button"
+			class:active={showFilters}
+			aria-pressed={showFilters}
+			onclick={() => (showFilters = !showFilters)}><SlidersHorizontal size={18} /> Filter</button
+		>
 	</form>
 	{#if searchQuery.trim().length >= 2}<section class="live-results surface" aria-live="polite">
 			<h2>Hasil cepat</h2>
@@ -91,18 +128,20 @@
 						hasStory={user.hasStory}
 						seen={user.storyViewed}
 					/><a href={`/u/${user.username}`}
-						><strong>{user.fullName}</strong><small>@{user.username}</small></a
+						><strong
+							>{user.fullName}<UserBadges verified={user.badgeVerified} role={user.role} /></strong
+						><small>@{user.username}</small></a
 					>
 				</div>{/each}{#if searchMessage}<p>{searchMessage}</p>{/if}
 		</section>{/if}
-	<nav class="filters" id="filters" aria-label="Filter jelajah">
-		<a class:active={data.sort === 'random'} href={filterHref('random')}>Untuk Anda</a>
-		<a class:active={data.sort === 'newest'} href={filterHref('newest')}>Terbaru</a>
-		<a class:active={data.sort === 'popular'} href={filterHref('popular')}>Populer</a>
-		<a href="#people"><Users size={15} /> Pengguna</a>
-	</nav>
+	{#if showFilters}<nav class="filters surface" id="filters" aria-label="Filter jelajah">
+			<a class:active={data.sort === 'random'} href={filterHref('random')}>Untuk Anda</a>
+			<a class:active={data.sort === 'newest'} href={filterHref('newest')}>Terbaru</a>
+			<a class:active={data.sort === 'popular'} href={filterHref('popular')}>Populer</a>
+			<a href="#people"><Users size={15} /> Pengguna</a>
+		</nav>{/if}
 	<section class="explore-grid" aria-label="Konten jelajah">
-		{#each data.posts as post, index (post.id)}
+		{#each posts as post, index (post.id)}
 			<a href={`/posts/${post.id}`} class:wide={index % 7 === 0}>
 				{#if post.isVideo && !post.thumbnailUrl}<video
 						src={post.mediaUrl}
@@ -111,12 +150,17 @@
 						preload="metadata"
 					></video>{:else}<img src={post.thumbnailUrl ?? post.mediaUrl} alt={post.mediaAlt} />{/if}
 				<span
-					>{#if index % 3 === 0}<Play size={17} fill="currentColor" />{:else}<Image
+					>{#if post.isVideo}<Play size={17} fill="currentColor" />{:else}<Image
 							size={17}
 						/>{/if}</span
 				>
 				<div>
-					<strong>{post.user.fullName}</strong><small>{post.likesCount} suka</small>
+					<strong
+						>{post.user.fullName}<UserBadges
+							verified={post.user.badgeVerified}
+							role={post.user.role}
+						/></strong
+					><small>{post.likesCount} suka</small>
 				</div>
 			</a>
 		{/each}
@@ -124,12 +168,14 @@
 	{#if data.exploreUnavailable}<p class="service-note">
 			Konten jelajah sedang diperbarui. Pencarian pengguna tetap dapat digunakan.
 		</p>{/if}
-	{#if data.posts.length === 0}<p class="empty">Belum ada postingan untuk filter ini.</p>{/if}
-	<nav class="pagination" aria-label="Halaman jelajah">
-		{#if data.page > 1}<a href={filterHref(data.sort, data.page - 1)}>Sebelumnya</a>{/if}
-		<span>Halaman {data.page}</span>
-		{#if data.hasNext}<a href={filterHref(data.sort, data.page + 1)}>Berikutnya</a>{/if}
-	</nav>
+	{#if posts.length === 0}<p class="empty">Belum ada postingan untuk filter ini.</p>{/if}
+	<InfiniteScrollTrigger
+		{hasMore}
+		loading={loadingMore}
+		onLoad={loadMore}
+		label="Memuat jelajah berikutnya…"
+	/>
+	{#if loadError}<p class="service-note" aria-live="polite">{loadError}</p>{/if}
 	<section class="people surface" id="people">
 		<h2>{data.query ? `Hasil pengguna untuk “${data.query}”` : 'Orang yang mungkin Anda kenal'}</h2>
 		{#if data.peopleUnavailable}<p class="people-error">
@@ -146,7 +192,9 @@
 						hasStory={user.hasStory}
 						seen={user.storyViewed}
 					/><a href={`/u/${user.username}`}
-						><strong>{user.fullName}</strong><small>@{user.username}</small></a
+						><strong
+							>{user.fullName}<UserBadges verified={user.badgeVerified} role={user.role} /></strong
+						><small>@{user.username}</small></a
 					>
 				</article>{/each}
 		</div>
@@ -192,6 +240,11 @@
 		border: 1px solid var(--color-border);
 		border-radius: 13px;
 		font-weight: 680;
+	}
+	.filter-action.active {
+		background: var(--color-text);
+		border-color: var(--color-text);
+		color: white;
 	}
 	.search-row .clear {
 		display: grid;
@@ -255,6 +308,7 @@
 		display: flex;
 		gap: 8px;
 		margin-bottom: 16px;
+		padding: 10px;
 		overflow-x: auto;
 		scrollbar-width: none;
 	}
@@ -369,19 +423,6 @@
 		color: var(--color-muted);
 		font-size: 0.72rem;
 	}
-	.pagination {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 14px;
-		padding: 18px;
-		font-size: 0.78rem;
-	}
-	.pagination a {
-		color: var(--color-primary-strong);
-		font-weight: 720;
-	}
-	.pagination span,
 	.people-error,
 	.empty {
 		color: var(--color-muted);

@@ -1,7 +1,9 @@
 <script lang="ts">
-	import { Bookmark, Heart, LoaderCircle, MessageCircle, Music2, Send } from '@lucide/svelte';
+	import { Bookmark, Heart, MessageCircle, Music2, Send } from '@lucide/svelte';
 	import { clientRequest } from '$lib/api/client';
+	import SmartVideo from '$lib/components/media/SmartVideo.svelte';
 	import StoryAvatarLink from '$lib/components/story/StoryAvatarLink.svelte';
+	import UserBadges from '$lib/components/ui/UserBadges.svelte';
 	import { untrack } from 'svelte';
 	import type { PageProps } from './$types';
 	let { data }: PageProps = $props();
@@ -9,8 +11,6 @@
 	let bookmarked = $state(untrack(() => data.clip.isBookmarked));
 	let likes = $state(untrack(() => data.clip.likesCount));
 	let message = $state('');
-	let mediaLoading = $state(true);
-	let mediaError = $state(false);
 	async function like() {
 		const previous = liked;
 		liked = !liked;
@@ -50,29 +50,12 @@
 <svelte:head><title>Clips — Portal SI</title><meta name="robots" content="noindex" /></svelte:head>
 <div class="clips-page">
 	<article>
-		<video
+		<SmartVideo
 			src={data.clip.mediaUrl}
 			poster={data.clip.thumbnailUrl}
-			controls
-			autoplay
-			muted
-			loop
-			playsinline
-			preload="auto"
-			onloadstart={() => (mediaLoading = true)}
-			onwaiting={() => (mediaLoading = true)}
-			oncanplay={() => (mediaLoading = false)}
-			onplaying={() => (mediaLoading = false)}
-			onerror={() => {
-				mediaLoading = false;
-				mediaError = true;
-			}}><track kind="captions" label="Takarir tidak tersedia" /></video
-		>
-		{#if mediaLoading}<div class="media-state">
-				<LoaderCircle size={28} /><span>Menyiapkan video…</span>
-			</div>{:else if mediaError}<div class="media-state error">
-				<span>Video belum dapat diputar. Periksa koneksi lalu muat ulang.</span>
-			</div>{/if}
+			label={data.clip.mediaAlt}
+			fill
+		/>
 		<header>
 			<StoryAvatarLink
 				userId={data.clip.user.id}
@@ -82,9 +65,12 @@
 				size="sm"
 				hasStory={data.clip.user.hasStory}
 				seen={data.clip.user.storyViewed}
-			/><strong>{data.clip.user.fullName}</strong><a href={`/u/${data.clip.user.username}`}
-				>Lihat profil</a
-			>
+			/><strong
+				>{data.clip.user.fullName}<UserBadges
+					verified={data.clip.user.badgeVerified}
+					role={data.clip.user.role}
+				/></strong
+			><a href={`/u/${data.clip.user.username}`}>Lihat profil</a>
 		</header>
 		<div class="caption">
 			<p>{data.clip.caption}</p>
@@ -125,36 +111,6 @@
 		background: #31251b;
 		border-radius: 18px;
 		color: white;
-	}
-	.clips-page video {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-	.media-state {
-		position: absolute;
-		z-index: 2;
-		inset: 0;
-		display: grid;
-		place-content: center;
-		justify-items: center;
-		gap: 9px;
-		background: rgb(20 16 12 / 45%);
-		color: white;
-		font-size: 0.75rem;
-		pointer-events: none;
-	}
-	.media-state :global(svg) {
-		animation: spin 0.8s linear infinite;
-	}
-	.media-state.error {
-		padding: 30px;
-		text-align: center;
-	}
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
 	}
 	.clips-page article::after {
 		position: absolute;

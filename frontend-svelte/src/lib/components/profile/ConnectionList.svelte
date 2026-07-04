@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { ArrowLeft } from '@lucide/svelte';
 	import StoryAvatarLink from '$lib/components/story/StoryAvatarLink.svelte';
-	import VerifiedBadge from '$lib/components/ui/VerifiedBadge.svelte';
+	import UserBadges from '$lib/components/ui/UserBadges.svelte';
 	import type { PortalUser } from '$lib/types/domain';
 	let { title, backHref, users }: { title: string; backHref: string; users: PortalUser[] } =
 		$props();
@@ -26,7 +26,7 @@
 				/><a href={`/u/${user.username}`}
 					><span
 						><strong
-							>{user.fullName}{#if user.badgeVerified}<VerifiedBadge />{/if}</strong
+							>{user.fullName}<UserBadges verified={user.badgeVerified} role={user.role} /></strong
 						><small>@{user.username}</small></span
 					></a
 				>

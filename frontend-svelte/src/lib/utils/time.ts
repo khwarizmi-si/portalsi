@@ -9,5 +9,7 @@ export function relativeTimeId(value: string | Date, now = new Date()): string {
 	if (absolute < 3_600) return formatter.format(Math.round(seconds / 60), 'minute');
 	if (absolute < 86_400) return formatter.format(Math.round(seconds / 3_600), 'hour');
 	if (absolute < 604_800) return formatter.format(Math.round(seconds / 86_400), 'day');
-	return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short' }).format(date);
+	if (absolute < 2_629_746) return formatter.format(Math.round(seconds / 604_800), 'week');
+	if (absolute < 31_556_952) return formatter.format(Math.round(seconds / 2_629_746), 'month');
+	return formatter.format(Math.round(seconds / 31_556_952), 'year');
 }

@@ -67,21 +67,8 @@ export const actions: Actions = {
 			return fail(400, { message: 'Postingan tidak valid.' });
 		const source = await request.formData();
 		const caption = String(source.get('caption') ?? '').trim();
-		const location = String(source.get('location') ?? '').trim();
 		const body = new FormData();
 		body.set('caption', caption);
-		if (location) body.set('location', location);
-		const media = source.get('media');
-		if (media instanceof File && media.size > 0) {
-			if (media.size > 500 * 1024 * 1024) return fail(422, { message: 'Media maksimal 500 MB.' });
-			if (
-				!/^(image\/(jpeg|png)|video\/(mp4|quicktime|webm|x-msvideo|3gpp|x-matroska))$/.test(
-					media.type
-				)
-			)
-				return fail(422, { message: 'Format media tidak didukung.' });
-			body.set('media', media);
-		}
 		try {
 			await backendRequest(`posts/${postId}/update`, {
 				method: 'POST',

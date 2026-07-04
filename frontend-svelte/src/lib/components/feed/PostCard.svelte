@@ -1,7 +1,9 @@
 <script lang="ts">
-	import { Bookmark, Heart, MapPin, MessageCircle, Music2, Send } from '@lucide/svelte';
+	import { Bookmark, Heart, MapPin, MessageCircle, Send } from '@lucide/svelte';
 	import StoryAvatarLink from '$lib/components/story/StoryAvatarLink.svelte';
-	import VerifiedBadge from '$lib/components/ui/VerifiedBadge.svelte';
+	import UserBadges from '$lib/components/ui/UserBadges.svelte';
+	import SmartVideo from '$lib/components/media/SmartVideo.svelte';
+	import ViewportMusic from '$lib/components/media/ViewportMusic.svelte';
 	import { clientRequest } from '$lib/api/client';
 	import type { PostPreview } from '$lib/types/domain';
 
@@ -82,7 +84,7 @@
 			<a href={`/u/${post.user.username}`} class="author-copy">
 				<strong id={`post-${post.id}-author`}
 					>{post.user.fullName}
-					{#if post.user.badgeVerified}<VerifiedBadge />{/if}</strong
+					<UserBadges verified={post.user.badgeVerified} role={post.user.role} /></strong
 				>
 				<small>@{post.user.username} · {post.createdLabel}</small>
 			</a>
@@ -92,14 +94,18 @@
 	{#if post.location || post.music}
 		<div class="context-row">
 			{#if post.location}<span><MapPin size={13} />{post.location}</span>{/if}
-			{#if post.music}<span><Music2 size={13} />{post.music.title} — {post.music.artist}</span>{/if}
+			{#if post.music}<ViewportMusic
+					src={post.music.previewUrl}
+					title={post.music.title}
+					artist={post.music.artist}
+					start={post.music.startSeconds}
+					clipDuration={post.music.durationSeconds}
+				/>{/if}
 		</div>
 	{/if}
 
 	{#if post.isVideo}<div class="media">
-			<video src={post.mediaUrl} poster={post.thumbnailUrl} controls preload="metadata" playsinline
-				><track kind="captions" label="Takarir tidak tersedia" /></video
-			>
+			<SmartVideo src={post.mediaUrl} poster={post.thumbnailUrl} label={post.mediaAlt} />
 		</div>{:else}<a
 			class="media"
 			href={`/posts/${post.id}`}
@@ -227,16 +233,15 @@
 
 	.media {
 		display: block;
-		aspect-ratio: 4 / 4.25;
 		overflow: hidden;
 		background: var(--color-canvas-deep);
 	}
 
-	.media img,
-	.media video {
+	.media img {
+		display: block;
 		width: 100%;
-		height: 100%;
-		object-fit: cover;
+		max-height: 82vh;
+		object-fit: contain;
 	}
 
 	.actions,

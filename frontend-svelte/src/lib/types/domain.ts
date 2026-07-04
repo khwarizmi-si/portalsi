@@ -17,6 +17,7 @@ export interface StoryPreview {
 	id: number;
 	user: PortalUser;
 	isOwn?: boolean;
+	recommended?: boolean;
 }
 
 export interface PostPreview {
@@ -33,7 +34,13 @@ export interface PostPreview {
 	commentsCount: number;
 	isLiked: boolean;
 	isBookmarked: boolean;
-	music?: { title: string; artist: string };
+	music?: {
+		title: string;
+		artist: string;
+		previewUrl?: string;
+		startSeconds: number;
+		durationSeconds: number;
+	};
 }
 
 export interface AnnouncementPreview {

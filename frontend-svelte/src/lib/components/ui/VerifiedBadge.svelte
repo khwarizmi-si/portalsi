@@ -7,7 +7,8 @@
 
 <style>
 	:global(.badge) {
-		color: var(--color-secondary);
+		color: #1687e8;
+		filter: drop-shadow(0 1px 2px rgb(22 135 232 / 22%));
 		flex: none;
 	}
 </style>

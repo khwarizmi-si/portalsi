@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Edit3, Plus, Search, Users } from '@lucide/svelte';
+	import { Edit3, Plus, Search, Users, X } from '@lucide/svelte';
 	import Avatar from '$lib/components/ui/Avatar.svelte';
 	import SectionPage from '$lib/components/layout/SectionPage.svelte';
 	import type { PageProps } from './$types';
@@ -36,6 +36,10 @@
 		</div>{/snippet}
 	<div class="messages-shell surface">
 		<section class="inbox" aria-label="Daftar percakapan">
+			<div class="inbox-head">
+				<div><strong>Kotak masuk</strong><small>{data.chats.length} percakapan</small></div>
+				<a href="/messages/new" aria-label="Tulis pesan baru"><Edit3 size={17} /></a>
+			</div>
 			{#if data.specialGroups.length}<div class="special-groups">
 					<strong>Grup sekolah</strong>
 					<div>
@@ -50,7 +54,9 @@
 				><Search size={17} /><span class="sr-only">Cari percakapan</span><input
 					bind:value={query}
 					placeholder="Cari percakapan"
-				/></label
+				/>{#if query}<button onclick={() => (query = '')} aria-label="Hapus pencarian"
+						><X size={15} /></button
+					>{/if}</label
 			>
 			<div class="inbox-tabs">
 				<button class:active={filter === 'all'} onclick={() => (filter = 'all')}>Semua</button>
@@ -158,6 +164,31 @@
 	.inbox {
 		border-right: 1px solid var(--color-border);
 	}
+	.inbox-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 16px 16px 2px;
+	}
+	.inbox-head > div {
+		display: grid;
+	}
+	.inbox-head strong {
+		font-size: 0.9rem;
+	}
+	.inbox-head small {
+		color: var(--color-muted);
+		font-size: 0.66rem;
+	}
+	.inbox-head a {
+		display: grid;
+		width: 36px;
+		height: 36px;
+		place-items: center;
+		background: var(--color-primary-soft);
+		border-radius: 11px;
+		color: var(--color-primary-strong);
+	}
 	.chat-search {
 		display: flex;
 		height: 43px;
@@ -177,6 +208,17 @@
 		border: 0;
 		outline: 0;
 		font-size: 0.82rem;
+	}
+	.chat-search button {
+		display: grid;
+		width: 28px;
+		height: 28px;
+		padding: 0;
+		place-items: center;
+		background: transparent;
+		border: 0;
+		border-radius: 8px;
+		color: var(--color-muted);
 	}
 	.inbox-tabs {
 		display: flex;
