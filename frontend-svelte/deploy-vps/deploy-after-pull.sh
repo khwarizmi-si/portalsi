@@ -36,7 +36,7 @@ set -a
 set +a
 export NODE_ENV="${NODE_ENV:-production}"
 export HOST="${HOST:-127.0.0.1}"
-export PORT="${PORT:-3000}"
+export PORT="${PORT:-3100}"
 export BODY_SIZE_LIMIT="${BODY_SIZE_LIMIT:-512M}"
 
 echo "==> Restart ${APP_NAME}"

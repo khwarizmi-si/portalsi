@@ -10,7 +10,7 @@ set -euo pipefail
 
 # ==== Konfigurasi default — boleh diubah lewat env ====
 DOMAIN="${DOMAIN:-app.portalsi.com}"
-PORT="${PORT:-3000}"
+PORT="${PORT:-3100}"
 APP_NAME="${APP_NAME:-portalsi-web}"
 NODE_MAJOR="${NODE_MAJOR:-24}"
 # ======================================================
