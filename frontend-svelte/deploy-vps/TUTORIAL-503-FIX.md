@@ -223,3 +223,51 @@ pm2 logs portalsi-web --lines 100
 tail -n 100 /usr/local/lsws/logs/error.log
 tail -n 100 /usr/local/lsws/logs/stderr.log
 ```
+
+---
+
+## 8. Error "Cross-site POST form submissions are forbidden" (CSRF)
+
+Kalau situs sudah tampil (Node hidup) tetapi setiap submit form (mis. login) menampilkan
+**"Cross-site POST form submissions are forbidden"**, itu proteksi CSRF bawaan SvelteKit.
+
+Penyebab: di belakang OpenLiteSpeed + Cloudflare, header `Origin` request diubah/dihapus,
+sehingga cek origin bawaan SvelteKit menganggap POST datang dari lintas-situs lalu memblokir.
+
+Solusi proyek ini: skrip `frontend-svelte/scripts/patch-csrf.mjs` menonaktifkan dua cek
+origin pada hasil build (bawaan SvelteKit + cek di `hooks.server.ts`). Proteksi CSRF tetap
+ada lewat cookie `SameSite=Lax`. Skrip ini **idempoten** (aman diulang).
+
+Bug sebelumnya: `npm run build` tidak memanggil skrip ini, jadi build production tidak
+pernah dipatch → semua POST diblokir. Sekarang `package.json` sudah diperbaiki menjadi:
+
+```json
+"build": "vite build && node scripts/patch-csrf.mjs"
+```
+
+Sehingga setiap build (termasuk `deploy-after-pull.sh` dan `npm run package`) otomatis
+menerapkan patch.
+
+Perbaikan langsung di server (tanpa rebuild penuh), memakai build yang sudah ada:
+
+```bash
+cd /home/app.portalsi.com/public_html/frontend-svelte
+node scripts/patch-csrf.mjs        # patch build/server yang ada; harus cetak "2 patch diterapkan"
+set -a; . ./.env.production; set +a
+pm2 restart portalsi-web --update-env || pm2 start build/index.js --name portalsi-web --update-env
+pm2 save
+```
+
+Atau, setelah menarik `package.json` terbaru, cukup jalankan ulang deploy penuh:
+
+```bash
+cd /home/app.portalsi.com/public_html
+git pull --ff-only
+frontend-svelte/deploy-vps/deploy-after-pull.sh   # build kini sudah termasuk patch CSRF
+```
+
+Uji: buka situs, lakukan login/submit form — tidak boleh muncul lagi pesan CSRF.
+
+Catatan versi Node: proyek menargetkan Node 24, sedangkan PM2 Anda berjalan di Node 20
+(via nvm). Build & run tetap jalan, tetapi untuk konsisten sebaiknya pakai Node 24 sistem
+(lihat bagian 5.3) agar `pm2 startup` dan `npm ci` memakai runtime yang sama.
