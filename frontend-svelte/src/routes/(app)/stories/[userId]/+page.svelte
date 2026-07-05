@@ -7,17 +7,12 @@
 		LoaderCircle,
 		MessageCircle,
 		Music2,
-		Pause,
-		Play,
 		Trash2,
-		Volume2,
-		VolumeX,
 		X
 	} from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { clientRequest } from '$lib/api/client';
 	import Avatar from '$lib/components/ui/Avatar.svelte';
-	import UserBadges from '$lib/components/ui/UserBadges.svelte';
 	import { storyViewersResponseSchema } from '$lib/schemas/story';
 	import type { PageProps } from './$types';
 	import { confirmAction } from '$lib/ui/confirm';
@@ -226,21 +221,8 @@
 				aria-label={`Buka profil @${data.user.username}`}
 			>
 				<Avatar name={data.user.username} src={data.user.avatarUrl ?? undefined} size="sm" />
-				<span
-					><strong
-						>{data.user.fullName}<UserBadges
-							verified={data.user.badgeVerified}
-							role={data.user.role}
-						/></strong
-					><small>@{data.user.username} · {story?.createdLabel ?? ''}</small></span
-				>
+				<span><small>@{data.user.username} · {story?.createdLabel ?? ''}</small></span>
 			</a>
-			<button onclick={() => (paused = !paused)} aria-label={paused ? 'Lanjutkan' : 'Jeda'}
-				>{#if paused}<Play size={18} />{:else}<Pause size={18} />{/if}</button
-			>
-			<button onclick={() => (muted = !muted)} aria-label={muted ? 'Aktifkan suara' : 'Bisukan'}
-				>{#if muted}<VolumeX size={17} />{:else}<Volume2 size={17} />{/if}</button
-			>
 			<a class="close" href="/home" aria-label="Tutup cerita"><X size={19} /></a>
 		</header>
 		{#if story && story.type === 'video' && story.mediaUrl}

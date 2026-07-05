@@ -25,6 +25,18 @@
 	let loadError = $state('');
 	const visiblePeople = $derived(searchQuery.trim().length >= 2 ? livePeople : data.people);
 
+	// Sinkronkan grid saat filter/sort berganti (navigasi client-side) — tanpa perlu refresh manual.
+	$effect(() => {
+		const incomingPosts = data.posts;
+		void data.sort;
+		untrack(() => {
+			posts = [...incomingPosts];
+			nextPage = data.page + 1;
+			hasMore = data.hasNext;
+			loadError = '';
+		});
+	});
+
 	$effect(() => {
 		const query = searchQuery.trim();
 		if (query.length < 2) {
@@ -135,11 +147,35 @@
 				</div>{/each}{#if searchMessage}<p>{searchMessage}</p>{/if}
 		</section>{/if}
 	{#if showFilters}<nav class="filters surface" id="filters" aria-label="Filter jelajah">
+			<span class="filters-label"><SlidersHorizontal size={14} /> Urutkan</span>
 			<a class:active={data.sort === 'random'} href={filterHref('random')}>Untuk Anda</a>
 			<a class:active={data.sort === 'newest'} href={filterHref('newest')}>Terbaru</a>
 			<a class:active={data.sort === 'popular'} href={filterHref('popular')}>Populer</a>
-			<a href="#people"><Users size={15} /> Pengguna</a>
 		</nav>{/if}
+	<section class="people surface" id="people">
+		<h2><Users size={16} /> {data.query ? `Hasil pengguna untuk “${data.query}”` : 'Orang yang mungkin Anda kenal'}</h2>
+		{#if data.peopleUnavailable}<p class="people-error">
+				Sebagian hasil pengguna belum dapat dimuat.
+			</p>{/if}
+		<div>
+			{#each data.people as user (user.id)}<article>
+					<StoryAvatarLink
+						userId={user.id}
+						username={user.username}
+						name={user.fullName}
+						avatarUrl={user.avatarUrl}
+						size="md"
+						hasStory={user.hasStory}
+						seen={user.storyViewed}
+					/><a href={`/u/${user.username}`}
+						><strong
+							>{user.fullName}<UserBadges verified={user.badgeVerified} role={user.role} /></strong
+						><small>@{user.username}</small></a
+					>
+				</article>{/each}
+		</div>
+		{#if data.people.length === 0}<p class="empty">Tidak ada pengguna yang cocok.</p>{/if}
+	</section>
 	<section class="explore-grid" aria-label="Konten jelajah">
 		{#each posts as post, index (post.id)}
 			<a href={`/posts/${post.id}`} class:wide={index % 7 === 0}>
@@ -177,30 +213,6 @@
 		label="Memuat jelajah berikutnya…"
 	/>
 	{#if loadError}<p class="service-note" aria-live="polite">{loadError}</p>{/if}
-	<section class="people surface" id="people">
-		<h2>{data.query ? `Hasil pengguna untuk “${data.query}”` : 'Orang yang mungkin Anda kenal'}</h2>
-		{#if data.peopleUnavailable}<p class="people-error">
-				Sebagian hasil pengguna belum dapat dimuat.
-			</p>{/if}
-		<div>
-			{#each data.people as user (user.id)}<article>
-					<StoryAvatarLink
-						userId={user.id}
-						username={user.username}
-						name={user.fullName}
-						avatarUrl={user.avatarUrl}
-						size="md"
-						hasStory={user.hasStory}
-						seen={user.storyViewed}
-					/><a href={`/u/${user.username}`}
-						><strong
-							>{user.fullName}<UserBadges verified={user.badgeVerified} role={user.role} /></strong
-						><small>@{user.username}</small></a
-					>
-				</article>{/each}
-		</div>
-		{#if data.people.length === 0}<p class="empty">Tidak ada pengguna yang cocok.</p>{/if}
-	</section>
 </SectionPage>
 
 <style>
@@ -307,11 +319,25 @@
 	}
 	.filters {
 		display: flex;
+		align-items: center;
 		gap: 8px;
 		margin-bottom: 16px;
-		padding: 10px;
+		padding: 10px 12px;
+		border-radius: 14px;
 		overflow-x: auto;
 		scrollbar-width: none;
+	}
+	.filters-label {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		padding-right: 2px;
+		color: var(--color-muted);
+		font-size: 0.68rem;
+		font-weight: 750;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		white-space: nowrap;
 	}
 	.filters a {
 		display: flex;
@@ -396,6 +422,9 @@
 		padding: 18px;
 	}
 	.people h2 {
+		display: flex;
+		align-items: center;
+		gap: 7px;
 		margin: 0 0 14px;
 		font-size: 0.95rem;
 	}

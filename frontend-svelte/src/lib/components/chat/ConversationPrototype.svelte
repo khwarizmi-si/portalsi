@@ -181,6 +181,14 @@
 		statusMessage = '';
 	}
 
+	function composerKeydown(event: KeyboardEvent) {
+		// Desktop: Enter mengirim, Shift+Enter baris baru. Di layar sentuh, Enter tetap baris baru.
+		if (event.key !== 'Enter' || event.shiftKey) return;
+		if (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches) return;
+		event.preventDefault();
+		(event.currentTarget as HTMLFormElement).requestSubmit();
+	}
+
 	async function send(event: SubmitEvent) {
 		event.preventDefault();
 		if ((!content.trim() && !media) || sending) return;
@@ -352,7 +360,7 @@
 				><X size={15} /></button
 			>
 		</div>{/if}
-	<form class="composer" onsubmit={send}>
+	<form class="composer" onsubmit={send} onkeydown={composerKeydown}>
 		<label class="media-button" aria-label="Pilih media"
 			><ImagePlus size={20} /><input
 				type="file"
@@ -387,6 +395,14 @@
 		grid-template-rows: auto 1fr auto auto auto;
 		margin: 20px auto;
 		overflow: hidden;
+	}
+	@media (max-width: 767px) {
+		.conversation-page {
+			width: 100%;
+			height: 100dvh;
+			margin: 0;
+			border-radius: 0;
+		}
 	}
 	.conversation-page > header {
 		display: flex;

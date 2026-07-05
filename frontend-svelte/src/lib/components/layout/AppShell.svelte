@@ -38,6 +38,8 @@
 		/^\/(create\/|messages\/(direct|groups|new)|stories\/|groups\/)/.test(page.url.pathname)
 	);
 	const showBack = $derived(!topLevel.has(page.url.pathname) && !hasOwnBack);
+	// Sembunyikan bottom-nav di halaman percakapan agar tidak menghalangi kotak pesan & tombol kirim.
+	const hideBottomNav = $derived(/^\/messages\/(direct|groups)\/[^/]+/.test(page.url.pathname));
 
 	onMount(() => {
 		let active = true;
@@ -100,7 +102,7 @@
 	}
 </script>
 
-<div class="app-shell">
+<div class="app-shell" class:no-bottom-nav={hideBottomNav}>
 	<aside class="sidebar" aria-label="Navigasi utama">
 		<a class="brand" href="/home" aria-label="Portal SI — Beranda">
 			<img src="/assets/logo-mark.png" alt="" />
@@ -162,20 +164,23 @@
 		{@render children()}
 	</main>
 
-	<nav class="bottom-nav" aria-label="Navigasi utama seluler">
-		{#each mobile as item (item.href)}
-			<a
-				href={item.href}
-				class:active={active(item.href)}
-				class:create={item.create}
-				aria-current={active(item.href) ? 'page' : undefined}
-			>
-				<span><item.icon size={item.create ? 24 : 21} strokeWidth={item.create ? 2.8 : 2.2} /></span
+	{#if !hideBottomNav}
+		<nav class="bottom-nav" aria-label="Navigasi utama seluler">
+			{#each mobile as item (item.href)}
+				<a
+					href={item.href}
+					class:active={active(item.href)}
+					class:create={item.create}
+					aria-current={active(item.href) ? 'page' : undefined}
 				>
-				<small>{item.label}</small>
-			</a>
-		{/each}
-	</nav>
+					<span
+						><item.icon size={item.create ? 24 : 21} strokeWidth={item.create ? 2.8 : 2.2} /></span
+					>
+					<small>{item.label}</small>
+				</a>
+			{/each}
+		</nav>
+	{/if}
 </div>
 
 <style>
@@ -422,6 +427,9 @@
 	.app-main {
 		min-width: 0;
 		padding-bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + 16px);
+	}
+	.app-shell.no-bottom-nav .app-main {
+		padding-bottom: 0;
 	}
 	.page-back {
 		position: relative;
