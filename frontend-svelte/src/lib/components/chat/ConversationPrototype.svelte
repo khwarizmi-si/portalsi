@@ -70,7 +70,9 @@
 	let replyingTo = $state<{ id: number; name: string } | null>(null);
 
 	function mediaKind(url: string) {
-		const pathname = new URL(url, window.location.origin).pathname.toLowerCase();
+		// Jangan pakai window.location di sini: fungsi ini dipanggil saat render (SSR),
+		// dan `window` tidak ada di server → ReferenceError → halaman 500.
+		const pathname = url.split(/[?#]/)[0].toLowerCase();
 		if (/\.(jpg|jpeg|png|gif|webp)$/.test(pathname)) return 'image';
 		if (/\.(mp4|mov|webm)$/.test(pathname)) return 'video';
 		return 'file';
