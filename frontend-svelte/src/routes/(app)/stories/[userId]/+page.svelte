@@ -220,15 +220,21 @@
 				>{/each}
 		</div>
 		<header>
-			<Avatar name={data.user.username} src={data.user.avatarUrl ?? undefined} size="sm" />
-			<span
-				><strong
-					>{data.user.fullName}<UserBadges
-						verified={data.user.badgeVerified}
-						role={data.user.role}
-					/></strong
-				><small>@{data.user.username} · {story?.createdLabel ?? ''}</small></span
+			<a
+				class="story-user"
+				href={data.isOwn ? '/profile' : `/u/${data.user.username}`}
+				aria-label={`Buka profil @${data.user.username}`}
 			>
+				<Avatar name={data.user.username} src={data.user.avatarUrl ?? undefined} size="sm" />
+				<span
+					><strong
+						>{data.user.fullName}<UserBadges
+							verified={data.user.badgeVerified}
+							role={data.user.role}
+						/></strong
+					><small>@{data.user.username} · {story?.createdLabel ?? ''}</small></span
+				>
+			</a>
 			<button onclick={() => (paused = !paused)} aria-label={paused ? 'Lanjutkan' : 'Jeda'}
 				>{#if paused}<Play size={18} />{:else}<Pause size={18} />{/if}</button
 			>
@@ -477,9 +483,15 @@
 		border-radius: 14px;
 		backdrop-filter: blur(12px);
 	}
-	article > header > span {
-		display: grid;
+	.story-user {
+		display: flex;
+		align-items: center;
+		gap: 8px;
 		margin-right: auto;
+		color: inherit;
+	}
+	.story-user span {
+		display: grid;
 	}
 	article > header strong {
 		font-size: 0.78rem;

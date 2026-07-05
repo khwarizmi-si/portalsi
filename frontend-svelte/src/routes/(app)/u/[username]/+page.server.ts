@@ -61,7 +61,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 			followingCount: profile.following_count,
 			postsCount: profile.posts_count,
 			message: profile.message ?? null,
-			hasStory: Boolean(profileStory),
+			hasStory: profile.has_story ?? Boolean(profileStory),
 			storyViewed: profileStory?.is_viewed ?? false
 		},
 		posts: profile.recent_posts.map((post) => ({

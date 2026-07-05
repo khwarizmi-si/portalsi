@@ -36,6 +36,7 @@ export const profileResponseSchema = z
 		is_verified: booleanish.catch(false),
 		role: userRoleSchema.catch('other'),
 		is_private: booleanish.catch(false),
+		has_story: booleanish.optional().catch(false),
 		followers_count: z.coerce.number().int().nonnegative().catch(0),
 		following_count: z.coerce.number().int().nonnegative().catch(0),
 		posts_count: z.coerce.number().int().nonnegative().catch(0),
