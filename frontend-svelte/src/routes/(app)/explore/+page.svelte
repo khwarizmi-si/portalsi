@@ -18,6 +18,7 @@
 	let searching = $state(false);
 	let searchMessage = $state('');
 	let showFilters = $state(false);
+	let showPeople = $state(false);
 	let posts = $state(untrack(() => [...data.posts]));
 	let nextPage = $state(untrack(() => data.page + 1));
 	let hasMore = $state(untrack(() => data.hasNext));
@@ -151,8 +152,15 @@
 			<a class:active={data.sort === 'random'} href={filterHref('random')}>Untuk Anda</a>
 			<a class:active={data.sort === 'newest'} href={filterHref('newest')}>Terbaru</a>
 			<a class:active={data.sort === 'popular'} href={filterHref('popular')}>Populer</a>
+			<button
+				type="button"
+				class="people-toggle"
+				class:active={showPeople}
+				aria-pressed={showPeople}
+				onclick={() => (showPeople = !showPeople)}><Users size={14} /> Orang</button
+			>
 		</nav>{/if}
-	<section class="people surface" id="people">
+	{#if showPeople || data.query}<section class="people surface" id="people">
 		<h2><Users size={16} /> {data.query ? `Hasil pengguna untuk “${data.query}”` : 'Orang yang mungkin Anda kenal'}</h2>
 		{#if data.peopleUnavailable}<p class="people-error">
 				Sebagian hasil pengguna belum dapat dimuat.
@@ -175,7 +183,7 @@
 				</article>{/each}
 		</div>
 		{#if data.people.length === 0}<p class="empty">Tidak ada pengguna yang cocok.</p>{/if}
-	</section>
+	</section>{/if}
 	<section class="explore-grid" aria-label="Konten jelajah">
 		{#each posts as post, index (post.id)}
 			<a href={`/posts/${post.id}`} class:wide={index % 7 === 0}>
@@ -339,21 +347,27 @@
 		letter-spacing: 0.05em;
 		white-space: nowrap;
 	}
-	.filters a {
+	.filters a,
+	.people-toggle {
 		display: flex;
 		align-items: center;
 		gap: 5px;
-		min-height: 38px;
+		min-height: 31px;
 		flex: none;
-		padding: 0 15px;
+		padding: 0 12px;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: 999px;
 		color: var(--color-muted);
-		font-size: 0.8rem;
+		font-size: 0.73rem;
 		font-weight: 670;
+		cursor: pointer;
 	}
-	.filters a.active {
+	.people-toggle {
+		margin-left: auto;
+	}
+	.filters a.active,
+	.people-toggle.active {
 		background: var(--color-text);
 		border-color: var(--color-text);
 		color: white;
@@ -374,6 +388,16 @@
 	.explore-grid > a.wide {
 		grid-column: span 2;
 		grid-row: span 2;
+	}
+	@media (min-width: 768px) {
+		/* Desktop khusus: 4 kolom sama besar, mengalir ke bawah — tanpa tile lebar. */
+		.explore-grid {
+			grid-template-columns: repeat(4, minmax(0, 1fr));
+		}
+		.explore-grid > a.wide {
+			grid-column: auto;
+			grid-row: auto;
+		}
 	}
 	.explore-grid img,
 	.explore-grid video {
@@ -418,7 +442,7 @@
 		font-size: 0.68rem;
 	}
 	.people {
-		margin-top: 18px;
+		margin: 4px 0 18px;
 		padding: 18px;
 	}
 	.people h2 {

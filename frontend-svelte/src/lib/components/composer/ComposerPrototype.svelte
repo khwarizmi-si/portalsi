@@ -389,11 +389,13 @@
 	function updateMusicStart(event: Event) {
 		const value = Number((event.currentTarget as HTMLInputElement).value);
 		musicStartSeconds = Math.min(value, musicEndSeconds - 5);
+		playPreviewRange();
 	}
 
 	function updateMusicEnd(event: Event) {
 		const value = Number((event.currentTarget as HTMLInputElement).value);
 		musicEndSeconds = Math.max(value, musicStartSeconds + 5);
+		playPreviewRange();
 	}
 	function formatMusicTime(totalSeconds: number) {
 		const safe = Number.isFinite(totalSeconds) ? Math.max(0, Math.round(totalSeconds)) : 0;
@@ -410,23 +412,33 @@
 		musicPreviewPlaying = false;
 	}
 
+	// Putar pratinjau tepat pada rentang terpilih [start, end], lalu loop.
+	function playPreviewRange() {
+		if (!musicAudio) return;
+		musicAudio.currentTime = musicStartSeconds;
+		musicPreviewPlaying = true;
+		void musicAudio.play().catch(() => undefined);
+	}
+
 	function toggleMusicPreview() {
 		if (!musicAudio) return;
 		if (musicAudio.paused) {
-			if (musicAudio.currentTime >= musicPreviewSeconds) musicAudio.currentTime = 0;
+			if (musicAudio.currentTime < musicStartSeconds || musicAudio.currentTime >= musicEndSeconds)
+				musicAudio.currentTime = musicStartSeconds;
 			void musicAudio.play();
 		} else musicAudio.pause();
 	}
 
 	function startMusicPreview(event: Event) {
 		const audio = event.currentTarget as HTMLAudioElement;
-		if (audio.currentTime >= musicPreviewSeconds) audio.currentTime = 0;
+		if (audio.currentTime < musicStartSeconds || audio.currentTime >= musicEndSeconds)
+			audio.currentTime = musicStartSeconds;
 	}
 
 	function limitMusicPreview(event: Event) {
 		const audio = event.currentTarget as HTMLAudioElement;
-		if (audio.currentTime >= musicPreviewSeconds) {
-			audio.currentTime = 0;
+		if (audio.currentTime >= musicEndSeconds || audio.currentTime < musicStartSeconds - 0.25) {
+			audio.currentTime = musicStartSeconds;
 			void audio.play().catch(() => undefined);
 		}
 	}
@@ -735,6 +747,10 @@
 							preload="metadata"
 							onloadedmetadata={(event) => {
 								musicPreviewSeconds = Math.max(1, Math.floor(event.currentTarget.duration || 30));
+								// Batasi rentang ke durasi pratinjau nyata agar akhir loop selalu tercapai.
+								musicTotalSeconds = Math.min(musicTotalSeconds, musicPreviewSeconds);
+								musicEndSeconds = Math.min(musicEndSeconds, musicPreviewSeconds);
+								if (musicStartSeconds >= musicEndSeconds - 1) musicStartSeconds = 0;
 							}}
 							onplay={(event) => {
 								startMusicPreview(event);

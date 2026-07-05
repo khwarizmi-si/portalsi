@@ -4,14 +4,16 @@
 		src,
 		poster,
 		label = 'Video postingan',
-		fill = false
-	}: { src: string; poster?: string; label?: string; fill?: boolean } = $props();
+		fill = false,
+		autoplay = false
+	}: { src: string; poster?: string; label?: string; fill?: boolean; autoplay?: boolean } = $props();
 	let video: HTMLVideoElement;
 	let root: HTMLDivElement;
 	let loading = $state(true);
 	let failed = $state(false);
 	let playing = $state(false);
-	let muted = $state(false);
+	// Autoplay hanya diizinkan browser jika muted; mulai muted lalu user bisa aktifkan suara.
+	let muted = $state(autoplay);
 	let current = $state(0);
 	let duration = $state(0);
 	let mediaAspect = $state('16 / 9');
@@ -50,7 +52,9 @@
 		bind:this={video}
 		{src}
 		{poster}
-		preload="metadata"
+		{autoplay}
+		bind:muted
+		preload={autoplay ? 'auto' : 'metadata'}
 		playsinline
 		aria-label={label}
 		onclick={togglePlayback}

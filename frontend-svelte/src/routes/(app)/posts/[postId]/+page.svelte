@@ -150,7 +150,7 @@
 			{#if form?.message}<p class:success={form.success} class="notice" role="status">
 					{form.message}
 				</p>{/if}
-			<PostCard post={data.post} zoomable />
+			<PostCard post={data.post} zoomable autoplay />
 			<details class="likers surface">
 				<summary
 					><Users size={16} /> {data.likers.length.toLocaleString('id-ID')} orang menyukai</summary

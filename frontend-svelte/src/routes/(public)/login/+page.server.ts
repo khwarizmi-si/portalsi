@@ -50,6 +50,7 @@ export const actions: Actions = {
 			throw error;
 		}
 
-		redirect(303, safeRedirectTarget(url.searchParams.get('next')));
+		const next = String(formData.get('next') ?? '') || url.searchParams.get('next');
+		redirect(303, safeRedirectTarget(next));
 	}
 };

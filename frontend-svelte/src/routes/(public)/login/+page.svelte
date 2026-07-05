@@ -1,10 +1,14 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import { Eye, LockKeyhole, UserRound } from '@lucide/svelte';
 	import AuthFields from '$lib/components/auth/AuthFields.svelte';
 	import AuthShell from '$lib/components/auth/AuthShell.svelte';
 	import type { PageProps } from './$types';
 	let { form }: PageProps = $props();
 	let revealPassword = $state(false);
+	// Tujuan setelah login (mis. /login?next=/posts/12). Diteruskan lewat hidden input
+	// agar tetap terbawa walau query pada aksi form tak konsisten.
+	const nextTarget = $derived(page.url.searchParams.get('next') ?? '');
 </script>
 
 <svelte:head><title>Masuk — Portal SI</title></svelte:head>
@@ -20,6 +24,7 @@
 				Coba lagi dalam {form.retryAfterSeconds} detik.{/if}
 		</div>{/if}
 	<form method="POST">
+		{#if nextTarget}<input type="hidden" name="next" value={nextTarget} />{/if}
 		<AuthFields>
 			<label>
 				<span>Username atau email</span>

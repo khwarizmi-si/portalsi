@@ -9,7 +9,11 @@
 	import type { PostPreview } from '$lib/types/domain';
 	import MentionText from '$lib/components/ui/MentionText.svelte';
 
-	let { post, zoomable = false }: { post: PostPreview; zoomable?: boolean } = $props();
+	let {
+		post,
+		zoomable = false,
+		autoplay = false
+	}: { post: PostPreview; zoomable?: boolean; autoplay?: boolean } = $props();
 	let lightboxOpen = $state(false);
 	function initialInteractionState() {
 		return {
@@ -108,7 +112,12 @@
 	{/if}
 
 	{#if post.isVideo}<div class="media" class:zoomable>
-			<SmartVideo src={post.mediaUrl} poster={post.thumbnailUrl} label={post.mediaAlt} />
+			<SmartVideo
+				src={post.mediaUrl}
+				poster={post.thumbnailUrl}
+				label={post.mediaAlt}
+				{autoplay}
+			/>
 			{#if zoomable}<button
 					class="expand-media"
 					onclick={() => (lightboxOpen = true)}

@@ -515,11 +515,11 @@
 		grid-template-columns: 1fr auto;
 		gap: 10px;
 	}
-	.add-member button[disabled] {
+	.add-row button[disabled] {
 		opacity: 0.55;
 	}
-	.panel form > button,
-	.add-member button {
+	.panel > form > button,
+	.add-row button {
 		min-height: 40px;
 		padding: 0 14px;
 		background: var(--color-primary);
