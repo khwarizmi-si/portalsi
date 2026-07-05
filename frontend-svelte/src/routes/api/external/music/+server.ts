@@ -2,23 +2,17 @@ import { env } from '$env/dynamic/private';
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
 
-const artworkSchema = z
-	.object({
-		'150x150': z.string().url().optional(),
-		'480x480': z.string().url().optional(),
-		'1000x1000': z.string().url().optional()
-	})
-	.nullish();
+// Apple Music / iTunes Search API. Preview resmi 30 detik.
 const resultSchema = z.object({
-	data: z.array(
+	results: z.array(
 		z
 			.object({
-				id: z.string().min(1),
-				title: z.string().min(1),
-				duration: z.coerce.number().positive(),
-				is_streamable: z.boolean().optional().default(true),
-				user: z.object({ name: z.string().min(1) }),
-				artwork: artworkSchema
+				trackId: z.coerce.number(),
+				trackName: z.string().min(1),
+				artistName: z.string().min(1),
+				previewUrl: z.string().url().optional(),
+				artworkUrl100: z.string().url().optional(),
+				trackTimeMillis: z.coerce.number().optional()
 			})
 			.passthrough()
 	)
@@ -33,34 +27,33 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 	const cached = cache.get(key);
 	if (cached && cached.expires > Date.now()) return privateResponse(cached.value);
 	try {
-		const target = new URL(env.AUDIUS_API_URL?.trim() || 'https://api.audius.co/v1/tracks/search');
-		if (target.protocol !== 'https:' || target.hostname !== 'api.audius.co')
+		const target = new URL(env.ITUNES_API_URL?.trim() || 'https://itunes.apple.com/search');
+		if (target.protocol !== 'https:' || target.hostname !== 'itunes.apple.com')
 			throw new Error('Origin not allowed');
-		const appName = (env.AUDIUS_APP_NAME?.trim() || 'portal-si').slice(0, 40);
-		target.searchParams.set('query', query);
-		target.searchParams.set('limit', '8');
-		target.searchParams.set('app_name', appName);
+		target.searchParams.set('term', query);
+		target.searchParams.set('media', 'music');
+		target.searchParams.set('entity', 'song');
+		target.searchParams.set('limit', '12');
 		const upstream = await fetch(target, {
 			headers: { Accept: 'application/json' },
 			signal: AbortSignal.timeout(8_000)
 		});
 		if (!upstream.ok) throw new Error('Upstream failed');
 		const parsed = resultSchema.parse(await upstream.json());
-		const streamBase = new URL('/v1/tracks/', target.origin);
 		const value = {
-			tracks: parsed.data
-				.filter((track) => track.is_streamable && track.duration >= 5)
+			tracks: parsed.results
+				.filter((track) => Boolean(track.previewUrl))
+				.slice(0, 8)
 				.map((track) => ({
-					id: track.id,
-					title: track.title,
-					artist: track.user.name,
-					durationSeconds: Math.max(5, Math.round(track.duration)),
-					previewUrl: `${streamBase}${encodeURIComponent(track.id)}/stream?app_name=${encodeURIComponent(appName)}`,
-					artworkUrl:
-						track.artwork?.['480x480'] ??
-						track.artwork?.['150x150'] ??
-						track.artwork?.['1000x1000'] ??
-						null
+					id: String(track.trackId),
+					title: track.trackName,
+					artist: track.artistName,
+					// Preview iTunes = 30 detik.
+					durationSeconds: 30,
+					previewUrl: track.previewUrl as string,
+					artworkUrl: track.artworkUrl100
+						? track.artworkUrl100.replace('100x100bb', '300x300bb').replace('100x100', '300x300')
+						: null
 				}))
 		};
 		cache.set(key, { expires: Date.now() + 10 * 60_000, value });
