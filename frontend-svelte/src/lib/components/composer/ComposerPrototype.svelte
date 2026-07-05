@@ -61,6 +61,9 @@
 	let filter = $state<'normal' | 'bright' | 'warm' | 'mono' | 'contrast'>('normal');
 	let locationResults = $state<Array<{ id: number; label: string }>>([]);
 	let locationSearching = $state(false);
+	// true setelah user memilih satu lokasi: hentikan pencarian & sembunyikan saran
+	// sampai user mengetik lagi (atau menekan X).
+	let locationChosen = $state(false);
 	let musicSearching = $state(false);
 	let musicQuery = $state('');
 	let musicResults = $state<
@@ -126,7 +129,7 @@
 
 	$effect(() => {
 		const query = location.trim();
-		if (kind === 'story' || query.length < 3) {
+		if (kind === 'story' || locationChosen || query.length < 3) {
 			locationResults = [];
 			locationSearching = false;
 			return;
@@ -201,6 +204,7 @@
 				}
 				caption = draft.caption ?? '';
 				location = draft.location ?? '';
+				locationChosen = Boolean(location.trim());
 				file = draft.file instanceof File ? draft.file : null;
 				selectedMusic = draft.music ?? null;
 				musicQuery = selectedMusic?.title ?? '';
@@ -251,7 +255,10 @@
 
 	async function saveDraft() {
 		try {
-			await writeDraft({
+			// PENTING: nilai $state adalah Proxy; IndexedDB (structured clone) menolak Proxy
+			// (DataCloneError) sehingga draft gagal tersimpan. $state.snapshot mengubahnya jadi
+			// objek biasa. File tetap dipertahankan.
+			const draft = $state.snapshot({
 				caption,
 				location,
 				file,
@@ -262,7 +269,8 @@
 				musicStartSeconds,
 				musicDurationSeconds,
 				savedAt: new Date().toISOString()
-			});
+			}) as Draft;
+			await writeDraft(draft);
 			message = 'Draft dan media disimpan di perangkat ini.';
 		} catch {
 			message = 'Draft belum dapat disimpan di perangkat ini.';
@@ -389,8 +397,10 @@
 		musicQuery = track.title;
 		musicResults = [];
 		musicStartSeconds = 0;
-		musicEndSeconds = 15;
-		musicTotalSeconds = 30;
+		// Default pilih SELURUH durasi pratinjau; nilai ini di-clamp ke durasi asli
+		// oleh onloadedmetadata. (Pratinjau iTunes memang maksimal ~30 dtk dari Apple.)
+		musicEndSeconds = 90;
+		musicTotalSeconds = 90;
 		musicPreviewPlaying = false;
 	}
 
@@ -623,21 +633,38 @@
 						bind:value={location}
 						maxlength="255"
 						placeholder="Contoh: Denpasar"
+						oninput={() => (locationChosen = false)}
 						onkeydown={(event) => {
 							if (event.key === 'Enter') event.preventDefault();
 						}}
-					/>{#if locationSearching}<LoaderCircle class="field-spinner" size={16} />{/if}</label
+					/>{#if locationSearching}<LoaderCircle
+							class="field-spinner"
+							size={16}
+						/>{:else if location.trim()}<button
+							type="button"
+							class="field-clear"
+							onclick={() => {
+								location = '';
+								locationChosen = false;
+								locationResults = [];
+							}}
+							aria-label="Hapus lokasi">×</button
+						>{/if}</label
 				><small class="attribution"
 					>Pencarian © <a
 						href="https://www.openstreetmap.org/copyright"
 						target="_blank"
 						rel="noreferrer">OpenStreetMap contributors</a
 					></small
-				>{#if locationResults.length}<div class="suggestions" aria-label="Saran lokasi">
+				>{#if locationResults.length && !locationChosen}<div
+						class="suggestions"
+						aria-label="Saran lokasi"
+					>
 						{#each locationResults as place (place.id)}<button
 								onclick={() => {
 									location = place.label;
 									locationResults = [];
+									locationChosen = true;
 								}}><MapPin size={13} /> {place.label}</button
 							>{/each}
 					</div>{/if}{/if}
@@ -1003,6 +1030,23 @@
 		bottom: 15px;
 		color: var(--color-primary);
 		animation: spin 0.75s linear infinite;
+	}
+	.field-clear {
+		position: absolute;
+		right: 8px;
+		bottom: 9px;
+		display: grid;
+		width: 26px;
+		height: 26px;
+		place-items: center;
+		padding: 0;
+		background: var(--color-surface-soft);
+		border: 0;
+		border-radius: 50%;
+		color: var(--color-muted);
+		font-size: 1.1rem;
+		line-height: 1;
+		cursor: pointer;
 	}
 	@keyframes spin {
 		to {

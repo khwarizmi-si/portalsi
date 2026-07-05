@@ -1,10 +1,81 @@
 <script lang="ts">
-	import { ArrowLeft, Crown, Shield, UserMinus, UserPlus, Volume2, VolumeX } from '@lucide/svelte';
+	import { env } from '$env/dynamic/public';
+	import {
+		ArrowLeft,
+		Crown,
+		LoaderCircle,
+		Search,
+		Shield,
+		UserMinus,
+		UserPlus,
+		Volume2,
+		VolumeX,
+		X
+	} from '@lucide/svelte';
 	import Avatar from '$lib/components/ui/Avatar.svelte';
+	import UserBadges from '$lib/components/ui/UserBadges.svelte';
 	import VerifiedBadge from '$lib/components/ui/VerifiedBadge.svelte';
+	import { clientRequest } from '$lib/api/client';
+	import { mapCompactUser } from '$lib/api/mappers';
+	import { userSearchResponseSchema } from '$lib/schemas/post';
 	import { confirmFormSubmit } from '$lib/ui/confirm';
+	import type { PortalUser } from '$lib/types/domain';
 	import type { PageProps } from './$types';
 	let { data, form }: PageProps = $props();
+	const mediaBaseUrl = env.PUBLIC_MEDIA_BASE_URL?.trim() || 'https://api.portalsi.com/storage';
+
+	const existingIds = $derived(new Set(data.members.map((member) => member.user_id)));
+	let query = $state('');
+	let results = $state<PortalUser[]>([]);
+	let searching = $state(false);
+	let picked = $state<PortalUser | null>(null);
+	const visibleResults = $derived(results.filter((user) => !existingIds.has(user.id)));
+
+	$effect(() => {
+		const q = query.trim();
+		if (picked || q.length < 2) {
+			results = [];
+			searching = false;
+			return;
+		}
+		searching = true;
+		const controller = new AbortController();
+		const timer = window.setTimeout(async () => {
+			try {
+				const encoded = encodeURIComponent(q);
+				const response = await clientRequest(
+					`users/search?username=${encoded}&full_name=${encoded}&per_page=8`,
+					{ schema: userSearchResponseSchema, signal: controller.signal }
+				);
+				results = response.data.map((user) => mapCompactUser(user, mediaBaseUrl));
+			} catch (error) {
+				if (!(error instanceof DOMException && error.name === 'AbortError')) results = [];
+			} finally {
+				if (!controller.signal.aborted) searching = false;
+			}
+		}, 260);
+		return () => {
+			window.clearTimeout(timer);
+			controller.abort();
+		};
+	});
+
+	function pick(user: PortalUser) {
+		picked = user;
+		query = user.username;
+		results = [];
+	}
+	function clearPick() {
+		picked = null;
+		query = '';
+		results = [];
+	}
+	function onSearchKeydown(event: KeyboardEvent) {
+		if (event.key === 'Enter' && !picked) {
+			event.preventDefault();
+			if (visibleResults[0]) pick(visibleResults[0]);
+		}
+	}
 </script>
 
 <svelte:head
@@ -60,15 +131,59 @@
 		<section class="surface panel">
 			<h2><UserPlus size={18} /> Tambah anggota</h2>
 			<form class="add-member" method="POST" action="?/add">
-				<label
-					><span class="sr-only">Username atau email</span><input
-						name="identifier"
-						required
-						placeholder="Username atau email"
-					/></label
-				><select name="role" aria-label="Peran anggota"
-					><option value="member">Anggota</option><option value="admin">Admin</option></select
-				><button type="submit">Tambahkan</button>
+				<div class="member-search">
+					<div class="search-box">
+						{#if picked}<Avatar name={picked.fullName} src={picked.avatarUrl} size="sm" />{:else}
+							<Search size={17} />
+						{/if}
+						<input
+							value={query}
+							oninput={(event) => {
+								query = event.currentTarget.value;
+								picked = null;
+							}}
+							onkeydown={onSearchKeydown}
+							placeholder="Cari nama atau username…"
+							autocomplete="off"
+							aria-label="Cari calon anggota"
+						/>
+						{#if searching}<LoaderCircle
+								class="member-spinner"
+								size={16}
+							/>{:else if query}<button
+								type="button"
+								class="clear"
+								onclick={clearPick}
+								aria-label="Hapus pilihan"><X size={15} /></button
+							>{/if}
+					</div>
+					{#if query.trim().length >= 2 && !picked}<div class="results" aria-label="Hasil pencarian">
+							{#each visibleResults as user (user.id)}<button
+									type="button"
+									class="result"
+									onclick={() => pick(user)}
+								>
+									<Avatar name={user.fullName} src={user.avatarUrl} size="sm" />
+									<span
+										><strong
+											>{user.fullName}<UserBadges
+												verified={user.badgeVerified}
+												role={user.role}
+											/></strong
+										><small>@{user.username}</small></span
+									>
+								</button>{/each}
+							{#if !searching && visibleResults.length === 0}<p class="no-result">
+									Tidak ada pengguna yang cocok.
+								</p>{/if}
+						</div>{/if}
+					<input type="hidden" name="identifier" value={picked?.username ?? ''} />
+				</div>
+				<div class="add-row">
+					<select name="role" aria-label="Peran anggota"
+						><option value="member">Anggota</option><option value="admin">Admin</option></select
+					><button type="submit" disabled={!picked}>Tambahkan</button>
+				</div>
 			</form>
 		</section>
 	{/if}
@@ -242,15 +357,102 @@
 		border-radius: 10px;
 		outline: 0;
 	}
-	.file-grid,
-	.add-member {
+	.file-grid {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		gap: 10px;
 	}
 	.add-member {
-		grid-template-columns: 1fr 130px auto;
+		display: grid;
+		gap: 12px;
 		margin-top: 0 !important;
+	}
+	.member-search {
+		position: relative;
+		display: grid;
+		gap: 8px;
+	}
+	.add-member .search-box {
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		padding: 0 10px;
+		background: var(--color-canvas);
+		border: 1px solid var(--color-border);
+		border-radius: 10px;
+		color: var(--color-muted);
+	}
+	.add-member .search-box input {
+		border: 0;
+		background: transparent;
+		padding-inline: 0;
+	}
+	.add-member .search-box .clear {
+		display: grid;
+		width: 28px;
+		height: 28px;
+		place-items: center;
+		padding: 0;
+		background: transparent;
+		border: 0;
+		color: var(--color-muted);
+		cursor: pointer;
+	}
+	.add-member :global(.member-spinner) {
+		color: var(--color-primary);
+		animation: member-spin 0.8s linear infinite;
+	}
+	@keyframes member-spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+	.results {
+		display: grid;
+		gap: 2px;
+		padding: 6px;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: 10px;
+	}
+	.result {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 8px;
+		background: transparent;
+		border: 0;
+		border-radius: 8px;
+		text-align: left;
+		cursor: pointer;
+	}
+	.result:hover {
+		background: var(--color-surface-soft);
+	}
+	.result span {
+		display: grid;
+	}
+	.result strong {
+		font-size: 0.8rem;
+	}
+	.result small {
+		color: var(--color-muted);
+		font-size: 0.7rem;
+	}
+	.no-result {
+		margin: 0;
+		padding: 10px;
+		color: var(--color-muted);
+		font-size: 0.74rem;
+		text-align: center;
+	}
+	.add-row {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		gap: 10px;
+	}
+	.add-member button[disabled] {
+		opacity: 0.55;
 	}
 	.panel form > button,
 	.add-member button {

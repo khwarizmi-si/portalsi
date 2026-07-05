@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { env } from '$env/dynamic/public';
-	import { Bookmark, Grid3X3, Play, Settings, Share2 } from '@lucide/svelte';
+	import { Bookmark, Grid3X3, Maximize2, Play, Settings, Share2, X } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { clientRequest } from '$lib/api/client';
 	import StoryAvatarLink from '$lib/components/story/StoryAvatarLink.svelte';
@@ -25,6 +25,7 @@
 	let nextPage = $state(2);
 	let loading = $state(false);
 	let loadError = $state('');
+	let photoOpen = $state(false);
 	async function shareProfile() {
 		try {
 			const url = new URL(`/u/${data.profile.username}`, window.location.origin).toString();
@@ -75,16 +76,23 @@
 			{#if data.profile.bannerUrl}<img src={data.profile.bannerUrl} alt="Banner profil" />{/if}
 		</div>
 		<div class="profile-main">
-			<StoryAvatarLink
-				userId={data.profile.id}
-				username={data.profile.username}
-				name={data.profile.fullName}
-				avatarUrl={data.profile.avatarUrl ?? undefined}
-				size="xl"
-				hasStory={data.profile.hasStory}
-				seen={data.profile.storyViewed}
-				profileHref="/profile"
-			/>
+			<div class="avatar-slot">
+				<StoryAvatarLink
+					userId={data.profile.id}
+					username={data.profile.username}
+					name={data.profile.fullName}
+					avatarUrl={data.profile.avatarUrl ?? undefined}
+					size="xl"
+					hasStory={data.profile.hasStory}
+					seen={data.profile.storyViewed}
+					profileHref="/profile"
+				/>
+				{#if data.profile.avatarUrl}<button
+						class="expand-photo"
+						onclick={() => (photoOpen = true)}
+						aria-label="Perbesar foto profil"><Maximize2 size={13} /></button
+					>{/if}
+			</div>
 			<div class="profile-actions">
 				<a href="/profile/edit">Edit profil</a>
 				<a href="/settings" aria-label="Pengaturan"><Settings size={19} /></a>
@@ -156,6 +164,23 @@
 	{/if}
 </div>
 
+<svelte:window onkeydown={(event) => event.key === 'Escape' && (photoOpen = false)} />
+
+{#if photoOpen && data.profile.avatarUrl}
+	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+	<div class="photo-modal" onclick={() => (photoOpen = false)}>
+		<img
+			class="photo-full"
+			src={data.profile.avatarUrl}
+			alt={`Foto profil ${data.profile.fullName}`}
+			onclick={(event) => event.stopPropagation()}
+		/>
+		<button class="photo-close" onclick={() => (photoOpen = false)} aria-label="Tutup"
+			><X size={20} /></button
+		>
+	</div>
+{/if}
+
 <style>
 	.profile-page {
 		width: min(100% - 32px, 920px);
@@ -183,6 +208,62 @@
 	.profile-main > :global(.avatar-wrap) {
 		margin-top: -42px;
 		box-shadow: 0 0 0 5px white;
+	}
+	.avatar-slot {
+		position: relative;
+		display: inline-grid;
+		margin-top: -42px;
+	}
+	.avatar-slot :global(.avatar-wrap) {
+		margin-top: 0;
+		box-shadow: 0 0 0 5px white;
+	}
+	.expand-photo {
+		position: absolute;
+		right: 2px;
+		bottom: 2px;
+		z-index: 2;
+		display: grid;
+		width: 26px;
+		height: 26px;
+		place-items: center;
+		padding: 0;
+		background: rgb(0 0 0 / 55%);
+		border: 2px solid white;
+		border-radius: 50%;
+		color: white;
+		cursor: pointer;
+	}
+	.photo-modal {
+		position: fixed;
+		inset: 0;
+		z-index: 80;
+		display: grid;
+		place-items: center;
+		padding: 24px;
+		background: rgb(12 9 6 / 82%);
+		backdrop-filter: blur(4px);
+	}
+	.photo-full {
+		max-width: min(92vw, 520px);
+		max-height: 82vh;
+		object-fit: contain;
+		border-radius: 16px;
+		box-shadow: 0 30px 80px rgb(0 0 0 / 55%);
+	}
+	.photo-close {
+		position: fixed;
+		top: 18px;
+		right: 18px;
+		display: grid;
+		width: 40px;
+		height: 40px;
+		place-items: center;
+		background: rgb(255 255 255 / 15%);
+		border: 0;
+		border-radius: 50%;
+		color: white;
+		cursor: pointer;
 	}
 	.profile-actions {
 		position: absolute;
