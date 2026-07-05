@@ -7,15 +7,21 @@ export function normalizeMediaUrl(
 	if (!value?.trim()) return null;
 
 	const raw = value.trim();
-	if (absoluteHttpPattern.test(raw)) {
-		const url = new URL(raw);
-		if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
-		return url.toString();
-	}
+	// URL yang rusak/tidak wajar tidak boleh menjatuhkan seluruh halaman (mis. saat SSR
+	// me-render daftar pesan). Kembalikan null agar media itu saja yang tidak tampil.
+	try {
+		if (absoluteHttpPattern.test(raw)) {
+			const url = new URL(raw);
+			if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+			return url.toString();
+		}
 
-	const base = mediaBaseUrl.endsWith('/') ? mediaBaseUrl : `${mediaBaseUrl}/`;
-	const cleanPath = raw.replace(/^\/+/, '').replace(/^storage\//, '');
-	return new URL(cleanPath, base).toString();
+		const base = mediaBaseUrl.endsWith('/') ? mediaBaseUrl : `${mediaBaseUrl}/`;
+		const cleanPath = raw.replace(/^\/+/, '').replace(/^storage\//, '');
+		return new URL(cleanPath, base).toString();
+	} catch {
+		return null;
+	}
 }
 
 export function isAllowedExternalUrl(value: string, allowedOrigins: readonly string[]): boolean {
