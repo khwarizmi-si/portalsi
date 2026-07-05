@@ -159,7 +159,7 @@
 		{/if}
 
 		<StoryRail stories={data.stories} />
-		{#if data.announcement}<AnnouncementCard announcement={data.announcement} />{/if}
+		{#if data.announcements.length}<AnnouncementCard announcements={data.announcements} />{/if}
 
 		<div class="feed-label">
 			<div>

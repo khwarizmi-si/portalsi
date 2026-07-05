@@ -70,10 +70,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 		...(storyStatus.get(user.id) ?? {})
 	});
 
-	const announcement =
-		announcementResult.status === 'fulfilled' && announcementResult.value.length > 0
-			? mapAnnouncement(announcementResult.value[0])
-			: null;
+	const announcements =
+		announcementResult.status === 'fulfilled'
+			? announcementResult.value.map((item) => mapAnnouncement(item))
+			: [];
+	const announcement = announcements[0] ?? null;
 	const suggestions = deduplicateUsers([
 		...(suggestionResult.status === 'fulfilled' && suggestionResult.value
 			? suggestionResult.value.users.map((user) => mapCompactUser(user, mediaBaseUrl))
@@ -106,6 +107,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		posts,
 		stories,
 		announcement,
+		announcements,
 		suggestions,
 		onlineUsers,
 		onlineCount: onlineResult.status === 'fulfilled' ? onlineResult.value.count : null,
