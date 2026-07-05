@@ -68,7 +68,7 @@
 	let musicQuery = $state('');
 	let musicResults = $state<
 		Array<{
-			id: number;
+			id: string | number;
 			title: string;
 			artist: string;
 			durationSeconds: number;
@@ -414,7 +414,7 @@
 
 	// Putar pratinjau tepat pada rentang terpilih [start, end], lalu loop.
 	function playPreviewRange() {
-		if (!musicAudio) return;
+		if (!musicAudio || musicAudio.readyState < HTMLMediaElement.HAVE_METADATA) return;
 		musicAudio.currentTime = musicStartSeconds;
 		musicPreviewPlaying = true;
 		void musicAudio.play().catch(() => undefined);
@@ -721,7 +721,7 @@
 				/>{#if musicSearching}<LoaderCircle class="field-spinner" size={16} />{/if}</label
 			>
 			<small class="music-help"
-				>Pilih dari katalog musik dan dengarkan pratinjau sebelum digunakan.</small
+				>Pilih lagu penuh dari Audius, lalu atur bagian yang ingin diputar.</small
 			>
 			{#if musicResults.length}<div class="suggestions music" aria-label="Hasil musik">
 					{#each musicResults as track (track.id)}<button onclick={() => selectMusic(track)}
@@ -747,8 +747,8 @@
 							preload="metadata"
 							onloadedmetadata={(event) => {
 								musicPreviewSeconds = Math.max(1, Math.floor(event.currentTarget.duration || 30));
-								// Batasi rentang ke durasi pratinjau nyata agar akhir loop selalu tercapai.
-								musicTotalSeconds = Math.min(musicTotalSeconds, musicPreviewSeconds);
+								// Stream Audius berisi track penuh; pakai metadata audio sebagai sumber kebenaran.
+								musicTotalSeconds = musicPreviewSeconds;
 								musicEndSeconds = Math.min(musicEndSeconds, musicPreviewSeconds);
 								if (musicStartSeconds >= musicEndSeconds - 1) musicStartSeconds = 0;
 							}}
@@ -812,8 +812,7 @@
 						/>
 					</div>
 					<small
-						>Timeline memakai durasi lagu penuh. Tombol putar memakai cuplikan audio yang tersedia
-						dari katalog.</small
+						>Menggeser batas langsung memutar dari awal pilihan dan mengulang di titik akhir.</small
 					>
 				</div>{/if}
 			<button class="draft" onclick={saveDraft}
