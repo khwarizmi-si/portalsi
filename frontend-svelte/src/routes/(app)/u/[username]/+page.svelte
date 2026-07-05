@@ -50,6 +50,7 @@
 		bahasa: 'Bahasa',
 		karakter: 'Karakter'
 	};
+	let selectedPortfolio = $state<(typeof data.portfolio)[number] | null>(null);
 
 	function selectTab(tab: typeof activeTab) {
 		activeTab = tab;
@@ -200,7 +201,11 @@
 					role={data.profile.role}
 				/>
 			</h1>
-			<p class="handle">@{data.profile.username} · {roleLabels[data.profile.role]}</p>
+			<p class="handle">
+				@{data.profile.username}{#if data.profile.role !== 'student'} · {roleLabels[
+						data.profile.role
+					]}{/if}
+			</p>
 			<p class="bio"><MentionText text={data.profile.bio || 'Belum ada bio.'} /></p>
 			<div class="stats">
 				<span><strong>{data.profile.postsCount.toLocaleString('id-ID')}</strong> Postingan</span>
@@ -256,26 +261,24 @@
 	{:else if data.portfolio.length > 0}
 		<section class="portfolio-grid">
 			{#each data.portfolio as item (item.id)}
-				<article class="surface">
-					{#if item.mediaUrl}
-						{#if item.mediaUrl.toLowerCase().includes('.pdf')}
-							<a class="portfolio-media pdf" href={item.mediaUrl} target="_blank" rel="noreferrer"
-								><FileText size={30} /><span>Buka PDF</span></a
-							>
-						{:else}<img src={item.mediaUrl} alt={item.title} />{/if}
+				<button
+					type="button"
+					class="surface portfolio-card"
+					onclick={() => (selectedPortfolio = item)}
+				>
+					{#if item.mediaUrl && item.mediaUrl.toLowerCase().includes('.pdf')}
+						<span class="portfolio-media pdf"><FileText size={30} /><span>PDF</span></span>
+					{:else if item.mediaUrl}
+						<img src={item.mediaUrl} alt={item.title} />
+					{:else}
+						<span class="portfolio-media pdf"><FolderKanban size={26} /></span>
 					{/if}
-					<div>
+					<span class="card-body">
 						<small>{portfolioLabels[item.aspect]} · {item.year || '—'}</small>
-						<h2>{item.title}</h2>
-						<p>{item.description || 'Tanpa deskripsi.'}</p>
-						{#if item.signed_by}<small class="signature"
-								>Signed by {item.signed_by.full_name || `@${item.signed_by.username}`}{item
-									.signed_by.role === 'teacher'
-									? ' · Teacher'
-									: ''}</small
-							>{/if}
-					</div>
-				</article>
+						<span class="card-title">{item.title}</span>
+						<span class="card-desc">{item.description || 'Tanpa deskripsi.'}</span>
+					</span>
+				</button>
 			{/each}
 		</section>
 	{:else}
@@ -286,6 +289,47 @@
 		</section>
 	{/if}
 </div>
+
+<svelte:window onkeydown={(e) => e.key === 'Escape' && (selectedPortfolio = null)} />
+
+{#if selectedPortfolio}
+	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+	<div class="portfolio-modal" onclick={() => (selectedPortfolio = null)}>
+		<div
+			class="portfolio-dialog surface"
+			role="dialog"
+			aria-modal="true"
+			aria-label={selectedPortfolio.title}
+			onclick={(e) => e.stopPropagation()}
+		>
+			<button class="dialog-close" onclick={() => (selectedPortfolio = null)} aria-label="Tutup"
+				>×</button
+			>
+			{#if selectedPortfolio.mediaUrl && selectedPortfolio.mediaUrl.toLowerCase().includes('.pdf')}
+				<a
+					class="dialog-media pdf"
+					href={selectedPortfolio.mediaUrl}
+					target="_blank"
+					rel="noreferrer"><FileText size={34} /><span>Buka PDF</span></a
+				>
+			{:else if selectedPortfolio.mediaUrl}
+				<img class="dialog-media" src={selectedPortfolio.mediaUrl} alt={selectedPortfolio.title} />
+			{/if}
+			<div class="dialog-body">
+				<small>{portfolioLabels[selectedPortfolio.aspect]} · {selectedPortfolio.year || '—'}</small>
+				<h2>{selectedPortfolio.title}</h2>
+				<p>{selectedPortfolio.description || 'Tanpa deskripsi.'}</p>
+				{#if selectedPortfolio.signed_by}<small class="signature"
+						>Signed by {selectedPortfolio.signed_by.full_name ||
+							`@${selectedPortfolio.signed_by.username}`}{selectedPortfolio.signed_by.role ===
+						'teacher'
+							? ' · Teacher'
+							: ''}</small
+					>{/if}
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.other-profile {
@@ -439,8 +483,19 @@
 		gap: 12px;
 		margin-top: 14px;
 	}
-	.portfolio-grid article {
+	.portfolio-card {
+		display: block;
+		width: 100%;
+		padding: 0;
 		overflow: hidden;
+		text-align: left;
+		border: 1px solid var(--color-border);
+		cursor: pointer;
+		transition: border-color 140ms ease;
+	}
+	.portfolio-card:hover,
+	.portfolio-card:focus-visible {
+		border-color: var(--color-primary);
 	}
 	.portfolio-grid img,
 	.portfolio-media {
@@ -454,8 +509,27 @@
 		background: var(--color-secondary-soft);
 		color: var(--color-secondary);
 	}
-	.portfolio-grid article > div {
+	.card-body {
+		display: block;
 		padding: 13px;
+	}
+	.card-title {
+		display: block;
+		margin: 5px 0;
+		overflow: hidden;
+		font-size: 0.92rem;
+		font-weight: 700;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.card-desc {
+		display: -webkit-box;
+		overflow: hidden;
+		color: var(--color-muted);
+		font-size: 0.74rem;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
 	}
 	.portfolio-grid small {
 		color: var(--color-primary-strong);
@@ -492,7 +566,81 @@
 		color: var(--color-muted);
 		font-size: 0.8rem;
 	}
+	.portfolio-modal {
+		position: fixed;
+		inset: 0;
+		z-index: 60;
+		display: grid;
+		place-items: center;
+		padding: 18px;
+		background: rgb(18 14 10 / 62%);
+		backdrop-filter: blur(3px);
+	}
+	.portfolio-dialog {
+		position: relative;
+		width: min(100%, 520px);
+		max-height: 90vh;
+		overflow: auto;
+	}
+	.dialog-close {
+		position: absolute;
+		top: 10px;
+		right: 10px;
+		display: grid;
+		width: 34px;
+		height: 34px;
+		place-items: center;
+		background: rgb(0 0 0 / 45%);
+		border: 0;
+		border-radius: 50%;
+		color: white;
+		font-size: 1.3rem;
+		line-height: 1;
+		cursor: pointer;
+	}
+	.dialog-media {
+		display: grid;
+		width: 100%;
+		max-height: 60vh;
+		place-content: center;
+		justify-items: center;
+		gap: 6px;
+		object-fit: contain;
+		background: var(--color-secondary-soft);
+		color: var(--color-secondary);
+	}
+	.dialog-body {
+		padding: 16px 18px 20px;
+	}
+	.dialog-body small {
+		color: var(--color-primary-strong);
+		font-size: 0.68rem;
+	}
+	.dialog-body h2 {
+		margin: 6px 0;
+		font-size: 1.05rem;
+	}
+	.dialog-body p {
+		margin: 0;
+		color: var(--color-muted);
+		font-size: 0.84rem;
+		white-space: pre-wrap;
+	}
+	.dialog-body .signature {
+		display: block;
+		margin-top: 12px;
+		padding: 7px 9px;
+		background: var(--color-secondary-soft);
+		border-radius: 7px;
+		color: var(--color-secondary);
+	}
 	@media (max-width: 767px) {
+		nav button,
+		.profile-tabs a {
+			flex: 1;
+			justify-content: center;
+			padding-inline: 6px;
+		}
 		.other-profile {
 			width: 100%;
 			margin-top: 0;

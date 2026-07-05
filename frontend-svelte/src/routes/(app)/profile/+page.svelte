@@ -97,7 +97,11 @@
 						role={data.profile.role}
 					/>
 				</h1>
-				<p>@{data.profile.username} · {roleLabels[data.profile.role]}</p>
+				<p>
+					@{data.profile.username}{#if data.profile.role !== 'student'} · {roleLabels[
+							data.profile.role
+						]}{/if}
+				</p>
 			</div>
 			<p class="bio"><MentionText text={data.profile.bio || 'Belum ada bio.'} /></p>
 			<div class="stats">
@@ -327,8 +331,13 @@
 			gap: 8px;
 		}
 		.profile-tabs {
-			overflow-x: auto;
-			justify-content: flex-start;
+			justify-content: center;
+		}
+		.profile-tabs a {
+			flex: 1;
+			justify-content: center;
+			padding-inline: 6px;
+			white-space: nowrap;
 		}
 		.profile-grid {
 			border-radius: 0;

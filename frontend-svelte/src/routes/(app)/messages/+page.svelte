@@ -26,7 +26,7 @@
 <SectionPage
 	eyebrow="Percakapan"
 	title="Pesan"
-	description="Direct message dan grup dalam satu tempat."
+	description="Kirim pesan dan tetap terhubung dengan teman maupun grup."
 >
 	{#snippet actions()}<div class="page-actions">
 			<a class="new-message secondary" href="/groups/new"><Plus size={18} /> Buat grup</a><a

@@ -120,7 +120,7 @@
 	><title>Postingan — Portal SI</title><meta name="robots" content="noindex" /></svelte:head
 >
 
-<SectionPage eyebrow="Percakapan komunitas" title="Detail postingan">
+<SectionPage eyebrow="Diskusi" title="Detail postingan">
 	<div class="post-detail-layout">
 		<div class="post-column">
 			{#if data.post.user.id === data.currentUser.id}<details class="owner-tools surface">
