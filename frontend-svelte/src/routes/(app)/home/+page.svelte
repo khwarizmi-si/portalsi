@@ -16,7 +16,7 @@
 	import FriendSuggestionCard from '$lib/components/feed/FriendSuggestionCard.svelte';
 
 	let { data }: PageProps = $props();
-	const firstName = $derived(data.user.fullName.split(' ')[0]);
+	const greetingName = $derived((data.user.fullName || '').trim() || data.user.username);
 	const mediaBaseUrl = env.PUBLIC_MEDIA_BASE_URL?.trim() || 'https://api.portalsi.com/storage';
 	let posts = $state(untrack(() => [...data.posts]));
 	let nextPage = $state(2);
@@ -96,7 +96,7 @@
 		<header class="desktop-feed-header">
 			<div>
 				<p class="eyebrow">{data.dateLabel}</p>
-				<h1>Assalamu’alaikum, {firstName}</h1>
+				<h1>Assalamu’alaikum, <span class="greet-name">{greetingName}</span></h1>
 			</div>
 			<div class="search-wrap">
 				<div class="search-box">
@@ -228,10 +228,18 @@
 		padding: 30px 2px 8px;
 	}
 
+	.desktop-feed-header > div:first-child {
+		min-width: 0;
+	}
 	.desktop-feed-header h1 {
 		margin: 0;
+		min-width: 0;
 		font-size: 1.65rem;
 		letter-spacing: -0.035em;
+		overflow-wrap: anywhere;
+	}
+	.greet-name {
+		font-weight: inherit;
 	}
 
 	.search-box {

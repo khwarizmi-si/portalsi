@@ -3,6 +3,22 @@ import { profilePaginationSchema } from './profile';
 
 const booleanish = z.union([z.boolean(), z.literal(0), z.literal(1)]).transform(Boolean);
 
+export const notificationPreferencesSchema = z
+	.object({
+		new_post_reminders: z.enum(['all', 'mutual', 'off']).catch('all'),
+		likes: booleanish.catch(true),
+		comments: booleanish.catch(true),
+		mentions: booleanish.catch(true),
+		follows: booleanish.catch(true)
+	})
+	.passthrough();
+
+export const notificationPreferencesResponseSchema = z
+	.object({ preferences: notificationPreferencesSchema })
+	.passthrough();
+
+export type NotificationPreferences = z.infer<typeof notificationPreferencesSchema>;
+
 export const notificationsResponseSchema = z.object({
 	notifications: z.array(
 		z.object({
