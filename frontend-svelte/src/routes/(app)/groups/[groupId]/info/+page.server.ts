@@ -128,19 +128,29 @@ export const actions: Actions = {
 		if (!locals.token) return fail(401, { message: 'Sesi tidak tersedia.' });
 		const groupId = numericId(params.groupId);
 		const source = await request.formData();
-		const identifier = String(source.get('identifier') ?? '')
-			.trim()
-			.replace(/^@/, '');
+		const identifiers = [
+			...new Set(
+				String(source.get('identifiers') ?? '')
+					.split(',')
+					.map((value) => value.trim().replace(/^@/, ''))
+					.filter(Boolean)
+			)
+		].slice(0, 30);
 		const role = source.get('role') === 'admin' ? 'admin' : 'member';
-		if (!groupId || !identifier) return fail(422, { message: 'Username atau email wajib diisi.' });
+		if (!groupId || identifiers.length === 0)
+			return fail(422, { message: 'Pilih minimal satu calon anggota.' });
 		try {
-			await backendRequest(`groups/${groupId}/members`, {
-				method: 'POST',
-				token: locals.token,
-				requestId: locals.requestId,
-				body: { identifier, role }
-			});
-			return { success: true, message: 'Anggota berhasil ditambahkan.' };
+			await Promise.all(
+				identifiers.map((identifier) =>
+					backendRequest(`groups/${groupId}/members`, {
+						method: 'POST',
+						token: locals.token,
+						requestId: locals.requestId,
+						body: { identifier, role }
+					})
+				)
+			);
+			return { success: true, message: `${identifiers.length} anggota berhasil ditambahkan.` };
 		} catch (cause) {
 			return apiFailure(cause);
 		}

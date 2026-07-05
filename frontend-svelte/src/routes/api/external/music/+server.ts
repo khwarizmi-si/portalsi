@@ -10,6 +10,7 @@ const resultSchema = z.object({
 				trackId: z.coerce.number().int(),
 				trackName: z.string(),
 				artistName: z.string(),
+				trackTimeMillis: z.coerce.number().int().positive().optional(),
 				previewUrl: z.string().url().optional(),
 				artworkUrl100: z.string().url().optional()
 			})
@@ -44,6 +45,9 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 				id: track.trackId,
 				title: track.trackName,
 				artist: track.artistName,
+				durationSeconds: track.trackTimeMillis
+					? Math.max(1, Math.round(track.trackTimeMillis / 1000))
+					: 30,
 				previewUrl: track.previewUrl ?? null,
 				artworkUrl: track.artworkUrl100 ?? null
 			}))

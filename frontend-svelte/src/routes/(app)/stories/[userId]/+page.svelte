@@ -126,9 +126,16 @@
 
 	function loopStoryMusic(event: Event) {
 		const audio = event.currentTarget as HTMLAudioElement;
-		const end = story.musicStartSeconds + story.musicDurationSeconds;
-		if (audio.currentTime < story.musicStartSeconds || audio.currentTime >= end) {
-			audio.currentTime = story.musicStartSeconds;
+		const start =
+			Number.isFinite(audio.duration) && story.musicStartSeconds < audio.duration
+				? story.musicStartSeconds
+				: 0;
+		const end = Math.min(
+			start + story.musicDurationSeconds,
+			audio.duration || start + story.musicDurationSeconds
+		);
+		if (audio.currentTime < start || audio.currentTime >= end) {
+			audio.currentTime = start;
 			if (!effectivePaused) void audio.play().catch(() => undefined);
 		}
 	}

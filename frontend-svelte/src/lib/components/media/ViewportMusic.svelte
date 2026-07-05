@@ -25,13 +25,19 @@
 	let playing = $state(false);
 	let autoplayBlocked = $state(false);
 	const key = $derived(src ?? `${title}-${artist}`);
+	function playableStart() {
+		return audio && Number.isFinite(audio.duration) && start < audio.duration
+			? Math.max(0, start)
+			: 0;
+	}
 
 	async function play() {
 		if (!src || !audio) return;
 		if (activeAudio && activeAudio !== audio) activeAudio.pause();
 		activeAudio = audio;
 		const saved = savedPositions.get(key);
-		audio.currentTime = saved !== undefined ? saved : start;
+		const resumeAt = saved !== undefined && saved < audio.duration ? saved : playableStart();
+		audio.currentTime = resumeAt;
 		try {
 			await audio.play();
 			autoplayBlocked = false;
@@ -72,7 +78,17 @@
 			ontimeupdate={(event) => {
 				const target = event.currentTarget;
 				savedPositions.set(key, target.currentTime);
-				if (target.currentTime >= start + clipDuration) target.currentTime = start;
+				const safeStart = playableStart();
+				const safeEnd = Math.min(
+					safeStart + clipDuration,
+					target.duration || safeStart + clipDuration
+				);
+				if (target.currentTime >= safeEnd) target.currentTime = safeStart;
+			}}
+			onended={(event) => {
+				const target = event.currentTarget;
+				target.currentTime = playableStart();
+				void target.play().catch(() => undefined);
 			}}
 		></audio><button
 			onclick={() => (playing ? pause() : void play())}

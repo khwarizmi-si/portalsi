@@ -171,6 +171,7 @@
 				name={data.profile.fullName}
 				avatarUrl={data.profile.avatarUrl ?? undefined}
 				size="xl"
+				previewable
 				hasStory={data.profile.hasStory}
 				seen={data.profile.storyViewed}
 			/>
@@ -202,9 +203,8 @@
 				/>
 			</h1>
 			<p class="handle">
-				@{data.profile.username}{#if data.profile.role !== 'student'} · {roleLabels[
-						data.profile.role
-					]}{/if}
+				@{data.profile.username}{#if data.profile.role !== 'student'}
+					· {roleLabels[data.profile.role]}{/if}
 			</p>
 			<p class="bio"><MentionText text={data.profile.bio || 'Belum ada bio.'} /></p>
 			<div class="stats">

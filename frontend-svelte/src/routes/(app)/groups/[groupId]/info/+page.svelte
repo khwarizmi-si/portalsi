@@ -28,12 +28,17 @@
 	let query = $state('');
 	let results = $state<PortalUser[]>([]);
 	let searching = $state(false);
-	let picked = $state<PortalUser | null>(null);
-	const visibleResults = $derived(results.filter((user) => !existingIds.has(user.id)));
+	let selected = $state<PortalUser[]>([]);
+	const identifiers = $derived(selected.map((user) => user.username).join(','));
+	const visibleResults = $derived(
+		results.filter(
+			(user) => !existingIds.has(user.id) && !selected.some((picked) => picked.id === user.id)
+		)
+	);
 
 	$effect(() => {
 		const q = query.trim();
-		if (picked || q.length < 2) {
+		if (q.length < 2) {
 			results = [];
 			searching = false;
 			return;
@@ -60,20 +65,18 @@
 		};
 	});
 
-	function pick(user: PortalUser) {
-		picked = user;
-		query = user.username;
-		results = [];
-	}
-	function clearPick() {
-		picked = null;
+	function addUser(user: PortalUser) {
+		if (!selected.some((picked) => picked.id === user.id)) selected = [...selected, user];
 		query = '';
 		results = [];
 	}
+	function removeUser(userId: number) {
+		selected = selected.filter((user) => user.id !== userId);
+	}
 	function onSearchKeydown(event: KeyboardEvent) {
-		if (event.key === 'Enter' && !picked) {
+		if (event.key === 'Enter') {
 			event.preventDefault();
-			if (visibleResults[0]) pick(visibleResults[0]);
+			if (visibleResults[0]) addUser(visibleResults[0]);
 		}
 	}
 </script>
@@ -132,36 +135,45 @@
 			<h2><UserPlus size={18} /> Tambah anggota</h2>
 			<form class="add-member" method="POST" action="?/add">
 				<div class="member-search">
+					{#if selected.length}<div
+							class="selected-members"
+							aria-label="Anggota yang akan ditambahkan"
+						>
+							{#each selected as user (user.id)}<span class="member-chip">
+									<Avatar name={user.fullName} src={user.avatarUrl} size="sm" />
+									<span><strong>{user.fullName}</strong><small>@{user.username}</small></span>
+									<button
+										type="button"
+										onclick={() => removeUser(user.id)}
+										aria-label={`Hapus ${user.fullName}`}><X size={13} /></button
+									>
+								</span>{/each}
+						</div>{/if}
 					<div class="search-box">
-						{#if picked}<Avatar name={picked.fullName} src={picked.avatarUrl} size="sm" />{:else}
-							<Search size={17} />
-						{/if}
+						<Search size={17} />
 						<input
 							value={query}
-							oninput={(event) => {
-								query = event.currentTarget.value;
-								picked = null;
-							}}
+							oninput={(event) => (query = event.currentTarget.value)}
 							onkeydown={onSearchKeydown}
 							placeholder="Cari nama atau username…"
 							autocomplete="off"
 							aria-label="Cari calon anggota"
 						/>
-						{#if searching}<LoaderCircle
-								class="member-spinner"
-								size={16}
-							/>{:else if query}<button
+						{#if searching}<LoaderCircle class="member-spinner" size={16} />{:else if query}<button
 								type="button"
 								class="clear"
-								onclick={clearPick}
+								onclick={() => {
+									query = '';
+									results = [];
+								}}
 								aria-label="Hapus pilihan"><X size={15} /></button
 							>{/if}
 					</div>
-					{#if query.trim().length >= 2 && !picked}<div class="results" aria-label="Hasil pencarian">
+					{#if query.trim().length >= 2}<div class="results" aria-label="Hasil pencarian">
 							{#each visibleResults as user (user.id)}<button
 									type="button"
 									class="result"
-									onclick={() => pick(user)}
+									onclick={() => addUser(user)}
 								>
 									<Avatar name={user.fullName} src={user.avatarUrl} size="sm" />
 									<span
@@ -177,12 +189,14 @@
 									Tidak ada pengguna yang cocok.
 								</p>{/if}
 						</div>{/if}
-					<input type="hidden" name="identifier" value={picked?.username ?? ''} />
+					<input type="hidden" name="identifiers" value={identifiers} />
 				</div>
 				<div class="add-row">
 					<select name="role" aria-label="Peran anggota"
 						><option value="member">Anggota</option><option value="admin">Admin</option></select
-					><button type="submit" disabled={!picked}>Tambahkan</button>
+					><button type="submit" disabled={!selected.length}
+						>Tambahkan {selected.length || ''}</button
+					>
 				</div>
 			</form>
 		</section>
@@ -214,6 +228,7 @@
 									: `?/promote&userId=${member.user_id}`}
 							>
 								<button
+									class:active={member.role === 'admin'}
 									title={member.role === 'admin' ? 'Jadikan anggota' : 'Jadikan admin'}
 									aria-label={member.role === 'admin' ? 'Jadikan anggota' : 'Jadikan admin'}
 									>{#if member.role === 'admin'}<Shield size={15} />{:else}<Crown
@@ -228,6 +243,7 @@
 									: `?/mute&userId=${member.user_id}`}
 							>
 								<button
+									class:active={member.is_muted}
 									title={member.is_muted ? 'Bunyikan' : 'Bisukan'}
 									aria-label={member.is_muted ? 'Bunyikan anggota' : 'Bisukan anggota'}
 									>{#if member.is_muted}<Volume2 size={15} />{:else}<VolumeX
@@ -235,7 +251,17 @@
 										/>{/if}</button
 								>
 							</form>
-							<form method="POST" action={`?/remove&userId=${member.user_id}`}>
+							<form
+								method="POST"
+								action={`?/remove&userId=${member.user_id}`}
+								onsubmit={(event) =>
+									confirmFormSubmit(event, {
+										title: 'Keluarkan anggota?',
+										description: `${member.fullName} tidak lagi dapat membuka percakapan grup ini.`,
+										confirmLabel: 'Ya, keluarkan',
+										tone: 'danger'
+									})}
+							>
 								<button class="danger" title="Keluarkan" aria-label="Keluarkan anggota"
 									><UserMinus size={15} /></button
 								>
@@ -372,6 +398,44 @@
 		display: grid;
 		gap: 8px;
 	}
+	.selected-members {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 7px;
+	}
+	.member-chip {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		padding: 5px 6px;
+		background: var(--color-primary-soft);
+		border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+		border-radius: 999px;
+		color: var(--color-text);
+	}
+	.member-chip > span {
+		display: grid;
+		line-height: 1.15;
+	}
+	.member-chip strong {
+		font-size: 0.7rem;
+	}
+	.member-chip small {
+		color: var(--color-muted);
+		font-size: 0.62rem;
+	}
+	.add-member .member-chip button {
+		display: grid;
+		width: 24px;
+		height: 24px;
+		min-height: 0;
+		place-items: center;
+		padding: 0;
+		background: transparent;
+		border: 0;
+		border-radius: 50%;
+		color: var(--color-muted);
+	}
 	.add-member .search-box {
 		display: flex;
 		align-items: center;
@@ -494,23 +558,47 @@
 	}
 	.member-actions {
 		display: flex;
-		gap: 4px;
+		gap: 6px;
+		padding: 4px;
+		background: var(--color-canvas);
+		border: 1px solid var(--color-border);
+		border-radius: 13px;
 	}
 	.member-actions form {
 		margin: 0;
 	}
 	.member-actions button {
 		display: grid;
-		width: 34px;
-		height: 34px;
+		width: 36px;
+		height: 36px;
+		min-height: 0;
 		place-items: center;
-		background: var(--color-canvas);
-		border: 1px solid var(--color-border);
-		border-radius: 9px;
+		padding: 0;
+		background: var(--color-surface);
+		border: 0;
+		border-radius: 10px;
 		color: var(--color-muted);
+		box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+		cursor: pointer;
+		transition:
+			transform 0.15s ease,
+			background 0.15s ease,
+			color 0.15s ease;
+	}
+	.member-actions button:hover {
+		transform: translateY(-1px);
+		background: var(--color-primary-soft);
+		color: var(--color-primary);
+	}
+	.member-actions button.active {
+		background: var(--color-primary-soft);
+		color: var(--color-primary);
 	}
 	.member-actions button.danger {
 		color: var(--color-danger);
+	}
+	.member-actions button.danger:hover {
+		background: var(--color-danger-soft);
 	}
 	.notice {
 		margin: 0;

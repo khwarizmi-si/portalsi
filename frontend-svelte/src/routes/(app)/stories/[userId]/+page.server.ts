@@ -26,6 +26,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		query: validOrder.length > 0 ? { order: validOrder.join(',') } : undefined
 	});
 	const mediaBaseUrl = env.PUBLIC_MEDIA_BASE_URL?.trim() || 'https://api.portalsi.com/storage';
+	const orderIndex = validOrder.indexOf(userId);
 	return {
 		user: {
 			id: response.current_user.user_id,
@@ -49,8 +50,11 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 			musicStartSeconds: (story.music_start_position_ms ?? 0) / 1000,
 			musicDurationSeconds: (story.music_clip_duration_ms ?? 15_000) / 1000
 		})),
-		previousUserId: response.prev_user_id,
-		nextUserId: response.next_user_id,
+		// Hanya home yang mengirim `order`. Entry point lain (profil, post,
+		// komentar, dst.) harus tetap berada di rangkaian story pemilik ini.
+		previousUserId: orderIndex > 0 ? validOrder[orderIndex - 1] : null,
+		nextUserId:
+			orderIndex >= 0 && orderIndex < validOrder.length - 1 ? validOrder[orderIndex + 1] : null,
 		storyOrder: validOrder.join(',')
 	};
 };

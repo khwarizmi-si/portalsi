@@ -71,6 +71,7 @@
 			id: number;
 			title: string;
 			artist: string;
+			durationSeconds: number;
 			previewUrl: string | null;
 			artworkUrl: string | null;
 		}>
@@ -79,6 +80,7 @@
 	let musicStartSeconds = $state(0);
 	let musicEndSeconds = $state(15);
 	let musicTotalSeconds = $state(30);
+	let musicPreviewSeconds = $state(30);
 	let musicPreviewPlaying = $state(false);
 	let musicAudio = $state<HTMLAudioElement>();
 	const musicDurationSeconds = $derived(Math.max(0, musicEndSeconds - musicStartSeconds));
@@ -213,6 +215,7 @@
 				filter = draft.filter ?? 'normal';
 				musicStartSeconds = draft.musicStartSeconds ?? 0;
 				musicEndSeconds = musicStartSeconds + (draft.musicDurationSeconds ?? 15);
+				musicTotalSeconds = selectedMusic?.durationSeconds ?? Math.max(30, musicEndSeconds);
 			})
 			.catch(() => undefined);
 	});
@@ -255,10 +258,9 @@
 
 	async function saveDraft() {
 		try {
-			// PENTING: nilai $state adalah Proxy; IndexedDB (structured clone) menolak Proxy
-			// (DataCloneError) sehingga draft gagal tersimpan. $state.snapshot mengubahnya jadi
-			// objek biasa. File tetap dipertahankan.
-			const draft = $state.snapshot({
+			// Bentuk objek biasa; writeDraft memisahkan File menjadi Blob + metadata
+			// agar konsisten di browser yang tidak stabil menyimpan File secara langsung.
+			const draft = {
 				caption,
 				location,
 				file,
@@ -269,8 +271,11 @@
 				musicStartSeconds,
 				musicDurationSeconds,
 				savedAt: new Date().toISOString()
-			}) as Draft;
+			} satisfies Draft;
 			await writeDraft(draft);
+			const verified = await readDraft();
+			if (!verified || verified.savedAt !== draft.savedAt || verified.file?.size !== file?.size)
+				throw new Error('Draft verification failed');
 			message = 'Draft dan media disimpan di perangkat ini.';
 		} catch {
 			message = 'Draft belum dapat disimpan di perangkat ini.';
@@ -384,12 +389,15 @@
 	function updateMusicStart(event: Event) {
 		const value = Number((event.currentTarget as HTMLInputElement).value);
 		musicStartSeconds = Math.min(value, musicEndSeconds - 5);
-		if (musicAudio) musicAudio.currentTime = musicStartSeconds;
 	}
 
 	function updateMusicEnd(event: Event) {
 		const value = Number((event.currentTarget as HTMLInputElement).value);
 		musicEndSeconds = Math.max(value, musicStartSeconds + 5);
+	}
+	function formatMusicTime(totalSeconds: number) {
+		const safe = Number.isFinite(totalSeconds) ? Math.max(0, Math.round(totalSeconds)) : 0;
+		return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, '0')}`;
 	}
 
 	function selectMusic(track: (typeof musicResults)[number]) {
@@ -397,35 +405,28 @@
 		musicQuery = track.title;
 		musicResults = [];
 		musicStartSeconds = 0;
-		// Default pilih SELURUH durasi pratinjau; nilai ini di-clamp ke durasi asli
-		// oleh onloadedmetadata. (Pratinjau iTunes memang maksimal ~30 dtk dari Apple.)
-		musicEndSeconds = 90;
-		musicTotalSeconds = 90;
+		musicTotalSeconds = Math.max(5, track.durationSeconds || 30);
+		musicEndSeconds = musicTotalSeconds;
 		musicPreviewPlaying = false;
 	}
 
 	function toggleMusicPreview() {
 		if (!musicAudio) return;
 		if (musicAudio.paused) {
-			if (musicAudio.currentTime < musicStartSeconds || musicAudio.currentTime >= musicEndSeconds)
-				musicAudio.currentTime = musicStartSeconds;
+			if (musicAudio.currentTime >= musicPreviewSeconds) musicAudio.currentTime = 0;
 			void musicAudio.play();
 		} else musicAudio.pause();
 	}
 
 	function startMusicPreview(event: Event) {
 		const audio = event.currentTarget as HTMLAudioElement;
-		if (
-			audio.currentTime < musicStartSeconds ||
-			audio.currentTime >= musicStartSeconds + musicDurationSeconds
-		)
-			audio.currentTime = musicStartSeconds;
+		if (audio.currentTime >= musicPreviewSeconds) audio.currentTime = 0;
 	}
 
 	function limitMusicPreview(event: Event) {
 		const audio = event.currentTarget as HTMLAudioElement;
-		if (audio.currentTime >= musicEndSeconds) {
-			audio.currentTime = musicStartSeconds;
+		if (audio.currentTime >= musicPreviewSeconds) {
+			audio.currentTime = 0;
 			void audio.play().catch(() => undefined);
 		}
 	}
@@ -479,33 +480,61 @@
 		musicDurationSeconds?: number;
 		savedAt?: string;
 	};
+	type StoredDraft = Omit<Draft, 'file'> & {
+		file?: { blob: Blob; name: string; type: string; lastModified: number } | null;
+	};
 	function draftDatabase() {
 		return new Promise<IDBDatabase>((resolve, reject) => {
-			const request = indexedDB.open('portal-si-composer', 1);
-			request.onupgradeneeded = () => request.result.createObjectStore('drafts');
+			const request = indexedDB.open('portal-si-composer', 2);
+			request.onupgradeneeded = () => {
+				if (!request.result.objectStoreNames.contains('drafts'))
+					request.result.createObjectStore('drafts');
+			};
 			request.onsuccess = () => resolve(request.result);
 			request.onerror = () => reject(request.error);
+			request.onblocked = () => reject(new Error('Penyimpanan draft sedang dipakai tab lain.'));
 		});
 	}
 	async function writeDraft(draft: Draft) {
 		const db = await draftDatabase();
+		const stored: StoredDraft = {
+			...draft,
+			file: draft.file
+				? {
+						blob: draft.file.slice(0, draft.file.size, draft.file.type),
+						name: draft.file.name,
+						type: draft.file.type,
+						lastModified: draft.file.lastModified
+					}
+				: null
+		};
 		await new Promise<void>((resolve, reject) => {
 			const tx = db.transaction('drafts', 'readwrite');
-			tx.objectStore('drafts').put(draft, kind);
+			tx.objectStore('drafts').put(stored, kind);
 			tx.oncomplete = () => resolve();
 			tx.onerror = () => reject(tx.error);
+			tx.onabort = () => reject(tx.error ?? new Error('Transaksi draft dibatalkan.'));
 		});
 		db.close();
 	}
 	async function readDraft() {
 		const db = await draftDatabase();
-		const value = await new Promise<Draft | undefined>((resolve, reject) => {
+		const value = await new Promise<StoredDraft | Draft | undefined>((resolve, reject) => {
 			const request = db.transaction('drafts').objectStore('drafts').get(kind);
-			request.onsuccess = () => resolve(request.result as Draft | undefined);
+			request.onsuccess = () => resolve(request.result as StoredDraft | Draft | undefined);
 			request.onerror = () => reject(request.error);
 		});
 		db.close();
-		return value;
+		if (!value) return undefined;
+		const storedFile = value.file;
+		if (storedFile instanceof File || storedFile == null) return value as Draft;
+		return {
+			...value,
+			file: new File([storedFile.blob], storedFile.name, {
+				type: storedFile.type,
+				lastModified: storedFile.lastModified
+			})
+		};
 	}
 	async function deleteDraft() {
 		const db = await draftDatabase();
@@ -514,6 +543,7 @@
 			tx.objectStore('drafts').delete(kind);
 			tx.oncomplete = () => resolve();
 			tx.onerror = () => reject(tx.error);
+			tx.onabort = () => reject(tx.error ?? new Error('Transaksi draft dibatalkan.'));
 		});
 		db.close();
 	}
@@ -685,7 +715,10 @@
 					{#each musicResults as track (track.id)}<button onclick={() => selectMusic(track)}
 							>{#if track.artworkUrl}<img src={track.artworkUrl} alt="" />{:else}<Music2
 									size={28}
-								/>{/if}<span><strong>{track.title}</strong><small>{track.artist}</small></span
+								/>{/if}<span
+								><strong>{track.title}</strong><small
+									>{track.artist} · {formatMusicTime(track.durationSeconds)}</small
+								></span
 							></button
 						>{/each}
 				</div>{/if}
@@ -693,14 +726,15 @@
 					{#if selectedMusic.artworkUrl}<img src={selectedMusic.artworkUrl} alt="" />{:else}<Music2
 							size={21}
 						/>{/if}<span
-						><strong>{selectedMusic.title}</strong><small>{selectedMusic.artist}</small></span
+						><strong>{selectedMusic.title}</strong><small
+							>{selectedMusic.artist} · {formatMusicTime(selectedMusic.durationSeconds)}</small
+						></span
 					>{#if selectedMusic.previewUrl}<audio
 							bind:this={musicAudio}
 							src={selectedMusic.previewUrl}
 							preload="metadata"
 							onloadedmetadata={(event) => {
-								musicTotalSeconds = Math.max(5, Math.floor(event.currentTarget.duration || 30));
-								musicEndSeconds = Math.min(musicEndSeconds, musicTotalSeconds);
+								musicPreviewSeconds = Math.max(1, Math.floor(event.currentTarget.duration || 30));
 							}}
 							onplay={(event) => {
 								startMusicPreview(event);
@@ -729,11 +763,13 @@
 				<div class="music-trim">
 					<header>
 						<span><Scissors size={14} /> Potong musik</span><strong
-							>{musicDurationSeconds} detik</strong
+							>{formatMusicTime(musicDurationSeconds)}</strong
 						>
 					</header>
 					<div class="trim-times">
-						<span>{musicStartSeconds}s</span><span>{musicEndSeconds}s</span>
+						<span>{formatMusicTime(musicStartSeconds)}</span><span
+							>{formatMusicTime(musicEndSeconds)}</span
+						>
 					</div>
 					<div
 						class="dual-range"
@@ -759,7 +795,10 @@
 							oninput={updateMusicEnd}
 						/>
 					</div>
-					<small>Bagian ini akan diputar berulang saat postingan atau cerita dilihat.</small>
+					<small
+						>Timeline memakai durasi lagu penuh. Tombol putar memakai cuplikan audio yang tersedia
+						dari katalog.</small
+					>
 				</div>{/if}
 			<button class="draft" onclick={saveDraft}
 				><Save size={18} /><span>Simpan draft<small>Teks, media, lokasi, dan musik</small></span
