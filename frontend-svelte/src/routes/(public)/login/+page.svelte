@@ -6,6 +6,10 @@
 	import type { PageProps } from './$types';
 	let { form }: PageProps = $props();
 	let revealPassword = $state(false);
+	// Kendalikan nilai input via state agar tidak "ikut berubah" saat tombol mata ditekan
+	// (perubahan type input memicu autofill browser yang menimpa field yang tak terkontrol).
+	let loginValue = $state(form?.values?.login ?? '');
+	let passwordValue = $state('');
 	// Tujuan setelah login (mis. /login?next=/posts/12). Diteruskan lewat hidden input
 	// agar tetap terbawa walau query pada aksi form tak konsisten.
 	const nextTarget = $derived(page.url.searchParams.get('next') ?? '');
@@ -33,7 +37,7 @@
 						name="login"
 						autocomplete="username"
 						placeholder="nama@contoh.id"
-						value={form?.values?.login ?? ''}
+						bind:value={loginValue}
 						aria-invalid={form?.errors?.login ? 'true' : undefined}
 					/>
 				</div>
@@ -47,6 +51,7 @@
 						type={revealPassword ? 'text' : 'password'}
 						autocomplete="current-password"
 						placeholder="Masukkan kata sandi"
+						bind:value={passwordValue}
 						aria-invalid={form?.errors?.password ? 'true' : undefined}
 					/><button
 						type="button"

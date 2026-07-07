@@ -57,7 +57,7 @@ function contentSecurityPolicy(isDevelopment: boolean): string {
 		: "'self' 'unsafe-inline' https://static.cloudflareinsights.com";
 	const connectSource = isDevelopment
 		? "'self' ws: wss: http: https:"
-		: "'self' https://api.portalsi.com wss://ws.portalsi.com https://cloudflareinsights.com";
+		: "'self' https://api.portalsi.com wss://ws.portalsi.com https://cloudflareinsights.com https://*.r2.cloudflarestorage.com";
 	return [
 		"default-src 'self'",
 		`script-src ${scriptSource}`,

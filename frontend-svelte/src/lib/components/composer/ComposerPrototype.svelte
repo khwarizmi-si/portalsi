@@ -306,7 +306,11 @@
 				selectedFileKind === 'image' && cropRegion
 					? await cropImageToRegion(file, cropRegion, 2048, activeFilter)
 					: file;
-			body.set('media', uploadFile);
+			// Coba unggah media LANGSUNG ke R2 (tanpa melewati Laravel). Kalau gagal (mis. CORS
+			// R2 belum diatur), otomatis fallback mengirim file ke server seperti biasa.
+			const directKey = await tryDirectUpload(uploadFile, kind === 'story' ? 'story' : 'post');
+			if (directKey) body.set('media_key', directKey);
+			else body.set('media', uploadFile);
 			body.set('caption', caption.trim());
 			if (selectedMusic) {
 				body.set('music_track_name', selectedMusic.title);
@@ -379,6 +383,56 @@
 			xhr.onerror = () => reject(new Error('Koneksi unggahan terputus.'));
 			xhr.onabort = () => reject(new Error('Unggahan dibatalkan.'));
 			xhr.send(body);
+		});
+	}
+
+	// Coba unggah media langsung ke R2 via presigned URL. Return key kalau sukses, null bila
+	// gagal (agar pemanggil fallback ke unggah lewat server).
+	async function tryDirectUpload(
+		fileToUpload: File,
+		presignKind: 'post' | 'story'
+	): Promise<string | null> {
+		try {
+			const contentType = fileToUpload.type;
+			if (!contentType || !/^(image|video)\//.test(contentType)) return null;
+			const extension =
+				(fileToUpload.name.split('.').pop() || '').toLowerCase() ||
+				(contentType.startsWith('video/') ? 'mp4' : 'jpg');
+			const res = await fetch('/api/uploads/presign', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+				body: JSON.stringify({ extension, content_type: contentType, kind: presignKind })
+			});
+			if (!res.ok) return null;
+			const presign = (await res.json()) as {
+				upload_url?: string;
+				key?: string;
+				content_type?: string;
+			};
+			if (!presign.upload_url || !presign.key) return null;
+			await putToStorage(presign.upload_url, fileToUpload, presign.content_type || contentType);
+			return presign.key;
+		} catch {
+			return null;
+		}
+	}
+
+	function putToStorage(url: string, fileToUpload: File, contentType: string) {
+		return new Promise<void>((resolve, reject) => {
+			const xhr = new XMLHttpRequest();
+			activeUpload = xhr;
+			xhr.open('PUT', url);
+			xhr.setRequestHeader('Content-Type', contentType);
+			xhr.upload.onprogress = (event) => {
+				if (event.lengthComputable) uploadProgress = Math.round((event.loaded / event.total) * 100);
+			};
+			xhr.onload = () => {
+				if (xhr.status >= 200 && xhr.status < 300) resolve();
+				else reject(new Error('Upload langsung gagal.'));
+			};
+			xhr.onerror = () => reject(new Error('Upload langsung terputus.'));
+			xhr.onabort = () => reject(new Error('Unggahan dibatalkan.'));
+			xhr.send(fileToUpload);
 		});
 	}
 
