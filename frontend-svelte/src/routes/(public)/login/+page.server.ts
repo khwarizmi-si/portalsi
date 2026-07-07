@@ -12,7 +12,7 @@ export const load: PageServerLoad = ({ locals }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ request, cookies, locals, url }) => {
+	default: async ({ request, cookies, locals, url, getClientAddress }) => {
 		const formData = await request.formData();
 		const parsed = loginInputSchema.safeParse({
 			login: formData.get('login'),
@@ -29,11 +29,22 @@ export const actions: Actions = {
 		}
 
 		try {
+			// Teruskan UA & IP asli browser ke API supaya riwayat login akurat (request ke
+			// API datang dari server SSR, bukan langsung dari browser).
+			const clientUa = request.headers.get('user-agent') ?? '';
+			const clientIp =
+				request.headers.get('cf-connecting-ip') ??
+				(request.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() ??
+				'';
 			const response = await backendRequest('login', {
 				method: 'POST',
 				body: { login: parsed.data.login, password: parsed.data.password },
 				schema: loginResponseSchema,
-				requestId: locals.requestId
+				requestId: locals.requestId,
+				headers: {
+					'X-Real-Client-Ua': clientUa,
+					'X-Real-Client-Ip': clientIp || getClientAddress()
+				}
 			});
 			setSessionCookie(cookies, response.token, parsed.data.remember);
 		} catch (error) {

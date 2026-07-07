@@ -1,7 +1,11 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { page } from '$app/state';
+	import { page, navigating } from '$app/state';
 	import { onMount } from 'svelte';
+	import FeedSkeleton from '$lib/components/skeleton/FeedSkeleton.svelte';
+	import ExploreSkeleton from '$lib/components/skeleton/ExploreSkeleton.svelte';
+	import ProfileSkeleton from '$lib/components/skeleton/ProfileSkeleton.svelte';
+	import PostDetailSkeleton from '$lib/components/skeleton/PostDetailSkeleton.svelte';
 	import {
 		Bell,
 		Bookmark,
@@ -30,7 +34,7 @@
 		'/explore',
 		'/messages',
 		'/notifications',
-		'/store',
+		'/marketplace',
 		'/profile',
 		'/settings'
 	]);
@@ -85,7 +89,7 @@
 		{ href: '/explore', label: 'Jelajah', icon: Compass },
 		{ href: '/messages', label: 'Pesan', icon: MessageCircle },
 		{ href: '/notifications', label: 'Notifikasi', icon: Bell },
-		{ href: '/store', label: 'Store', icon: ShoppingBag },
+		{ href: '/marketplace', label: 'Marketplace', icon: ShoppingBag },
 		{ href: '/profile', label: 'Profil', icon: UserRound }
 	];
 
@@ -93,13 +97,25 @@
 		{ href: '/home', label: 'Beranda', icon: Home },
 		{ href: '/explore', label: 'Jelajah', icon: Compass },
 		{ href: '/create/post', label: 'Buat', icon: Plus, create: true },
-		{ href: '/store', label: 'Store', icon: ShoppingBag },
+		{ href: '/marketplace', label: 'Marketplace', icon: ShoppingBag },
 		{ href: '/profile', label: 'Profil', icon: UserRound }
 	];
 
 	function active(href: string) {
 		return page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
 	}
+
+	// Tampilkan skeleton saat berpindah ke halaman yang mengambil media, supaya terasa responsif
+	// (load berjalan di server SSR, jadi tanpa ini halaman lama membeku dulu sebelum berganti).
+	const NavSkeleton = $derived.by(() => {
+		const id = navigating?.to?.route?.id;
+		if (!id) return null;
+		if (id === '/(app)/home') return FeedSkeleton;
+		if (id === '/(app)/explore') return ExploreSkeleton;
+		if (id === '/(app)/profile' || id === '/(app)/u/[username]') return ProfileSkeleton;
+		if (id === '/(app)/posts/[postId]') return PostDetailSkeleton;
+		return null;
+	});
 </script>
 
 <div class="app-shell" class:no-bottom-nav={hideBottomNav}>
@@ -161,7 +177,11 @@
 
 	<main class="app-main" id="main-content">
 		{#if showBack}<div class="page-back"><BackButton /></div>{/if}
-		{@render children()}
+		{#if NavSkeleton}
+			<div class="nav-skeleton-wrap"><NavSkeleton /></div>
+		{:else}
+			{@render children()}
+		{/if}
 	</main>
 
 	{#if !hideBottomNav}
@@ -427,6 +447,16 @@
 	.app-main {
 		min-width: 0;
 		padding-bottom: calc(var(--bottom-nav-height) + var(--safe-bottom) + 16px);
+	}
+	.nav-skeleton-wrap {
+		width: min(100%, calc(var(--content-width) + 56px));
+		margin: 0 auto;
+		padding: 0 16px;
+	}
+	@media (min-width: 768px) {
+		.nav-skeleton-wrap {
+			padding: 8px 28px 0;
+		}
 	}
 	.app-shell.no-bottom-nav .app-main {
 		padding-bottom: 0;

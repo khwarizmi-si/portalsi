@@ -719,7 +719,7 @@
 				><span>Caption</span><MentionTextarea
 					bind:value={caption}
 					name="caption"
-					maxlength={5000}
+					maxlength={2200}
 					rows={5}
 					placeholder="Tulis sesuatu yang bermakna…"
 				/><small>{caption.length.toLocaleString('id-ID')} karakter</small></label

@@ -56,16 +56,20 @@
 		<div class="session-actions">
 			<button onclick={removeAll} disabled={sessions.length === 0}>Logout semua perangkat</button>
 		</div>
-		{#each sessions as item (item.id)}<article>
+		{#each sessions as item (item.id)}<article class:current={item.is_current}>
 				<span><MonitorSmartphone size={20} /></span>
 				<div>
-					<strong>{item.device || 'Perangkat tidak dikenal'} · {item.browser || 'Browser'}</strong
+					<strong
+						>{item.device || 'Perangkat tidak dikenal'} · {item.browser ||
+							'Browser'}{#if item.is_current}<em class="badge">Sesi ini</em>{/if}</strong
 					><small
-						>{item.platform || 'Platform tidak diketahui'} · {item.ip_address ||
-							'IP tidak tersedia'}</small
+						>{item.platform || 'Platform tidak diketahui'}{#if item.location} · {item.location}{/if} ·
+						{item.ip_address || 'IP tidak tersedia'}</small
 					><time>{new Date(item.login_at).toLocaleString('id-ID')}</time>
 				</div>
-				<button onclick={() => remove(item.id)} aria-label="Hapus riwayat"
+				<button
+					onclick={() => remove(item.id)}
+					aria-label={item.is_current ? 'Keluar sesi ini' : 'Hapus riwayat'}
 					><Trash2 size={17} /></button
 				>
 			</article>{/each}{#if sessions.length === 0}<p>
@@ -85,6 +89,21 @@
 		gap: 12px;
 		padding: 14px 16px;
 		border-bottom: 1px solid var(--color-border);
+	}
+	.sessions article.current {
+		background: var(--color-secondary-soft);
+	}
+	.badge {
+		margin-left: 8px;
+		padding: 2px 8px;
+		background: var(--color-secondary);
+		border-radius: 999px;
+		color: white;
+		font-size: 0.6rem;
+		font-weight: 700;
+		font-style: normal;
+		letter-spacing: 0.03em;
+		vertical-align: middle;
 	}
 	.session-actions {
 		display: flex;

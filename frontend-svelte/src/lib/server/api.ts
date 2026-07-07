@@ -13,6 +13,7 @@ interface BackendRequestOptions<T> {
 	timeoutMs?: number;
 	requestId?: string;
 	signal?: AbortSignal;
+	headers?: Record<string, string>;
 }
 
 export async function backendRequest<T = unknown>(
@@ -24,6 +25,11 @@ export async function backendRequest<T = unknown>(
 	const headers = new Headers({ Accept: 'application/json' });
 	if (options.token) headers.set('Authorization', `Bearer ${options.token}`);
 	if (options.requestId) headers.set('X-Request-ID', options.requestId);
+	if (options.headers) {
+		for (const [key, value] of Object.entries(options.headers)) {
+			if (value) headers.set(key, value);
+		}
+	}
 
 	const body = serializeBody(options.body, headers);
 	const attempts = 1;

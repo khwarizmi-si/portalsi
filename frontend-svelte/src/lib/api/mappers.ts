@@ -18,7 +18,10 @@ export function mapCompactUser(user: CompactUser, mediaBaseUrl?: string): Portal
 		emailVerified: true,
 		isPrivate: user.is_private,
 		hasStory: user.has_story ?? false,
-		storyViewed: user.story_viewed ?? false
+		storyViewed: user.story_viewed ?? false,
+		isFollowing: user.is_following ?? false,
+		isRequested: user.is_requested ?? false,
+		isSelf: user.is_self ?? false
 	};
 }
 

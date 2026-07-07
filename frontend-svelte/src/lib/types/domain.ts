@@ -11,6 +11,9 @@ export interface PortalUser {
 	isPrivate: boolean;
 	hasStory?: boolean;
 	storyViewed?: boolean;
+	isFollowing?: boolean;
+	isRequested?: boolean;
+	isSelf?: boolean;
 }
 
 export interface StoryPreview {

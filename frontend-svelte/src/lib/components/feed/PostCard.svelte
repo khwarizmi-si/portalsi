@@ -8,6 +8,7 @@
 	import { clientRequest } from '$lib/api/client';
 	import type { PostPreview } from '$lib/types/domain';
 	import MentionText from '$lib/components/ui/MentionText.svelte';
+	import SharePostSheet from '$lib/components/feed/SharePostSheet.svelte';
 
 	let {
 		post,
@@ -15,6 +16,7 @@
 		autoplay = false
 	}: { post: PostPreview; zoomable?: boolean; autoplay?: boolean } = $props();
 	let lightboxOpen = $state(false);
+	let shareOpen = $state(false);
 	function initialInteractionState() {
 		return {
 			liked: post.isLiked,
@@ -61,18 +63,13 @@
 		}
 	}
 
-	async function sharePost() {
-		const url = new URL(`/posts/${post.id}`, window.location.origin).toString();
-		try {
-			if (navigator.share) await navigator.share({ title: post.mediaAlt, url });
-			else {
-				await navigator.clipboard.writeText(url);
-				interactionError = 'Tautan postingan disalin.';
-			}
-		} catch (error) {
-			if (error instanceof DOMException && error.name === 'AbortError') return;
-			interactionError = 'Tautan belum dapat dibagikan.';
-		}
+	const shareUrl = $derived(
+		typeof window !== 'undefined'
+			? new URL(`/posts/${post.id}`, window.location.origin).toString()
+			: `https://app.portalsi.com/posts/${post.id}`
+	);
+	function sharePost() {
+		shareOpen = true;
 	}
 </script>
 
@@ -186,6 +183,10 @@
 	poster={post.thumbnailUrl}
 	onClose={() => (lightboxOpen = false)}
 />
+
+{#if shareOpen}
+	<SharePostSheet postId={post.id} {shareUrl} onClose={() => (shareOpen = false)} />
+{/if}
 
 <style>
 	.post-card {
@@ -365,6 +366,9 @@
 	.caption {
 		font-size: 0.91rem;
 		line-height: 1.5;
+		/* Pertahankan baris baru & spasi seperti yang diketik user (paragraf). */
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
 	}
 
 	.caption a {

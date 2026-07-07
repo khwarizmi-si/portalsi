@@ -1,6 +1,7 @@
 <script lang="ts">
 	import {
 		Archive,
+		AtSign,
 		Bell,
 		Bookmark,
 		ChevronRight,
@@ -28,6 +29,12 @@
 					desc: 'Atur siapa yang dapat mengikuti Anda',
 					href: '/settings/privacy',
 					icon: ShieldCheck
+				},
+				{
+					label: 'Ubah email',
+					desc: 'Ganti alamat email dengan konfirmasi',
+					href: '/settings/email',
+					icon: AtSign
 				},
 				{
 					label: 'Ubah kata sandi',

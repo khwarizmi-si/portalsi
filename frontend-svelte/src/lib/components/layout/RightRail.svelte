@@ -69,9 +69,10 @@
 	</section>
 
 	<footer>
-		<a href="/settings">Privasi</a><span>·</span><a href="/announcements">Pengumuman</a><span
+		<a href="/legal/privasi">Privasi</a><span>·</span><a href="/legal/syarat">Syarat</a><span
 			>·</span
-		><a href="/store">Store</a>
+		><a href="/legal/kebijakan">Kebijakan</a><span>·</span><a href="/announcements">Pengumuman</a
+		><span>·</span><a href="/marketplace">Marketplace</a>
 		<p>© {currentYear} Portal SI</p>
 	</footer>
 </aside>

@@ -4,15 +4,27 @@
 	import { clientRequest } from '$lib/api/client';
 	import Avatar from '$lib/components/ui/Avatar.svelte';
 	import SectionPage from '$lib/components/layout/SectionPage.svelte';
+	import { confirmAction } from '$lib/ui/confirm';
 	import type { PageProps } from './$types';
 	let { data }: PageProps = $props();
 	let requests = $state(untrack(() => [...data.requests]));
 	let message = $state('');
-	async function decide(id: number, accept: boolean) {
+	async function decide(user: { id: number; username: string; fullName: string }, accept: boolean) {
+		const confirmed = await confirmAction({
+			title: accept ? `Terima @${user.username}?` : `Tolak @${user.username}?`,
+			description: accept
+				? `${user.fullName} akan bisa melihat postingan dan cerita Anda.`
+				: `Permintaan ${user.fullName} akan dihapus. Mereka masih bisa meminta lagi nanti.`,
+			confirmLabel: accept ? 'Terima' : 'Tolak',
+			tone: accept ? 'default' : 'danger'
+		});
+		if (!confirmed) return;
 		message = '';
 		try {
-			await clientRequest(`followers/${id}/${accept ? 'accept' : 'reject'}`, { method: 'POST' });
-			requests = requests.filter((item) => item.id !== id);
+			await clientRequest(`followers/${user.id}/${accept ? 'accept' : 'reject'}`, {
+				method: 'POST'
+			});
+			requests = requests.filter((item) => item.id !== user.id);
 			message = accept ? 'Permintaan diterima.' : 'Permintaan ditolak.';
 		} catch (error) {
 			message = error instanceof Error ? error.message : 'Permintaan belum dapat diproses.';
@@ -30,11 +42,11 @@
 			</p>{:else}{#each requests as user (user.id)}<article>
 					<Avatar name={user.fullName} size="md" /><a href={`/u/${user.username}`}
 						><strong>{user.fullName}</strong><small>@{user.username}</small></a
-					><button onclick={() => decide(user.id, true)} aria-label={`Terima ${user.fullName}`}
+					><button onclick={() => decide(user, true)} aria-label={`Terima ${user.fullName}`}
 						><Check size={17} /></button
 					><button
 						class="reject"
-						onclick={() => decide(user.id, false)}
+						onclick={() => decide(user, false)}
 						aria-label={`Tolak ${user.fullName}`}><X size={17} /></button
 					>
 				</article>{/each}{#if requests.length === 0}<p>

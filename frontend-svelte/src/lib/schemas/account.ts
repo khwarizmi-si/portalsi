@@ -7,6 +7,7 @@ export const loginHistorySchema = z.object({
 	device: z.string().nullish(),
 	browser: z.string().nullish(),
 	platform: z.string().nullish(),
+	location: z.string().nullish(),
 	login_at: z.string(),
 	is_current: z.boolean().optional().default(false)
 });

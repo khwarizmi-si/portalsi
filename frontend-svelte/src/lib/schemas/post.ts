@@ -12,7 +12,10 @@ export const compactUserSchema = z
 		is_verified: booleanish.catch(false),
 		is_private: booleanish.catch(false),
 		has_story: booleanish.optional().catch(false),
-		story_viewed: booleanish.optional().catch(false)
+		story_viewed: booleanish.optional().catch(false),
+		is_following: booleanish.optional().catch(false),
+		is_requested: booleanish.optional().catch(false),
+		is_self: booleanish.optional().catch(false)
 	})
 	.passthrough();
 
