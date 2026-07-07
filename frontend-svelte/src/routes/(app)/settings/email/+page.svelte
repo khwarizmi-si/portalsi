@@ -45,7 +45,8 @@
 					diganti <strong>sekali dalam 24 jam</strong>.
 				</p>
 			</div>
-			{#if form?.message && !form?.success}<p class="err">{form.message}</p>{/if}
+			{#if form?.errors?.email?.length}<p class="err">{form.errors.email[0]}</p>
+			{:else if form?.message && !form?.success}<p class="err">{form.message}</p>{/if}
 			<button>Kirim tautan konfirmasi</button>
 		</form>
 	{/if}
