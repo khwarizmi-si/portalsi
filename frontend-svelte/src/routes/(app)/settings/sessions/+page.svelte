@@ -3,6 +3,7 @@
 	import { untrack } from 'svelte';
 	import { clientRequest } from '$lib/api/client';
 	import { confirmAction } from '$lib/ui/confirm';
+	import { relativeTimeId } from '$lib/utils/time';
 	import SectionPage from '$lib/components/layout/SectionPage.svelte';
 	import type { PageProps } from './$types';
 	let { data }: PageProps = $props();
@@ -61,11 +62,13 @@
 				<div>
 					<strong
 						>{item.device || 'Perangkat tidak dikenal'} · {item.browser ||
-							'Browser'}{#if item.is_current}<em class="badge">Sesi ini</em>{/if}</strong
+							'Browser'}{#if item.is_current}<em class="badge">Sesi ini</em>{:else if item.is_active}<em
+								class="badge active"><span class="dot"></span>Sedang aktif</em
+							>{/if}</strong
 					><small
 						>{item.platform || 'Platform tidak diketahui'}{#if item.location} · {item.location}{/if} ·
 						{item.ip_address || 'IP tidak tersedia'}</small
-					><time>{new Date(item.login_at).toLocaleString('id-ID')}</time>
+					><time>{relativeTimeId(item.login_at)}</time>
 				</div>
 				<button
 					onclick={() => remove(item.id)}
@@ -104,6 +107,32 @@
 		font-style: normal;
 		letter-spacing: 0.03em;
 		vertical-align: middle;
+	}
+	.badge.active {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		background: #12a150;
+		color: white;
+	}
+	.badge.active .dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: #b8f5c9;
+		box-shadow: 0 0 0 0 rgb(184 245 201 / 70%);
+		animation: pulse-dot 1.6s ease-out infinite;
+	}
+	@keyframes pulse-dot {
+		0% {
+			box-shadow: 0 0 0 0 rgb(184 245 201 / 60%);
+		}
+		70% {
+			box-shadow: 0 0 0 5px rgb(184 245 201 / 0%);
+		}
+		100% {
+			box-shadow: 0 0 0 0 rgb(184 245 201 / 0%);
+		}
 	}
 	.session-actions {
 		display: flex;

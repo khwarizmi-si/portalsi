@@ -9,6 +9,7 @@ export const commentReplySchema = z
 		post_id: z.coerce.number().int().positive(),
 		user_id: z.coerce.number().int().positive(),
 		content: z.string(),
+		gif_url: z.string().nullish(),
 		parent_comment_id: z.coerce.number().int().positive().nullable(),
 		created_at: z.string(),
 		likes_count: z.coerce.number().int().nonnegative().catch(0),
@@ -35,6 +36,7 @@ export const createdCommentResponseSchema = z.object({
 			post_id: z.coerce.number().int().positive(),
 			user_id: z.coerce.number().int().positive(),
 			content: z.string(),
+			gif_url: z.string().nullish(),
 			parent_comment_id: z.coerce.number().int().positive().nullable(),
 			created_at: z.string(),
 			user: compactUserSchema

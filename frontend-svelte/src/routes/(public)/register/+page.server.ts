@@ -19,6 +19,8 @@ export const actions: Actions = {
 			username: String(formData.get('username') ?? ''),
 			email: String(formData.get('email') ?? '')
 		};
+		const password = String(formData.get('password') ?? '');
+		const passwordConfirmation = String(formData.get('password_confirmation') ?? '');
 		const parsed = registerInputSchema.safeParse({
 			...values,
 			role: 'student',
@@ -29,6 +31,13 @@ export const actions: Actions = {
 			return fail(422, {
 				message: 'Periksa kembali data pendaftaran.',
 				errors: formFieldErrors(parsed.error),
+				values
+			});
+		}
+		if (password !== passwordConfirmation) {
+			return fail(422, {
+				message: 'Konfirmasi kata sandi tidak cocok.',
+				errors: { password_confirmation: ['Konfirmasi kata sandi tidak sama.'] },
 				values
 			});
 		}

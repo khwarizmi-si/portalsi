@@ -11,6 +11,7 @@
 	import { confirmAction, confirmButtonAction } from '$lib/ui/confirm';
 	import MentionText from '$lib/components/ui/MentionText.svelte';
 	import MentionTextarea from '$lib/components/ui/MentionTextarea.svelte';
+	import GifPicker from '$lib/components/comment/GifPicker.svelte';
 
 	let { data, form }: PageProps = $props();
 	let comments = $state(untrack(() => structuredClone(data.comments)));
@@ -19,24 +20,29 @@
 	let submitting = $state(false);
 	let formMessage = $state('');
 	let commentCount = $state(untrack(() => data.post.commentsCount));
+	let gifOpen = $state(false);
 
-	async function submitComment(event: SubmitEvent) {
-		event.preventDefault();
+	async function sendComment(gifUrl: string | null = null) {
 		const text = content.trim();
-		if (!text || submitting) return;
+		if ((!text && !gifUrl) || submitting) return;
 		submitting = true;
 		formMessage = '';
 		try {
 			const response = await clientRequest(`posts/${data.post.id}/comments`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ content: text, parent_comment_id: replyTo?.id ?? null }),
+				body: JSON.stringify({
+					content: text,
+					gif_url: gifUrl,
+					parent_comment_id: replyTo?.id ?? null
+				}),
 				schema: createdCommentResponseSchema
 			});
 			const created = {
 				id: response.data.comment_id,
 				user: data.currentUser,
 				text: response.data.content,
+				gifUrl: response.data.gif_url ?? gifUrl ?? null,
 				createdLabel: 'baru saja',
 				likesCount: 0,
 				isLiked: false,
@@ -49,12 +55,22 @@
 			content = '';
 			replyTo = null;
 			commentCount += 1;
-			formMessage = 'Komentar terkirim.';
+			formMessage = gifUrl ? 'GIF terkirim.' : 'Komentar terkirim.';
 		} catch {
 			formMessage = 'Komentar belum dapat dikirim.';
 		} finally {
 			submitting = false;
 		}
+	}
+
+	function submitComment(event?: SubmitEvent) {
+		event?.preventDefault();
+		void sendComment(null);
+	}
+
+	function pickGif(url: string) {
+		gifOpen = false;
+		void sendComment(url);
 	}
 
 	async function toggleCommentLike(id: number, reply = false) {
@@ -186,8 +202,14 @@
 										role={comment.user.role}
 									/></strong
 								>
-								<MentionText text={comment.text} />
+								{#if !comment.gifUrl}<MentionText text={comment.text} />{/if}
 							</p>
+							{#if comment.gifUrl}<img
+									class="comment-gif"
+									src={comment.gifUrl}
+									alt="Komentar GIF"
+									loading="lazy"
+								/>{/if}
 							<footer>
 								<time>{comment.createdLabel}</time><button
 									class:active={comment.isLiked}
@@ -216,8 +238,14 @@
 													role={reply.user.role}
 												/></strong
 											>
-											<MentionText text={reply.text} />
+											{#if !reply.gifUrl}<MentionText text={reply.text} />{/if}
 										</p>
+										{#if reply.gifUrl}<img
+												class="comment-gif"
+												src={reply.gifUrl}
+												alt="Balasan GIF"
+												loading="lazy"
+											/>{/if}
 										<footer>
 											<time>{reply.createdLabel}</time><button
 												class:active={reply.isLiked}
@@ -252,13 +280,22 @@
 						maxlength={2000}
 						rows={1}
 						placeholder={replyTo ? 'Tulis balasan…' : 'Tulis komentar…'}
+						onEnter={() => submitComment()}
 					/></label
+				>
+				<button
+					type="button"
+					class="gif-btn"
+					onclick={() => (gifOpen = true)}
+					disabled={submitting}
+					aria-label="Kirim GIF">GIF</button
 				>
 				<button type="submit" aria-label="Kirim komentar" disabled={!content.trim() || submitting}
 					><Send size={18} /></button
 				>
 			</form>
 			{#if formMessage}<p class="form-message" aria-live="polite">{formMessage}</p>{/if}
+			{#if gifOpen}<GifPicker onSelect={pickGif} onClose={() => (gifOpen = false)} />{/if}
 		</section>
 	</div>
 </SectionPage>
@@ -464,7 +501,7 @@
 	}
 	.comment-form {
 		display: grid;
-		grid-template-columns: auto 1fr auto;
+		grid-template-columns: auto 1fr auto auto;
 		align-items: center;
 		gap: 8px;
 		padding: 12px;
@@ -492,8 +529,22 @@
 		border-radius: 11px;
 		color: white;
 	}
+	.comment-form .gif-btn {
+		width: 42px;
+		background: var(--color-secondary-soft, #d9efe6);
+		color: var(--color-secondary, #178f72);
+		font-size: 0.72rem;
+		font-weight: 800;
+		letter-spacing: 0.02em;
+	}
 	.comment-form button:disabled {
 		opacity: 0.45;
+	}
+	.comment-gif {
+		max-width: min(220px, 68%);
+		margin: 6px 0 2px;
+		border-radius: 12px;
+		border: 1px solid var(--color-border);
 	}
 	.form-message,
 	.empty {

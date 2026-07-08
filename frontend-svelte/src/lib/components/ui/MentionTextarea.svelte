@@ -7,13 +7,15 @@
 		name,
 		placeholder = '',
 		maxlength = 2000,
-		rows = 4
+		rows = 4,
+		onEnter
 	}: {
 		value?: string;
 		name: string;
 		placeholder?: string;
 		maxlength?: number;
 		rows?: number;
+		onEnter?: () => void;
 	} = $props();
 	let textarea: HTMLTextAreaElement;
 	let results = $state<Array<{ user_id: number; username: string; full_name?: string | null }>>([]);
@@ -43,6 +45,16 @@
 		}
 	}
 
+	function handleKeydown(event: KeyboardEvent) {
+		// Desktop: Enter mengirim, Shift+Enter membuat baris baru. Di layar sentuh Enter tetap baris baru.
+		// Jika menu mention terbuka, Enter dibiarkan untuk mengetik (bukan mengirim).
+		if (event.key !== 'Enter' || event.shiftKey || !onEnter) return;
+		if (results.length > 0) return;
+		if (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches) return;
+		event.preventDefault();
+		onEnter();
+	}
+
 	function select(username: string) {
 		const cursor = textarea.selectionStart;
 		const before = value.slice(0, cursor).replace(/@([A-Za-z0-9._]{1,40})$/, `@${username} `);
@@ -63,7 +75,8 @@
 		{placeholder}
 		{maxlength}
 		{rows}
-		oninput={updateSuggestions}></textarea>
+		oninput={updateSuggestions}
+		onkeydown={handleKeydown}></textarea>
 	{#if results.length || loading}<div class="mention-menu" role="listbox">
 			{#if loading && !results.length}<span>Mencari pengguna…</span>{/if}
 			{#each results as user (user.user_id)}<button

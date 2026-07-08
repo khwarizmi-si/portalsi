@@ -1,20 +1,33 @@
 <script lang="ts">
 	import { ArrowUpRight, Megaphone, Pin } from '@lucide/svelte';
-	import { fly } from 'svelte/transition';
 	import type { AnnouncementPreview } from '$lib/types/domain';
 
 	let { announcements }: { announcements: AnnouncementPreview[] } = $props();
 	let active = $state(0);
+	let holding = $state(false);
+	let trackEl = $state<HTMLDivElement>();
 
-	// Auto-geser ke pengumuman berikutnya setiap 5 detik bila lebih dari satu.
+	function scrollToIndex(index: number, behavior: ScrollBehavior = 'smooth') {
+		if (!trackEl) return;
+		const clamped = ((index % announcements.length) + announcements.length) % announcements.length;
+		trackEl.scrollTo({ left: clamped * trackEl.clientWidth, behavior });
+	}
+
+	function onScroll() {
+		if (!trackEl) return;
+		active = Math.round(trackEl.scrollLeft / (trackEl.clientWidth || 1));
+	}
+
+	// Auto-geser tiap 5 detik — dijeda selama user menahan/menggeser agar tidak membingungkan.
 	$effect(() => {
 		if (announcements.length <= 1) return;
 		const timer = setInterval(() => {
-			active = (active + 1) % announcements.length;
+			if (holding) return;
+			scrollToIndex(active + 1);
 		}, 5000);
 		return () => clearInterval(timer);
 	});
-	// Jaga index tetap valid bila jumlah pengumuman berubah.
+
 	$effect(() => {
 		if (active >= announcements.length) active = 0;
 	});
@@ -22,27 +35,36 @@
 
 {#if announcements.length}
 	<div class="announcement-carousel">
-		{#key active}
-			<article class="announcement" in:fly={{ x: 48, duration: 420 }}>
-				<div class="icon"><Megaphone size={21} /></div>
-				<div class="copy">
-					<div class="meta">
-						{#if announcements[active].pinned}<Pin size={13} /> Disematkan ·
-						{/if}{announcements[active].createdLabel}
+		<div
+			class="track"
+			bind:this={trackEl}
+			onscroll={onScroll}
+			onpointerdown={() => (holding = true)}
+			onpointerup={() => (holding = false)}
+			onpointercancel={() => (holding = false)}
+			onpointerleave={() => (holding = false)}
+		>
+			{#each announcements as item (item.id)}
+				<article class="announcement">
+					<div class="icon"><Megaphone size={21} /></div>
+					<div class="copy">
+						<div class="meta">
+							{#if item.pinned}<Pin size={13} /> Disematkan · {/if}{item.createdLabel}
+						</div>
+						<h2>{item.title}</h2>
+						<p>{item.content}</p>
 					</div>
-					<h2>{announcements[active].title}</h2>
-					<p>{announcements[active].content}</p>
-				</div>
-				<a href="/announcements" aria-label="Lihat semua pengumuman"><ArrowUpRight size={20} /></a>
-			</article>
-		{/key}
+					<a href="/announcements" aria-label="Lihat semua pengumuman"><ArrowUpRight size={20} /></a>
+				</article>
+			{/each}
+		</div>
 		{#if announcements.length > 1}
 			<div class="dots" aria-label="Navigasi pengumuman">
 				{#each announcements as _, index (index)}
 					<button
 						type="button"
 						class:active={index === active}
-						onclick={() => (active = index)}
+						onclick={() => scrollToIndex(index)}
 						aria-label={`Pengumuman ${index + 1} dari ${announcements.length}`}
 					></button>
 				{/each}
@@ -55,10 +77,23 @@
 	.announcement-carousel {
 		position: relative;
 		min-width: 0;
-		overflow: hidden;
+	}
+	.track {
+		display: flex;
+		overflow-x: auto;
+		scroll-snap-type: x mandatory;
+		scrollbar-width: none;
+		border-radius: var(--radius-lg);
+		-webkit-overflow-scrolling: touch;
+		touch-action: pan-y;
+	}
+	.track::-webkit-scrollbar {
+		display: none;
 	}
 	.announcement {
+		flex: 0 0 100%;
 		min-width: 0;
+		scroll-snap-align: center;
 		display: grid;
 		grid-template-columns: auto 1fr auto;
 		align-items: start;
@@ -77,6 +112,10 @@
 		background: #ffe8b9;
 		border-radius: 12px;
 		color: #9a4c00;
+	}
+
+	.copy {
+		min-width: 0;
 	}
 
 	.meta {

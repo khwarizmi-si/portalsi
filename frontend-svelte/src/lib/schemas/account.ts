@@ -9,7 +9,8 @@ export const loginHistorySchema = z.object({
 	platform: z.string().nullish(),
 	location: z.string().nullish(),
 	login_at: z.string(),
-	is_current: z.boolean().optional().default(false)
+	is_current: z.boolean().optional().default(false),
+	is_active: z.boolean().optional().default(false)
 });
 
 export const loginHistoriesSchema = z.array(loginHistorySchema);

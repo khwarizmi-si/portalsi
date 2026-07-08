@@ -36,6 +36,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		id: comment.comment_id,
 		user: mapCompactUser(comment.user, mediaBaseUrl),
 		text: comment.content,
+		gifUrl: comment.gif_url ?? null,
 		createdLabel: relativeTimeId(comment.created_at),
 		likesCount: comment.likes_count,
 		isLiked: comment.is_liked,

@@ -1,8 +1,15 @@
 <script lang="ts">
+	import { Eye, EyeOff } from '@lucide/svelte';
 	import AuthFields from '$lib/components/auth/AuthFields.svelte';
 	import AuthShell from '$lib/components/auth/AuthShell.svelte';
 	import type { PageProps } from './$types';
 	let { form }: PageProps = $props();
+
+	let showPassword = $state(false);
+	let showConfirm = $state(false);
+	let password = $state('');
+	let confirm = $state('');
+	const mismatch = $derived(confirm.length > 0 && password !== confirm);
 </script>
 
 <svelte:head><title>Daftar — Portal SI</title></svelte:head>
@@ -48,19 +55,58 @@
 					>{/if}</label
 			>
 			<label
-				><span>Kata sandi</span><input
-					name="password"
-					type="password"
-					autocomplete="new-password"
-					placeholder="Minimal 6 karakter"
-				/>{#if form?.errors?.password}<small class="field-error">{form.errors.password[0]}</small
+				><span>Kata sandi</span>
+				<div class="pw-field">
+					<input
+						name="password"
+						type={showPassword ? 'text' : 'password'}
+						autocomplete="new-password"
+						placeholder="Minimal 6 karakter"
+						bind:value={password}
+					/><button
+						type="button"
+						onclick={() => (showPassword = !showPassword)}
+						aria-label={showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+						aria-pressed={showPassword}
+						>{#if showPassword}<EyeOff size={18} />{:else}<Eye size={18} />{/if}</button
+					>
+				</div>
+				{#if form?.errors?.password}<small class="field-error">{form.errors.password[0]}</small
 					>{/if}</label
 			>
-			<label class="terms"
-				><input type="checkbox" name="terms" /><span
-					>Saya menyetujui aturan komunitas dan kebijakan privasi Portal SI.</span
-				></label
+			<label
+				><span>Ulangi kata sandi</span>
+				<div class="pw-field">
+					<input
+						name="password_confirmation"
+						type={showConfirm ? 'text' : 'password'}
+						autocomplete="new-password"
+						placeholder="Ketik ulang kata sandi"
+						bind:value={confirm}
+						aria-invalid={mismatch ? 'true' : undefined}
+					/><button
+						type="button"
+						onclick={() => (showConfirm = !showConfirm)}
+						aria-label={showConfirm ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+						aria-pressed={showConfirm}
+						>{#if showConfirm}<EyeOff size={18} />{:else}<Eye size={18} />{/if}</button
+					>
+				</div>
+				{#if mismatch}<small class="field-error">Kata sandi belum sama.</small>
+				{:else if form?.errors?.password_confirmation}<small class="field-error"
+						>{form.errors.password_confirmation[0]}</small
+					>{/if}</label
 			>
+			<div class="terms">
+				<input type="checkbox" name="terms" id="terms" />
+				<label for="terms"
+					>Saya menyetujui <a href="/legal/kebijakan" target="_blank" rel="noopener"
+						>aturan komunitas</a
+					>
+					dan
+					<a href="/legal/privasi" target="_blank" rel="noopener">kebijakan privasi</a> Portal SI.</label
+				>
+			</div>
 			{#if form?.errors?.terms}<small class="field-error">{form.errors.terms[0]}</small>{/if}
 			<button class="auth-primary" type="submit">Buat akun</button>
 		</AuthFields>
@@ -87,6 +133,33 @@
 		gap: 15px;
 	}
 
+	.pw-field {
+		position: relative;
+		display: flex;
+		align-items: center;
+	}
+	.pw-field input {
+		flex: 1;
+		width: 100%;
+		padding-right: 44px;
+	}
+	.pw-field button {
+		position: absolute;
+		right: 6px;
+		display: grid;
+		width: 34px;
+		height: 34px;
+		place-items: center;
+		padding: 0;
+		background: transparent;
+		border: 0;
+		color: var(--color-muted);
+		cursor: pointer;
+	}
+	.pw-field button:hover {
+		color: var(--color-text);
+	}
+
 	:global(.auth-fields .terms) {
 		display: grid;
 		grid-template-columns: auto 1fr;
@@ -102,6 +175,14 @@
 		width: 17px;
 		height: 17px;
 		margin-top: 1px;
+	}
+	:global(.auth-fields .terms label) {
+		color: var(--color-muted);
+	}
+	:global(.auth-fields .terms a) {
+		color: var(--color-primary-strong);
+		font-weight: 700;
+		text-decoration: underline;
 	}
 
 	.switch {
