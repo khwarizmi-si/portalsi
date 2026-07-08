@@ -31,6 +31,7 @@ export interface PostPreview {
 	media?: string[];
 	thumbnailUrl?: string;
 	isVideo: boolean;
+	videoMuted?: boolean;
 	mediaAlt: string;
 	location?: string;
 	createdLabel: string;

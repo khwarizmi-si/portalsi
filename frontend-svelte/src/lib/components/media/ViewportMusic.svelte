@@ -51,14 +51,17 @@
 
 	onMount(() => {
 		if (!src) return;
+		// Ikat pemutaran ke visibilitas POSTINGAN (kartu), bukan baris detail musik ini.
+		// Aktif saat kartu melintasi pita tengah layar (bekerja untuk kartu tinggi maupun pendek).
+		const target = root.closest('.post-card') ?? root.closest('.media') ?? root;
 		const observer = new IntersectionObserver(
 			([entry]) => {
-				if (entry.isIntersecting && entry.intersectionRatio >= 0.58) void play();
+				if (entry.isIntersecting) void play();
 				else pause();
 			},
-			{ threshold: [0.2, 0.58, 0.8] }
+			{ rootMargin: '-45% 0px -45% 0px', threshold: 0 }
 		);
-		observer.observe(root);
+		observer.observe(target);
 		return () => {
 			observer.disconnect();
 			pause();

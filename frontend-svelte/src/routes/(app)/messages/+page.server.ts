@@ -21,6 +21,16 @@ export const load: PageServerLoad = async ({ locals }) => {
 				schema: specialGroupsSchema
 			}).catch(() => [])
 		: [];
+	// Ringkas pesan yang berisi tautan postingan menjadi label ramah (bukan URL mentah).
+	const previewText = (raw: string | null | undefined, hasMedia: boolean) => {
+		const value = (raw ?? '').trim();
+		if (/https?:\/\/[^\s]*\/posts\/\d+/i.test(value)) {
+			const note = value.replace(/https?:\/\/[^\s]*\/posts\/\d+/gi, '').trim();
+			return note ? `📷 ${note}` : '📷 Membagikan postingan';
+		}
+		return value || (hasMedia ? 'Media' : 'Belum ada pesan');
+	};
+
 	// Urutkan berdasarkan waktu pesan terakhir (grup & pribadi bercampur, terbaru di atas).
 	const lastAt = (item: (typeof response)[number]) =>
 		item.type === 'user' ? item.last_chat.sent_at : item.sent_at;
@@ -44,7 +54,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 							? `@${item.conversation.username}`
 							: 'Pesan langsung',
 						avatarUrl: normalizeMediaUrl(item.conversation.profile_picture_url, mediaBaseUrl),
-						text: item.last_chat.content || (item.last_chat.media ? 'Media' : 'Belum ada pesan'),
+						text: previewText(item.last_chat.content, Boolean(item.last_chat.media)),
 						time: item.last_chat.sent_at ? relativeTimeId(item.last_chat.sent_at) : '',
 						unread: !item.last_chat.is_read
 					}
@@ -54,7 +64,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 						name: item.name,
 						handle: item.description || 'Grup Portal SI',
 						avatarUrl: normalizeMediaUrl(item.avatar_url, mediaBaseUrl),
-						text: item.last_message || (item.last_media ? 'Media' : 'Belum ada pesan'),
+						text: previewText(item.last_message, Boolean(item.last_media)),
 						time: item.sent_at ? relativeTimeId(item.sent_at) : '',
 						unread: false
 					}

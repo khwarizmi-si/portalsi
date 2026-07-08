@@ -143,6 +143,7 @@
 				poster={post.thumbnailUrl}
 				label={post.mediaAlt}
 				{autoplay}
+				forceMuted={post.videoMuted || Boolean(post.music)}
 			/>
 			{#if zoomable}<button
 					class="expand-media"

@@ -16,13 +16,28 @@
 		data,
 		form = null
 	}: { data: PageData; form?: { message?: string; success?: boolean } | null } = $props();
-	let comments = $state(untrack(() => structuredClone(data.comments)));
+	// Urutan komentar: paling banyak like di atas, lalu yang punya balasan, sisanya urutan asli.
+	// Disortir sekali saat awal (tidak melompat-lompat saat di-like); komentar baru muncul di atas.
+	function sortComments<T extends { likesCount: number; replies: { length: number } }>(list: T[]): T[] {
+		return [...list].sort(
+			(a, b) => b.likesCount - a.likesCount || b.replies.length - a.replies.length
+		);
+	}
+	let comments = $state(untrack(() => sortComments(structuredClone(data.comments))));
+	let expandedReplies = $state<Set<number>>(new Set());
 	let content = $state('');
 	let replyTo = $state<{ id: number; name: string } | null>(null);
 	let submitting = $state(false);
 	let formMessage = $state('');
 	let commentCount = $state(untrack(() => data.post.commentsCount));
 	let gifOpen = $state(false);
+
+	function toggleReplies(id: number) {
+		const next = new Set(expandedReplies);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		expandedReplies = next;
+	}
 
 	async function sendComment(gifUrl: string | null = null) {
 		const text = content.trim();
@@ -51,8 +66,10 @@
 				parentId: response.data.parent_comment_id
 			};
 			if (replyTo) {
-				const parent = comments.find((comment) => comment.id === replyTo?.id);
+				const parentId = replyTo.id;
+				const parent = comments.find((comment) => comment.id === parentId);
 				parent?.replies.push(created);
+				expandedReplies = new Set(expandedReplies).add(parentId); // buka balasan otomatis
 			} else comments.unshift({ ...created, parentId: null, replies: [] });
 			content = '';
 			replyTo = null;
@@ -220,7 +237,15 @@
 										onclick={() => editComment(comment.id)}>Edit</button
 									><button onclick={() => deleteComment(comment.id)}>Hapus</button>{/if}
 							</footer>
-							{#each comment.replies as reply (reply.id)}
+							{#if comment.replies.length > 0}<button
+									class="show-replies"
+									onclick={() => toggleReplies(comment.id)}
+									><span></span>{expandedReplies.has(comment.id)
+										? 'Sembunyikan balasan'
+										: `Lihat ${comment.replies.length} balasan`}</button
+								>{/if}
+							{#if expandedReplies.has(comment.id)}
+								{#each comment.replies as reply (reply.id)}
 								<div class="reply">
 									<CornerDownRight size={15} class="reply-arrow" /><Avatar
 										name={reply.user.fullName}
@@ -257,11 +282,13 @@
 									</div>
 								</div>
 							{/each}
+							{/if}
 						</div>
 					</article>
 				{/each}
 				{#if comments.length === 0}<p class="empty">Jadilah yang pertama berkomentar.</p>{/if}
 			</div>
+			<div class="comment-compose">
 			{#if replyTo}<div class="replying">
 					Membalas {replyTo.name}<button
 						onclick={() => (replyTo = null)}
@@ -292,6 +319,7 @@
 				>
 			</form>
 			{#if formMessage}<p class="form-message" aria-live="polite">{formMessage}</p>{/if}
+			</div>
 			{#if gifOpen}<GifPicker onSelect={pickGif} onClose={() => (gifOpen = false)} />{/if}
 		</section>
 	</div>
@@ -402,9 +430,8 @@
 		align-items: start;
 	}
 	.comments {
-		position: sticky;
-		top: 20px;
-		overflow: hidden;
+		display: flex;
+		flex-direction: column;
 	}
 	.comments > header {
 		display: flex;
@@ -429,8 +456,32 @@
 		font-weight: 720;
 	}
 	.comment-list {
-		max-height: 600px;
-		overflow: auto;
+		flex: 1;
+	}
+	/* Kolom tulis komentar disematkan (sticky) di bawah agar selalu mudah dijangkau. */
+	.comment-compose {
+		position: sticky;
+		bottom: 0;
+		z-index: 4;
+		background: var(--color-surface);
+		border-top: 1px solid var(--color-border);
+	}
+	.show-replies {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin: 4px 0 2px;
+		padding: 4px 0;
+		background: transparent;
+		border: 0;
+		color: var(--color-muted);
+		font-size: 0.72rem;
+		font-weight: 650;
+	}
+	.show-replies span {
+		width: 22px;
+		height: 1px;
+		background: var(--color-border);
 	}
 	.comment-list > article {
 		display: grid;

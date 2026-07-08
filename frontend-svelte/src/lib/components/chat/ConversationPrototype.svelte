@@ -318,26 +318,17 @@
 			{@const sharedId = sharedPostId(message.text)}
 			{@const note = textWithoutSharedPost(message.text)}
 			{#if sharedId}
-				{#if note}
-					<article class:mine={message.mine}>
-						{#if !message.mine && mode === 'group'}<Avatar name={message.senderName} size="sm" />{/if}
-						<div>
-							{#if !message.mine && mode === 'group'}<strong>{message.senderName}</strong>{/if}
-							<p><MentionText text={note} /></p>
-						</div>
-					</article>
-				{/if}
 				<article class:mine={message.mine} class="shared">
 					{#if !message.mine && mode === 'group'}<Avatar name={message.senderName} size="sm" />{/if}
 					<div class="bare">
-						{#if !message.mine && mode === 'group' && !note}<strong>{message.senderName}</strong>{/if}
+						{#if !message.mine && mode === 'group'}<strong>{message.senderName}</strong>{/if}
 						<SharedPostPreview postId={sharedId} />
-						<small
-							>{message.time}{#if message.mine}<CheckCheck
-									size={13}
-									class={message.isRead ? 'read' : undefined}
-								/>{/if}</small
-						>
+						{#if !note}<small
+								>{message.time}{#if message.mine}<CheckCheck
+										size={13}
+										class={message.isRead ? 'read' : undefined}
+									/>{/if}</small
+							>{/if}
 						{#if message.mine || mode === 'group'}<div class="message-tools">
 								{#if mode === 'group'}<button
 										onclick={() => (replyingTo = { id: message.id, name: message.senderName })}
@@ -349,6 +340,20 @@
 							</div>{/if}
 					</div>
 				</article>
+				{#if note}
+					<article class:mine={message.mine}>
+						{#if !message.mine && mode === 'group'}<Avatar name={message.senderName} size="sm" />{/if}
+						<div>
+							<p><MentionText text={note} /></p>
+							<small
+								>{message.time}{#if message.mine}<CheckCheck
+										size={13}
+										class={message.isRead ? 'read' : undefined}
+									/>{/if}</small
+							>
+						</div>
+					</article>
+				{/if}
 			{:else}
 				<article class:mine={message.mine}>
 					{#if !message.mine && mode === 'group'}<Avatar name={message.senderName} size="sm" />{/if}

@@ -5,15 +5,24 @@
 		poster,
 		label = 'Video postingan',
 		fill = false,
-		autoplay = false
-	}: { src: string; poster?: string; label?: string; fill?: boolean; autoplay?: boolean } = $props();
+		autoplay = false,
+		forceMuted = false
+	}: {
+		src: string;
+		poster?: string;
+		label?: string;
+		fill?: boolean;
+		autoplay?: boolean;
+		forceMuted?: boolean;
+	} = $props();
 	let video: HTMLVideoElement;
 	let root: HTMLDivElement;
 	let loading = $state(true);
 	let failed = $state(false);
 	let playing = $state(false);
 	// Autoplay hanya diizinkan browser jika muted; mulai muted lalu user bisa aktifkan suara.
-	let muted = $state(autoplay);
+	// forceMuted (mis. post pakai musik / video sengaja dibisukan) mengunci mute.
+	let muted = $state(autoplay || forceMuted);
 	let current = $state(0);
 	let duration = $state(0);
 	let mediaAspect = $state('16 / 9');
@@ -138,14 +147,14 @@
 			oninput={seek}
 		/>
 		<span>{format(duration)}</span>
-		<button
-			onclick={() => {
-				video.muted = !video.muted;
-				muted = video.muted;
-			}}
-			aria-label={muted ? 'Nyalakan suara' : 'Bisukan'}
-			>{#if muted}<VolumeX size={18} />{:else}<Volume2 size={18} />{/if}</button
-		>
+		{#if !forceMuted}<button
+				onclick={() => {
+					video.muted = !video.muted;
+					muted = video.muted;
+				}}
+				aria-label={muted ? 'Nyalakan suara' : 'Bisukan'}
+				>{#if muted}<VolumeX size={18} />{:else}<Volume2 size={18} />{/if}</button
+			>{/if}
 		<button onclick={fullscreen} aria-label="Layar penuh"><Expand size={17} /></button>
 	</div>
 </div>

@@ -13,6 +13,8 @@
 		TriangleAlert,
 		Upload,
 		Video,
+		Volume2,
+		VolumeX,
 		X
 	} from '@lucide/svelte';
 	import { onDestroy, onMount, untrack } from 'svelte';
@@ -82,6 +84,7 @@
 	let message = $state('');
 	// Peringatan blokir (mis. video >1) ditampilkan sebagai modal agar jelas terlihat.
 	let warning = $state<string | null>(null);
+	let videoMuted = $state(false);
 	let uploadProgress = $state(0);
 	let activeUpload = $state<XMLHttpRequest | null>(null);
 	let cropMode = $state<'original' | 'square' | 'portrait' | 'story'>(
@@ -138,6 +141,10 @@
 	);
 	type MediaKind = 'image' | 'video' | 'audio' | 'unknown';
 	const selectedFileKind = $derived(file ? mediaKind(file) : null);
+	// Bisukan video: manual, atau otomatis saat memakai musik (musik yang menang).
+	const videoWillMute = $derived(
+		selectedFileKind === 'video' && (videoMuted || Boolean(selectedMusic))
+	);
 	const galleryMode = $derived(kind === 'post' && galleryItems.length > 1);
 	const editingItem = $derived(galleryItems.find((item) => item.id === editingId) ?? null);
 	const editCropAspect = $derived(
@@ -626,6 +633,7 @@
 				}
 				if (location.trim()) body.set('location', location.trim());
 				body.set('is_video', String(selectedFileKind === 'video' ? 1 : 0));
+				body.set('video_muted', videoWillMute ? '1' : '0');
 				body.set('is_archived', '0');
 				const response = await upload('posts', body, (payload) =>
 					createdPostResponseSchema.parse(payload)
@@ -1008,7 +1016,22 @@
 						>
 					</div>
 				{:else}<div class="preview">
-						{#if selectedFileKind === 'video'}<video src={previewUrl} controls muted></video>
+						{#if selectedFileKind === 'video'}<video
+								src={previewUrl}
+								controls
+								muted={videoWillMute}
+							></video>
+							<button
+								type="button"
+								class="mute-toggle"
+								class:on={videoWillMute}
+								disabled={Boolean(selectedMusic)}
+								onclick={() => (videoMuted = !videoMuted)}
+								aria-pressed={videoWillMute}
+								aria-label={videoWillMute ? 'Bunyikan video' : 'Bisukan video'}
+								>{#if videoWillMute}<VolumeX size={16} />{:else}<Volume2 size={16} />{/if}
+								{videoWillMute ? 'Video dibisukan' : 'Suara video aktif'}</button
+							>
 						{:else}<audio src={previewUrl} controls></audio>{/if}
 						<button onclick={() => (file = null)} aria-label="Hapus media"><X size={18} /></button>
 					</div>{/if}
@@ -1289,6 +1312,12 @@
 {/if}
 
 <style>
+	/* Elemen yang diminta dihilangkan: atribusi lokasi, teks bantuan musik, tombol draft. */
+	.attribution,
+	.music-help,
+	.draft {
+		display: none !important;
+	}
 	.warn-overlay {
 		position: fixed;
 		inset: 0;
@@ -1492,6 +1521,26 @@
 		border: 0;
 		border-radius: 50%;
 		color: white;
+	}
+	.preview .mute-toggle {
+		top: auto;
+		right: auto;
+		bottom: 10px;
+		left: 10px;
+		display: flex;
+		width: auto;
+		height: 34px;
+		align-items: center;
+		gap: 6px;
+		padding: 0 13px;
+		border-radius: 999px;
+		background: rgb(0 0 0 / 62%);
+		font-size: 0.7rem;
+		font-weight: 650;
+		backdrop-filter: blur(6px);
+	}
+	.preview .mute-toggle:disabled {
+		opacity: 0.9;
 	}
 	.crop-editor {
 		position: relative;

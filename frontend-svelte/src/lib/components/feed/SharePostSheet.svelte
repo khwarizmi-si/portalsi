@@ -192,7 +192,7 @@
 			}
 			done = true;
 			status = `Postingan dikirim ke ${keys.length} obrolan.`;
-			window.setTimeout(onClose, 1100);
+			window.setTimeout(onClose, 1500);
 		} catch {
 			status = 'Sebagian pesan gagal terkirim. Coba lagi.';
 		} finally {
@@ -223,6 +223,13 @@
 ></div>
 
 <section class="share-sheet" role="dialog" aria-modal="true" aria-label="Bagikan postingan">
+	{#if done}
+		<div class="sent-state">
+			<div class="sent-check"><Check size={34} /></div>
+			<strong>Terkirim!</strong>
+			<span>{status}</span>
+		</div>
+	{:else}
 	<header>
 		<strong>Bagikan</strong>
 		<button onclick={onClose} aria-label="Tutup"><X size={19} /></button>
@@ -284,15 +291,51 @@
 		<input class="note" placeholder="Tambahkan pesan (opsional)" bind:value={note} />
 	{/if}
 
-	{#if status}<p class="status" class:ok={done} aria-live="polite">{status}</p>{/if}
+	{#if status && !done}<p class="status" aria-live="polite">{status}</p>{/if}
 
 	<button class="send" disabled={selected.size === 0 || sending} onclick={sendToSelected}>
 		{#if sending}<LoaderCircle class="spin" size={17} />{:else}<Send size={17} />{/if}
 		Kirim{selected.size > 0 ? ` (${selected.size})` : ''}
 	</button>
+	{/if}
 </section>
 
 <style>
+	.sent-state {
+		display: grid;
+		justify-items: center;
+		gap: 8px;
+		padding: 34px 20px 30px;
+		text-align: center;
+	}
+	.sent-check {
+		display: grid;
+		width: 72px;
+		height: 72px;
+		place-items: center;
+		background: var(--color-secondary, #178f72);
+		border-radius: 50%;
+		color: white;
+		animation: sent-pop 0.4s cubic-bezier(0.2, 1.3, 0.4, 1);
+	}
+	.sent-state strong {
+		margin-top: 6px;
+		font-size: 1.1rem;
+	}
+	.sent-state span {
+		color: var(--color-muted);
+		font-size: 0.84rem;
+	}
+	@keyframes sent-pop {
+		0% {
+			transform: scale(0.3);
+			opacity: 0;
+		}
+		100% {
+			transform: scale(1);
+			opacity: 1;
+		}
+	}
 	.share-overlay {
 		position: fixed;
 		z-index: 1200;

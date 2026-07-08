@@ -168,8 +168,12 @@
 			border-radius: 999px;
 			background: var(--color-border);
 		}
+		/* Selalu terlihat & bisa ditekan di HP (di atas notch/URL bar). */
 		.pm-close {
-			top: 8px;
+			position: fixed;
+			top: calc(10px + env(safe-area-inset-top, 0px));
+			right: 12px;
+			z-index: 1402;
 		}
 	}
 </style>

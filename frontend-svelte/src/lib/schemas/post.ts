@@ -29,6 +29,7 @@ export const postSchema = z
 		thumbnail_url: z.string().nullish(),
 		location: z.string().nullish(),
 		is_video: booleanish.catch(false),
+		video_muted: booleanish.catch(false),
 		created_at: z.string(),
 		likes_count: z.coerce.number().int().nonnegative().catch(0),
 		comments_count: z.coerce.number().int().nonnegative().catch(0),

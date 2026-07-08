@@ -89,7 +89,7 @@
 <style>
 	.backdrop {
 		position: fixed;
-		z-index: 1200;
+		z-index: 1600;
 		inset: 0;
 		display: grid;
 		place-items: center;

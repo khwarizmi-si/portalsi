@@ -10,7 +10,8 @@ export const load: LayoutServerLoad = ({ locals, url }) => {
 	}
 	const isPublicProfile = /^\/u\/[^/]+\/?$/.test(url.pathname);
 	const isLegal = url.pathname.startsWith('/legal');
-	if (!locals.user && !isPublicProfile && !isLegal) {
+	const isPost = /^\/posts\/\d+\/?$/.test(url.pathname);
+	if (!locals.user && !isPublicProfile && !isLegal && !isPost) {
 		const next = `${url.pathname}${url.search}`;
 		redirect(303, `/login?next=${encodeURIComponent(next)}`);
 	}
