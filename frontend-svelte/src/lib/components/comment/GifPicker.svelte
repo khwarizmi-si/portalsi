@@ -86,7 +86,7 @@
 		{/each}
 	</div>
 	{#if !loading && results.length === 0}<p class="msg">{message || 'Tidak ada hasil.'}</p>{/if}
-	<p class="attribution">GIF oleh Tenor</p>
+	<p class="attribution">Powered by GIPHY</p>
 </section>
 
 <style>

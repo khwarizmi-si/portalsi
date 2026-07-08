@@ -2,16 +2,24 @@ import { env } from '$env/dynamic/private';
 import { z } from 'zod';
 import type { RequestHandler } from './$types';
 
-// Tenor (Google) GIF/Sticker Search API. Butuh TENOR_API_KEY di environment.
-const mediaFormat = z.object({ url: z.string().url(), dims: z.array(z.number()).optional() });
+// GIPHY GIF/Sticker API. Butuh GIPHY_API_KEY di environment.
+// (Tenor resmi dimatikan 30 Juni 2026; GIPHY adalah penggantinya.)
+const imageSchema = z
+	.object({
+		url: z.string().url().optional(),
+		width: z.coerce.number().optional(),
+		height: z.coerce.number().optional()
+	})
+	.partial();
+
 const resultSchema = z.object({
-	results: z
+	data: z
 		.array(
 			z
 				.object({
 					id: z.union([z.string(), z.number()]).transform(String),
-					content_description: z.string().optional(),
-					media_formats: z.record(z.string(), mediaFormat.partial()).optional()
+					title: z.string().optional(),
+					images: z.record(z.string(), imageSchema).optional()
 				})
 				.passthrough()
 		)
@@ -23,24 +31,22 @@ const cache = new Map<string, { expires: number; value: unknown }>();
 export const GET: RequestHandler = async ({ locals, url }) => {
 	if (!locals.token) return Response.json({ message: 'Sesi tidak tersedia.' }, { status: 401 });
 
-	const apiKey = env.TENOR_API_KEY?.trim();
+	const apiKey = env.GIPHY_API_KEY?.trim();
 	if (!apiKey) return Response.json({ results: [], message: 'GIF belum dikonfigurasi.' });
 
 	const query = (url.searchParams.get('q') ?? '').trim().slice(0, 60);
-	const type = url.searchParams.get('type') === 'sticker' ? 'sticker' : 'gif';
+	const type = url.searchParams.get('type') === 'sticker' ? 'stickers' : 'gifs';
 	const key = `${type}:${query.toLocaleLowerCase('id-ID')}`;
 	const cached = cache.get(key);
 	if (cached && cached.expires > Date.now()) return privateResponse(cached.value);
 
 	try {
-		const endpoint = query.length >= 2 ? 'search' : 'featured';
-		const target = new URL(`https://tenor.googleapis.com/v2/${endpoint}`);
-		target.searchParams.set('key', apiKey);
-		target.searchParams.set('client_key', 'portalsi');
+		const endpoint = query.length >= 2 ? 'search' : 'trending';
+		const target = new URL(`https://api.giphy.com/v1/${type}/${endpoint}`);
+		target.searchParams.set('api_key', apiKey);
 		target.searchParams.set('limit', '24');
-		target.searchParams.set('contentfilter', 'high');
-		target.searchParams.set('media_filter', 'gif,tinygif');
-		if (type === 'sticker') target.searchParams.set('searchfilter', 'sticker');
+		target.searchParams.set('rating', 'g');
+		target.searchParams.set('bundle', 'messaging_non_clips');
 		if (endpoint === 'search') target.searchParams.set('q', query);
 
 		const upstream = await fetch(target, {
@@ -49,20 +55,21 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 		});
 		if (!upstream.ok) throw new Error('Upstream failed');
 		const parsed = resultSchema.parse(await upstream.json());
-		const results = parsed.results
+		const results = parsed.data
 			.map((item) => {
-				const formats = item.media_formats ?? {};
-				const full = formats.gif?.url ?? formats.mediumgif?.url ?? formats.tinygif?.url;
-				const preview = formats.tinygif?.url ?? formats.nanogif?.url ?? full;
-				const dims = formats.tinygif?.dims ?? formats.gif?.dims ?? [1, 1];
+				const images = item.images ?? {};
+				const full = images.downsized?.url ?? images.original?.url ?? images.fixed_width?.url;
+				const preview =
+					images.fixed_width?.url ?? images.fixed_width_small?.url ?? images.downsized?.url ?? full;
+				const dims = images.fixed_width ?? images.original ?? {};
 				if (!full || !preview) return null;
 				return {
 					id: item.id,
 					url: full,
 					preview,
-					width: dims[0] ?? 1,
-					height: dims[1] ?? 1,
-					alt: item.content_description ?? 'GIF'
+					width: dims.width ?? 1,
+					height: dims.height ?? 1,
+					alt: item.title ?? 'GIF'
 				};
 			})
 			.filter((item): item is NonNullable<typeof item> => item !== null);
