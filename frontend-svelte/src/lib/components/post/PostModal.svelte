@@ -95,7 +95,7 @@
 	.pm-panel {
 		position: relative;
 		display: flex;
-		width: min(760px, 100%);
+		width: min(1120px, calc(100% - 40px));
 		max-height: 92vh;
 		flex-direction: column;
 		overflow: hidden;
@@ -127,11 +127,23 @@
 	.pm-scroll {
 		flex: 1;
 		overflow-y: auto;
-		padding: 16px 16px 8px;
+		padding: 22px 24px 12px;
 		-webkit-overflow-scrolling: touch;
 	}
 	.pm-scroll :global(.post-detail-layout) {
 		margin: 0;
+	}
+	/* Beri ruang lebih lega untuk dua kolom (post + komentar) di dalam modal lebar. */
+	@media (min-width: 951px) {
+		.pm-scroll :global(.post-detail-layout) {
+			grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+			gap: 22px;
+		}
+	}
+	@media (max-width: 720px) {
+		.pm-scroll {
+			padding: 8px 14px 8px;
+		}
 	}
 
 	@media (max-width: 720px) {
