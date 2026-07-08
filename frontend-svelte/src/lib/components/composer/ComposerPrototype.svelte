@@ -30,7 +30,7 @@
 			post: {
 				eyebrow: 'Bagikan momen',
 				title: 'Buat postingan',
-				description: 'Foto atau video tunggal dengan caption dan lokasi.'
+				description: 'Satu video, atau hingga 15 foto dalam satu galeri, dengan caption dan lokasi.'
 			},
 			story: {
 				eyebrow: 'Cerita 24 jam',
@@ -44,7 +44,11 @@
 			}
 		}[kind]
 	);
+	const MAX_IMAGES = 15;
 	let file = $state<File | null>(null);
+	// Galeri multi-foto (khusus post). Aktif saat berisi >1 foto.
+	let galleryImages = $state<File[]>([]);
+	let galleryPreviews = $state<string[]>([]);
 	let caption = $state('');
 	let location = $state('');
 	let previewUrl = $state('');
@@ -107,6 +111,7 @@
 	);
 	type MediaKind = 'image' | 'video' | 'audio' | 'unknown';
 	const selectedFileKind = $derived(file ? mediaKind(file) : null);
+	const galleryMode = $derived(kind === 'post' && galleryImages.length > 1);
 
 	function mediaKind(candidate: File): MediaKind {
 		if (candidate.type.startsWith('image/')) return 'image';
@@ -127,6 +132,12 @@
 		const url = URL.createObjectURL(file);
 		previewUrl = url;
 		return () => URL.revokeObjectURL(url);
+	});
+
+	$effect(() => {
+		const urls = galleryImages.map((image) => URL.createObjectURL(image));
+		galleryPreviews = urls;
+		return () => urls.forEach((url) => URL.revokeObjectURL(url));
 	});
 
 	$effect(() => {
@@ -220,9 +231,8 @@
 			.catch(() => undefined);
 	});
 
-	function selectFile(candidate?: File) {
+	function selectSingle(candidate?: File) {
 		if (!candidate) return;
-		message = '';
 		const detectedKind = mediaKind(candidate);
 		const allowed =
 			kind === 'clips'
@@ -239,16 +249,77 @@
 			return;
 		}
 		file = candidate;
+		galleryImages = [];
 		cropMode = kind === 'story' ? 'story' : 'original';
 		sourceAspect = 1;
 		cropRegion = null;
 		filter = 'normal';
 	}
 
+	function selectFiles(list?: FileList | File[] | null) {
+		if (!list) return;
+		const incoming = Array.from(list);
+		if (incoming.length === 0) return;
+		message = '';
+
+		// Story / clips selalu media tunggal.
+		if (kind !== 'post') {
+			selectSingle(incoming[0]);
+			return;
+		}
+
+		const kinds = incoming.map(mediaKind);
+		const hasVideo = kinds.some((value) => value === 'video');
+		const allImages = kinds.every((value) => value === 'image');
+
+		// Video: hanya boleh satu, dan tidak boleh dicampur foto.
+		if (hasVideo) {
+			if (incoming.length > 1) {
+				message = 'Video hanya boleh satu. Untuk banyak media, pilih foto saja.';
+				return;
+			}
+			selectSingle(incoming[0]);
+			return;
+		}
+		if (!allImages) {
+			message = 'Jenis file tidak didukung untuk konten ini.';
+			return;
+		}
+
+		// Foto: gabungkan dengan yang sudah ada (maks 15).
+		const existing = galleryMode ? galleryImages : file && selectedFileKind === 'image' ? [file] : [];
+		if (existing.length + incoming.length > MAX_IMAGES)
+			message = `Maksimal ${MAX_IMAGES} foto per postingan.`;
+		const combined = [...existing, ...incoming].slice(0, MAX_IMAGES);
+		const tooBig = combined.find((image) => image.size > 500 * 1024 * 1024);
+		if (tooBig) {
+			message = 'Ukuran file melebihi batas 500 MB.';
+			return;
+		}
+		if (combined.length <= 1) {
+			selectSingle(combined[0]);
+		} else {
+			file = null;
+			galleryImages = combined;
+			cropRegion = null;
+			filter = 'normal';
+		}
+	}
+
+	function removeGalleryImage(index: number) {
+		const next = galleryImages.filter((_, position) => position !== index);
+		if (next.length === 1) {
+			selectSingle(next[0]);
+		} else {
+			galleryImages = next;
+			if (next.length === 0) file = null;
+		}
+	}
+
 	function onDrop(event: DragEvent) {
 		event.preventDefault();
 		dragging = false;
-		selectFile(event.dataTransfer?.files[0]);
+		selectFiles(event.dataTransfer?.files);
 	}
 
 	function setCropMode(mode: typeof cropMode) {
@@ -282,8 +353,18 @@
 		}
 	}
 
+	function appendMusic(body: FormData) {
+		if (!selectedMusic) return;
+		body.set('music_track_name', selectedMusic.title);
+		body.set('music_artist_name', selectedMusic.artist);
+		if (selectedMusic.previewUrl) body.set('music_preview_url', selectedMusic.previewUrl);
+		if (selectedMusic.artworkUrl) body.set('music_album_art_url', selectedMusic.artworkUrl);
+		body.set('music_start_position_ms', String(musicStartSeconds * 1000));
+		body.set('music_clip_duration_ms', String(musicDurationSeconds * 1000));
+	}
+
 	async function publish() {
-		if (!file || submitting) return;
+		if ((!file && galleryImages.length === 0) || submitting) return;
 		const confirmed = await confirmAction({
 			title:
 				kind === 'story'
@@ -301,6 +382,27 @@
 		message = '';
 		startProgress();
 		try {
+			// Jalur galeri multi-foto (post): unggah tiap foto, kirim media_keys[]/media[].
+			if (kind === 'post' && galleryMode) {
+				const body = new FormData();
+				for (const image of galleryImages) {
+					const key = await tryDirectUpload(image, 'post');
+					if (key) body.append('media_keys[]', key);
+					else body.append('media[]', image);
+				}
+				body.set('caption', caption.trim());
+				appendMusic(body);
+				if (location.trim()) body.set('location', location.trim());
+				body.set('is_video', '0');
+				body.set('is_archived', '0');
+				const response = await upload('posts', body, (payload) =>
+					createdPostResponseSchema.parse(payload)
+				);
+				await deleteDraft();
+				await goto(`/posts/${response.post.post_id}`);
+				return;
+			}
+			if (!file) return;
 			const body = new FormData();
 			const uploadFile =
 				selectedFileKind === 'image' && cropRegion
@@ -626,7 +728,7 @@
 			<p class="eyebrow">{copy.eyebrow}</p>
 			<h1>{copy.title}</h1>
 		</div>
-		<button onclick={publish} disabled={!file || submitting}
+		<button onclick={publish} disabled={(!file && galleryImages.length === 0) || submitting}
 			>{submitting
 				? uploadProgress >= 100
 					? 'Memproses di server…'
@@ -646,7 +748,37 @@
 			ondragleave={() => (dragging = false)}
 			ondrop={onDrop}
 		>
-			{#if previewUrl}
+			{#if galleryMode}
+				<div class="gallery-edit">
+					<div class="gallery-grid">
+						{#each galleryPreviews as src, index (index)}
+							<div class="g-item">
+								<img {src} alt={`Foto ${index + 1}`} />
+								<button
+									class="g-remove"
+									onclick={() => removeGalleryImage(index)}
+									aria-label={`Hapus foto ${index + 1}`}><X size={14} /></button
+								>
+								<span class="g-index">{index + 1}</span>
+							</div>
+						{/each}
+						{#if galleryImages.length < MAX_IMAGES}
+							<label class="g-add">
+								<ImagePlus size={22} /><span>Tambah</span>
+								<input
+									type="file"
+									accept="image/*"
+									multiple
+									onchange={(event) => selectFiles(event.currentTarget.files)}
+								/>
+							</label>
+						{/if}
+					</div>
+					<p class="gallery-note">
+						{galleryImages.length}/{MAX_IMAGES} foto · akan bisa digeser seperti Instagram
+					</p>
+				</div>
+			{:else if previewUrl}
 				{#if selectedFileKind === 'image'}
 					<div class="crop-editor">
 						{#key `${previewUrl}:${cropMode}`}
@@ -701,10 +833,11 @@
 			{/if}
 			<label
 				><Upload size={17} />
-				{file ? 'Ganti media' : 'Pilih dari perangkat'}<input
+				{galleryMode ? 'Tambah foto' : file ? 'Ganti media' : 'Pilih dari perangkat'}<input
 					type="file"
 					accept={acceptedTypes}
-					onchange={(event) => selectFile(event.currentTarget.files?.[0])}
+					multiple={kind === 'post'}
+					onchange={(event) => selectFiles(event.currentTarget.files)}
 				/></label
 			>
 			<small
@@ -1043,6 +1176,82 @@
 	.crop-editor {
 		position: relative;
 		width: min(100%, 540px);
+	}
+	.gallery-edit {
+		display: grid;
+		width: min(100%, 540px);
+		gap: 10px;
+	}
+	.gallery-grid {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 8px;
+	}
+	.g-item {
+		position: relative;
+		aspect-ratio: 1/1;
+		overflow: hidden;
+		border-radius: 12px;
+		background: var(--color-canvas-deep);
+	}
+	.g-item img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.g-remove {
+		position: absolute;
+		top: 6px;
+		right: 6px;
+		display: grid;
+		width: 26px;
+		height: 26px;
+		place-items: center;
+		padding: 0;
+		background: rgb(0 0 0 / 58%);
+		border: 0;
+		border-radius: 50%;
+		color: white;
+	}
+	.g-index {
+		position: absolute;
+		bottom: 6px;
+		left: 6px;
+		min-width: 20px;
+		padding: 1px 6px;
+		background: rgb(0 0 0 / 55%);
+		border-radius: 999px;
+		color: white;
+		font-size: 0.62rem;
+		font-weight: 700;
+		text-align: center;
+	}
+	.g-add {
+		display: grid;
+		aspect-ratio: 1/1;
+		place-content: center;
+		justify-items: center;
+		gap: 5px;
+		background: var(--color-surface-soft);
+		border: 2px dashed var(--color-border);
+		border-radius: 12px;
+		color: var(--color-muted);
+		font-size: 0.68rem;
+		font-weight: 650;
+		cursor: pointer;
+	}
+	.g-add input {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		opacity: 0;
+	}
+	.gallery-note {
+		margin: 0;
+		color: var(--color-muted);
+		font-size: 0.7rem;
+		text-align: center;
 	}
 	.crop-remove {
 		position: absolute;

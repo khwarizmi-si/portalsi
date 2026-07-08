@@ -25,6 +25,7 @@ export const postSchema = z
 		post_id: z.coerce.number().int().positive(),
 		caption: z.string().nullish(),
 		media_url: z.string().min(1),
+		media_urls: z.array(z.string()).nullish(),
 		thumbnail_url: z.string().nullish(),
 		location: z.string().nullish(),
 		is_video: booleanish.catch(false),

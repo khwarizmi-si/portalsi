@@ -28,6 +28,7 @@ export interface PostPreview {
 	user: PortalUser;
 	caption: string;
 	mediaUrl: string;
+	media?: string[];
 	thumbnailUrl?: string;
 	isVideo: boolean;
 	mediaAlt: string;

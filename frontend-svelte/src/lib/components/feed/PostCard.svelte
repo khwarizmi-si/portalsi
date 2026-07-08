@@ -1,5 +1,14 @@
 <script lang="ts">
-	import { Bookmark, Heart, MapPin, Maximize2, MessageCircle, Send } from '@lucide/svelte';
+	import {
+		Bookmark,
+		ChevronLeft,
+		ChevronRight,
+		Heart,
+		MapPin,
+		Maximize2,
+		MessageCircle,
+		Send
+	} from '@lucide/svelte';
 	import StoryAvatarLink from '$lib/components/story/StoryAvatarLink.svelte';
 	import UserBadges from '$lib/components/ui/UserBadges.svelte';
 	import SmartVideo from '$lib/components/media/SmartVideo.svelte';
@@ -16,7 +25,27 @@
 		autoplay = false
 	}: { post: PostPreview; zoomable?: boolean; autoplay?: boolean } = $props();
 	let lightboxOpen = $state(false);
+	let lightboxIndex = $state(0);
 	let shareOpen = $state(false);
+
+	// Galeri multi-foto (Instagram-style). Video selalu tunggal.
+	const gallery = $derived(post.media && post.media.length > 0 ? post.media : [post.mediaUrl]);
+	const isGallery = $derived(!post.isVideo && gallery.length > 1);
+	let slide = $state(0);
+	let trackEl = $state<HTMLDivElement>();
+	function onTrackScroll() {
+		if (!trackEl) return;
+		slide = Math.round(trackEl.scrollLeft / (trackEl.clientWidth || 1));
+	}
+	function goSlide(index: number) {
+		if (!trackEl) return;
+		const clamped = Math.max(0, Math.min(gallery.length - 1, index));
+		trackEl.scrollTo({ left: clamped * trackEl.clientWidth, behavior: 'smooth' });
+	}
+	function openLightbox(index: number) {
+		lightboxIndex = index;
+		lightboxOpen = true;
+	}
 	function initialInteractionState() {
 		return {
 			liked: post.isLiked,
@@ -117,12 +146,36 @@
 			/>
 			{#if zoomable}<button
 					class="expand-media"
-					onclick={() => (lightboxOpen = true)}
+					onclick={() => openLightbox(0)}
 					aria-label="Perbesar video"><Maximize2 size={19} /></button
 				>{/if}
+		</div>{:else if isGallery}<div class="media gallery">
+			<div class="gallery-track" bind:this={trackEl} onscroll={onTrackScroll}>
+				{#each gallery as src, index (index)}
+					{#if zoomable}<button class="slide" onclick={() => openLightbox(index)}
+							><img src={src} alt={`${post.mediaAlt} (${index + 1})`} /></button
+						>{:else}<a class="slide" href={`/posts/${post.id}`}
+							><img src={src} alt={`${post.mediaAlt} (${index + 1})`} /></a
+						>{/if}
+				{/each}
+			</div>
+			<span class="counter">{slide + 1}/{gallery.length}</span>
+			{#if slide > 0}<button
+					class="nav prev"
+					onclick={() => goSlide(slide - 1)}
+					aria-label="Foto sebelumnya"><ChevronLeft size={20} /></button
+				>{/if}
+			{#if slide < gallery.length - 1}<button
+					class="nav next"
+					onclick={() => goSlide(slide + 1)}
+					aria-label="Foto berikutnya"><ChevronRight size={20} /></button
+				>{/if}
+			<div class="dots">
+				{#each gallery as _, index (index)}<span class:on={index === slide}></span>{/each}
+			</div>
 		</div>{:else if zoomable}<button
 			class="media zoomable"
-			onclick={() => (lightboxOpen = true)}
+			onclick={() => openLightbox(0)}
 			aria-label={`Perbesar postingan ${post.user.fullName}`}
 			><img src={post.mediaUrl} alt={post.mediaAlt} /><span class="zoom-cue"
 				><Maximize2 size={20} /> Perbesar</span
@@ -177,7 +230,7 @@
 
 <MediaLightbox
 	open={lightboxOpen}
-	src={post.mediaUrl}
+	src={post.isVideo ? post.mediaUrl : (gallery[lightboxIndex] ?? post.mediaUrl)}
 	alt={post.mediaAlt}
 	isVideo={post.isVideo}
 	poster={post.thumbnailUrl}
@@ -323,6 +376,94 @@
 		width: 100%;
 		max-height: 82vh;
 		object-fit: contain;
+	}
+
+	/* Galeri multi-foto */
+	.gallery {
+		position: relative;
+	}
+	.gallery-track {
+		display: flex;
+		overflow-x: auto;
+		scroll-snap-type: x mandatory;
+		scrollbar-width: none;
+		-webkit-overflow-scrolling: touch;
+	}
+	.gallery-track::-webkit-scrollbar {
+		display: none;
+	}
+	.gallery .slide {
+		flex: 0 0 100%;
+		scroll-snap-align: center;
+		padding: 0;
+		border: 0;
+		background: var(--color-canvas-deep);
+		cursor: pointer;
+	}
+	.gallery .slide img {
+		max-height: 82vh;
+	}
+	.gallery .counter {
+		position: absolute;
+		top: 12px;
+		right: 12px;
+		z-index: 3;
+		padding: 4px 10px;
+		background: rgb(0 0 0 / 60%);
+		border-radius: 999px;
+		color: white;
+		font-size: 0.68rem;
+		font-weight: 700;
+		backdrop-filter: blur(6px);
+	}
+	.gallery .nav {
+		position: absolute;
+		top: 50%;
+		z-index: 3;
+		display: grid;
+		width: 32px;
+		height: 32px;
+		place-items: center;
+		padding: 0;
+		background: rgb(255 255 255 / 82%);
+		border: 0;
+		border-radius: 50%;
+		color: #1d1915;
+		transform: translateY(-50%);
+		box-shadow: 0 2px 8px rgb(0 0 0 / 22%);
+	}
+	.gallery .nav.prev {
+		left: 10px;
+	}
+	.gallery .nav.next {
+		right: 10px;
+	}
+	.gallery .dots {
+		position: absolute;
+		bottom: 12px;
+		left: 0;
+		right: 0;
+		z-index: 3;
+		display: flex;
+		justify-content: center;
+		gap: 5px;
+		pointer-events: none;
+	}
+	.gallery .dots span {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: rgb(255 255 255 / 55%);
+		box-shadow: 0 0 3px rgb(0 0 0 / 40%);
+		transition: background 160ms ease;
+	}
+	.gallery .dots span.on {
+		background: white;
+	}
+	@media (hover: none) {
+		.gallery .nav {
+			display: none;
+		}
 	}
 
 	.actions,

@@ -45,11 +45,16 @@ export function mapPost(post: BackendPost, mediaBaseUrl: string): PostPreview {
 	const cleanPath = mediaUrl.split('?')[0].toLowerCase();
 	const hasImageExtension = /\.(?:avif|gif|jpe?g|png|svg|webp)$/.test(cleanPath);
 	const hasVideoExtension = /\.(?:3gp|m4v|mkv|mov|mp4|webm|avi)$/.test(cleanPath);
+	const gallery = (post.media_urls ?? [])
+		.map((url) => normalizeMediaUrl(url, mediaBaseUrl))
+		.filter((url): url is string => Boolean(url));
+	const media = gallery.length > 0 ? gallery : [mediaUrl];
 	return {
 		id: post.post_id,
 		user: mapCompactUser(post.user, mediaBaseUrl),
 		caption: post.caption ?? '',
 		mediaUrl,
+		media,
 		thumbnailUrl: normalizeMediaUrl(post.thumbnail_url, mediaBaseUrl) ?? undefined,
 		isVideo: hasImageExtension ? false : hasVideoExtension ? true : post.is_video,
 		mediaAlt: post.caption?.trim() || `Postingan oleh ${post.user.username}`,

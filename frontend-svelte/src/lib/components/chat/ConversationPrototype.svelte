@@ -28,6 +28,18 @@
 	import { confirmAction } from '$lib/ui/confirm';
 	import MentionText from '$lib/components/ui/MentionText.svelte';
 	import MentionTextarea from '$lib/components/ui/MentionTextarea.svelte';
+	import SharedPostPreview from '$lib/components/chat/SharedPostPreview.svelte';
+
+	// Deteksi tautan postingan Portal SI di dalam pesan → tampilkan kartu preview.
+	function sharedPostId(text?: string): number | null {
+		if (!text) return null;
+		const match = text.match(/https?:\/\/[^\s]*\/posts\/(\d+)/i);
+		return match ? Number(match[1]) : null;
+	}
+	function textWithoutSharedPost(text?: string): string {
+		if (!text) return '';
+		return text.replace(/https?:\/\/[^\s]*\/posts\/\d+/gi, '').trim();
+	}
 
 	type ChatMessage = {
 		id: number;
@@ -308,7 +320,12 @@
 				<div>
 					{#if !message.mine && mode === 'group'}<strong>{message.senderName}</strong>{/if}
 					{#if message.isPinned}<span class="pinned"><Pin size={11} /> Disematkan</span>{/if}
-					{#if message.text}<p><MentionText text={message.text} /></p>{/if}
+					{#if sharedPostId(message.text)}
+						{#if textWithoutSharedPost(message.text)}<p>
+								<MentionText text={textWithoutSharedPost(message.text)} />
+							</p>{/if}
+						<SharedPostPreview postId={sharedPostId(message.text)!} />
+					{:else if message.text}<p><MentionText text={message.text} /></p>{/if}
 					{#if message.mediaUrl}
 						{#if mediaKind(message.mediaUrl) === 'image'}<a
 								href={message.mediaUrl}
