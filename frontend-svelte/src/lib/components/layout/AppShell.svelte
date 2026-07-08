@@ -1,7 +1,9 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { page, navigating } from '$app/state';
+	import { goto, preloadData, pushState } from '$app/navigation';
 	import { onMount } from 'svelte';
+	import PostModal from '$lib/components/post/PostModal.svelte';
 	import FeedSkeleton from '$lib/components/skeleton/FeedSkeleton.svelte';
 	import ExploreSkeleton from '$lib/components/skeleton/ExploreSkeleton.svelte';
 	import ProfileSkeleton from '$lib/components/skeleton/ProfileSkeleton.svelte';
@@ -105,6 +107,44 @@
 		return page.url.pathname === href || page.url.pathname.startsWith(`${href}/`);
 	}
 
+	// Buka detail postingan sebagai modal (shallow routing) alih-alih navigasi penuh,
+	// supaya posisi scroll & state halaman asal tetap terjaga (ala Instagram).
+	// Deep link / URL langsung / buka tab baru tetap membuka halaman detail penuh.
+	async function handleContentClick(event: MouseEvent) {
+		if (event.defaultPrevented || event.button !== 0) return;
+		if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+		const anchor = (event.target as HTMLElement | null)?.closest?.('a[href]') as
+			| HTMLAnchorElement
+			| null;
+		if (!anchor || anchor.target === '_blank' || anchor.hasAttribute('data-no-modal')) return;
+		let url: URL;
+		try {
+			url = new URL(anchor.href);
+		} catch {
+			return;
+		}
+		if (url.origin !== location.origin) return;
+		const match = url.pathname.match(/^\/posts\/(\d+)\/?$/);
+		if (!match) return;
+		// Sudah di halaman/URL post yang sama → biarkan default.
+		if (page.url.pathname === url.pathname) return;
+		event.preventDefault();
+		try {
+			const result = await preloadData(url.pathname);
+			if (result.type === 'loaded' && result.status === 200) {
+				pushState(url.pathname, { postDetail: result.data as App.PageState['postDetail'] });
+			} else {
+				await goto(url.pathname);
+			}
+		} catch {
+			await goto(url.pathname);
+		}
+	}
+
+	function closePostModal() {
+		history.back();
+	}
+
 	// Tampilkan skeleton saat berpindah ke halaman yang mengambil media, supaya terasa responsif
 	// (load berjalan di server SSR, jadi tanpa ini halaman lama membeku dulu sebelum berganti).
 	const NavSkeleton = $derived.by(() => {
@@ -175,7 +215,8 @@
 		</div>
 	</header>
 
-	<main class="app-main" id="main-content">
+	<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+	<main class="app-main" id="main-content" onclick={handleContentClick}>
 		{#if showBack}<div class="page-back"><BackButton /></div>{/if}
 		{#if NavSkeleton}
 			<div class="nav-skeleton-wrap"><NavSkeleton /></div>
@@ -202,6 +243,10 @@
 		</nav>
 	{/if}
 </div>
+
+{#if page.state.postDetail}
+	<PostModal data={page.state.postDetail} onClose={closePostModal} />
+{/if}
 
 <style>
 	.app-shell {

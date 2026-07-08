@@ -1,0 +1,163 @@
+<script lang="ts">
+	import { X } from '@lucide/svelte';
+	import { fade, fly } from 'svelte/transition';
+	import { cubicOut } from 'svelte/easing';
+	import PostDetailView from '$lib/components/post/PostDetailView.svelte';
+	import type { PageData } from '../../../routes/(app)/posts/[postId]/$types';
+
+	let { data, onClose }: { data: PageData; onClose: () => void } = $props();
+
+	let scrollEl = $state<HTMLDivElement>();
+	let dragging = $state(false);
+	let dragY = $state(0);
+	let startY = 0;
+
+	// Cegah scroll latar & kembalikan saat modal ditutup.
+	$effect(() => {
+		const previous = document.body.style.overflow;
+		document.body.style.overflow = 'hidden';
+		return () => {
+			document.body.style.overflow = previous;
+		};
+	});
+
+	// Swipe-down untuk menutup (mobile) — hanya saat konten sudah di paling atas.
+	function onPointerDown(event: PointerEvent) {
+		if (event.pointerType === 'mouse') return;
+		if (!scrollEl || scrollEl.scrollTop > 0) return;
+		startY = event.clientY;
+		dragging = true;
+	}
+	function onPointerMove(event: PointerEvent) {
+		if (!dragging) return;
+		dragY = Math.max(0, event.clientY - startY);
+	}
+	function onPointerUp() {
+		if (!dragging) return;
+		dragging = false;
+		if (dragY > 120) onClose();
+		dragY = 0;
+	}
+</script>
+
+<svelte:window
+	onkeydown={(event) => {
+		if (event.key === 'Escape') onClose();
+	}}
+/>
+
+<div class="pm-overlay" transition:fade={{ duration: 180 }} onclick={onClose} role="presentation"></div>
+
+<div class="pm-viewport">
+	<div
+		class="pm-panel"
+		in:fly={{ y: 30, duration: 240, easing: cubicOut }}
+		out:fly={{ y: 20, duration: 160, easing: cubicOut }}
+		style:transform={dragY ? `translateY(${dragY}px)` : undefined}
+		style:transition={dragging ? 'none' : 'transform 220ms cubic-bezier(0.2,0.9,0.3,1)'}
+		role="dialog"
+		aria-modal="true"
+		aria-label="Detail postingan"
+	>
+		<div class="pm-grabber" aria-hidden="true"><span></span></div>
+		<button class="pm-close" onclick={onClose} aria-label="Tutup"><X size={20} /></button>
+		<div
+			class="pm-scroll"
+			bind:this={scrollEl}
+			onpointerdown={onPointerDown}
+			onpointermove={onPointerMove}
+			onpointerup={onPointerUp}
+			onpointercancel={onPointerUp}
+		>
+			<PostDetailView {data} />
+		</div>
+	</div>
+</div>
+
+<style>
+	.pm-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 1400;
+		background: rgb(18 13 8 / 55%);
+		backdrop-filter: blur(3px);
+	}
+	.pm-viewport {
+		position: fixed;
+		inset: 0;
+		z-index: 1401;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 20px;
+		pointer-events: none;
+	}
+	.pm-panel {
+		position: relative;
+		display: flex;
+		width: min(760px, 100%);
+		max-height: 92vh;
+		flex-direction: column;
+		overflow: hidden;
+		background: var(--color-canvas, #fbf7ef);
+		border: 1px solid var(--color-border);
+		border-radius: 20px;
+		box-shadow: 0 30px 80px rgb(0 0 0 / 34%);
+		pointer-events: auto;
+		will-change: transform;
+	}
+	.pm-grabber {
+		display: none;
+	}
+	.pm-close {
+		position: absolute;
+		z-index: 3;
+		top: 12px;
+		right: 12px;
+		display: grid;
+		width: 38px;
+		height: 38px;
+		place-items: center;
+		background: rgb(0 0 0 / 45%);
+		border: 0;
+		border-radius: 50%;
+		color: white;
+		backdrop-filter: blur(6px);
+	}
+	.pm-scroll {
+		flex: 1;
+		overflow-y: auto;
+		padding: 16px 16px 8px;
+		-webkit-overflow-scrolling: touch;
+	}
+	.pm-scroll :global(.post-detail-layout) {
+		margin: 0;
+	}
+
+	@media (max-width: 720px) {
+		.pm-viewport {
+			align-items: flex-end;
+			padding: 0;
+		}
+		.pm-panel {
+			width: 100%;
+			max-height: 94vh;
+			border-radius: 20px 20px 0 0;
+			touch-action: pan-y;
+		}
+		.pm-grabber {
+			display: grid;
+			place-items: center;
+			padding: 8px 0 4px;
+		}
+		.pm-grabber span {
+			width: 40px;
+			height: 4px;
+			border-radius: 999px;
+			background: var(--color-border);
+		}
+		.pm-close {
+			top: 8px;
+		}
+	}
+</style>
