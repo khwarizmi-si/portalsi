@@ -564,4 +564,13 @@
 			position: static;
 		}
 	}
-	@media (max-wid
+	@media (max-width: 767px) {
+		.owner-tools,
+		.comments {
+			border-radius: 0;
+		}
+		.comment-list {
+			padding-inline: 2px;
+		}
+	}
+</style>
