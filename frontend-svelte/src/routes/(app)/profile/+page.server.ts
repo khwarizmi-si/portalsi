@@ -44,7 +44,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			caption: post.caption?.trim() || `Postingan ${profile.username}`,
 			mediaUrl: normalizeMediaUrl(post.media_url, mediaBaseUrl) || '/assets/logo.png',
 			thumbnailUrl: normalizeMediaUrl(post.thumbnail_url, mediaBaseUrl),
-			isVideo: post.is_video
+			isVideo: post.is_video,
+			isMultiple: post.is_multiple
 		})),
 		hasMore: Boolean(
 			profile.pagination && profile.pagination.current_page < profile.pagination.last_page

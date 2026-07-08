@@ -172,6 +172,7 @@
 		<div class="feed-list">
 			{#each posts as post, index (post.id)}<PostCard
 					{post}
+					autoplay
 				/>{#if (index + 1) % 10 === 0}<FriendSuggestionCard users={data.suggestions} />{/if}{/each}
 		</div>
 		<InfiniteScrollTrigger

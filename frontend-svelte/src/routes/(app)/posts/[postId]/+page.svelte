@@ -501,39 +501,45 @@
 	}
 	.comment-form {
 		display: grid;
-		grid-template-columns: auto 1fr auto auto;
+		grid-template-columns: auto minmax(0, 1fr) auto auto;
 		align-items: center;
 		gap: 8px;
 		padding: 12px;
 		border-top: 1px solid var(--color-border);
 	}
 	.comment-form label {
-		height: 40px;
+		display: block;
+		min-width: 0;
 	}
 	.comment-form :global(.mention-field textarea) {
+		display: block;
 		width: 100%;
-		height: 100%;
-		padding: 0 12px;
+		min-height: 42px;
+		max-height: 120px;
+		padding: 10px 13px;
 		background: var(--color-canvas);
 		border: 1px solid var(--color-border);
-		border-radius: 11px;
+		border-radius: 12px;
 		outline: 0;
+		font: inherit;
+		line-height: 1.35;
+		resize: none;
 	}
 	.comment-form button {
 		display: grid;
-		width: 40px;
-		height: 40px;
+		width: 42px;
+		height: 42px;
+		flex: none;
 		place-items: center;
 		background: var(--color-primary);
 		border: 0;
-		border-radius: 11px;
+		border-radius: 12px;
 		color: white;
 	}
 	.comment-form .gif-btn {
-		width: 42px;
 		background: var(--color-secondary-soft, #d9efe6);
 		color: var(--color-secondary, #178f72);
-		font-size: 0.72rem;
+		font-size: 0.7rem;
 		font-weight: 800;
 		letter-spacing: 0.02em;
 	}

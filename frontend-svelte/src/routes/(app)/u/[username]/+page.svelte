@@ -5,6 +5,7 @@
 		FolderKanban,
 		Grid3X3,
 		Image,
+		Layers,
 		Lock,
 		MessageCircle,
 		Share2,
@@ -76,7 +77,8 @@
 			caption: post.caption?.trim() || `Postingan ${profile.username}`,
 			mediaUrl: normalizeMediaUrl(post.media_url, mediaBaseUrl) || '/assets/logo.png',
 			thumbnailUrl: normalizeMediaUrl(post.thumbnail_url, mediaBaseUrl),
-			isVideo: post.is_video
+			isVideo: post.is_video,
+			isMultiple: post.is_multiple
 		}));
 	}
 
@@ -242,7 +244,7 @@
 						></video>{:else}<img
 							src={post.thumbnailUrl ?? post.mediaUrl}
 							alt={post.caption}
-						/>{/if}{#if post.isVideo}<span><Play size={16} fill="currentColor" /></span>{/if}</a
+						/>{/if}{#if post.isVideo}<span aria-label="Video"><Play size={16} fill="currentColor" /></span>{:else if post.isMultiple}<span aria-label="Beberapa foto"><Layers size={14} /></span>{/if}</a
 				>{/each}
 		</section>
 		<InfiniteScrollTrigger

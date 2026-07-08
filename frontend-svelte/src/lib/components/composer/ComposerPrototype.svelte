@@ -10,11 +10,13 @@
 		Save,
 		Scissors,
 		Sparkles,
+		TriangleAlert,
 		Upload,
 		Video,
 		X
 	} from '@lucide/svelte';
-	import { onMount, untrack } from 'svelte';
+	import { flip } from 'svelte/animate';
+	import { onDestroy, onMount, untrack } from 'svelte';
 	import { createdPostResponseSchema } from '$lib/schemas/post';
 	import { createdStoryResponseSchema } from '$lib/schemas/story';
 	import ImageCropper from '$lib/components/media/ImageCropper.svelte';
@@ -46,15 +48,32 @@
 	);
 	const MAX_IMAGES = 15;
 	let file = $state<File | null>(null);
-	// Galeri multi-foto (khusus post). Aktif saat berisi >1 foto.
-	let galleryImages = $state<File[]>([]);
-	let galleryPreviews = $state<string[]>([]);
+	// Galeri multi-foto (khusus post). Aktif saat berisi >1 foto. Tiap foto punya
+	// pengaturan crop & filter sendiri, dan bisa diurutkan ulang lewat drag.
+	type GalleryCrop = 'original' | 'square' | 'portrait';
+	type GalleryItem = {
+		id: string;
+		file: File;
+		url: string;
+		crop: GalleryCrop;
+		region: CropRegion | null;
+		filter: 'normal' | 'bright' | 'warm' | 'mono' | 'contrast';
+		aspect: number;
+	};
+	let galleryItems = $state<GalleryItem[]>([]);
+	let editingId = $state<string | null>(null);
+	let dragId = $state<string | null>(null);
+	let dragMoved = $state(false);
+	let dragStartX = 0;
+	let dragStartY = 0;
 	let caption = $state('');
 	let location = $state('');
 	let previewUrl = $state('');
 	let submitting = $state(false);
 	let dragging = $state(false);
 	let message = $state('');
+	// Peringatan blokir (mis. video >1) ditampilkan sebagai modal agar jelas terlihat.
+	let warning = $state<string | null>(null);
 	let uploadProgress = $state(0);
 	let activeUpload = $state<XMLHttpRequest | null>(null);
 	let cropMode = $state<'original' | 'square' | 'portrait' | 'story'>(
@@ -111,7 +130,20 @@
 	);
 	type MediaKind = 'image' | 'video' | 'audio' | 'unknown';
 	const selectedFileKind = $derived(file ? mediaKind(file) : null);
-	const galleryMode = $derived(kind === 'post' && galleryImages.length > 1);
+	const galleryMode = $derived(kind === 'post' && galleryItems.length > 1);
+	const editingItem = $derived(galleryItems.find((item) => item.id === editingId) ?? null);
+	const editCropAspect = $derived(
+		editingItem
+			? editingItem.crop === 'square'
+				? 1
+				: editingItem.crop === 'portrait'
+					? 4 / 5
+					: editingItem.aspect
+			: 1
+	);
+	const editFilterCss = $derived(
+		filterOptions.find((option) => option.id === editingItem?.filter)?.css ?? 'none'
+	);
 
 	function mediaKind(candidate: File): MediaKind {
 		if (candidate.type.startsWith('image/')) return 'image';
@@ -134,11 +166,23 @@
 		return () => URL.revokeObjectURL(url);
 	});
 
-	$effect(() => {
-		const urls = galleryImages.map((image) => URL.createObjectURL(image));
-		galleryPreviews = urls;
-		return () => urls.forEach((url) => URL.revokeObjectURL(url));
-	});
+	// Bebaskan object URL galeri saat komponen dilepas.
+	onDestroy(() => galleryItems.forEach((item) => URL.revokeObjectURL(item.url)));
+
+	function makeGalleryItem(source: File): GalleryItem {
+		return {
+			id:
+				typeof crypto !== 'undefined' && crypto.randomUUID
+					? crypto.randomUUID()
+					: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+			file: source,
+			url: URL.createObjectURL(source),
+			crop: 'original',
+			region: null,
+			filter: 'normal',
+			aspect: 1
+		};
+	}
 
 	$effect(() => {
 		const query = location.trim();
@@ -231,6 +275,12 @@
 			.catch(() => undefined);
 	});
 
+	function clearGallery() {
+		galleryItems.forEach((item) => URL.revokeObjectURL(item.url));
+		galleryItems = [];
+		editingId = null;
+	}
+
 	function selectSingle(candidate?: File) {
 		if (!candidate) return;
 		const detectedKind = mediaKind(candidate);
@@ -241,15 +291,15 @@
 					? detectedKind !== 'unknown'
 					: detectedKind === 'image' || detectedKind === 'video';
 		if (!allowed) {
-			message = 'Jenis file tidak didukung untuk konten ini.';
+			warning = 'Jenis file tidak didukung untuk konten ini.';
 			return;
 		}
 		if (candidate.size > 500 * 1024 * 1024) {
-			message = 'Ukuran file melebihi batas 500 MB.';
+			warning = 'Ukuran file melebihi batas 500 MB.';
 			return;
 		}
 		file = candidate;
-		galleryImages = [];
+		clearGallery();
 		cropMode = kind === 'story' ? 'story' : 'original';
 		sourceAspect = 1;
 		cropRegion = null;
@@ -275,45 +325,94 @@
 		// Video: hanya boleh satu, dan tidak boleh dicampur foto.
 		if (hasVideo) {
 			if (incoming.length > 1) {
-				message = 'Video hanya boleh satu. Untuk banyak media, pilih foto saja.';
+				warning = 'Video hanya boleh satu. Untuk banyak media, pilih foto saja.';
 				return;
 			}
 			selectSingle(incoming[0]);
 			return;
 		}
 		if (!allImages) {
-			message = 'Jenis file tidak didukung untuk konten ini.';
+			warning = 'Jenis file tidak didukung untuk konten ini.';
 			return;
 		}
 
-		// Foto: gabungkan dengan yang sudah ada (maks 15).
-		const existing = galleryMode ? galleryImages : file && selectedFileKind === 'image' ? [file] : [];
-		if (existing.length + incoming.length > MAX_IMAGES)
-			message = `Maksimal ${MAX_IMAGES} foto per postingan.`;
-		const combined = [...existing, ...incoming].slice(0, MAX_IMAGES);
-		const tooBig = combined.find((image) => image.size > 500 * 1024 * 1024);
-		if (tooBig) {
-			message = 'Ukuran file melebihi batas 500 MB.';
+		// Foto: gabungkan dengan yang sudah ada (maks 15), pertahankan urutan & pengaturan.
+		const existingItems = galleryMode
+			? galleryItems
+			: file && selectedFileKind === 'image'
+				? [makeGalleryItem(file)]
+				: [];
+		const room = MAX_IMAGES - existingItems.length;
+		if (incoming.length > room)
+			warning = `Maksimal ${MAX_IMAGES} foto per postingan. Sisanya tidak ditambahkan.`;
+		const chosen = incoming.slice(0, Math.max(0, room));
+		if ([...chosen, ...existingItems.map((item) => item.file)].some((f) => f.size > 500 * 1024 * 1024)) {
+			warning = 'Ukuran file melebihi batas 500 MB.';
 			return;
 		}
+		const combined = [...existingItems, ...chosen.map(makeGalleryItem)];
 		if (combined.length <= 1) {
-			selectSingle(combined[0]);
+			if (combined.length === 1) selectSingle(combined[0].file);
+			combined.forEach((item) => URL.revokeObjectURL(item.url));
 		} else {
 			file = null;
-			galleryImages = combined;
-			cropRegion = null;
-			filter = 'normal';
+			galleryItems = combined;
+			editingId = null;
 		}
 	}
 
-	function removeGalleryImage(index: number) {
-		const next = galleryImages.filter((_, position) => position !== index);
-		if (next.length === 1) {
-			selectSingle(next[0]);
-		} else {
-			galleryImages = next;
-			if (next.length === 0) file = null;
+	function removeGalleryImage(id: string) {
+		const item = galleryItems.find((entry) => entry.id === id);
+		if (!item) return;
+		URL.revokeObjectURL(item.url);
+		const next = galleryItems.filter((entry) => entry.id !== id);
+		galleryItems = next;
+		if (editingId === id) editingId = null;
+		if (next.length === 1) selectSingle(next[0].file);
+		else if (next.length === 0) file = null;
+	}
+
+	// Drag untuk mengurutkan ulang foto (mendukung sentuh); reflow dianimasikan via animate:flip.
+	function thumbPointerDown(event: PointerEvent, id: string) {
+		if (event.pointerType === 'mouse' && event.button !== 0) return;
+		dragId = id;
+		dragMoved = false;
+		dragStartX = event.clientX;
+		dragStartY = event.clientY;
+		(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+	}
+	function thumbPointerMove(event: PointerEvent) {
+		if (dragId === null) return;
+		if (!dragMoved) {
+			if (Math.hypot(event.clientX - dragStartX, event.clientY - dragStartY) < 6) return;
+			dragMoved = true;
 		}
+		const target = (document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null)
+			?.closest?.('[data-gid]') as HTMLElement | null;
+		const overId = target?.dataset.gid;
+		if (!overId || overId === dragId) return;
+		const from = galleryItems.findIndex((item) => item.id === dragId);
+		const to = galleryItems.findIndex((item) => item.id === overId);
+		if (from < 0 || to < 0) return;
+		const next = [...galleryItems];
+		const [moved] = next.splice(from, 1);
+		next.splice(to, 0, moved);
+		galleryItems = next;
+	}
+	function thumbPointerUp(id: string) {
+		const wasDrag = dragMoved;
+		dragId = null;
+		dragMoved = false;
+		if (!wasDrag) editingId = id; // ketukan tanpa geser = buka editor foto
+	}
+
+	function setEditCrop(mode: GalleryCrop) {
+		if (!editingItem) return;
+		editingItem.crop = mode;
+		editingItem.region = null;
+	}
+	function setEditFilter(id: GalleryItem['filter']) {
+		if (editingItem) editingItem.filter = id;
 	}
 
 	function onDrop(event: DragEvent) {
@@ -364,7 +463,7 @@
 	}
 
 	async function publish() {
-		if ((!file && galleryImages.length === 0) || submitting) return;
+		if ((!file && galleryItems.length === 0) || submitting) return;
 		const confirmed = await confirmAction({
 			title:
 				kind === 'story'
@@ -382,13 +481,26 @@
 		message = '';
 		startProgress();
 		try {
-			// Jalur galeri multi-foto (post): unggah tiap foto, kirim media_keys[]/media[].
+			// Jalur galeri multi-foto (post): terapkan crop/filter tiap foto, lalu unggah.
 			if (kind === 'post' && galleryMode) {
 				const body = new FormData();
-				for (const image of galleryImages) {
-					const key = await tryDirectUpload(image, 'post');
+				for (const item of galleryItems) {
+					const css = filterOptions.find((option) => option.id === item.filter)?.css ?? 'none';
+					let uploadFile = item.file;
+					if (item.region) {
+						uploadFile = await cropImageToRegion(item.file, item.region, 2048, css);
+					} else if (item.filter !== 'normal') {
+						// Filter tanpa crop: render ulang seluruh gambar dengan filter.
+						uploadFile = await cropImageToRegion(
+							item.file,
+							{ sx: 0, sy: 0, sw: 1e9, sh: 1e9 },
+							2048,
+							css
+						);
+					}
+					const key = await tryDirectUpload(uploadFile, 'post');
 					if (key) body.append('media_keys[]', key);
-					else body.append('media[]', image);
+					else body.append('media[]', uploadFile);
 				}
 				body.set('caption', caption.trim());
 				appendMusic(body);
@@ -728,7 +840,7 @@
 			<p class="eyebrow">{copy.eyebrow}</p>
 			<h1>{copy.title}</h1>
 		</div>
-		<button onclick={publish} disabled={(!file && galleryImages.length === 0) || submitting}
+		<button onclick={publish} disabled={(!file && galleryItems.length === 0) || submitting}
 			>{submitting
 				? uploadProgress >= 100
 					? 'Memproses di server…'
@@ -751,18 +863,43 @@
 			{#if galleryMode}
 				<div class="gallery-edit">
 					<div class="gallery-grid">
-						{#each galleryPreviews as src, index (index)}
-							<div class="g-item">
-								<img {src} alt={`Foto ${index + 1}`} />
+						{#each galleryItems as item, index (item.id)}
+							<div
+								class="g-item"
+								class:dragging={dragId === item.id && dragMoved}
+								data-gid={item.id}
+								role="button"
+								tabindex="0"
+								aria-label={`Foto ${index + 1}. Ketuk untuk mengedit, tahan lalu geser untuk mengurutkan.`}
+								animate:flip={{ duration: 220 }}
+								onpointerdown={(event) => thumbPointerDown(event, item.id)}
+								onpointermove={thumbPointerMove}
+								onpointerup={() => thumbPointerUp(item.id)}
+								onpointercancel={() => {
+									dragId = null;
+									dragMoved = false;
+								}}
+								onkeydown={(event) => {
+									if (event.key === 'Enter' || event.key === ' ') {
+										event.preventDefault();
+										editingId = item.id;
+									}
+								}}
+							>
+								<img src={item.url} alt={`Foto ${index + 1}`} draggable="false" />
+								{#if item.filter !== 'normal' || item.crop !== 'original'}<span class="g-edited"
+										><Sparkles size={11} /></span
+									>{/if}
 								<button
 									class="g-remove"
-									onclick={() => removeGalleryImage(index)}
+									onpointerdown={(event) => event.stopPropagation()}
+									onclick={() => removeGalleryImage(item.id)}
 									aria-label={`Hapus foto ${index + 1}`}><X size={14} /></button
 								>
 								<span class="g-index">{index + 1}</span>
 							</div>
 						{/each}
-						{#if galleryImages.length < MAX_IMAGES}
+						{#if galleryItems.length < MAX_IMAGES}
 							<label class="g-add">
 								<ImagePlus size={22} /><span>Tambah</span>
 								<input
@@ -775,7 +912,8 @@
 						{/if}
 					</div>
 					<p class="gallery-note">
-						{galleryImages.length}/{MAX_IMAGES} foto · akan bisa digeser seperti Instagram
+						{galleryItems.length}/{MAX_IMAGES} foto · ketuk untuk atur filter & rasio, tahan lalu geser
+						untuk mengurutkan
 					</p>
 				</div>
 			{:else if previewUrl}
@@ -1020,7 +1158,115 @@
 	</div>
 </div>
 
+{#if editingItem}
+	<div class="editor-overlay" role="presentation" onclick={() => (editingId = null)}></div>
+	<div class="editor-modal" role="dialog" aria-modal="true" aria-label="Edit foto">
+		<header>
+			<strong>Edit foto</strong>
+			<button onclick={() => (editingId = null)} aria-label="Selesai"><X size={18} /></button>
+		</header>
+		<div class="editor-crop">
+			{#key `${editingItem.id}:${editingItem.crop}`}
+				<ImageCropper
+					src={editingItem.url}
+					aspect={editCropAspect}
+					label="Atur potongan gambar"
+					filterCss={editFilterCss}
+					onready={(aspect) => {
+						if (editingItem) editingItem.aspect = aspect;
+					}}
+					onregion={(region) => {
+						if (editingItem) editingItem.region = region;
+					}}
+				/>
+			{/key}
+		</div>
+		<div class="crop-controls" aria-label="Rasio gambar">
+			<span>Rasio</span><button
+				class:active={editingItem.crop === 'original'}
+				onclick={() => setEditCrop('original')}>Asli</button
+			><button class:active={editingItem.crop === 'square'} onclick={() => setEditCrop('square')}
+				>1:1</button
+			><button
+				class:active={editingItem.crop === 'portrait'}
+				onclick={() => setEditCrop('portrait')}>4:5</button
+			>
+		</div>
+		<div class="filter-controls" aria-label="Filter gambar">
+			{#each filterOptions as option (option.id)}<button
+					class:active={editingItem.filter === option.id}
+					onclick={() => setEditFilter(option.id)}
+					><span style:filter={option.css}><img src={editingItem.url} alt="" /></span
+					>{option.label}</button
+				>{/each}
+		</div>
+		<button class="editor-done" onclick={() => (editingId = null)}>Selesai</button>
+	</div>
+{/if}
+
+{#if warning}
+	<div class="warn-overlay" role="presentation" onclick={() => (warning = null)}></div>
+	<div class="warn-modal" role="alertdialog" aria-modal="true" aria-label="Peringatan">
+		<div class="warn-icon"><TriangleAlert size={26} /></div>
+		<h3>Media tidak bisa ditambahkan</h3>
+		<p>{warning}</p>
+		<button onclick={() => (warning = null)}>Mengerti</button>
+	</div>
+{/if}
+
 <style>
+	.warn-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 1300;
+		background: rgb(20 15 10 / 45%);
+		backdrop-filter: blur(2px);
+	}
+	.warn-modal {
+		position: fixed;
+		z-index: 1301;
+		top: 50%;
+		left: 50%;
+		display: grid;
+		width: min(360px, calc(100% - 40px));
+		justify-items: center;
+		gap: 8px;
+		padding: 26px 24px 22px;
+		background: var(--color-surface);
+		border-radius: 18px;
+		box-shadow: 0 24px 60px rgb(0 0 0 / 28%);
+		text-align: center;
+		transform: translate(-50%, -50%);
+	}
+	.warn-icon {
+		display: grid;
+		width: 56px;
+		height: 56px;
+		place-items: center;
+		background: #fdecdc;
+		border-radius: 50%;
+		color: #c2570f;
+	}
+	.warn-modal h3 {
+		margin: 6px 0 0;
+		font-size: 1.05rem;
+	}
+	.warn-modal p {
+		margin: 0;
+		color: var(--color-muted);
+		font-size: 0.86rem;
+		line-height: 1.5;
+	}
+	.warn-modal button {
+		width: 100%;
+		min-height: 44px;
+		margin-top: 12px;
+		background: var(--color-primary);
+		border: 0;
+		border-radius: 12px;
+		color: white;
+		font-weight: 720;
+	}
 	.composer-page {
 		width: min(100% - 32px, 1040px);
 		margin: 0 auto;
@@ -1193,11 +1439,40 @@
 		overflow: hidden;
 		border-radius: 12px;
 		background: var(--color-canvas-deep);
+		cursor: grab;
+		touch-action: none;
+		transition:
+			transform 160ms ease,
+			box-shadow 160ms ease;
+	}
+	.g-item.dragging {
+		z-index: 5;
+		cursor: grabbing;
+		transform: scale(1.08);
+		box-shadow: 0 12px 26px rgb(0 0 0 / 28%);
+		opacity: 0.96;
+		/* Biar elementFromPoint bisa mendeteksi target di bawah item yang diangkat;
+		   pointer capture tetap mengirim event ke item ini. */
+		pointer-events: none;
 	}
 	.g-item img {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
+		pointer-events: none;
+		user-select: none;
+	}
+	.g-edited {
+		position: absolute;
+		top: 6px;
+		left: 6px;
+		display: grid;
+		width: 22px;
+		height: 22px;
+		place-items: center;
+		background: var(--color-primary);
+		border-radius: 50%;
+		color: white;
 	}
 	.g-remove {
 		position: absolute;
@@ -1252,6 +1527,63 @@
 		color: var(--color-muted);
 		font-size: 0.7rem;
 		text-align: center;
+	}
+	.editor-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 1300;
+		background: rgb(20 15 10 / 55%);
+		backdrop-filter: blur(2px);
+	}
+	.editor-modal {
+		position: fixed;
+		z-index: 1301;
+		top: 50%;
+		left: 50%;
+		display: grid;
+		width: min(440px, calc(100% - 28px));
+		max-height: 92vh;
+		gap: 12px;
+		overflow-y: auto;
+		padding: 16px;
+		background: var(--color-surface);
+		border-radius: 18px;
+		box-shadow: 0 24px 60px rgb(0 0 0 / 30%);
+		transform: translate(-50%, -50%);
+	}
+	.editor-modal > header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+	.editor-modal > header strong {
+		font-size: 1rem;
+	}
+	.editor-modal > header button {
+		display: grid;
+		width: 34px;
+		height: 34px;
+		place-items: center;
+		border: 0;
+		border-radius: 50%;
+		background: var(--color-canvas-deep, #f1ece3);
+		color: var(--color-muted);
+	}
+	.editor-crop {
+		width: 100%;
+	}
+	.editor-modal .crop-controls,
+	.editor-modal .filter-controls {
+		margin-top: 0;
+		width: 100%;
+	}
+	.editor-done {
+		min-height: 46px;
+		background: var(--color-primary);
+		border: 0;
+		border-radius: 12px;
+		color: white;
+		font-weight: 720;
 	}
 	.crop-remove {
 		position: absolute;

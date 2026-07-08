@@ -11,6 +11,7 @@ export const profilePostSchema = z
 		media_url: z.string().min(1),
 		thumbnail_url: z.string().nullish(),
 		is_video: booleanish.catch(false),
+		is_multiple: booleanish.catch(false),
 		created_at: z.string()
 	})
 	.passthrough();

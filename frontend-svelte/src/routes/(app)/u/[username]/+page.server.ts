@@ -69,7 +69,8 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 			caption: post.caption?.trim() || `Postingan ${profile.username}`,
 			mediaUrl: normalizeMediaUrl(post.media_url, mediaBaseUrl) || '/assets/logo.png',
 			thumbnailUrl: normalizeMediaUrl(post.thumbnail_url, mediaBaseUrl),
-			isVideo: post.is_video
+			isVideo: post.is_video,
+			isMultiple: post.is_multiple
 		})),
 		portfolio:
 			portfolioResult.status === 'fulfilled'

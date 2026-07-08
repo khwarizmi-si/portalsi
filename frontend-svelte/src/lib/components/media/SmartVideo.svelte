@@ -38,6 +38,28 @@
 		event.stopPropagation();
 		void root.requestFullscreen?.();
 	}
+
+	// Autoplay ala Instagram: putar saat video masuk viewport, jeda saat digulir menjauh.
+	$effect(() => {
+		if (!autoplay) return;
+		const el = video;
+		const container = root;
+		if (!el || !container) return;
+		const observer = new IntersectionObserver(
+			(entries) => {
+				const entry = entries[0];
+				if (!entry) return;
+				if (entry.isIntersecting && entry.intersectionRatio >= 0.55) {
+					void el.play().catch(() => undefined);
+				} else if (!el.paused) {
+					el.pause();
+				}
+			},
+			{ threshold: [0, 0.55, 1] }
+		);
+		observer.observe(container);
+		return () => observer.disconnect();
+	});
 </script>
 
 <div
@@ -52,7 +74,6 @@
 		bind:this={video}
 		{src}
 		{poster}
-		{autoplay}
 		bind:muted
 		preload={autoplay ? 'auto' : 'metadata'}
 		playsinline

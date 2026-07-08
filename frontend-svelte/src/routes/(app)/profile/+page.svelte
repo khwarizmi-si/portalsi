@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { env } from '$env/dynamic/public';
-	import { Bookmark, Grid3X3, Maximize2, Play, Settings, Share2, X } from '@lucide/svelte';
+	import { Bookmark, Grid3X3, Layers, Maximize2, Play, Settings, Share2, X } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { clientRequest } from '$lib/api/client';
 	import StoryAvatarLink from '$lib/components/story/StoryAvatarLink.svelte';
@@ -42,7 +42,8 @@
 			caption: post.caption?.trim() || `Postingan ${profile.username}`,
 			mediaUrl: normalizeMediaUrl(post.media_url, mediaBaseUrl) || '/assets/logo.png',
 			thumbnailUrl: normalizeMediaUrl(post.thumbnail_url, mediaBaseUrl),
-			isVideo: post.is_video
+			isVideo: post.is_video,
+			isMultiple: post.is_multiple
 		}));
 	}
 
@@ -145,7 +146,9 @@
 							playsinline
 							preload="metadata"
 						></video>{:else}<img src={post.thumbnailUrl ?? post.mediaUrl} alt={post.caption} />{/if}
-					{#if post.isVideo}<span><Play size={15} fill="currentColor" /> Video</span>{/if}
+					{#if post.isVideo}<span aria-label="Video"><Play size={14} fill="currentColor" /></span
+						>{:else if post.isMultiple}<span aria-label="Beberapa foto"><Layers size={14} /></span
+						>{/if}
 				</a>
 			{/each}
 		</section>
@@ -364,16 +367,16 @@
 	}
 	.profile-grid a span {
 		position: absolute;
-		right: 8px;
-		bottom: 8px;
-		display: flex;
-		align-items: center;
-		gap: 4px;
-		padding: 3px 7px;
-		background: rgb(22 17 12 / 60%);
-		border-radius: 7px;
+		right: 7px;
+		top: 7px;
+		display: grid;
+		place-items: center;
+		width: 24px;
+		height: 24px;
+		background: rgb(22 17 12 / 55%);
+		border-radius: 50%;
 		color: white;
-		font-size: 0.66rem;
+		filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.4));
 	}
 	.empty-profile {
 		display: grid;

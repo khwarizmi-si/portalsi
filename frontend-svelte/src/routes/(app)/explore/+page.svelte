@@ -1,7 +1,15 @@
 <script lang="ts">
 	import { env } from '$env/dynamic/public';
 	import { untrack } from 'svelte';
-	import { Image, LoaderCircle, Play, Search, SlidersHorizontal, Users, X } from '@lucide/svelte';
+	import {
+		Layers,
+		LoaderCircle,
+		Play,
+		Search,
+		SlidersHorizontal,
+		Users,
+		X
+	} from '@lucide/svelte';
 	import { clientRequest } from '$lib/api/client';
 	import { mapCompactUser, mapPost } from '$lib/api/mappers';
 	import SectionPage from '$lib/components/layout/SectionPage.svelte';
@@ -193,11 +201,10 @@
 						playsinline
 						preload="metadata"
 					></video>{:else}<img src={post.thumbnailUrl ?? post.mediaUrl} alt={post.mediaAlt} />{/if}
-				<span
-					>{#if post.isVideo}<Play size={17} fill="currentColor" />{:else}<Image
-							size={17}
-						/>{/if}</span
-				>
+				{#if post.isVideo}<span aria-label="Video"><Play size={16} fill="currentColor" /></span
+					>{:else if post.media && post.media.length > 1}<span aria-label="Beberapa foto"
+						><Layers size={16} /></span
+					>{/if}
 				<div>
 					<strong
 						>{post.user.fullName}<UserBadges

@@ -46,11 +46,10 @@
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
-		// Desktop: Enter mengirim, Shift+Enter membuat baris baru. Di layar sentuh Enter tetap baris baru.
+		// Enter mengirim (desktop & mobile); Shift+Enter membuat baris baru.
 		// Jika menu mention terbuka, Enter dibiarkan untuk mengetik (bukan mengirim).
 		if (event.key !== 'Enter' || event.shiftKey || !onEnter) return;
 		if (results.length > 0) return;
-		if (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches) return;
 		event.preventDefault();
 		onEnter();
 	}
