@@ -1,16 +1,20 @@
 <script lang="ts">
-	import { Check, Copy, LoaderCircle, Search, Send, Share2, X } from '@lucide/svelte';
+	import { env } from '$env/dynamic/public';
+	import { Check, Copy, LoaderCircle, Search, Send, Share2, Users, X } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { clientRequest } from '$lib/api/client';
 	import { userSearchResponseSchema } from '$lib/schemas/post';
-	import { sentDirectMessageSchema } from '$lib/schemas/chat';
+	import { chatListSchema } from '$lib/schemas/chat';
+	import { normalizeMediaUrl } from '$lib/utils/media';
 	import Avatar from '$lib/components/ui/Avatar.svelte';
 	import UserBadges from '$lib/components/ui/UserBadges.svelte';
 
-	type Person = {
+	type Target = {
+		key: string;
+		kind: 'user' | 'group';
 		id: number;
-		username: string;
-		fullName: string;
+		name: string;
+		handle: string;
 		avatarUrl: string | null;
 		verified: boolean;
 		role: 'student' | 'parent' | 'teacher' | 'dev' | 'other';
@@ -22,46 +26,83 @@
 		onClose
 	}: { postId: number; shareUrl: string; onClose: () => void } = $props();
 
-	let people = $state<Person[]>([]);
+	const mediaBaseUrl = env.PUBLIC_MEDIA_BASE_URL?.trim() || 'https://api.portalsi.com/storage';
+
+	let recentTargets = $state<Target[]>([]);
+	let searchTargets = $state<Target[]>([]);
 	let query = $state('');
 	let loading = $state(true);
 	let searching = $state(false);
-	let selected = $state<Set<number>>(new Set());
+	let selected = $state<Set<string>>(new Set());
 	let note = $state('');
 	let sending = $state(false);
 	let status = $state('');
 	let copied = $state(false);
 	let done = $state(false);
 
-	function toPerson(user: {
+	const shownTargets = $derived(query.trim().length >= 2 ? searchTargets : recentTargets);
+
+	function userTarget(user: {
 		user_id: number;
 		username: string;
 		full_name?: string | null;
 		profile_picture_url?: string | null;
 		is_verified?: boolean;
-		role?: Person['role'];
-	}): Person {
+		role?: Target['role'];
+	}): Target {
 		return {
+			key: `user:${user.user_id}`,
+			kind: 'user',
 			id: user.user_id,
-			username: user.username,
-			fullName: user.full_name?.trim() || user.username,
-			avatarUrl: user.profile_picture_url ?? null,
+			name: user.full_name?.trim() || user.username,
+			handle: `@${user.username}`,
+			avatarUrl: normalizeMediaUrl(user.profile_picture_url, mediaBaseUrl) ?? null,
 			verified: Boolean(user.is_verified),
 			role: user.role ?? 'other'
 		};
 	}
 
-	// Muat daftar kontak awal (mutual/teman).
+	// Daftar awal = obrolan terbaru (grup & pribadi), urut berdasarkan waktu chat terakhir.
 	$effect(() => {
 		let active = true;
 		untrack(async () => {
 			try {
-				const response = await clientRequest('mutuals?per_page=30', {
-					schema: userSearchResponseSchema
-				});
-				if (active) people = response.data.map(toPerson);
+				const list = await clientRequest('messages/chat-list', { schema: chatListSchema });
+				const withTime = list.map((item) => ({
+					item,
+					at: item.type === 'user' ? item.last_chat.sent_at : item.sent_at
+				}));
+				withTime.sort(
+					(a, b) => (b.at ? Date.parse(b.at) : 0) - (a.at ? Date.parse(a.at) : 0)
+				);
+				const targets = withTime.map(({ item }): Target =>
+					item.type === 'user'
+						? {
+								key: `user:${item.conversation.id}`,
+								kind: 'user',
+								id: item.conversation.id,
+								name:
+									item.conversation.name || item.conversation.username || 'Pengguna Portal SI',
+								handle: item.conversation.username ? `@${item.conversation.username}` : 'Pesan',
+								avatarUrl:
+									normalizeMediaUrl(item.conversation.profile_picture_url, mediaBaseUrl) ?? null,
+								verified: false,
+								role: 'other'
+							}
+						: {
+								key: `group:${item.id}`,
+								kind: 'group',
+								id: item.id,
+								name: item.name,
+								handle: 'Grup',
+								avatarUrl: normalizeMediaUrl(item.avatar_url, mediaBaseUrl) ?? null,
+								verified: false,
+								role: 'other'
+							}
+				);
+				if (active) recentTargets = targets;
 			} catch {
-				if (active) status = 'Daftar kontak belum dapat dimuat.';
+				if (active) status = 'Daftar obrolan belum dapat dimuat.';
 			} finally {
 				if (active) loading = false;
 			}
@@ -71,7 +112,7 @@
 		};
 	});
 
-	// Pencarian pengguna.
+	// Pencarian pengguna (untuk mengirim ke orang yang belum pernah dichat).
 	$effect(() => {
 		const q = query.trim();
 		if (q.length < 2) {
@@ -87,7 +128,10 @@
 					`users/search?username=${encoded}&full_name=${encoded}&per_page=20`,
 					{ schema: userSearchResponseSchema, signal: controller.signal }
 				);
-				people = response.data.map(toPerson);
+				const groups = recentTargets.filter(
+					(target) => target.kind === 'group' && target.name.toLowerCase().includes(q.toLowerCase())
+				);
+				searchTargets = [...groups, ...response.data.map(userTarget)];
 			} catch (error) {
 				if (!(error instanceof DOMException && error.name === 'AbortError'))
 					status = 'Pencarian gagal.';
@@ -101,10 +145,10 @@
 		};
 	});
 
-	function toggle(id: number) {
+	function toggle(key: string) {
 		const next = new Set(selected);
-		if (next.has(id)) next.delete(id);
-		else next.add(id);
+		if (next.has(key)) next.delete(key);
+		else next.add(key);
 		selected = next;
 	}
 
@@ -132,20 +176,22 @@
 		sending = true;
 		status = '';
 		const content = note.trim() ? `${note.trim()}\n${shareUrl}` : shareUrl;
-		const ids = [...selected];
+		const keys = [...selected];
 		try {
-			for (const receiverId of ids) {
+			for (const key of keys) {
+				const [kind, idString] = key.split(':');
+				const id = Number(idString);
 				const body = new FormData();
-				body.set('receiver_id', String(receiverId));
 				body.set('content', content);
-				await clientRequest('messages/send', {
-					method: 'POST',
-					body,
-					schema: sentDirectMessageSchema
-				});
+				if (kind === 'group') {
+					await clientRequest(`groups/${id}/messages`, { method: 'POST', body });
+				} else {
+					body.set('receiver_id', String(id));
+					await clientRequest('messages/send', { method: 'POST', body });
+				}
 			}
 			done = true;
-			status = `Postingan dikirim ke ${ids.length} orang.`;
+			status = `Postingan dikirim ke ${keys.length} obrolan.`;
 			window.setTimeout(onClose, 1100);
 		} catch {
 			status = 'Sebagian pesan gagal terkirim. Coba lagi.';
@@ -195,31 +241,39 @@
 
 	<div class="search">
 		<Search size={17} />
-		<input placeholder="Cari orang untuk dikirimi" bind:value={query} />
+		<input placeholder="Cari orang atau grup untuk dikirimi" bind:value={query} />
 		{#if searching}<LoaderCircle class="spin" size={16} />{/if}
 	</div>
 
 	<div class="people">
 		{#if loading}
-			<p class="hint">Memuat kontak…</p>
-		{:else if people.length === 0}
-			<p class="hint">Tidak ada orang yang cocok.</p>
+			<p class="hint">Memuat obrolan…</p>
+		{:else if shownTargets.length === 0}
+			<p class="hint">Tidak ada yang cocok.</p>
 		{:else}
-			{#each people as person (person.id)}
+			{#each shownTargets as target (target.key)}
 				<button
 					class="person"
-					class:selected={selected.has(person.id)}
-					onclick={() => toggle(person.id)}
-					aria-pressed={selected.has(person.id)}
+					class:selected={selected.has(target.key)}
+					onclick={() => toggle(target.key)}
+					aria-pressed={selected.has(target.key)}
 				>
-					<Avatar name={person.fullName} src={person.avatarUrl ?? undefined} size="sm" />
+					{#if target.kind === 'group' && !target.avatarUrl}
+						<span class="group-avatar"><Users size={17} /></span>
+					{:else}
+						<Avatar name={target.name} src={target.avatarUrl ?? undefined} size="sm" />
+					{/if}
 					<span class="who">
-						<strong>{person.fullName}<UserBadges verified={person.verified} role={person.role} /></strong
+						<strong
+							>{target.name}{#if target.kind === 'user'}<UserBadges
+									verified={target.verified}
+									role={target.role}
+								/>{/if}</strong
 						>
-						<small>@{person.username}</small>
+						<small>{target.handle}</small>
 					</span>
 					<span class="check" aria-hidden="true">
-						{#if selected.has(person.id)}<Check size={15} />{/if}
+						{#if selected.has(target.key)}<Check size={15} />{/if}
 					</span>
 				</button>
 			{/each}
@@ -364,6 +418,16 @@
 	}
 	.person.selected {
 		background: var(--color-primary-soft);
+	}
+	.person .group-avatar {
+		display: grid;
+		width: 34px;
+		height: 34px;
+		flex: none;
+		place-items: center;
+		background: var(--color-secondary-soft, #d9efe6);
+		border-radius: 50%;
+		color: var(--color-secondary, #178f72);
 	}
 	.person .who {
 		display: grid;

@@ -2,7 +2,7 @@
 	import { env } from '$env/dynamic/public';
 	import { untrack } from 'svelte';
 	import {
-		Layers,
+		Copy,
 		LoaderCircle,
 		Play,
 		Search,
@@ -203,7 +203,7 @@
 					></video>{:else}<img src={post.thumbnailUrl ?? post.mediaUrl} alt={post.mediaAlt} />{/if}
 				{#if post.isVideo}<span aria-label="Video"><Play size={16} fill="currentColor" /></span
 					>{:else if post.media && post.media.length > 1}<span aria-label="Beberapa foto"
-						><Layers size={16} /></span
+						><Copy size={16} /></span
 					>{/if}
 				<div>
 					<strong

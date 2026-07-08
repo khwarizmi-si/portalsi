@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { env } from '$env/dynamic/public';
-	import { Bookmark, Grid3X3, Layers, Maximize2, Play, Settings, Share2, X } from '@lucide/svelte';
+	import { Bookmark, Copy, Grid3X3, Maximize2, Play, Settings, Share2, X } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { clientRequest } from '$lib/api/client';
 	import StoryAvatarLink from '$lib/components/story/StoryAvatarLink.svelte';
@@ -147,7 +147,7 @@
 							preload="metadata"
 						></video>{:else}<img src={post.thumbnailUrl ?? post.mediaUrl} alt={post.caption} />{/if}
 					{#if post.isVideo}<span aria-label="Video"><Play size={14} fill="currentColor" /></span
-						>{:else if post.isMultiple}<span aria-label="Beberapa foto"><Layers size={14} /></span
+						>{:else if post.isMultiple}<span aria-label="Beberapa foto"><Copy size={14} /></span
 						>{/if}
 				</a>
 			{/each}

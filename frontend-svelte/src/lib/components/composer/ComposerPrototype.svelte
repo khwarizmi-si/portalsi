@@ -15,7 +15,6 @@
 		Video,
 		X
 	} from '@lucide/svelte';
-	import { flip } from 'svelte/animate';
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import { createdPostResponseSchema } from '$lib/schemas/post';
 	import { createdStoryResponseSchema } from '$lib/schemas/story';
@@ -62,10 +61,19 @@
 	};
 	let galleryItems = $state<GalleryItem[]>([]);
 	let editingId = $state<string | null>(null);
+	// Reorder halus: array TIDAK diubah selama menyeret — kita geser tiap kartu lewat
+	// transform (diukur dari posisi awal), lalu susun ulang array sekali saat dilepas.
+	let gridEl = $state<HTMLDivElement>();
 	let dragId = $state<string | null>(null);
 	let dragMoved = $state(false);
+	let committing = $state(false);
+	let dragIndex = -1;
+	let overIndex = $state(-1);
+	let pointerDX = $state(0);
+	let pointerDY = $state(0);
 	let dragStartX = 0;
 	let dragStartY = 0;
+	let slotRects: { left: number; top: number; cx: number; cy: number }[] = [];
 	let caption = $state('');
 	let location = $state('');
 	let previewUrl = $state('');
@@ -144,6 +152,32 @@
 	const editFilterCss = $derived(
 		filterOptions.find((option) => option.id === editingItem?.filter)?.css ?? 'none'
 	);
+
+	// Peta transform tiap kartu saat menyeret (kartu yang diseret mengikuti jari,
+	// kartu lain bergeser mulus untuk memberi ruang).
+	const itemTransforms = $derived.by(() => {
+		const map = new Map<string, { dx: number; dy: number; scale: number }>();
+		if (dragId === null || dragIndex < 0 || slotRects.length !== galleryItems.length) return map;
+		map.set(dragId, { dx: pointerDX, dy: pointerDY, scale: dragMoved ? 1.06 : 1 });
+		const to = overIndex < 0 ? dragIndex : overIndex;
+		const order = galleryItems.map((item) => item.id);
+		const [moved] = order.splice(dragIndex, 1);
+		order.splice(to, 0, moved);
+		galleryItems.forEach((item, i) => {
+			if (item.id === dragId) return;
+			const targetSlot = order.indexOf(item.id);
+			const from = slotRects[i];
+			const dest = slotRects[targetSlot];
+			if (from && dest)
+				map.set(item.id, { dx: dest.left - from.left, dy: dest.top - from.top, scale: 1 });
+		});
+		return map;
+	});
+	function transformFor(id: string): string | undefined {
+		const t = itemTransforms.get(id);
+		if (!t) return undefined;
+		return `translate(${t.dx}px, ${t.dy}px)${t.scale !== 1 ? ` scale(${t.scale})` : ''}`;
+	}
 
 	function mediaKind(candidate: File): MediaKind {
 		if (candidate.type.startsWith('image/')) return 'image';
@@ -372,38 +406,81 @@
 		else if (next.length === 0) file = null;
 	}
 
-	// Drag untuk mengurutkan ulang foto (mendukung sentuh); reflow dianimasikan via animate:flip.
+	// Drag untuk mengurutkan ulang foto (mendukung sentuh).
+	function measureSlots() {
+		if (!gridEl) return;
+		slotRects = [...gridEl.querySelectorAll<HTMLElement>('[data-gid]')].map((node) => {
+			const rect = node.getBoundingClientRect();
+			return {
+				left: rect.left,
+				top: rect.top,
+				cx: rect.left + rect.width / 2,
+				cy: rect.top + rect.height / 2
+			};
+		});
+	}
+	function resetDrag() {
+		dragId = null;
+		dragMoved = false;
+		dragIndex = -1;
+		overIndex = -1;
+		pointerDX = 0;
+		pointerDY = 0;
+	}
 	function thumbPointerDown(event: PointerEvent, id: string) {
 		if (event.pointerType === 'mouse' && event.button !== 0) return;
+		measureSlots();
 		dragId = id;
+		dragIndex = galleryItems.findIndex((item) => item.id === id);
+		overIndex = dragIndex;
 		dragMoved = false;
 		dragStartX = event.clientX;
 		dragStartY = event.clientY;
+		pointerDX = 0;
+		pointerDY = 0;
 		(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
 	}
 	function thumbPointerMove(event: PointerEvent) {
 		if (dragId === null) return;
+		pointerDX = event.clientX - dragStartX;
+		pointerDY = event.clientY - dragStartY;
 		if (!dragMoved) {
-			if (Math.hypot(event.clientX - dragStartX, event.clientY - dragStartY) < 6) return;
+			if (Math.hypot(pointerDX, pointerDY) < 6) return;
 			dragMoved = true;
 		}
-		const target = (document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null)
-			?.closest?.('[data-gid]') as HTMLElement | null;
-		const overId = target?.dataset.gid;
-		if (!overId || overId === dragId) return;
-		const from = galleryItems.findIndex((item) => item.id === dragId);
-		const to = galleryItems.findIndex((item) => item.id === overId);
-		if (from < 0 || to < 0) return;
-		const next = [...galleryItems];
-		const [moved] = next.splice(from, 1);
-		next.splice(to, 0, moved);
-		galleryItems = next;
+		// Slot tujuan = kartu yang pusatnya paling dekat dengan jari.
+		let best = dragIndex;
+		let bestDist = Infinity;
+		for (let i = 0; i < slotRects.length; i += 1) {
+			const s = slotRects[i];
+			const d = (s.cx - event.clientX) ** 2 + (s.cy - event.clientY) ** 2;
+			if (d < bestDist) {
+				bestDist = d;
+				best = i;
+			}
+		}
+		overIndex = best;
 	}
 	function thumbPointerUp(id: string) {
 		const wasDrag = dragMoved;
-		dragId = null;
-		dragMoved = false;
-		if (!wasDrag) editingId = id; // ketukan tanpa geser = buka editor foto
+		if (dragId !== null && wasDrag && overIndex >= 0 && overIndex !== dragIndex) {
+			const order = galleryItems.map((item) => item.id);
+			const [moved] = order.splice(dragIndex, 1);
+			order.splice(overIndex, 0, moved);
+			// Susun ulang array sekali; matikan transisi satu frame agar tidak ada lompatan.
+			committing = true;
+			galleryItems = order.map((oid) => galleryItems.find((item) => item.id === oid)!);
+			resetDrag();
+			requestAnimationFrame(() =>
+				requestAnimationFrame(() => {
+					committing = false;
+				})
+			);
+		} else {
+			const tap = !wasDrag;
+			resetDrag();
+			if (tap) editingId = id; // ketukan tanpa geser = buka editor foto
+		}
 	}
 
 	function setEditCrop(mode: GalleryCrop) {
@@ -862,7 +939,7 @@
 		>
 			{#if galleryMode}
 				<div class="gallery-edit">
-					<div class="gallery-grid">
+					<div class="gallery-grid" class:committing bind:this={gridEl}>
 						{#each galleryItems as item, index (item.id)}
 							<div
 								class="g-item"
@@ -871,14 +948,11 @@
 								role="button"
 								tabindex="0"
 								aria-label={`Foto ${index + 1}. Ketuk untuk mengedit, tahan lalu geser untuk mengurutkan.`}
-								animate:flip={{ duration: 220 }}
+								style:transform={transformFor(item.id)}
 								onpointerdown={(event) => thumbPointerDown(event, item.id)}
 								onpointermove={thumbPointerMove}
 								onpointerup={() => thumbPointerUp(item.id)}
-								onpointercancel={() => {
-									dragId = null;
-									dragMoved = false;
-								}}
+								onpointercancel={resetDrag}
 								onkeydown={(event) => {
 									if (event.key === 'Enter' || event.key === ' ') {
 										event.preventDefault();
@@ -1441,19 +1515,21 @@
 		background: var(--color-canvas-deep);
 		cursor: grab;
 		touch-action: none;
+		will-change: transform;
 		transition:
-			transform 160ms ease,
-			box-shadow 160ms ease;
+			transform 240ms cubic-bezier(0.2, 0.9, 0.3, 1),
+			box-shadow 180ms ease;
 	}
+	/* Kartu lain bergeser mulus; kartu yang diseret mengikuti jari tanpa transisi. */
 	.g-item.dragging {
-		z-index: 5;
+		z-index: 6;
 		cursor: grabbing;
-		transform: scale(1.08);
-		box-shadow: 0 12px 26px rgb(0 0 0 / 28%);
-		opacity: 0.96;
-		/* Biar elementFromPoint bisa mendeteksi target di bawah item yang diangkat;
-		   pointer capture tetap mengirim event ke item ini. */
-		pointer-events: none;
+		box-shadow: 0 14px 30px rgb(0 0 0 / 30%);
+		transition: box-shadow 180ms ease;
+	}
+	/* Saat commit (array disusun ulang), matikan transisi agar tak ada lompatan. */
+	.gallery-grid.committing .g-item {
+		transition: none;
 	}
 	.g-item img {
 		width: 100%;

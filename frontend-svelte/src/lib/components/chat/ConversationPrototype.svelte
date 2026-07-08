@@ -315,18 +315,48 @@
 	<div class="messages" bind:this={messagePane} aria-label={`Percakapan dengan ${title}`}>
 		<div class="date">Percakapan</div>
 		{#each messages as message (message.id)}
-			<article class:mine={message.mine}>
-				{#if !message.mine && mode === 'group'}<Avatar name={message.senderName} size="sm" />{/if}
-				<div>
-					{#if !message.mine && mode === 'group'}<strong>{message.senderName}</strong>{/if}
-					{#if message.isPinned}<span class="pinned"><Pin size={11} /> Disematkan</span>{/if}
-					{#if sharedPostId(message.text)}
-						{#if textWithoutSharedPost(message.text)}<p>
-								<MentionText text={textWithoutSharedPost(message.text)} />
-							</p>{/if}
-						<SharedPostPreview postId={sharedPostId(message.text)!} />
-					{:else if message.text}<p><MentionText text={message.text} /></p>{/if}
-					{#if message.mediaUrl}
+			{@const sharedId = sharedPostId(message.text)}
+			{@const note = textWithoutSharedPost(message.text)}
+			{#if sharedId}
+				{#if note}
+					<article class:mine={message.mine}>
+						{#if !message.mine && mode === 'group'}<Avatar name={message.senderName} size="sm" />{/if}
+						<div>
+							{#if !message.mine && mode === 'group'}<strong>{message.senderName}</strong>{/if}
+							<p><MentionText text={note} /></p>
+						</div>
+					</article>
+				{/if}
+				<article class:mine={message.mine} class="shared">
+					{#if !message.mine && mode === 'group'}<Avatar name={message.senderName} size="sm" />{/if}
+					<div class="bare">
+						{#if !message.mine && mode === 'group' && !note}<strong>{message.senderName}</strong>{/if}
+						<SharedPostPreview postId={sharedId} />
+						<small
+							>{message.time}{#if message.mine}<CheckCheck
+									size={13}
+									class={message.isRead ? 'read' : undefined}
+								/>{/if}</small
+						>
+						{#if message.mine || mode === 'group'}<div class="message-tools">
+								{#if mode === 'group'}<button
+										onclick={() => (replyingTo = { id: message.id, name: message.senderName })}
+										><CornerDownRight size={12} /> Balas</button
+									>{/if}
+								{#if message.mine}<button onclick={() => deleteMessage(message)}
+										><Trash2 size={12} /> Hapus</button
+									>{/if}
+							</div>{/if}
+					</div>
+				</article>
+			{:else}
+				<article class:mine={message.mine}>
+					{#if !message.mine && mode === 'group'}<Avatar name={message.senderName} size="sm" />{/if}
+					<div>
+						{#if !message.mine && mode === 'group'}<strong>{message.senderName}</strong>{/if}
+						{#if message.isPinned}<span class="pinned"><Pin size={11} /> Disematkan</span>{/if}
+						{#if message.text}<p><MentionText text={message.text} /></p>{/if}
+						{#if message.mediaUrl}
 						{#if mediaKind(message.mediaUrl) === 'image'}<a
 								href={message.mediaUrl}
 								target="_blank"
@@ -361,6 +391,7 @@
 					</div>
 				</div>
 			</article>
+			{/if}
 		{/each}
 		{#if messages.length === 0}<p class="empty">
 				Belum ada pesan. Mulai percakapan dengan sapaan.
@@ -509,6 +540,26 @@
 		border-color: var(--color-primary);
 		border-radius: 14px 14px 4px;
 		color: white;
+	}
+	.messages article.shared {
+		max-width: 80%;
+	}
+	.messages article > div.bare {
+		min-width: 0;
+		padding: 0;
+		background: transparent;
+		border: 0;
+		box-shadow: none;
+	}
+	.messages article > div.bare small {
+		justify-content: flex-start;
+		color: var(--color-muted);
+	}
+	.messages article.mine > div.bare {
+		background: transparent;
+	}
+	.messages article.mine > div.bare small {
+		justify-content: flex-end;
 	}
 	.messages p {
 		margin: 0;

@@ -21,12 +21,20 @@ export const load: PageServerLoad = async ({ locals }) => {
 				schema: specialGroupsSchema
 			}).catch(() => [])
 		: [];
+	// Urutkan berdasarkan waktu pesan terakhir (grup & pribadi bercampur, terbaru di atas).
+	const lastAt = (item: (typeof response)[number]) =>
+		item.type === 'user' ? item.last_chat.sent_at : item.sent_at;
+	const sorted = [...response].sort((a, b) => {
+		const ta = lastAt(a);
+		const tb = lastAt(b);
+		return (tb ? new Date(tb).getTime() : 0) - (ta ? new Date(ta).getTime() : 0);
+	});
 	return {
 		specialGroups: specialGroups.map((group) => ({
 			...group,
 			avatarUrl: normalizeMediaUrl(group.avatar_url, mediaBaseUrl)
 		})),
-		chats: response.map((item) =>
+		chats: sorted.map((item) =>
 			item.type === 'user'
 				? {
 						type: 'direct' as const,

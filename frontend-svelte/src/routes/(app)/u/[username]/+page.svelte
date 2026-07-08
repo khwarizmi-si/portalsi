@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { env } from '$env/dynamic/public';
 	import {
+		Copy,
 		FileText,
 		FolderKanban,
 		Grid3X3,
 		Image,
-		Layers,
 		Lock,
 		MessageCircle,
 		Share2,
@@ -244,7 +244,7 @@
 						></video>{:else}<img
 							src={post.thumbnailUrl ?? post.mediaUrl}
 							alt={post.caption}
-						/>{/if}{#if post.isVideo}<span aria-label="Video"><Play size={16} fill="currentColor" /></span>{:else if post.isMultiple}<span aria-label="Beberapa foto"><Layers size={14} /></span>{/if}</a
+						/>{/if}{#if post.isVideo}<span aria-label="Video"><Play size={16} fill="currentColor" /></span>{:else if post.isMultiple}<span aria-label="Beberapa foto"><Copy size={14} /></span>{/if}</a
 				>{/each}
 		</section>
 		<InfiniteScrollTrigger
