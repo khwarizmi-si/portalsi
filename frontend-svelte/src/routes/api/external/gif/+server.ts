@@ -31,8 +31,8 @@ const cache = new Map<string, { expires: number; value: unknown }>();
 export const GET: RequestHandler = async ({ locals, url }) => {
 	if (!locals.token) return Response.json({ message: 'Sesi tidak tersedia.' }, { status: 401 });
 
-	const apiKey = env.GIPHY_API_KEY?.trim();
-	if (!apiKey) return Response.json({ results: [], message: 'GIF belum dikonfigurasi.' });
+	// Key GIPHY bersifat publik/klien; pakai env bila ada, jika tidak pakai fallback bawaan.
+	const apiKey = env.GIPHY_API_KEY?.trim() || 'uJ4lQllKgTEeyyo0s3bxW9O2flbdYbLz';
 
 	const query = (url.searchParams.get('q') ?? '').trim().slice(0, 60);
 	const type = url.searchParams.get('type') === 'sticker' ? 'stickers' : 'gifs';
