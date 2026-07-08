@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { RotateCcw, X, ZoomIn, ZoomOut } from '@lucide/svelte';
+	import { portal } from '$lib/actions/portal';
 
 	let {
 		open,
@@ -50,6 +51,7 @@
 {#if open}
 	<div
 		class="backdrop"
+		use:portal
 		role="presentation"
 		onclick={(event) => event.currentTarget === event.target && onClose()}
 	>

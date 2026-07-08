@@ -133,11 +133,21 @@
 	.pm-scroll :global(.post-detail-layout) {
 		margin: 0;
 	}
+	/* Tampilan bersih ala Instagram di dalam modal: kartu tanpa bingkai, media di latar gelap. */
+	.pm-scroll :global(.post-card) {
+		border: 0;
+		box-shadow: none;
+		background: transparent;
+	}
+	.pm-scroll :global(.post-card .media) {
+		background: #0b0c0d;
+		border-radius: 14px;
+	}
 	/* Beri ruang lebih lega untuk dua kolom (post + komentar) di dalam modal lebar. */
 	@media (min-width: 951px) {
 		.pm-scroll :global(.post-detail-layout) {
-			grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-			gap: 22px;
+			grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+			gap: 24px;
 		}
 	}
 	@media (max-width: 720px) {

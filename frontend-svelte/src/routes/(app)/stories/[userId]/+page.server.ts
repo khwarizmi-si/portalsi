@@ -1,5 +1,5 @@
 import { env } from '$env/dynamic/public';
-import { storyViewerResponseSchema } from '$lib/schemas/story';
+import { storyFeedResponseSchema, storyViewerResponseSchema } from '$lib/schemas/story';
 import { backendRequest } from '$lib/server/api';
 import { normalizeMediaUrl } from '$lib/utils/media';
 import { relativeTimeId } from '$lib/utils/time';
@@ -19,14 +19,44 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		)
 	].slice(0, 30);
 	const validOrder = storyOrder.includes(userId) ? storyOrder : [];
-	const response = await backendRequest(`stories/feed/user/${userId}`, {
-		token: locals.token,
-		requestId: locals.requestId,
-		schema: storyViewerResponseSchema,
-		query: validOrder.length > 0 ? { order: validOrder.join(',') } : undefined
-	});
+	const [response, feed] = await Promise.all([
+		backendRequest(`stories/feed/user/${userId}`, {
+			token: locals.token,
+			requestId: locals.requestId,
+			schema: storyViewerResponseSchema,
+			query: validOrder.length > 0 ? { order: validOrder.join(',') } : undefined
+		}),
+		backendRequest('stories/feed', {
+			token: locals.token,
+			requestId: locals.requestId,
+			schema: storyFeedResponseSchema
+		}).catch(() => null)
+	]);
 	const mediaBaseUrl = env.PUBLIC_MEDIA_BASE_URL?.trim() || 'https://api.portalsi.com/storage';
 	const orderIndex = validOrder.indexOf(userId);
+	const previousUserId = orderIndex > 0 ? validOrder[orderIndex - 1] : null;
+	const nextUserId =
+		orderIndex >= 0 && orderIndex < validOrder.length - 1 ? validOrder[orderIndex + 1] : null;
+
+	// Cover + username tetangga untuk pratinjau samping (ala Instagram).
+	const groupMap = new Map<number, { username: string; cover: string | null; avatar: string | null }>();
+	for (const group of feed?.stories ?? []) {
+		groupMap.set(group.user_id, {
+			username: group.username,
+			cover: normalizeMediaUrl(group.stories[0]?.media_url, mediaBaseUrl),
+			avatar: normalizeMediaUrl(group.profile_picture_url, mediaBaseUrl)
+		});
+	}
+	const preview = (id: number | null) => {
+		if (!id) return null;
+		const group = groupMap.get(id);
+		return {
+			userId: id,
+			username: group?.username ?? '',
+			cover: group?.cover ?? null,
+			avatar: group?.avatar ?? null
+		};
+	};
 	return {
 		user: {
 			id: response.current_user.user_id,
@@ -52,9 +82,10 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		})),
 		// Hanya home yang mengirim `order`. Entry point lain (profil, post,
 		// komentar, dst.) harus tetap berada di rangkaian story pemilik ini.
-		previousUserId: orderIndex > 0 ? validOrder[orderIndex - 1] : null,
-		nextUserId:
-			orderIndex >= 0 && orderIndex < validOrder.length - 1 ? validOrder[orderIndex + 1] : null,
+		previousUserId,
+		nextUserId,
+		prevPreview: preview(previousUserId),
+		nextPreview: preview(nextUserId),
 		storyOrder: validOrder.join(',')
 	};
 };

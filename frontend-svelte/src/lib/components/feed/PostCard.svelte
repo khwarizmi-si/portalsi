@@ -144,6 +144,7 @@
 				label={post.mediaAlt}
 				{autoplay}
 				forceMuted={post.videoMuted || Boolean(post.music)}
+				preferSound={zoomable}
 			/>
 			{#if zoomable}<button
 					class="expand-media"

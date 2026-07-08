@@ -6,7 +6,8 @@
 		label = 'Video postingan',
 		fill = false,
 		autoplay = false,
-		forceMuted = false
+		forceMuted = false,
+		preferSound = false
 	}: {
 		src: string;
 		poster?: string;
@@ -14,18 +15,30 @@
 		fill?: boolean;
 		autoplay?: boolean;
 		forceMuted?: boolean;
+		preferSound?: boolean;
 	} = $props();
 	let video: HTMLVideoElement;
 	let root: HTMLDivElement;
 	let loading = $state(true);
 	let failed = $state(false);
 	let playing = $state(false);
-	// Autoplay hanya diizinkan browser jika muted; mulai muted lalu user bisa aktifkan suara.
-	// forceMuted (mis. post pakai musik / video sengaja dibisukan) mengunci mute.
-	let muted = $state(autoplay || forceMuted);
+	// forceMuted mengunci mute. preferSound (mis. di detail/modal) mulai dengan suara aktif;
+	// bila browser memblokir autoplay bersuara, otomatis fallback ke mute agar tetap main.
+	let muted = $state(forceMuted ? true : preferSound ? false : autoplay);
 	let current = $state(0);
 	let duration = $state(0);
 	let mediaAspect = $state('16 / 9');
+
+	function playWithFallback() {
+		if (!video) return;
+		void video.play().catch(() => {
+			if (!forceMuted && !video.muted) {
+				video.muted = true;
+				muted = true;
+				void video.play().catch(() => undefined);
+			}
+		});
+	}
 
 	function togglePlayback() {
 		if (!video || failed) return;
@@ -59,7 +72,7 @@
 				const entry = entries[0];
 				if (!entry) return;
 				if (entry.isIntersecting && entry.intersectionRatio >= 0.55) {
-					void el.play().catch(() => undefined);
+					playWithFallback();
 				} else if (!el.paused) {
 					el.pause();
 				}
