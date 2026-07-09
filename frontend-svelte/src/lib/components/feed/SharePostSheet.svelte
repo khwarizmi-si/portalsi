@@ -6,6 +6,7 @@
 	import { userSearchResponseSchema } from '$lib/schemas/post';
 	import { chatListSchema } from '$lib/schemas/chat';
 	import { normalizeMediaUrl } from '$lib/utils/media';
+	import { portal } from '$lib/actions/portal';
 	import Avatar from '$lib/components/ui/Avatar.svelte';
 	import UserBadges from '$lib/components/ui/UserBadges.svelte';
 
@@ -211,6 +212,7 @@
 	});
 </script>
 
+<div use:portal>
 <div
 	class="share-overlay"
 	role="button"
@@ -299,6 +301,7 @@
 	</button>
 	{/if}
 </section>
+</div>
 
 <style>
 	.sent-state {

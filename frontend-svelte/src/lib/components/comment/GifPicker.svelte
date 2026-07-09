@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { LoaderCircle, Search, X } from '@lucide/svelte';
 	import { z } from 'zod';
+	import { portal } from '$lib/actions/portal';
 
 	let { onSelect, onClose }: { onSelect: (url: string) => void; onClose: () => void } = $props();
 
@@ -60,6 +61,7 @@
 	});
 </script>
 
+<div use:portal>
 <div class="gif-overlay" role="presentation" onclick={onClose}></div>
 <section class="gif-picker" aria-label="Pilih GIF">
 	<header>
@@ -88,6 +90,7 @@
 	{#if !loading && results.length === 0}<p class="msg">{message || 'Tidak ada hasil.'}</p>{/if}
 	<p class="attribution">Powered by GIPHY</p>
 </section>
+</div>
 
 <style>
 	.gif-overlay {

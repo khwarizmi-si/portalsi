@@ -161,23 +161,30 @@
 	}
 
 	:global(.auth-fields .terms) {
-		display: grid;
-		grid-template-columns: auto 1fr;
-		align-items: start;
-		gap: 9px;
-		color: var(--color-muted);
-		font-size: 0.75rem;
-		font-weight: 560;
-		line-height: 1.4;
+		display: flex;
+		align-items: flex-start;
+		gap: 10px;
 	}
 
+	/* Kotak centang native (reset gaya input auth agar tidak membengkak). */
 	:global(.auth-fields .terms input) {
-		width: 17px;
-		height: 17px;
-		margin-top: 1px;
+		width: 18px;
+		height: 18px;
+		min-width: 18px;
+		flex: none;
+		margin: 2px 0 0;
+		padding: 0;
+		border: 0;
+		background: none;
+		accent-color: var(--color-primary);
 	}
+	/* Label mengalir sebagai teks biasa (bukan grid), agar tautan tetap sebaris. */
 	:global(.auth-fields .terms label) {
+		display: inline;
 		color: var(--color-muted);
+		font-size: 0.8rem;
+		font-weight: 560;
+		line-height: 1.5;
 	}
 	:global(.auth-fields .terms a) {
 		color: var(--color-primary-strong);

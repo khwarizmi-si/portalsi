@@ -60,7 +60,6 @@
 		aria-label="Detail postingan"
 	>
 		<div class="pm-grabber" aria-hidden="true"><span></span></div>
-		<button class="pm-close" onclick={onClose} aria-label="Tutup"><X size={20} /></button>
 		<div
 			class="pm-scroll"
 			bind:this={scrollEl}
@@ -73,6 +72,9 @@
 		</div>
 	</div>
 </div>
+
+<!-- Tombol tutup di luar panel (panel ber-transform), agar 'fixed' relatif ke layar, tidak terpotong. -->
+<button class="pm-close" onclick={onClose} aria-label="Tutup"><X size={20} /></button>
 
 <style>
 	.pm-overlay {
@@ -110,15 +112,15 @@
 		display: none;
 	}
 	.pm-close {
-		position: absolute;
-		z-index: 3;
-		top: 12px;
-		right: 12px;
+		position: fixed;
+		z-index: 1402;
+		top: calc(12px + env(safe-area-inset-top, 0px));
+		right: 14px;
 		display: grid;
-		width: 38px;
-		height: 38px;
+		width: 40px;
+		height: 40px;
 		place-items: center;
-		background: rgb(0 0 0 / 45%);
+		background: rgb(0 0 0 / 55%);
 		border: 0;
 		border-radius: 50%;
 		color: white;
@@ -177,13 +179,6 @@
 			height: 4px;
 			border-radius: 999px;
 			background: var(--color-border);
-		}
-		/* Selalu terlihat & bisa ditekan di HP (di atas notch/URL bar). */
-		.pm-close {
-			position: fixed;
-			top: calc(10px + env(safe-area-inset-top, 0px));
-			right: 12px;
-			z-index: 1402;
 		}
 	}
 </style>

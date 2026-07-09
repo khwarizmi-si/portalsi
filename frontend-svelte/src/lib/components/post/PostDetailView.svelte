@@ -11,6 +11,7 @@
 	import MentionText from '$lib/components/ui/MentionText.svelte';
 	import MentionTextarea from '$lib/components/ui/MentionTextarea.svelte';
 	import GifPicker from '$lib/components/comment/GifPicker.svelte';
+	import { portal } from '$lib/actions/portal';
 
 	let {
 		data,
@@ -31,6 +32,8 @@
 	let formMessage = $state('');
 	let commentCount = $state(untrack(() => data.post.commentsCount));
 	let gifOpen = $state(false);
+	let editing = $state<{ id: number; reply: boolean; text: string } | null>(null);
+	let savingEdit = $state(false);
 
 	function toggleReplies(id: number) {
 		const next = new Set(expandedReplies);
@@ -109,22 +112,39 @@
 		}
 	}
 
-	async function editComment(id: number, reply = false) {
-		const item = reply
+	function findComment(id: number, reply: boolean) {
+		return reply
 			? comments.flatMap((comment) => comment.replies).find((entry) => entry.id === id)
 			: comments.find((entry) => entry.id === id);
+	}
+
+	function editComment(id: number, reply = false) {
+		const item = findComment(id, reply);
 		if (!item) return;
-		const text = window.prompt('Edit komentar', item.text)?.trim();
-		if (!text || text === item.text) return;
+		editing = { id, reply, text: item.text };
+	}
+
+	async function saveEdit() {
+		if (!editing || savingEdit) return;
+		const text = editing.text.trim();
+		const item = findComment(editing.id, editing.reply);
+		if (!item || !text || text === item.text) {
+			editing = null;
+			return;
+		}
+		savingEdit = true;
 		try {
-			await clientRequest(`comments/${id}`, {
+			await clientRequest(`comments/${editing.id}`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ content: text })
 			});
 			item.text = text;
+			editing = null;
 		} catch {
 			formMessage = 'Komentar belum dapat diedit.';
+		} finally {
+			savingEdit = false;
 		}
 	}
 
@@ -324,7 +344,114 @@
 		</section>
 	</div>
 
+{#if editing}
+	<div use:portal>
+	<div class="edit-overlay" role="presentation" onclick={() => (editing = null)}></div>
+	<div class="edit-modal" role="dialog" aria-modal="true" aria-label="Edit komentar">
+		<header>
+			<strong>Edit komentar</strong>
+			<button onclick={() => (editing = null)} aria-label="Tutup"><X size={18} /></button>
+		</header>
+		<textarea
+			bind:value={editing.text}
+			rows="4"
+			maxlength="2000"
+			placeholder="Tulis komentar…"
+			onkeydown={(event) => {
+				if (event.key === 'Enter' && !event.shiftKey) {
+					event.preventDefault();
+					void saveEdit();
+				}
+			}}
+		></textarea>
+		<div class="edit-actions">
+			<button class="cancel" onclick={() => (editing = null)}>Batal</button>
+			<button class="save" onclick={saveEdit} disabled={savingEdit || !editing.text.trim()}
+				>{savingEdit ? 'Menyimpan…' : 'Simpan'}</button
+			>
+		</div>
+	</div>
+	</div>
+{/if}
+
 <style>
+	.edit-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 1450;
+		background: rgb(18 13 8 / 55%);
+		backdrop-filter: blur(2px);
+	}
+	.edit-modal {
+		position: fixed;
+		z-index: 1451;
+		top: 50%;
+		left: 50%;
+		display: grid;
+		width: min(440px, calc(100% - 28px));
+		gap: 12px;
+		padding: 18px;
+		background: var(--color-surface);
+		border-radius: 18px;
+		box-shadow: 0 24px 60px rgb(0 0 0 / 30%);
+		transform: translate(-50%, -50%);
+	}
+	.edit-modal > header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+	.edit-modal > header strong {
+		font-size: 1rem;
+	}
+	.edit-modal > header button {
+		display: grid;
+		width: 34px;
+		height: 34px;
+		place-items: center;
+		border: 0;
+		border-radius: 50%;
+		background: var(--color-canvas-deep, #f1ece3);
+		color: var(--color-muted);
+	}
+	.edit-modal textarea {
+		width: 100%;
+		padding: 12px;
+		background: var(--color-canvas, #fbf7ef);
+		border: 1px solid var(--color-border);
+		border-radius: 12px;
+		outline: 0;
+		font: inherit;
+		line-height: 1.4;
+		resize: vertical;
+	}
+	.edit-modal textarea:focus {
+		border-color: var(--color-primary);
+		box-shadow: var(--focus-ring);
+	}
+	.edit-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 10px;
+	}
+	.edit-actions button {
+		min-height: 42px;
+		padding: 0 18px;
+		border: 0;
+		border-radius: 11px;
+		font-weight: 720;
+	}
+	.edit-actions .cancel {
+		background: var(--color-canvas-deep, #f1ece3);
+		color: var(--color-text);
+	}
+	.edit-actions .save {
+		background: var(--color-primary);
+		color: white;
+	}
+	.edit-actions .save:disabled {
+		opacity: 0.5;
+	}
 	.post-column {
 		display: grid;
 		gap: 12px;

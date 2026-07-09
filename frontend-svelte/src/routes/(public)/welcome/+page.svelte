@@ -29,7 +29,7 @@
 		</div>
 		<div class="visual">
 			<div class="card-one">
-				<img src="/assets/images/register.webp" alt="Ilustrasi komunitas Portal SI" />
+				<img src="/assets/images/home.webp" alt="Ilustrasi komunitas Portal SI" />
 			</div>
 			<div class="floating">
 				<Sparkles size={18} /><span
