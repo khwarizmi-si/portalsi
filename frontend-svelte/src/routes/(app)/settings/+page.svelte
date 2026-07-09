@@ -107,20 +107,20 @@
 				</section>{/each}
 			<section class="surface danger-zone">
 				<h2>Login dan akun</h2>
-				<form method="POST" action="/logout" onsubmit={confirmLogout}>
-					<button type="submit"
-						><span><LogOut size={19} /></span>
-						<p><strong>Keluar</strong><small>Akhiri sesi di perangkat ini</small></p>
-						<ChevronRight size={18} /></button
-					>
-				</form>
-				<a class="danger" href="/settings/delete-account"
+				<a href="/settings/delete-account"
 					><span><Trash2 size={19} /></span>
 					<p>
 						<strong>Hapus akun</strong><small>Tindakan permanen dan tidak dapat dibatalkan</small>
 					</p>
 					<ChevronRight size={18} /></a
 				>
+				<form method="POST" action="/logout" onsubmit={confirmLogout}>
+					<button class="danger" type="submit"
+						><span><LogOut size={19} /></span>
+						<p><strong>Keluar</strong><small>Akhiri sesi di perangkat ini</small></p>
+						<ChevronRight size={18} /></button
+					>
+				</form>
 			</section>
 		</div>
 		<aside class="surface">
@@ -198,15 +198,15 @@
 		color: var(--color-muted);
 		font-size: 0.72rem;
 	}
-	/* Hanya "Hapus akun" yang berwarna merah; logout tampil normal seperti item lain. */
-	.danger-zone a.danger {
+	/* "Keluar" (logout) berwarna merah; "Hapus akun" tampil normal seperti item lain. */
+	.danger-zone > form button.danger {
 		color: var(--color-danger);
 	}
-	.danger-zone a.danger > span {
+	.danger-zone > form button.danger > span {
 		background: var(--color-danger-soft);
 		color: var(--color-danger);
 	}
-	.danger-zone > form button > span {
+	.danger-zone a > span {
 		background: var(--color-primary-soft);
 		color: var(--color-primary-strong);
 	}
