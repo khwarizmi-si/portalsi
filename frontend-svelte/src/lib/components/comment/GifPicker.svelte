@@ -96,12 +96,12 @@
 	.gif-overlay {
 		position: fixed;
 		inset: 0;
-		z-index: 1200;
+		z-index: 1500;
 		background: rgb(20 15 10 / 30%);
 	}
 	.gif-picker {
 		position: fixed;
-		z-index: 1201;
+		z-index: 1501;
 		right: 0;
 		bottom: 0;
 		left: 0;

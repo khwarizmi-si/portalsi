@@ -253,9 +253,9 @@
 								><button onclick={() => (replyTo = { id: comment.id, name: comment.user.fullName })}
 									>Balas</button
 								>
-								{#if comment.user.id === data.currentUser.id}<button
-										onclick={() => editComment(comment.id)}>Edit</button
-									><button onclick={() => deleteComment(comment.id)}>Hapus</button>{/if}
+								{#if comment.user.id === data.currentUser.id}{#if !comment.gifUrl}<button
+											onclick={() => editComment(comment.id)}>Edit</button
+										>{/if}<button onclick={() => deleteComment(comment.id)}>Hapus</button>{/if}
 							</footer>
 							{#if comment.replies.length > 0}<button
 									class="show-replies"
@@ -295,9 +295,10 @@
 												><Heart size={13} fill={reply.isLiked ? 'currentColor' : 'none'} />
 												{reply.likesCount}</button
 											>
-											{#if reply.user.id === data.currentUser.id}<button
-													onclick={() => editComment(reply.id, true)}>Edit</button
-												><button onclick={() => deleteComment(reply.id, true)}>Hapus</button>{/if}
+											{#if reply.user.id === data.currentUser.id}{#if !reply.gifUrl}<button
+														onclick={() => editComment(reply.id, true)}>Edit</button
+													>{/if}<button onclick={() => deleteComment(reply.id, true)}>Hapus</button
+												>{/if}
 										</footer>
 									</div>
 								</div>

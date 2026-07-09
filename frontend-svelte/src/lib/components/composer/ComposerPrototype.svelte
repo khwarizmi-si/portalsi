@@ -1096,7 +1096,7 @@
 					><span><MapPin size={17} /> Lokasi</span><input
 						bind:value={location}
 						maxlength="255"
-						placeholder="Contoh: Denpasar"
+						placeholder="Contoh: Bogor"
 						oninput={() => (locationChosen = false)}
 						onkeydown={(event) => {
 							if (event.key === 'Enter') event.preventDefault();

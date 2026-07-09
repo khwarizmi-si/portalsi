@@ -29,6 +29,7 @@
 	import MentionText from '$lib/components/ui/MentionText.svelte';
 	import MentionTextarea from '$lib/components/ui/MentionTextarea.svelte';
 	import SharedPostPreview from '$lib/components/chat/SharedPostPreview.svelte';
+	import { portal } from '$lib/actions/portal';
 
 	// Deteksi tautan postingan Portal SI di dalam pesan → tampilkan kartu preview.
 	function sharedPostId(text?: string): number | null {
@@ -73,6 +74,36 @@
 	} = $props();
 	const mediaBaseUrl = env.PUBLIC_MEDIA_BASE_URL?.trim() || 'https://api.portalsi.com/storage';
 	let messages = $state(untrack(() => structuredClone(initialMessages)));
+	// Penanda "belum dibaca": pesan pertama dari lawan yang belum saya baca (dihitung sekali
+	// saat awal; hilang sendiri ketika keluar-masuk lagi karena data sudah tertandai terbaca).
+	let firstUnreadId = $state(
+		untrack(() => messages.find((message) => !message.mine && !message.isRead)?.id ?? null)
+	);
+	// Info "dibaca oleh" untuk pesan grup (dibuka lewat tombol kecil, dimuat saat diperlukan).
+	let readInfo = $state<{
+		id: number;
+		loading: boolean;
+		readers: { username: string; verified: boolean }[];
+	} | null>(null);
+	async function showReadInfo(id: number) {
+		readInfo = { id, loading: true, readers: [] };
+		try {
+			const res = (await clientRequest(`groups/${targetId}/messages/${id}/read-info`)) as {
+				reads?: { username?: string; is_verified?: boolean }[];
+			};
+			if (readInfo?.id === id)
+				readInfo = {
+					id,
+					loading: false,
+					readers: (res.reads ?? []).map((entry) => ({
+						username: entry.username ?? '?',
+						verified: Boolean(entry.is_verified)
+					}))
+				};
+		} catch {
+			if (readInfo?.id === id) readInfo = { id, loading: false, readers: [] };
+		}
+	}
 	let content = $state('');
 	let media = $state<File | null>(null);
 	let sending = $state(false);
@@ -317,6 +348,7 @@
 		{#each messages as message (message.id)}
 			{@const sharedId = sharedPostId(message.text)}
 			{@const note = textWithoutSharedPost(message.text)}
+				{#if message.id === firstUnreadId}<div class="unread-divider"><span>Belum dibaca</span></div>{/if}
 			{#if sharedId}
 				<article class:mine={message.mine} class="shared">
 					{#if !message.mine && mode === 'group'}<Avatar name={message.senderName} size="sm" />{/if}
@@ -334,7 +366,7 @@
 										onclick={() => (replyingTo = { id: message.id, name: message.senderName })}
 										><CornerDownRight size={12} /> Balas</button
 									>{/if}
-								{#if message.mine}<button onclick={() => deleteMessage(message)}
+								{#if mode === 'group' && message.mine}<button onclick={() => showReadInfo(message.id)}><Info size={12} /> Dibaca</button>{/if}{#if message.mine}<button onclick={() => deleteMessage(message)}
 										><Trash2 size={12} /> Hapus</button
 									>{/if}
 							</div>{/if}
@@ -390,7 +422,7 @@
 						{#if mode === 'group' && canPin}<button onclick={() => togglePin(message)}
 								><Pin size={12} /> {message.isPinned ? 'Lepas pin' : 'Pin'}</button
 							>{/if}
-						{#if message.mine}<button onclick={() => deleteMessage(message)}
+						{#if mode === 'group' && message.mine}<button onclick={() => showReadInfo(message.id)}><Info size={12} /> Dibaca</button>{/if}{#if message.mine}<button onclick={() => deleteMessage(message)}
 								><Trash2 size={12} /> Hapus</button
 							>{/if}
 					</div>
@@ -439,6 +471,32 @@
 	</form>
 	{#if statusMessage}<p class="status" aria-live="polite">{statusMessage}</p>{/if}
 </div>
+
+{#if readInfo}
+	<div use:portal>
+		<div class="ri-overlay" role="presentation" onclick={() => (readInfo = null)}></div>
+		<div class="ri-modal" role="dialog" aria-modal="true" aria-label="Dibaca oleh">
+			<header>
+				<strong>Dibaca oleh</strong>
+				<button onclick={() => (readInfo = null)} aria-label="Tutup"><X size={17} /></button>
+			</header>
+			{#if readInfo.loading}
+				<p class="ri-hint">Memuat…</p>
+			{:else if readInfo.readers.length === 0}
+				<p class="ri-hint">Belum ada yang membaca pesan ini.</p>
+			{:else}
+				<ul>
+					{#each readInfo.readers as reader (reader.username)}
+						<li>
+							<Avatar name={reader.username} size="sm" />
+							<span>@{reader.username}</span>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</div>
+	</div>
+{/if}
 
 <style>
 	.conversation-page {
@@ -522,6 +580,95 @@
 		border-radius: 99px;
 		color: var(--color-muted);
 		font-size: 0.65rem;
+	}
+	.ri-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 1500;
+		background: rgb(18 13 8 / 50%);
+		backdrop-filter: blur(2px);
+	}
+	.ri-modal {
+		position: fixed;
+		z-index: 1501;
+		top: 50%;
+		left: 50%;
+		display: grid;
+		width: min(360px, calc(100% - 28px));
+		max-height: 70vh;
+		gap: 10px;
+		overflow: hidden;
+		padding: 16px;
+		background: var(--color-surface);
+		border-radius: 18px;
+		box-shadow: 0 24px 60px rgb(0 0 0 / 30%);
+		transform: translate(-50%, -50%);
+	}
+	.ri-modal > header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+	.ri-modal > header strong {
+		font-size: 0.98rem;
+	}
+	.ri-modal > header button {
+		display: grid;
+		width: 32px;
+		height: 32px;
+		place-items: center;
+		border: 0;
+		border-radius: 50%;
+		background: var(--color-canvas-deep, #f1ece3);
+		color: var(--color-muted);
+	}
+	.ri-modal ul {
+		display: grid;
+		gap: 4px;
+		margin: 0;
+		max-height: 46vh;
+		overflow-y: auto;
+		padding: 0;
+		list-style: none;
+	}
+	.ri-modal li {
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		padding: 6px 4px;
+		font-size: 0.82rem;
+	}
+	.ri-hint {
+		margin: 0;
+		padding: 18px;
+		color: var(--color-muted);
+		font-size: 0.8rem;
+		text-align: center;
+	}
+	.unread-divider {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		margin: 6px 2px;
+		color: var(--color-danger);
+		font-size: 0.64rem;
+		font-weight: 750;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+	.unread-divider::before,
+	.unread-divider::after {
+		flex: 1;
+		height: 1px;
+		background: var(--color-danger-soft, #f3c9c4);
+		content: '';
+	}
+	.unread-divider span {
+		flex: none;
+	}
+	/* Centang biru saat pesan sudah dibaca lawan. */
+	:global(.messages small .read) {
+		color: #3897f0;
 	}
 	.messages article {
 		display: flex;

@@ -277,7 +277,7 @@
 			<h2>{data.isOwner ? 'Hapus grup' : 'Keluar dari grup'}</h2>
 			<p>
 				{data.isOwner
-					? 'Grup dan riwayatnya akan dihapus oleh backend.'
+					? 'Grup dan riwayatnya akan dihapus oleh sistem.'
 					: 'Anda tidak akan menerima pesan baru dari grup ini.'}
 			</p>
 		</div>

@@ -341,14 +341,14 @@
 	}
 	.share-overlay {
 		position: fixed;
-		z-index: 1200;
+		z-index: 1500;
 		inset: 0;
 		background: rgb(20 15 10 / 45%);
 		backdrop-filter: blur(2px);
 	}
 	.share-sheet {
 		position: fixed;
-		z-index: 1201;
+		z-index: 1501;
 		right: 0;
 		bottom: 0;
 		left: 0;

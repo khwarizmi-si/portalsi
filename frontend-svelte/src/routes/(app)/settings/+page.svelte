@@ -79,7 +79,7 @@
 		const form = event.currentTarget as HTMLFormElement;
 		const confirmed = await confirmAction({
 			title: 'Keluar dari Portal SI?',
-			description: 'Sesi di perangkat ini akan diakhiri. Draft lokal Anda tetap tersimpan.',
+			description: 'Sesi di perangkat ini akan diakhiri, tekan Ya untuk lanjut.',
 			confirmLabel: 'Ya, keluar',
 			tone: 'danger'
 		});
@@ -114,7 +114,7 @@
 						<ChevronRight size={18} /></button
 					>
 				</form>
-				<a href="/settings/delete-account"
+				<a class="danger" href="/settings/delete-account"
 					><span><Trash2 size={19} /></span>
 					<p>
 						<strong>Hapus akun</strong><small>Tindakan permanen dan tidak dapat dibatalkan</small>
@@ -127,7 +127,7 @@
 			<img src="/assets/logo-mark.png" alt="" />
 			<h2>Portal SI Web</h2>
 			<p>Terkoneksi dengan iman, menginspirasi dalam kebaikan.</p>
-			<small>Build 2.2 · Stable</small>
+			<small>Versi 2.2.1 · Stabil</small>
 		</aside>
 	</div>
 </SectionPage>
@@ -198,12 +198,17 @@
 		color: var(--color-muted);
 		font-size: 0.72rem;
 	}
-	.danger-zone a:last-child {
+	/* Hanya "Hapus akun" yang berwarna merah; logout tampil normal seperti item lain. */
+	.danger-zone a.danger {
 		color: var(--color-danger);
 	}
-	.danger-zone a:last-child > span {
+	.danger-zone a.danger > span {
 		background: var(--color-danger-soft);
 		color: var(--color-danger);
+	}
+	.danger-zone > form button > span {
+		background: var(--color-primary-soft);
+		color: var(--color-primary-strong);
 	}
 	aside {
 		padding: 20px;

@@ -56,7 +56,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 						avatarUrl: normalizeMediaUrl(item.conversation.profile_picture_url, mediaBaseUrl),
 						text: previewText(item.last_chat.content, Boolean(item.last_chat.media)),
 						time: item.last_chat.sent_at ? relativeTimeId(item.last_chat.sent_at) : '',
-						unread: !item.last_chat.is_read
+						unread: !item.last_chat.is_read,
+						unreadCount: 0
 					}
 				: {
 						type: 'group' as const,
@@ -66,7 +67,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 						avatarUrl: normalizeMediaUrl(item.avatar_url, mediaBaseUrl),
 						text: previewText(item.last_message, Boolean(item.last_media)),
 						time: item.sent_at ? relativeTimeId(item.sent_at) : '',
-						unread: false
+						unread: item.unread_count > 0,
+						unreadCount: item.unread_count
 					}
 		)
 	};

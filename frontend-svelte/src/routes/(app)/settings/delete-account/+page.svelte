@@ -9,7 +9,7 @@
 	<a href="/settings">← Pengaturan</a>
 	<h1>Hapus akun secara permanen</h1>
 	<p>
-		Semua profil, konten, relasi, dan media Anda akan dihapus oleh backend. Tindakan ini tidak dapat
+		Semua profil, konten, relasi, dan media Anda akan dihapus oleh sistem. Tindakan ini tidak dapat
 		dibatalkan.
 	</p>
 	<form

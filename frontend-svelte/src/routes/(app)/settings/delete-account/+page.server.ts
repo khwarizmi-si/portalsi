@@ -9,14 +9,13 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const password = String(data.get('password') ?? '');
 		if (!password) return fail(422, { message: 'Password wajib dimasukkan.' });
-		const body = new FormData();
-		body.set('password', password);
 		try {
+			// Kirim sebagai JSON — body multipart pada DELETE tidak diparse PHP.
 			await backendRequest('account/delete', {
 				method: 'DELETE',
 				token: locals.token,
 				requestId: locals.requestId,
-				body
+				body: { password }
 			});
 			clearSessionCookie(cookies);
 		} catch (error) {

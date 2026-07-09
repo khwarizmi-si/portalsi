@@ -81,7 +81,7 @@
 							></span
 						>
 						<span class="chat-meta"
-							><time>{chat.time}</time>{#if chat.unread}<i aria-label="Belum dibaca"></i>{/if}</span
+							><time>{chat.time}</time>{#if chat.unreadCount > 0}<i class="count" aria-label={`${chat.unreadCount} belum dibaca`}>{chat.unreadCount > 99 ? '99+' : chat.unreadCount}</i>{:else if chat.unread}<i aria-label="Belum dibaca"></i>{/if}</span
 						>
 					</a>
 				{/each}
@@ -301,6 +301,19 @@
 		height: 9px;
 		background: var(--color-primary);
 		border-radius: 50%;
+	}
+	.chat-meta i.count {
+		display: grid;
+		width: auto;
+		min-width: 20px;
+		height: 20px;
+		padding: 0 6px;
+		place-items: center;
+		color: white;
+		border-radius: 999px;
+		font-size: 0.64rem;
+		font-weight: 800;
+		font-style: normal;
 	}
 	.empty-list {
 		padding: 28px 18px;

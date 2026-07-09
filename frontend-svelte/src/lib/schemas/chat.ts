@@ -37,6 +37,7 @@ export const groupChatListItemSchema = z.object({
 	cover_url: z.string().nullish(),
 	role: z.string(),
 	is_muted: booleanish.catch(false),
+	unread_count: z.coerce.number().int().nonnegative().catch(0),
 	last_message: z.string().nullish(),
 	last_media: z.string().nullish(),
 	sent_at: z.string().nullish()
