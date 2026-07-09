@@ -796,23 +796,46 @@
 		}
 	}
 
+	// Thumbnail video dibuat di sisi klien HANYA sebagai optimasi. Di HP/iOS event video
+	// sering tidak terpicu sehingga bisa menggantung — maka seluruh proses dibatasi waktu,
+	// dan jika gagal kita lewati saja (server tetap membuat thumbnail lewat queue).
 	async function generateVideoThumbnail(source: File): Promise<File | null> {
 		const url = URL.createObjectURL(source);
+		const video = document.createElement('video');
 		try {
-			const video = document.createElement('video');
 			video.preload = 'metadata';
 			video.muted = true;
 			video.playsInline = true;
+			video.setAttribute('playsinline', '');
 			video.src = url;
-			await new Promise<void>((resolve, reject) => {
-				video.onloadeddata = () => resolve();
-				video.onerror = () => reject(new Error('Frame video tidak dapat dibaca.'));
+
+			// Tunggu frame siap, tapi maksimal 4 detik (mobile sering tak memicu event).
+			const ready = await new Promise<boolean>((resolve) => {
+				let settled = false;
+				const finish = (ok: boolean) => {
+					if (settled) return;
+					settled = true;
+					clearTimeout(timer);
+					resolve(ok);
+				};
+				const timer = setTimeout(() => finish(false), 4000);
+				video.onloadeddata = () => finish(true);
+				video.oncanplay = () => finish(true);
+				video.onerror = () => finish(false);
 			});
-			video.currentTime = Math.min(0.1, Math.max(0, video.duration / 20));
-			await new Promise<void>((resolve) => {
-				video.onseeked = () => resolve();
-				setTimeout(resolve, 500);
-			});
+			if (!ready || !video.videoWidth || !video.videoHeight) return null;
+
+			// Coba geser ke frame awal (opsional, dibatasi waktu).
+			try {
+				video.currentTime = Math.min(0.1, Math.max(0, (video.duration || 1) / 20));
+				await new Promise<void>((resolve) => {
+					video.onseeked = () => resolve();
+					setTimeout(resolve, 600);
+				});
+			} catch {
+				// abaikan; pakai frame apa pun yang tersedia
+			}
+
 			const scale = Math.min(1, 1280 / Math.max(video.videoWidth, video.videoHeight));
 			const canvas = document.createElement('canvas');
 			canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
@@ -829,6 +852,12 @@
 		} catch {
 			return null;
 		} finally {
+			video.removeAttribute('src');
+			try {
+				video.load();
+			} catch {
+				// abaikan
+			}
 			URL.revokeObjectURL(url);
 		}
 	}
