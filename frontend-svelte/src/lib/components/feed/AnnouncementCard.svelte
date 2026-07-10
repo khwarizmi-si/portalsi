@@ -37,6 +37,8 @@
 	<div class="announcement-carousel">
 		<div
 			class="track"
+			role="region"
+			aria-label="Slider pengumuman"
 			bind:this={trackEl}
 			onscroll={onScroll}
 			onpointerdown={() => (holding = true)}
@@ -85,7 +87,8 @@
 		scrollbar-width: none;
 		border-radius: var(--radius-lg);
 		-webkit-overflow-scrolling: touch;
-		touch-action: pan-y;
+		overscroll-behavior-x: contain;
+		touch-action: pan-x;
 	}
 	.track::-webkit-scrollbar {
 		display: none;
@@ -94,6 +97,7 @@
 		flex: 0 0 100%;
 		min-width: 0;
 		scroll-snap-align: center;
+		scroll-snap-stop: always;
 		display: grid;
 		grid-template-columns: auto 1fr auto;
 		align-items: start;

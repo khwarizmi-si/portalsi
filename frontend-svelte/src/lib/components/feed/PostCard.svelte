@@ -4,11 +4,13 @@
 		ChevronLeft,
 		ChevronRight,
 		Heart,
+		LoaderCircle,
 		MapPin,
 		Maximize2,
 		MessageCircle,
 		Send
 	} from '@lucide/svelte';
+	import { onMount } from 'svelte';
 	import StoryAvatarLink from '$lib/components/story/StoryAvatarLink.svelte';
 	import UserBadges from '$lib/components/ui/UserBadges.svelte';
 	import SmartVideo from '$lib/components/media/SmartVideo.svelte';
@@ -28,6 +30,7 @@
 	let lightboxOpen = $state(false);
 	let lightboxIndex = $state(0);
 	let shareOpen = $state(false);
+	let openingPost = $state(false);
 
 	// Galeri multi-foto (Instagram-style). Video selalu tunggal.
 	const gallery = $derived(post.media && post.media.length > 0 ? post.media : [post.mediaUrl]);
@@ -101,6 +104,24 @@
 	function sharePost() {
 		shareOpen = true;
 	}
+
+	onMount(() => {
+		const href = `/posts/${post.id}`;
+		const opening = (event: Event) => {
+			const detail = (event as CustomEvent<{ href?: string }>).detail;
+			if (detail?.href === href) openingPost = true;
+		};
+		const opened = (event: Event) => {
+			const detail = (event as CustomEvent<{ href?: string }>).detail;
+			if (!detail?.href || detail.href === href) openingPost = false;
+		};
+		window.addEventListener('portal:post-opening', opening);
+		window.addEventListener('portal:post-opened', opened);
+		return () => {
+			window.removeEventListener('portal:post-opening', opening);
+			window.removeEventListener('portal:post-opened', opened);
+		};
+	});
 </script>
 
 <article class="post-card" aria-labelledby={`post-${post.id}-author`}>
@@ -138,7 +159,7 @@
 		</div>
 	{/if}
 
-	{#if post.isVideo}<div class="media" class:zoomable>
+	{#if post.isVideo}<div class="media" class:zoomable class:opening={openingPost}>
 			<SmartVideo
 				src={post.mediaUrl}
 				poster={post.thumbnailUrl}
@@ -152,8 +173,9 @@
 					onclick={() => openLightbox(0)}
 					aria-label="Perbesar video"><Maximize2 size={19} /></button
 				>{/if}
+			{#if openingPost}<span class="post-opening"><LoaderCircle size={28} /></span>{/if}
 		</div>{:else if isGallery}<div class="media gallery">
-			<div class="gallery-track" bind:this={trackEl} onscroll={onTrackScroll}>
+			<div class="gallery-track" class:opening={openingPost} bind:this={trackEl} onscroll={onTrackScroll}>
 				{#each gallery as src, index (index)}
 					{#if zoomable}<button class="slide" onclick={() => openLightbox(index)}
 							><img src={src} alt={`${post.mediaAlt} (${index + 1})`} /></button
@@ -161,6 +183,7 @@
 							><img src={src} alt={`${post.mediaAlt} (${index + 1})`} /></a
 						>{/if}
 				{/each}
+				{#if openingPost}<span class="post-opening"><LoaderCircle size={28} /></span>{/if}
 			</div>
 			<span class="counter">{slide + 1}/{gallery.length}</span>
 			{#if slide > 0}<button
@@ -185,9 +208,10 @@
 			></button
 		>{:else}<a
 			class="media"
+			class:opening={openingPost}
 			href={`/posts/${post.id}`}
 			aria-label={`Buka postingan ${post.user.fullName}`}
-			><img src={post.mediaUrl} alt={post.mediaAlt} /></a
+			><img src={post.mediaUrl} alt={post.mediaAlt} />{#if openingPost}<span class="post-opening"><LoaderCircle size={28} /></span>{/if}</a
 		>{/if}
 
 	<div class="actions">
@@ -199,7 +223,10 @@
 				aria-pressed={interaction.liked}
 				aria-label={interaction.liked ? 'Batal menyukai' : 'Sukai'}
 			>
-				<Heart size={22} fill={interaction.liked ? 'currentColor' : 'none'} />
+				{#if liking}<LoaderCircle size={21} class="action-spin" />{:else}<Heart
+						size={22}
+						fill={interaction.liked ? 'currentColor' : 'none'}
+					/>{/if}
 			</button>
 			<a href={`/posts/${post.id}#comments`} aria-label="Komentar"><MessageCircle size={22} /></a>
 			<button onclick={sharePost} aria-label="Bagikan"><Send size={21} /></button>
@@ -211,7 +238,10 @@
 			aria-pressed={interaction.bookmarked}
 			aria-label={interaction.bookmarked ? 'Hapus dari tersimpan' : 'Simpan'}
 		>
-			<Bookmark size={22} fill={interaction.bookmarked ? 'currentColor' : 'none'} />
+			{#if bookmarking}<LoaderCircle size={21} class="action-spin" />{:else}<Bookmark
+					size={22}
+					fill={interaction.bookmarked ? 'currentColor' : 'none'}
+				/>{/if}
 		</button>
 	</div>
 
@@ -339,6 +369,37 @@
 	.media.zoomable:hover img {
 		transform: scale(1.018);
 	}
+	.media.opening,
+	.gallery-track.opening {
+		pointer-events: none;
+	}
+	.media.opening::before,
+	.gallery-track.opening::before {
+		position: absolute;
+		z-index: 4;
+		inset: 0;
+		background: rgb(11 8 6 / 42%);
+		backdrop-filter: blur(1px);
+		content: '';
+	}
+	.post-opening {
+		position: absolute;
+		z-index: 5;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		color: white;
+		pointer-events: none;
+	}
+	.post-opening :global(svg) {
+		filter: drop-shadow(0 4px 12px rgb(0 0 0 / 45%));
+		animation: post-open-spin 0.75s linear infinite;
+	}
+	@keyframes post-open-spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
 	.expand-media,
 	.zoom-cue {
 		position: absolute;
@@ -386,6 +447,7 @@
 		position: relative;
 	}
 	.gallery-track {
+		position: relative;
 		display: flex;
 		overflow-x: auto;
 		scroll-snap-type: x mandatory;
@@ -487,6 +549,9 @@
 	.actions button:disabled {
 		cursor: wait;
 		opacity: 0.6;
+	}
+	:global(.action-spin) {
+		animation: post-open-spin 0.75s linear infinite;
 	}
 
 	.post-copy {

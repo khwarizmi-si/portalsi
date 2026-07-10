@@ -127,6 +127,7 @@
 		// Sudah di halaman/URL post yang sama → biarkan default.
 		if (page.url.pathname === url.pathname) return;
 		event.preventDefault();
+		window.dispatchEvent(new CustomEvent('portal:post-opening', { detail: { href: url.pathname } }));
 		try {
 			const result = await preloadData(url.pathname);
 			if (result.type === 'loaded' && result.status === 200) {
@@ -136,6 +137,8 @@
 			}
 		} catch {
 			await goto(url.pathname);
+		} finally {
+			window.dispatchEvent(new CustomEvent('portal:post-opened', { detail: { href: url.pathname } }));
 		}
 	}
 

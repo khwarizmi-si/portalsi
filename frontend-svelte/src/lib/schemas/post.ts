@@ -89,6 +89,26 @@ export const userSearchResponseSchema = z
 	})
 	.passthrough();
 
+export const searchHistoryItemSchema = z
+	.object({
+		id: z.coerce.number().int().positive(),
+		type: z.enum(['keyword', 'user']).catch('keyword'),
+		query: z.string().min(1),
+		target_user_id: z.coerce.number().int().positive().nullable().optional(),
+		target_user: compactUserSchema.nullable().optional(),
+		created_at: z.string().nullish(),
+		updated_at: z.string().nullish()
+	})
+	.passthrough();
+
+export const searchHistoryResponseSchema = z.object({
+	data: z.array(searchHistoryItemSchema)
+});
+
+export const searchHistoryStoreResponseSchema = z.object({
+	history: searchHistoryItemSchema
+});
+
 export const createdPostResponseSchema = z.object({
 	message: z.string(),
 	post: postSchema
@@ -121,3 +141,4 @@ export const clipsResponseSchema = z.object({
 export type BackendPost = z.infer<typeof postSchema>;
 export type CompactUser = z.infer<typeof compactUserSchema>;
 export type FeedResponse = z.infer<typeof feedResponseSchema>;
+export type SearchHistoryItem = z.infer<typeof searchHistoryItemSchema>;

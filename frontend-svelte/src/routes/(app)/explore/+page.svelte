@@ -16,8 +16,15 @@
 	import StoryAvatarLink from '$lib/components/story/StoryAvatarLink.svelte';
 	import UserBadges from '$lib/components/ui/UserBadges.svelte';
 	import InfiniteScrollTrigger from '$lib/components/ui/InfiniteScrollTrigger.svelte';
-	import { exploreResponseSchema, userSearchResponseSchema } from '$lib/schemas/post';
+	import {
+		exploreResponseSchema,
+		searchHistoryResponseSchema,
+		searchHistoryStoreResponseSchema,
+		userSearchResponseSchema,
+		type SearchHistoryItem
+	} from '$lib/schemas/post';
 	import type { PageProps } from './$types';
+	import type { PortalUser } from '$lib/types/domain';
 
 	let { data }: PageProps = $props();
 	const mediaBaseUrl = env.PUBLIC_MEDIA_BASE_URL?.trim() || 'https://api.portalsi.com/storage';
@@ -32,7 +39,73 @@
 	let hasMore = $state(untrack(() => data.hasNext));
 	let loadingMore = $state(false);
 	let loadError = $state('');
+	let searchFocused = $state(false);
+	type SearchHistoryView = SearchHistoryItem & { user?: PortalUser };
+	let searchHistory = $state<SearchHistoryView[]>([]);
 	const visiblePeople = $derived(searchQuery.trim().length >= 2 ? livePeople : data.people);
+
+	function mapHistory(item: SearchHistoryItem): SearchHistoryView {
+		return {
+			...item,
+			user: item.target_user ? mapCompactUser(item.target_user, mediaBaseUrl) : undefined
+		};
+	}
+
+	async function loadSearchHistory() {
+		try {
+			const response = await clientRequest('search-histories?limit=8', {
+				schema: searchHistoryResponseSchema
+			});
+			searchHistory = response.data.map(mapHistory);
+		} catch {
+			searchHistory = [];
+		}
+	}
+
+	async function rememberSearch(value = searchQuery, user?: PortalUser) {
+		const query = (value || user?.fullName || user?.username || '').trim();
+		if (query.length < 2) return;
+		try {
+			const response = await clientRequest('search-histories', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					query,
+					type: user ? 'user' : 'keyword',
+					target_user_id: user?.id
+				}),
+				schema: searchHistoryStoreResponseSchema
+			});
+			const saved = mapHistory(response.history);
+			searchHistory = [saved, ...searchHistory.filter((item) => item.id !== saved.id)].slice(0, 8);
+		} catch {
+			// Riwayat gagal disimpan; pencarian tetap berjalan.
+		}
+	}
+
+	async function clearSearchHistory() {
+		const previous = searchHistory;
+		searchHistory = [];
+		try {
+			await clientRequest('search-histories', { method: 'DELETE' });
+		} catch {
+			searchHistory = previous;
+		}
+	}
+
+	async function deleteSearchHistory(id: number) {
+		const previous = searchHistory;
+		searchHistory = searchHistory.filter((item) => item.id !== id);
+		try {
+			await clientRequest(`search-histories/${id}`, { method: 'DELETE' });
+		} catch {
+			searchHistory = previous;
+		}
+	}
+
+	$effect(() => {
+		void loadSearchHistory();
+	});
 
 	// Sinkronkan grid saat filter/sort berganti (navigasi client-side) — tanpa perlu refresh manual.
 	$effect(() => {
@@ -117,11 +190,18 @@
 	title="Jelajah"
 	description="Karya, cerita, dan orang-orang dari seluruh komunitas Portal SI."
 >
-	<form class="search-row" onsubmit={(event) => event.preventDefault()}>
+	<form
+		class="search-row"
+		onsubmit={(event) => {
+			event.preventDefault();
+			void rememberSearch();
+		}}
+	>
 		<label
 			><Search size={19} /><span class="sr-only">Cari pengguna atau topik</span><input
 				bind:value={searchQuery}
 				placeholder="Cari pengguna atau topik"
+				onfocus={() => (searchFocused = true)}
 			/>{#if searching}<LoaderCircle class="spin" size={17} />{:else if searchQuery}<button
 					type="button"
 					class="clear"
@@ -137,6 +217,43 @@
 			onclick={() => (showFilters = !showFilters)}><SlidersHorizontal size={18} /> Filter</button
 		>
 	</form>
+	{#if searchFocused && searchQuery.trim().length < 2 && searchHistory.length}<section class="search-history surface">
+			<header><span>Riwayat pencarian</span><button onclick={() => void clearSearchHistory()}>Hapus semua</button></header>
+			{#each searchHistory as item (item.id)}
+				<div>
+					{#if item.user}
+						<StoryAvatarLink
+							userId={item.user.id}
+							username={item.user.username}
+							name={item.user.fullName}
+							avatarUrl={item.user.avatarUrl}
+							size="sm"
+							hasStory={item.user.hasStory}
+							seen={item.user.storyViewed}
+						/>
+						<a href={`/u/${item.user.username}`} onclick={() => void rememberSearch(item.query, item.user)}>
+							<strong>{item.user.fullName}<UserBadges verified={item.user.badgeVerified} role={item.user.role} /></strong>
+							<small>@{item.user.username}</small>
+						</a>
+					{:else}
+						<button
+							type="button"
+							class="history-keyword"
+							onclick={() => {
+								searchQuery = item.query;
+								void rememberSearch(item.query);
+							}}><Search size={14} /> {item.query}</button
+						>
+					{/if}
+					<button
+						type="button"
+						class="history-delete"
+						onclick={() => void deleteSearchHistory(item.id)}
+						aria-label={`Hapus riwayat ${item.query}`}><X size={14} /></button
+					>
+				</div>
+			{/each}
+		</section>{/if}
 	{#if searchQuery.trim().length >= 2}<section class="live-results surface" aria-live="polite">
 			<h2>Hasil cepat</h2>
 			{#each visiblePeople as user (user.id)}<div>
@@ -148,7 +265,7 @@
 						size="sm"
 						hasStory={user.hasStory}
 						seen={user.storyViewed}
-					/><a href={`/u/${user.username}`}
+					/><a href={`/u/${user.username}`} onclick={() => void rememberSearch(searchQuery, user)}
 						><strong
 							>{user.fullName}<UserBadges verified={user.badgeVerified} role={user.role} /></strong
 						><small>@{user.username}</small></a
@@ -297,6 +414,76 @@
 		gap: 2px;
 		margin: -4px 0 13px;
 		padding: 10px;
+	}
+	.search-history {
+		display: grid;
+		gap: 3px;
+		margin: -4px 0 13px;
+		padding: 8px;
+	}
+	.search-history header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 6px 7px 4px;
+		color: var(--color-muted);
+		font-size: 0.68rem;
+	}
+	.search-history header button,
+	.history-keyword,
+	.history-delete {
+		background: transparent;
+		border: 0;
+		color: inherit;
+	}
+	.search-history header button {
+		color: var(--color-primary-strong);
+		font-size: 0.68rem;
+		font-weight: 720;
+	}
+	.search-history > div {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		align-items: center;
+		gap: 9px;
+		padding: 7px;
+		border-radius: 10px;
+	}
+	.search-history > div:hover {
+		background: var(--color-surface-soft);
+	}
+	.search-history > div > a {
+		display: grid;
+		min-width: 0;
+	}
+	.search-history strong {
+		display: flex;
+		align-items: center;
+		gap: 3px;
+		font-size: 0.76rem;
+	}
+	.history-keyword {
+		grid-column: 1 / 3;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+		padding: 2px 0;
+		color: var(--color-text);
+		font-size: 0.78rem;
+		text-align: left;
+	}
+	.history-delete {
+		display: grid;
+		width: 30px;
+		height: 30px;
+		place-items: center;
+		border-radius: 50%;
+		color: var(--color-muted);
+	}
+	.history-delete:hover {
+		background: rgb(120 74 37 / 12%);
+		color: var(--color-primary-strong);
 	}
 	.live-results h2 {
 		margin: 0 6px 4px;

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { env } from '$env/dynamic/public';
 	import { beforeNavigate } from '$app/navigation';
-	import { LoaderCircle, Search, SlidersHorizontal } from '@lucide/svelte';
+	import { LoaderCircle, Search, SlidersHorizontal, X } from '@lucide/svelte';
 	import { clientRequest } from '$lib/api/client';
 	import { mapCompactUser, mapPost } from '$lib/api/mappers';
 	import AnnouncementCard from '$lib/components/feed/AnnouncementCard.svelte';
@@ -11,10 +11,17 @@
 	import StoryAvatarLink from '$lib/components/story/StoryAvatarLink.svelte';
 	import UserBadges from '$lib/components/ui/UserBadges.svelte';
 	import InfiniteScrollTrigger from '$lib/components/ui/InfiniteScrollTrigger.svelte';
-	import { feedResponseSchema, userSearchResponseSchema } from '$lib/schemas/post';
+	import {
+		feedResponseSchema,
+		searchHistoryResponseSchema,
+		searchHistoryStoreResponseSchema,
+		userSearchResponseSchema,
+		type SearchHistoryItem
+	} from '$lib/schemas/post';
 	import { onMount, untrack } from 'svelte';
 	import type { PageProps } from './$types';
 	import FriendSuggestionCard from '$lib/components/feed/FriendSuggestionCard.svelte';
+	import type { PortalUser } from '$lib/types/domain';
 
 	let { data }: PageProps = $props();
 	const greetingName = $derived((data.user.fullName || '').trim() || data.user.username);
@@ -29,10 +36,10 @@
 	let searching = $state(false);
 	let showSearchOptions = $state(false);
 	let searchFocused = $state(false);
-	let searchHistory = $state<string[]>([]);
+	type SearchHistoryView = SearchHistoryItem & { user?: PortalUser };
+	let searchHistory = $state<SearchHistoryView[]>([]);
 	const homeUserId = untrack(() => data.user.id);
 	const feedCacheKey = `portal:home-feed:${homeUserId}`;
-	const searchHistoryKey = `portal:search-history:${homeUserId}`;
 
 	onMount(() => {
 		try {
@@ -54,12 +61,7 @@
 		} catch {
 			// Abaikan cache rusak.
 		}
-		try {
-			const history = JSON.parse(localStorage.getItem(searchHistoryKey) || '[]');
-			if (Array.isArray(history)) searchHistory = history.filter((item) => typeof item === 'string').slice(0, 8);
-		} catch {
-			searchHistory = [];
-		}
+		void loadSearchHistory();
 	});
 
 	function saveFeedCache() {
@@ -83,23 +85,62 @@
 		return () => window.clearTimeout(timer);
 	});
 
-	function rememberSearch(value = homeQuery) {
-		const query = value.trim();
-		if (query.length < 2) return;
-		searchHistory = [query, ...searchHistory.filter((item) => item.toLowerCase() !== query.toLowerCase())].slice(0, 8);
+	function mapHistory(item: SearchHistoryItem): SearchHistoryView {
+		return {
+			...item,
+			user: item.target_user ? mapCompactUser(item.target_user, mediaBaseUrl) : undefined
+		};
+	}
+
+	async function loadSearchHistory() {
 		try {
-			localStorage.setItem(searchHistoryKey, JSON.stringify(searchHistory));
+			const response = await clientRequest('search-histories?limit=8', {
+				schema: searchHistoryResponseSchema
+			});
+			searchHistory = response.data.map(mapHistory);
 		} catch {
-			// Abaikan storage lokal.
+			searchHistory = [];
 		}
 	}
 
-	function clearSearchHistory() {
+	async function rememberSearch(value = homeQuery, user?: PortalUser) {
+		const query = (value || user?.fullName || user?.username || '').trim();
+		if (query.length < 2) return;
+		try {
+			const response = await clientRequest('search-histories', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					query,
+					type: user ? 'user' : 'keyword',
+					target_user_id: user?.id
+				}),
+				schema: searchHistoryStoreResponseSchema
+			});
+			const saved = mapHistory(response.history);
+			searchHistory = [saved, ...searchHistory.filter((item) => item.id !== saved.id)].slice(0, 8);
+		} catch {
+			// Riwayat gagal disimpan; pencarian tetap berjalan.
+		}
+	}
+
+	async function clearSearchHistory() {
+		const previous = searchHistory;
 		searchHistory = [];
 		try {
-			localStorage.removeItem(searchHistoryKey);
+			await clientRequest('search-histories', { method: 'DELETE' });
 		} catch {
-			// Abaikan storage lokal.
+			searchHistory = previous;
+		}
+	}
+
+	async function deleteSearchHistory(id: number) {
+		const previous = searchHistory;
+		searchHistory = searchHistory.filter((item) => item.id !== id);
+		try {
+			await clientRequest(`search-histories/${id}`, { method: 'DELETE' });
+		} catch {
+			searchHistory = previous;
 		}
 	}
 
@@ -217,7 +258,7 @@
 									hasStory={user.hasStory}
 									seen={user.storyViewed}
 								/><a href={`/u/${user.username}`}
-									onclick={() => rememberSearch()}
+									onclick={() => void rememberSearch(homeQuery, user)}
 									><strong
 										>{user.fullName}<UserBadges
 											verified={user.badgeVerified}
@@ -229,14 +270,41 @@
 								Tidak ada pengguna yang cocok.
 							</p>{/if}
 					</div>{:else if searchFocused && searchHistory.length}<div class="home-results surface history">
-						<header><span>Riwayat pencarian</span><button onclick={clearSearchHistory}>Hapus</button></header>
-						{#each searchHistory as item (item)}<button
-								type="button"
-								onclick={() => {
-									homeQuery = item;
-									rememberSearch(item);
-								}}><Search size={14} /> {item}</button
-							>{/each}
+						<header><span>Riwayat pencarian</span><button onclick={() => void clearSearchHistory()}>Hapus semua</button></header>
+						{#each searchHistory as item (item.id)}
+							<div class="history-row">
+								{#if item.user}
+									<StoryAvatarLink
+										userId={item.user.id}
+										username={item.user.username}
+										name={item.user.fullName}
+										avatarUrl={item.user.avatarUrl}
+										size="sm"
+										hasStory={item.user.hasStory}
+										seen={item.user.storyViewed}
+									/>
+									<a href={`/u/${item.user.username}`} onclick={() => void rememberSearch(item.query, item.user)}>
+										<strong>{item.user.fullName}<UserBadges verified={item.user.badgeVerified} role={item.user.role} /></strong>
+										<small>@{item.user.username}</small>
+									</a>
+								{:else}
+									<button
+										type="button"
+										class="history-keyword"
+										onclick={() => {
+											homeQuery = item.query;
+											void rememberSearch(item.query);
+										}}><Search size={14} /> {item.query}</button
+									>
+								{/if}
+								<button
+									type="button"
+									class="history-delete"
+									onclick={() => void deleteSearchHistory(item.id)}
+									aria-label={`Hapus riwayat ${item.query}`}><X size={14} /></button
+								>
+							</div>
+						{/each}
 					</div>{/if}
 			</div>
 		</header>
@@ -407,7 +475,8 @@
 		font-size: 0.66rem;
 	}
 	.home-results.history header button,
-	.home-results.history > button {
+	.history-keyword,
+	.history-delete {
 		border: 0;
 		background: transparent;
 		color: inherit;
@@ -417,18 +486,43 @@
 		font-size: 0.66rem;
 		font-weight: 720;
 	}
-	.home-results.history > button {
+	.history-row {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr) auto;
+		align-items: center;
+		gap: 8px;
+		padding: 7px;
+		border-radius: 11px;
+	}
+	.history-row:hover {
+		background: var(--color-primary-soft);
+	}
+	.history-row > a {
+		display: grid;
+		min-width: 0;
+	}
+	.history-keyword {
+		grid-column: 1 / 3;
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 9px 8px;
+		min-width: 0;
+		padding: 2px 0;
 		border-radius: 10px;
 		color: var(--color-text);
 		font-size: 0.78rem;
 		text-align: left;
 	}
-	.home-results.history > button:hover {
-		background: var(--color-primary-soft);
+	.history-delete {
+		display: grid;
+		width: 28px;
+		height: 28px;
+		place-items: center;
+		border-radius: 50%;
+		color: var(--color-muted);
+	}
+	.history-delete:hover {
+		background: rgb(120 74 37 / 12%);
 		color: var(--color-primary-strong);
 	}
 

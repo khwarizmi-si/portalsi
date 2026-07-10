@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Eye, EyeOff } from '@lucide/svelte';
+	import { Eye, EyeOff, LoaderCircle } from '@lucide/svelte';
 	import AuthFields from '$lib/components/auth/AuthFields.svelte';
 	import AuthShell from '$lib/components/auth/AuthShell.svelte';
 	import type { PageProps } from './$types';
@@ -15,6 +15,7 @@
 	let showConfirm = $state(false);
 	let password = $state('');
 	let confirm = $state('');
+	let submitting = $state(false);
 	const mismatch = $derived(confirm.length > 0 && password !== confirm);
 </script>
 
@@ -27,7 +28,7 @@
 		<p>Karena seribu langkah dimulai dari satu langkah.</p>
 	</div>
 	{#if form?.message}<div class="form-alert" role="alert">{form.message}</div>{/if}
-	<form method="POST">
+	<form method="POST" onsubmit={() => (submitting = true)}>
 		<AuthFields>
 			<div class="two-fields">
 				<label
@@ -114,7 +115,9 @@
 				>
 			</div>
 			{#if form?.errors?.terms}<small class="field-error">{form.errors.terms[0]}</small>{/if}
-			<button class="auth-primary" type="submit">Buat akun</button>
+			<button class="auth-primary" type="submit" disabled={submitting || mismatch}>
+				{#if submitting}<LoaderCircle size={17} class="button-spin" /> Memproses…{:else}Buat akun{/if}
+			</button>
 		</AuthFields>
 	</form>
 	<p class="switch">Sudah punya akun? <a href="/login">Masuk</a></p>
@@ -218,6 +221,14 @@
 		border-radius: 11px;
 		color: var(--color-danger);
 		font-size: 0.78rem;
+	}
+	:global(.button-spin) {
+		animation: auth-spin 0.8s linear infinite;
+	}
+	@keyframes auth-spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 	.field-error {
 		color: var(--color-danger);

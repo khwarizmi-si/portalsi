@@ -43,8 +43,8 @@
 	let segmentDuration = $state(7_000);
 	const frame = $derived.by(() => {
 		const mobile = vw > 0 && vw < 768;
-		const maxW = mobile ? vw : Math.min(500, vw - 40);
-		const maxH = mobile ? vh : vh - 40;
+		const maxW = mobile ? Math.max(180, vw - 106) : Math.min(500, vw - 140);
+		const maxH = mobile ? vh - 18 : vh - 40;
 		const aspect = Math.min(1.91, Math.max(0.42, frameAspect));
 		let width = maxW;
 		let height = width / aspect;
@@ -85,7 +85,7 @@
 		viewersOpen = false;
 		if (index < stories.length - 1) index += 1;
 		else if (data.nextUserId) void goto(storyHref(data.nextUserId));
-		else void goto('/home');
+		else closeStory();
 	}
 
 	function previous() {
@@ -94,9 +94,10 @@
 		else if (data.previousUserId) void goto(storyHref(data.previousUserId));
 	}
 
-	function goToUser(userId: number) {
+	function closeStory() {
 		viewersOpen = false;
-		void goto(storyHref(userId));
+		if (history.length > 1) history.back();
+		else void goto('/home', { replaceState: true });
 	}
 
 	// Reset media state hanya saat cerita berganti (bukan saat pause).
@@ -191,7 +192,7 @@
 		else if (event.key === ' ') {
 			event.preventDefault();
 			paused = !paused;
-		} else if (event.key === 'Escape') void goto('/home');
+		} else if (event.key === 'Escape') closeStory();
 	}
 </script>
 
@@ -205,16 +206,12 @@
 >
 
 <div class="story-viewer">
-	{#if data.prevPreview}
-		<button
-			class="side-preview prev"
-			style:background-image={data.prevPreview.cover ? `url('${data.prevPreview.cover}')` : undefined}
-			onclick={() => data.prevPreview && goToUser(data.prevPreview.userId)}
-			aria-label={`Cerita @${data.prevPreview.username}`}
-		>
-			<span class="side-user">@{data.prevPreview.username}</span>
-		</button>
-	{/if}
+	<button
+		class="story-nav outside-prev"
+		disabled={index === 0 && !data.previousUserId}
+		onclick={previous}
+		aria-label="Cerita sebelumnya"><ChevronLeft size={28} /></button
+	>
 	<article
 		style:width={`${frame.width}px`}
 		style:height={`${frame.height}px`}
@@ -222,12 +219,6 @@
 		onpointerup={() => (holding = false)}
 		onpointercancel={() => (holding = false)}
 	>
-		<button class="story-zone story-zone-left" onclick={previous} aria-label="Cerita sebelumnya"
-			><ChevronLeft size={28} /></button
-		>
-		<button class="story-zone story-zone-right" onclick={next} aria-label="Cerita berikutnya"
-			><ChevronRight size={28} /></button
-		>
 		<div class="progress">
 			{#each stories as item, itemIndex (item.id)}<span class:complete={itemIndex < index}
 					>{#if itemIndex === index}<i
@@ -245,7 +236,7 @@
 				<Avatar name={data.user.username} src={data.user.avatarUrl ?? undefined} size="sm" />
 				<span><small>@{data.user.username} · {story?.createdLabel ?? ''}</small></span>
 			</a>
-			<a class="close" href="/home" aria-label="Tutup cerita"><X size={19} /></a>
+			<button class="close" type="button" onclick={closeStory} aria-label="Tutup cerita"><X size={19} /></button>
 		</header>
 		{#if story && story.type === 'video' && story.mediaUrl}
 			<video
@@ -356,16 +347,12 @@
 				</div>
 			</aside>{/if}
 	</article>
-	{#if data.nextPreview}
-		<button
-			class="side-preview next"
-			style:background-image={data.nextPreview.cover ? `url('${data.nextPreview.cover}')` : undefined}
-			onclick={() => data.nextPreview && goToUser(data.nextPreview.userId)}
-			aria-label={`Cerita @${data.nextPreview.username}`}
-		>
-			<span class="side-user">@{data.nextPreview.username}</span>
-		</button>
-	{/if}
+	<button
+		class="story-nav outside-next"
+		disabled={index === stories.length - 1 && !data.nextUserId}
+		onclick={next}
+		aria-label="Cerita berikutnya"><ChevronRight size={28} /></button
+	>
 </div>
 
 <style>
@@ -381,58 +368,31 @@
 		background:
 			radial-gradient(circle at 50% 44%, rgb(115 81 47 / 22%), transparent 34rem), #100e0c;
 	}
-	.side-preview {
-		display: none;
+	.story-nav {
+		display: grid;
+		width: 46px;
+		height: 72px;
+		flex: none;
+		place-items: center;
+		background: rgb(255 255 255 / 11%);
+		border: 1px solid rgb(255 255 255 / 16%);
+		border-radius: 999px;
+		color: white;
+		cursor: pointer;
+		backdrop-filter: blur(12px);
+		transition:
+			opacity 160ms ease,
+			transform 160ms ease,
+			background 160ms ease;
 	}
-	@media (min-width: 900px) {
-		.story-viewer {
-			gap: 20px;
-		}
-		.side-preview {
-			position: relative;
-			display: grid;
-			align-items: end;
-			width: clamp(120px, 13vw, 190px);
-			height: min(56vh, 500px);
-			flex: none;
-			padding: 12px;
-			overflow: hidden;
-			background-color: #1a1613;
-			background-position: center;
-			background-size: cover;
-			border: 0;
-			border-radius: 18px;
-			opacity: 0.5;
-			filter: saturate(0.85);
-			transform: scale(0.94);
-			cursor: pointer;
-			transition:
-				opacity 200ms ease,
-				transform 200ms ease,
-				filter 200ms ease;
-		}
-		.side-preview::after {
-			position: absolute;
-			inset: 0;
-			background: linear-gradient(transparent 45%, rgb(0 0 0 / 78%));
-			content: '';
-		}
-		.side-preview:hover {
-			opacity: 0.9;
-			filter: none;
-			transform: scale(0.99);
-		}
-		.side-user {
-			position: relative;
-			z-index: 1;
-			overflow: hidden;
-			color: white;
-			font-size: 0.72rem;
-			font-weight: 700;
-			text-overflow: ellipsis;
-			white-space: nowrap;
-			text-shadow: 0 1px 3px #000;
-		}
+	.story-nav:hover {
+		background: rgb(255 255 255 / 18%);
+		transform: translateY(-1px);
+	}
+	.story-nav:disabled {
+		opacity: 0.25;
+		cursor: default;
+		transform: none;
 	}
 	.story-viewer > article {
 		position: relative;
@@ -460,39 +420,6 @@
 		filter: blur(28px) saturate(0.82);
 		opacity: 0.42;
 		transform: scale(1.08);
-	}
-	.story-viewer article > button.story-zone {
-		position: absolute;
-		z-index: 2;
-		top: 80px;
-		bottom: 68px;
-		width: 34%;
-		height: auto;
-		border-radius: 0;
-		background: transparent;
-		opacity: 0;
-		transition:
-			opacity 160ms ease,
-			background 160ms ease;
-	}
-	.story-viewer article > button.story-zone:hover,
-	.story-viewer article > button.story-zone:focus-visible {
-		background: linear-gradient(90deg, rgb(0 0 0 / 24%), transparent);
-		opacity: 1;
-	}
-	.story-viewer article > button.story-zone-left {
-		left: 0;
-		justify-items: start;
-		padding-left: 12px;
-	}
-	.story-viewer article > button.story-zone-right {
-		right: 0;
-		justify-items: end;
-		padding-right: 12px;
-	}
-	.story-viewer article > button.story-zone-right:hover,
-	.story-viewer article > button.story-zone-right:focus-visible {
-		background: linear-gradient(-90deg, rgb(0 0 0 / 24%), transparent);
 	}
 	.progress {
 		position: absolute;
@@ -560,15 +487,11 @@
 	.story-user span {
 		display: grid;
 	}
-	article > header strong {
-		font-size: 0.78rem;
-	}
 	article > header small {
 		color: rgb(255 255 255 / 70%);
 		font-size: 0.65rem;
 	}
 	article > header button,
-	article > button.story-zone,
 	.viewer-panel > header button {
 		display: grid;
 		width: 36px;
@@ -741,46 +664,19 @@
 	}
 	@media (max-width: 767px) {
 		.story-viewer {
-			gap: 0;
-			padding: 0;
+			gap: 6px;
+			padding: 8px;
 		}
 		.story-viewer > article {
-			border-radius: 0;
+			border-radius: 18px;
 		}
 		.story-viewer article > .story-media {
 			position: absolute;
 			inset: 0;
 		}
-		.story-viewer article > button.story-zone {
-			top: 50%;
-			bottom: auto;
-			display: grid;
-			width: 42px;
-			height: 62px;
-			place-items: center;
-			background: rgb(0 0 0 / 28%);
-			border: 1px solid rgb(255 255 255 / 16%);
-			border-radius: 999px;
-			opacity: 0.9;
-			transform: translateY(-50%);
-			backdrop-filter: blur(8px);
-		}
-		.story-viewer article > button.story-zone-left {
-			left: max(8px, env(safe-area-inset-left));
-			padding-left: 0;
-			justify-items: center;
-		}
-		.story-viewer article > button.story-zone-right {
-			right: max(8px, env(safe-area-inset-right));
-			padding-right: 0;
-			justify-items: center;
-		}
-		.story-viewer article > button.story-zone:hover,
-		.story-viewer article > button.story-zone:focus-visible,
-		.story-viewer article > button.story-zone-right:hover,
-		.story-viewer article > button.story-zone-right:focus-visible {
-			background: rgb(0 0 0 / 42%);
-			opacity: 1;
+		.story-nav {
+			width: 38px;
+			height: 58px;
 		}
 		article > footer button {
 			min-width: 0;

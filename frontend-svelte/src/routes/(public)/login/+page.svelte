@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { Eye, LockKeyhole, UserRound } from '@lucide/svelte';
+	import { Eye, LoaderCircle, LockKeyhole, UserRound } from '@lucide/svelte';
 	import AuthFields from '$lib/components/auth/AuthFields.svelte';
 	import AuthShell from '$lib/components/auth/AuthShell.svelte';
 	import type { PageProps } from './$types';
@@ -10,6 +10,7 @@
 	// (perubahan type input memicu autofill browser yang menimpa field yang tak terkontrol).
 	let loginValue = $state(form?.values?.login ?? '');
 	let passwordValue = $state('');
+	let submitting = $state(false);
 	// Tujuan setelah login (mis. /login?next=/posts/12). Diteruskan lewat hidden input
 	// agar tetap terbawa walau query pada aksi form tak konsisten.
 	const nextTarget = $derived(page.url.searchParams.get('next') ?? '');
@@ -27,7 +28,7 @@
 			{form.message}{#if 'retryAfterSeconds' in form && form.retryAfterSeconds}
 				Coba lagi dalam {form.retryAfterSeconds} detik.{/if}
 		</div>{/if}
-	<form method="POST">
+	<form method="POST" onsubmit={() => (submitting = true)}>
 		{#if nextTarget}<input type="hidden" name="next" value={nextTarget} />{/if}
 		<AuthFields>
 			<label>
@@ -68,7 +69,9 @@
 					><input type="checkbox" name="remember" /> <span>Ingat perangkat ini</span></label
 				><a href="/forgot-password">Lupa kata sandi?</a>
 			</div>
-			<button class="auth-primary" type="submit">Masuk</button>
+			<button class="auth-primary" type="submit" disabled={submitting}>
+				{#if submitting}<LoaderCircle size={17} class="button-spin" /> Memproses…{:else}Masuk{/if}
+			</button>
 		</AuthFields>
 	</form>
 	<p class="switch">Belum punya akun? <a href="/register">Daftar sekarang</a></p>
@@ -171,5 +174,13 @@
 		color: var(--color-danger);
 		font-size: 0.7rem;
 		font-weight: 560;
+	}
+	:global(.button-spin) {
+		animation: auth-spin 0.8s linear infinite;
+	}
+	@keyframes auth-spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 </style>
