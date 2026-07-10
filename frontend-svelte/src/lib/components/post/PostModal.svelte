@@ -5,7 +5,8 @@
 	import PostDetailView from '$lib/components/post/PostDetailView.svelte';
 	import type { PageData } from '../../../routes/(app)/posts/[postId]/$types';
 
-	let { data, onClose }: { data: PageData; onClose: () => void } = $props();
+	type PrivatePostData = Extract<PageData, { isPublic: false }>;
+	let { data, onClose }: { data: PrivatePostData; onClose: () => void } = $props();
 
 	let scrollEl = $state<HTMLDivElement>();
 	let dragging = $state(false);

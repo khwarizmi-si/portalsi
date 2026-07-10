@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { env } from '$env/dynamic/public';
+	import { beforeNavigate } from '$app/navigation';
 	import { LoaderCircle, Search, SlidersHorizontal } from '@lucide/svelte';
 	import { clientRequest } from '$lib/api/client';
 	import { mapCompactUser, mapPost } from '$lib/api/mappers';
@@ -11,7 +12,7 @@
 	import UserBadges from '$lib/components/ui/UserBadges.svelte';
 	import InfiniteScrollTrigger from '$lib/components/ui/InfiniteScrollTrigger.svelte';
 	import { feedResponseSchema, userSearchResponseSchema } from '$lib/schemas/post';
-	import { untrack } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import type { PageProps } from './$types';
 	import FriendSuggestionCard from '$lib/components/feed/FriendSuggestionCard.svelte';
 
@@ -27,6 +28,80 @@
 	let searchResults = $state<typeof data.suggestions>([]);
 	let searching = $state(false);
 	let showSearchOptions = $state(false);
+	let searchFocused = $state(false);
+	let searchHistory = $state<string[]>([]);
+	const homeUserId = untrack(() => data.user.id);
+	const feedCacheKey = `portal:home-feed:${homeUserId}`;
+	const searchHistoryKey = `portal:search-history:${homeUserId}`;
+
+	onMount(() => {
+		try {
+			const cached = JSON.parse(sessionStorage.getItem(feedCacheKey) || 'null') as
+				| {
+						posts?: typeof posts;
+						nextPage?: number;
+						hasMore?: boolean;
+						scrollY?: number;
+						savedAt?: number;
+				  }
+				| null;
+			if (cached && Date.now() - (cached.savedAt ?? 0) < 20 * 60_000 && cached.posts?.length) {
+				posts = cached.posts;
+				nextPage = cached.nextPage ?? nextPage;
+				hasMore = cached.hasMore ?? hasMore;
+				requestAnimationFrame(() => window.scrollTo({ top: cached.scrollY ?? 0 }));
+			}
+		} catch {
+			// Abaikan cache rusak.
+		}
+		try {
+			const history = JSON.parse(localStorage.getItem(searchHistoryKey) || '[]');
+			if (Array.isArray(history)) searchHistory = history.filter((item) => typeof item === 'string').slice(0, 8);
+		} catch {
+			searchHistory = [];
+		}
+	});
+
+	function saveFeedCache() {
+		try {
+			sessionStorage.setItem(
+				feedCacheKey,
+				JSON.stringify({ posts, nextPage, hasMore, scrollY: window.scrollY, savedAt: Date.now() })
+			);
+		} catch {
+			// Storage bisa penuh/ditolak; feed tetap jalan normal.
+		}
+	}
+
+	beforeNavigate(saveFeedCache);
+
+	$effect(() => {
+		posts.length;
+		nextPage;
+		hasMore;
+		const timer = window.setTimeout(saveFeedCache, 250);
+		return () => window.clearTimeout(timer);
+	});
+
+	function rememberSearch(value = homeQuery) {
+		const query = value.trim();
+		if (query.length < 2) return;
+		searchHistory = [query, ...searchHistory.filter((item) => item.toLowerCase() !== query.toLowerCase())].slice(0, 8);
+		try {
+			localStorage.setItem(searchHistoryKey, JSON.stringify(searchHistory));
+		} catch {
+			// Abaikan storage lokal.
+		}
+	}
+
+	function clearSearchHistory() {
+		searchHistory = [];
+		try {
+			localStorage.removeItem(searchHistoryKey);
+		} catch {
+			// Abaikan storage lokal.
+		}
+	}
 
 	$effect(() => {
 		const query = homeQuery.trim();
@@ -106,8 +181,12 @@
 						id="home-search"
 						bind:value={homeQuery}
 						placeholder="Cari teman atau topik"
+						onfocus={() => (searchFocused = true)}
 						onkeydown={(event) => {
-							if (event.key === 'Enter') event.preventDefault();
+							if (event.key === 'Enter') {
+								event.preventDefault();
+								rememberSearch();
+							}
 						}}
 					/>
 					{#if searching}<LoaderCircle class="search-spin" size={16} />{/if}
@@ -123,6 +202,7 @@
 				{#if showSearchOptions}<div class="search-options surface">
 						<span>Pencarian langsung menampilkan pengguna.</span><a
 							href={`/explore${homeQuery.trim() ? `?q=${encodeURIComponent(homeQuery.trim())}` : ''}`}
+							onclick={() => rememberSearch()}
 							>Cari konten di Jelajah</a
 						>
 					</div>{/if}
@@ -137,6 +217,7 @@
 									hasStory={user.hasStory}
 									seen={user.storyViewed}
 								/><a href={`/u/${user.username}`}
+									onclick={() => rememberSearch()}
 									><strong
 										>{user.fullName}<UserBadges
 											verified={user.badgeVerified}
@@ -147,6 +228,15 @@
 							</div>{/each}{#if !searching && searchResults.length === 0}<p>
 								Tidak ada pengguna yang cocok.
 							</p>{/if}
+					</div>{:else if searchFocused && searchHistory.length}<div class="home-results surface history">
+						<header><span>Riwayat pencarian</span><button onclick={clearSearchHistory}>Hapus</button></header>
+						{#each searchHistory as item (item)}<button
+								type="button"
+								onclick={() => {
+									homeQuery = item;
+									rememberSearch(item);
+								}}><Search size={14} /> {item}</button
+							>{/each}
 					</div>{/if}
 			</div>
 		</header>
@@ -173,6 +263,7 @@
 			{#each posts as post, index (post.id)}<PostCard
 					{post}
 					autoplay
+					preferSound
 				/>{#if (index + 1) % 10 === 0}<FriendSuggestionCard users={data.suggestions} />{/if}{/each}
 		</div>
 		<InfiniteScrollTrigger
@@ -303,6 +394,42 @@
 		margin: 0;
 		padding: 12px;
 		text-align: center;
+	}
+	.home-results.history {
+		gap: 3px;
+	}
+	.home-results.history header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 7px 8px 5px;
+		color: var(--color-muted);
+		font-size: 0.66rem;
+	}
+	.home-results.history header button,
+	.home-results.history > button {
+		border: 0;
+		background: transparent;
+		color: inherit;
+	}
+	.home-results.history header button {
+		color: var(--color-primary-strong);
+		font-size: 0.66rem;
+		font-weight: 720;
+	}
+	.home-results.history > button {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 9px 8px;
+		border-radius: 10px;
+		color: var(--color-text);
+		font-size: 0.78rem;
+		text-align: left;
+	}
+	.home-results.history > button:hover {
+		background: var(--color-primary-soft);
+		color: var(--color-primary-strong);
 	}
 
 	.search-box:focus-within {

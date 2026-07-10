@@ -85,6 +85,10 @@
 	// Peringatan blokir (mis. video >1) ditampilkan sebagai modal agar jelas terlihat.
 	let warning = $state<string | null>(null);
 	let videoMuted = $state(false);
+	let videoDuration = $state(0);
+	let thumbnailSecond = $state(1);
+	let thumbnailPreviewUrl = $state('');
+	let thumbnailGenerating = $state(false);
 	let uploadProgress = $state(0);
 	let activeUpload = $state<XMLHttpRequest | null>(null);
 	let cropMode = $state<'original' | 'square' | 'portrait' | 'story'>(
@@ -160,6 +164,10 @@
 		filterOptions.find((option) => option.id === editingItem?.filter)?.css ?? 'none'
 	);
 
+	$effect(() => {
+		if (selectedFileKind !== 'video') resetThumbnailSelection();
+	});
+
 	// Peta transform tiap kartu saat menyeret (kartu yang diseret mengikuti jari,
 	// kartu lain bergeser mulus untuk memberi ruang).
 	const itemTransforms = $derived.by(() => {
@@ -205,6 +213,13 @@
 		const url = URL.createObjectURL(file);
 		previewUrl = url;
 		return () => URL.revokeObjectURL(url);
+	});
+
+	$effect(() => {
+		const stale = thumbnailPreviewUrl;
+		return () => {
+			if (stale) URL.revokeObjectURL(stale);
+		};
 	});
 
 	// Bebaskan object URL galeri saat komponen dilepas.
@@ -322,6 +337,13 @@
 		editingId = null;
 	}
 
+	function resetThumbnailSelection() {
+		videoDuration = 0;
+		thumbnailSecond = 1;
+		thumbnailPreviewUrl = '';
+		thumbnailGenerating = false;
+	}
+
 	function selectSingle(candidate?: File) {
 		if (!candidate) return;
 		const detectedKind = mediaKind(candidate);
@@ -341,6 +363,7 @@
 		}
 		file = candidate;
 		clearGallery();
+		resetThumbnailSelection();
 		cropMode = kind === 'story' ? 'story' : 'original';
 		sourceAspect = 1;
 		cropRegion = null;
@@ -628,7 +651,7 @@
 				await goto('/home');
 			} else {
 				if (selectedFileKind === 'video') {
-					const thumbnail = await generateVideoThumbnail(file);
+					const thumbnail = await generateVideoThumbnail(file, thumbnailSecond);
 					if (thumbnail) body.set('thumbnail', thumbnail);
 				}
 				if (location.trim()) body.set('location', location.trim());
@@ -799,18 +822,18 @@
 	// Thumbnail video dibuat di sisi klien HANYA sebagai optimasi. Di HP/iOS event video
 	// sering tidak terpicu sehingga bisa menggantung — maka seluruh proses dibatasi waktu,
 	// dan jika gagal kita lewati saja (server tetap membuat thumbnail lewat queue).
-	async function generateVideoThumbnail(source: File): Promise<File | null> {
+	async function generateVideoThumbnail(source: File, atSeconds = 1): Promise<File | null> {
 		const url = URL.createObjectURL(source);
 		const video = document.createElement('video');
 		try {
-			video.preload = 'metadata';
+			video.preload = 'auto';
 			video.muted = true;
 			video.playsInline = true;
+			video.crossOrigin = 'anonymous';
 			video.setAttribute('playsinline', '');
 			video.src = url;
 
-			// Tunggu frame siap, tapi maksimal 4 detik (mobile sering tak memicu event).
-			const ready = await new Promise<boolean>((resolve) => {
+			const metadataReady = await new Promise<boolean>((resolve) => {
 				let settled = false;
 				const finish = (ok: boolean) => {
 					if (settled) return;
@@ -819,22 +842,32 @@
 					resolve(ok);
 				};
 				const timer = setTimeout(() => finish(false), 4000);
-				video.onloadeddata = () => finish(true);
-				video.oncanplay = () => finish(true);
+				video.onloadedmetadata = () => finish(true);
 				video.onerror = () => finish(false);
 			});
-			if (!ready || !video.videoWidth || !video.videoHeight) return null;
+			if (!metadataReady) return null;
 
-			// Coba geser ke frame awal (opsional, dibatasi waktu).
+			const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 1;
+			const targetSecond = Math.min(Math.max(0.05, atSeconds), Math.max(0.05, duration - 0.05));
 			try {
-				video.currentTime = Math.min(0.1, Math.max(0, (video.duration || 1) / 20));
+				video.currentTime = targetSecond;
 				await new Promise<void>((resolve) => {
-					video.onseeked = () => resolve();
-					setTimeout(resolve, 600);
+					let settled = false;
+					const finish = () => {
+						if (settled) return;
+						settled = true;
+						clearTimeout(timer);
+						resolve();
+					};
+					const timer = setTimeout(finish, 1400);
+					video.onseeked = finish;
+					video.oncanplay = finish;
+					video.onloadeddata = finish;
 				});
 			} catch {
 				// abaikan; pakai frame apa pun yang tersedia
 			}
+			if (!video.videoWidth || !video.videoHeight) return null;
 
 			const scale = Math.min(1, 1280 / Math.max(video.videoWidth, video.videoHeight));
 			const canvas = document.createElement('canvas');
@@ -859,6 +892,18 @@
 				// abaikan
 			}
 			URL.revokeObjectURL(url);
+		}
+	}
+
+	async function refreshThumbnailPreview() {
+		if (!file || selectedFileKind !== 'video') return;
+		thumbnailGenerating = true;
+		try {
+			const thumb = await generateVideoThumbnail(file, thumbnailSecond);
+			if (!thumb) return;
+			thumbnailPreviewUrl = URL.createObjectURL(thumb);
+		} finally {
+			thumbnailGenerating = false;
 		}
 	}
 
@@ -1049,6 +1094,12 @@
 								src={previewUrl}
 								controls
 								muted={videoWillMute}
+								onloadedmetadata={(event) => {
+									const duration = event.currentTarget.duration;
+									videoDuration = Number.isFinite(duration) ? Math.max(1, Math.floor(duration)) : 0;
+									thumbnailSecond = Math.min(Math.max(1, thumbnailSecond), Math.max(1, videoDuration));
+									void refreshThumbnailPreview();
+								}}
 							></video>
 							<button
 								type="button"
@@ -1061,6 +1112,32 @@
 								>{#if videoWillMute}<VolumeX size={16} />{:else}<Volume2 size={16} />{/if}
 								{videoWillMute ? 'Video dibisukan' : 'Suara video aktif'}</button
 							>
+							<div class="thumbnail-picker">
+								<div>
+									<strong>Thumbnail video</strong>
+									<small>Default detik pertama. Geser untuk memilih frame lain.</small>
+								</div>
+								<label
+									><span>{formatMusicTime(thumbnailSecond)}</span><input
+										type="range"
+										min="0"
+										max={videoDuration || 1}
+										step="0.1"
+										value={thumbnailSecond}
+										oninput={(event) => {
+											thumbnailSecond = Number(event.currentTarget.value);
+										}}
+										onchange={() => void refreshThumbnailPreview()}
+									/></label
+								>
+								<div class="thumbnail-preview">
+									{#if thumbnailPreviewUrl}<img src={thumbnailPreviewUrl} alt="Preview thumbnail video" />
+									{:else}<span>{thumbnailGenerating ? 'Membuat preview…' : 'Preview thumbnail belum tersedia'}</span>{/if}
+									<button type="button" onclick={() => void refreshThumbnailPreview()} disabled={thumbnailGenerating}>
+										{thumbnailGenerating ? 'Memproses…' : 'Jadikan thumbnail'}
+									</button>
+								</div>
+							</div>
 						{:else}<audio src={previewUrl} controls></audio>{/if}
 						<button onclick={() => (file = null)} aria-label="Hapus media"><X size={18} /></button>
 					</div>{/if}
@@ -1524,21 +1601,22 @@
 		position: relative;
 		display: grid;
 		width: min(100%, 540px);
-		max-height: 470px;
+		gap: 10px;
 		place-items: center;
-		overflow: hidden;
+		overflow: visible;
 		border-radius: 16px;
-		background: #1d1915;
 	}
 	.preview video {
 		width: 100%;
 		max-height: 470px;
 		object-fit: contain;
+		background: #1d1915;
+		border-radius: 16px;
 	}
 	.preview audio {
 		margin: 80px 30px;
 	}
-	.preview button {
+	.preview > button {
 		position: absolute;
 		top: 10px;
 		right: 10px;
@@ -1552,10 +1630,9 @@
 		color: white;
 	}
 	.preview .mute-toggle {
-		top: auto;
-		right: auto;
-		bottom: 10px;
-		left: 10px;
+		position: static;
+		justify-self: start;
+		margin: -48px 0 4px 10px;
 		display: flex;
 		width: auto;
 		height: 34px;
@@ -1567,9 +1644,75 @@
 		font-size: 0.7rem;
 		font-weight: 650;
 		backdrop-filter: blur(6px);
+		z-index: 2;
 	}
 	.preview .mute-toggle:disabled {
 		opacity: 0.9;
+	}
+	.thumbnail-picker {
+		display: grid;
+		width: 100%;
+		gap: 8px;
+		padding: 12px;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: 14px;
+		box-shadow: var(--shadow-xs);
+	}
+	.thumbnail-picker > div:first-child {
+		display: grid;
+		gap: 2px;
+	}
+	.thumbnail-picker strong {
+		font-size: 0.8rem;
+	}
+	.thumbnail-picker small,
+	.thumbnail-picker label span {
+		color: var(--color-muted);
+		font-size: 0.68rem;
+	}
+	.thumbnail-picker label {
+		display: grid;
+		grid-template-columns: 42px minmax(0, 1fr);
+		align-items: center;
+		gap: 9px;
+	}
+	.thumbnail-picker input {
+		width: 100%;
+		accent-color: var(--color-primary);
+	}
+	.thumbnail-preview {
+		display: grid;
+		grid-template-columns: 86px 1fr;
+		align-items: center;
+		gap: 10px;
+	}
+	.thumbnail-preview img,
+	.thumbnail-preview span {
+		display: grid;
+		width: 86px;
+		aspect-ratio: 16 / 9;
+		place-items: center;
+		overflow: hidden;
+		background: var(--color-canvas-deep);
+		border-radius: 10px;
+		color: var(--color-muted);
+		font-size: 0.6rem;
+		text-align: center;
+		object-fit: cover;
+	}
+	.thumbnail-preview button {
+		min-height: 38px;
+		padding: 0 12px;
+		background: var(--color-primary-soft);
+		border: 0;
+		border-radius: 11px;
+		color: var(--color-primary-strong);
+		font-size: 0.74rem;
+		font-weight: 720;
+	}
+	.thumbnail-preview button:disabled {
+		opacity: 0.65;
 	}
 	.crop-editor {
 		position: relative;

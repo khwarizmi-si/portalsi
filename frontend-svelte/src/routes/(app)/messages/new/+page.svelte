@@ -40,7 +40,7 @@
 			} catch (error) {
 				if (!(error instanceof DOMException && error.name === 'AbortError')) {
 					users = [];
-					message = 'Tidak ada pengguna yang cocok.';
+					message = 'Pencarian pengguna belum dapat dimuat.';
 				}
 			} finally {
 				if (!controller.signal.aborted) searching = false;
@@ -91,7 +91,11 @@
 					><small>@{user.username}</small>
 				</a>
 			</div>{/each}
-		{#if message}<p aria-live="polite">{message}</p>{/if}
+		{#if message}<p aria-live="polite">{message}</p>{:else if users.length === 0}<p>
+				{query.trim()
+					? 'Tidak ada pengguna yang cocok.'
+					: 'Cari nama atau username untuk memulai percakapan pertama.'}
+			</p>{/if}
 	</section>
 </main>
 

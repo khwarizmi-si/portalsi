@@ -3,7 +3,13 @@
 	import AuthFields from '$lib/components/auth/AuthFields.svelte';
 	import AuthShell from '$lib/components/auth/AuthShell.svelte';
 	import type { PageProps } from './$types';
-	let { form }: PageProps = $props();
+	type RegisterForm = {
+		message?: string;
+		values?: { full_name?: string; username?: string; email?: string };
+		errors?: Record<string, string[]>;
+	};
+	let { form: actionForm }: PageProps = $props();
+	const form = $derived(actionForm as RegisterForm | null | undefined);
 
 	let showPassword = $state(false);
 	let showConfirm = $state(false);

@@ -1,7 +1,17 @@
 <script lang="ts">
 	import { CircleCheckBig, Eye, EyeOff, Home, ShieldCheck } from '@lucide/svelte';
 	import type { PageProps } from './$types';
-	let { form }: PageProps = $props();
+	type PasswordForm = {
+		success?: boolean;
+		message?: string;
+		errors?: {
+			current_password?: string[];
+			new_password?: string[];
+			confirmation?: string[];
+		};
+	};
+	let { form: actionForm }: PageProps = $props();
+	const form = $derived(actionForm as PasswordForm | null | undefined);
 
 	let showCurrent = $state(false);
 	let showNew = $state(false);

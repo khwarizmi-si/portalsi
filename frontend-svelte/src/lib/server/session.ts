@@ -15,7 +15,7 @@ export function setSessionCookie(cookies: Cookies, token: string, remember: bool
 		httpOnly: true,
 		secure: !dev,
 		sameSite: 'lax',
-		maxAge: remember ? 60 * 60 * 24 * 30 : undefined
+		maxAge: 60 * 60 * 24 * (remember ? 90 : 30)
 	});
 }
 

@@ -20,6 +20,7 @@
 	let video: HTMLVideoElement;
 	let root: HTMLDivElement;
 	let loading = $state(true);
+	let hasFrame = $state(false);
 	let failed = $state(false);
 	let playing = $state(false);
 	// forceMuted mengunci mute. preferSound (mis. di detail/modal) mulai dengan suara aktif;
@@ -102,8 +103,17 @@
 		aria-label={label}
 		onclick={togglePlayback}
 		onloadstart={() => (loading = true)}
-		onwaiting={() => (loading = true)}
-		oncanplay={() => (loading = false)}
+		onwaiting={() => {
+			if (!hasFrame) loading = true;
+		}}
+		oncanplay={() => {
+			hasFrame = true;
+			loading = false;
+		}}
+		onloadeddata={() => {
+			hasFrame = true;
+			loading = false;
+		}}
 		onloadedmetadata={() => {
 			duration = video.duration;
 			if (video.videoWidth && video.videoHeight)
@@ -129,6 +139,8 @@
 			<span>Video belum dapat diputar.</span><button
 				onclick={(event) => {
 					event.stopPropagation();
+					hasFrame = false;
+					loading = true;
 					video.load();
 					failed = false;
 				}}>Coba lagi</button

@@ -22,8 +22,9 @@
 	let {
 		post,
 		zoomable = false,
-		autoplay = false
-	}: { post: PostPreview; zoomable?: boolean; autoplay?: boolean } = $props();
+		autoplay = false,
+		preferSound = false
+	}: { post: PostPreview; zoomable?: boolean; autoplay?: boolean; preferSound?: boolean } = $props();
 	let lightboxOpen = $state(false);
 	let lightboxIndex = $state(0);
 	let shareOpen = $state(false);
@@ -144,7 +145,7 @@
 				label={post.mediaAlt}
 				{autoplay}
 				forceMuted={post.videoMuted || Boolean(post.music)}
-				preferSound={zoomable}
+				preferSound={preferSound || zoomable}
 			/>
 			{#if zoomable}<button
 					class="expand-media"

@@ -258,7 +258,11 @@
 		{#if loading}
 			<p class="hint">Memuat obrolan…</p>
 		{:else if shownTargets.length === 0}
-			<p class="hint">Tidak ada yang cocok.</p>
+			<p class="hint">
+				{query.trim().length >= 2
+					? 'Tidak ada orang atau grup yang cocok.'
+					: 'Belum ada obrolan terbaru. Cari nama teman untuk mengirim postingan ini.'}
+			</p>
 		{:else}
 			{#each shownTargets as target (target.key)}
 				<button

@@ -16,8 +16,10 @@ declare global {
 			user?: SessionUser | null;
 		}
 		interface PageState {
-			// Data detail postingan untuk modal (shallow routing) — lihat AppShell.
-			postDetail?: import('./routes/(app)/posts/[postId]/$types').PageData;
+			postDetail?: Extract<
+				import('./routes/(app)/posts/[postId]/$types').PageData,
+				{ isPublic: false }
+			>;
 		}
 		// interface Platform {}
 	}

@@ -3,6 +3,12 @@ import { buildBackendUrl } from '$lib/server/api';
 import { clearSessionCookie } from '$lib/server/session';
 
 const supportedMethods = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
+const unverifiedAllowed = new Set([
+	'user',
+	'email/verification-notification',
+	'bind-email',
+	'logout'
+]);
 
 const proxy: RequestHandler = async ({ request, params, url, locals, cookies }) => {
 	const isPublicProfileRead =
@@ -18,6 +24,17 @@ const proxy: RequestHandler = async ({ request, params, url, locals, cookies }) 
 		!supportedMethods.has(request.method)
 	) {
 		return Response.json({ message: 'Endpoint BFF tidak valid.' }, { status: 400 });
+	}
+	if (
+		locals.user &&
+		!locals.user.emailVerified &&
+		!unverifiedAllowed.has(params.path) &&
+		!isPublicProfileRead
+	) {
+		return Response.json(
+			{ message: 'Verifikasi email terlebih dahulu untuk menggunakan fitur Portal SI.' },
+			{ status: 403 }
+		);
 	}
 
 	const target = buildBackendUrl(params.path);

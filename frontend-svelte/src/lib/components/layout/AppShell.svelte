@@ -4,8 +4,6 @@
 	import { goto, preloadData, pushState } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import PostModal from '$lib/components/post/PostModal.svelte';
-	import FeedSkeleton from '$lib/components/skeleton/FeedSkeleton.svelte';
-	import ExploreSkeleton from '$lib/components/skeleton/ExploreSkeleton.svelte';
 	import ProfileSkeleton from '$lib/components/skeleton/ProfileSkeleton.svelte';
 	import PostDetailSkeleton from '$lib/components/skeleton/PostDetailSkeleton.svelte';
 	import {
@@ -150,9 +148,8 @@
 	const NavSkeleton = $derived.by(() => {
 		const id = navigating?.to?.route?.id;
 		if (!id) return null;
-		if (id === '/(app)/home') return FeedSkeleton;
-		if (id === '/(app)/explore') return ExploreSkeleton;
-		if (id === '/(app)/profile' || id === '/(app)/u/[username]') return ProfileSkeleton;
+		if (id === '/(app)/home' || id === '/(app)/explore' || id === '/(app)/profile') return null;
+		if (id === '/(app)/u/[username]') return ProfileSkeleton;
 		if (id === '/(app)/posts/[postId]') return PostDetailSkeleton;
 		return null;
 	});
@@ -509,17 +506,15 @@
 	.page-back {
 		position: relative;
 		z-index: 20;
-		width: min(100% - 32px, 1080px);
-		height: 0;
+		display: flex;
+		width: min(100%, 1080px);
+		min-height: 58px;
+		align-items: center;
+		padding: 10px 16px 4px;
 		margin: 0 auto;
-		transform: translateY(14px);
 	}
 	.page-back :global(button) {
-		position: absolute;
-		left: 0;
-	}
-	.page-back + :global(.section-page) {
-		padding-top: 72px;
+		position: static;
 	}
 
 	.bottom-nav {
@@ -632,6 +627,20 @@
 		.app-main {
 			margin-left: 88px;
 			padding-bottom: 40px;
+		}
+		.page-back {
+			width: min(100% - 56px, 1080px);
+			height: 0;
+			min-height: 0;
+			padding: 0;
+			transform: translateY(14px);
+		}
+		.page-back :global(button) {
+			position: absolute;
+			left: 0;
+		}
+		.page-back + :global(.section-page) {
+			padding-top: 72px;
 		}
 	}
 

@@ -1,7 +1,15 @@
 <script lang="ts">
 	import { MailCheck, ShieldAlert } from '@lucide/svelte';
 	import type { PageProps } from './$types';
-	let { data, form }: PageProps = $props();
+	type EmailForm = {
+		success?: boolean;
+		message?: string;
+		pendingEmail?: string;
+		values?: { email?: string };
+		errors?: { email?: string[] };
+	};
+	let { data, form: actionForm }: PageProps = $props();
+	const form = $derived(actionForm as EmailForm | null | undefined);
 </script>
 
 <svelte:head><title>Ubah email — Portal SI</title></svelte:head>

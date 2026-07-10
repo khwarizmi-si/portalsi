@@ -7,7 +7,7 @@ import { formFieldErrors, safeRedirectTarget } from '$lib/server/forms';
 import { setSessionCookie } from '$lib/server/session';
 
 export const load: PageServerLoad = ({ locals }) => {
-	if (locals.user) redirect(303, '/home');
+	if (locals.user) redirect(303, locals.user.emailVerified ? '/home' : '/verify-email');
 	return {};
 };
 

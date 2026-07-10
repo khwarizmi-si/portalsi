@@ -85,7 +85,11 @@
 						>
 					</a>
 				{/each}
-				{#if chats.length === 0}<p class="empty-list">Tidak ada percakapan yang cocok.</p>{/if}
+				{#if chats.length === 0}<p class="empty-list">
+						{query.trim()
+							? 'Tidak ada percakapan yang cocok.'
+							: 'Belum ada percakapan. Mulai pesan baru untuk menyapa teman.'}
+					</p>{/if}
 			</div>
 		</section>
 		<section class="conversation-empty" aria-label="Pilih percakapan">

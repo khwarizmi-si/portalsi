@@ -7,8 +7,21 @@
 	import { finishProgress, startProgress } from '$lib/ui/progress';
 
 	let { children }: { children: Snippet } = $props();
+	const calmRoutes = new Set([
+		'/home',
+		'/explore',
+		'/create/post',
+		'/marketplace',
+		'/notifications',
+		'/messages',
+		'/profile'
+	]);
+	const calmPath = (pathname: string) =>
+		calmRoutes.has(pathname) || /^\/messages\/?$/.test(pathname);
 	beforeNavigate(({ from, to }) => {
-		if (from?.url.href !== to?.url.href) startProgress();
+		if (from?.url.href !== to?.url.href && !(from && to && calmPath(from.url.pathname) && calmPath(to.url.pathname))) {
+			startProgress();
+		}
 	});
 	afterNavigate(() => finishProgress(true));
 </script>

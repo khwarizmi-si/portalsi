@@ -13,10 +13,11 @@
 	import GifPicker from '$lib/components/comment/GifPicker.svelte';
 	import { portal } from '$lib/actions/portal';
 
+	type PrivatePostData = Extract<PageData, { isPublic: false }>;
 	let {
 		data,
 		form = null
-	}: { data: PageData; form?: { message?: string; success?: boolean } | null } = $props();
+	}: { data: PrivatePostData; form?: { message?: string; success?: boolean } | null } = $props();
 	// Urutan komentar: paling banyak like di atas, lalu yang punya balasan, sisanya urutan asli.
 	// Disortir sekali saat awal (tidak melompat-lompat saat di-like); komentar baru muncul di atas.
 	function sortComments<T extends { likesCount: number; replies: { length: number } }>(list: T[]): T[] {

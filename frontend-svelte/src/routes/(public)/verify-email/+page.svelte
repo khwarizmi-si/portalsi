@@ -40,7 +40,7 @@
 			>
 				{form.message}
 			</div>{/if}
-		<small>Sudah memverifikasi? <a href="/home">Muat ulang sesi</a></small>
+		<small>Sudah memverifikasi? <a href="/verify-email">Cek ulang status verifikasi</a></small>
 	</section>
 	<form method="POST" action="/logout"><button class="logout">Keluar dari akun</button></form>
 </main>
