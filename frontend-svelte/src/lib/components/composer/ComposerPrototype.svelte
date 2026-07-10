@@ -89,6 +89,8 @@
 	let thumbnailSecond = $state(1);
 	let thumbnailPreviewUrl = $state('');
 	let thumbnailGenerating = $state(false);
+	let thumbnailPreviewTimer: ReturnType<typeof setTimeout> | undefined;
+	let thumbnailPreviewRun = 0;
 	let uploadProgress = $state(0);
 	let activeUpload = $state<XMLHttpRequest | null>(null);
 	let cropMode = $state<'original' | 'square' | 'portrait' | 'story'>(
@@ -222,6 +224,12 @@
 		};
 	});
 
+	$effect(() => {
+		return () => {
+			if (thumbnailPreviewTimer) clearTimeout(thumbnailPreviewTimer);
+		};
+	});
+
 	// Bebaskan object URL galeri saat komponen dilepas.
 	onDestroy(() => galleryItems.forEach((item) => URL.revokeObjectURL(item.url)));
 
@@ -342,6 +350,7 @@
 		thumbnailSecond = 1;
 		thumbnailPreviewUrl = '';
 		thumbnailGenerating = false;
+		if (thumbnailPreviewTimer) clearTimeout(thumbnailPreviewTimer);
 	}
 
 	function selectSingle(candidate?: File) {
@@ -897,14 +906,22 @@
 
 	async function refreshThumbnailPreview() {
 		if (!file || selectedFileKind !== 'video') return;
+		const run = ++thumbnailPreviewRun;
 		thumbnailGenerating = true;
 		try {
 			const thumb = await generateVideoThumbnail(file, thumbnailSecond);
 			if (!thumb) return;
-			thumbnailPreviewUrl = URL.createObjectURL(thumb);
+			const url = URL.createObjectURL(thumb);
+			if (run === thumbnailPreviewRun) thumbnailPreviewUrl = url;
+			else URL.revokeObjectURL(url);
 		} finally {
-			thumbnailGenerating = false;
+			if (run === thumbnailPreviewRun) thumbnailGenerating = false;
 		}
+	}
+
+	function scheduleThumbnailPreview(delay = 160) {
+		if (thumbnailPreviewTimer) clearTimeout(thumbnailPreviewTimer);
+		thumbnailPreviewTimer = setTimeout(() => void refreshThumbnailPreview(), delay);
 	}
 
 	type Draft = {
@@ -1098,7 +1115,7 @@
 									const duration = event.currentTarget.duration;
 									videoDuration = Number.isFinite(duration) ? Math.max(1, Math.floor(duration)) : 0;
 									thumbnailSecond = Math.min(Math.max(1, thumbnailSecond), Math.max(1, videoDuration));
-									void refreshThumbnailPreview();
+									scheduleThumbnailPreview(0);
 								}}
 							></video>
 							<button
@@ -1126,16 +1143,15 @@
 										value={thumbnailSecond}
 										oninput={(event) => {
 											thumbnailSecond = Number(event.currentTarget.value);
+											scheduleThumbnailPreview();
 										}}
-										onchange={() => void refreshThumbnailPreview()}
+										onchange={() => scheduleThumbnailPreview(0)}
 									/></label
 								>
 								<div class="thumbnail-preview">
 									{#if thumbnailPreviewUrl}<img src={thumbnailPreviewUrl} alt="Preview thumbnail video" />
 									{:else}<span>{thumbnailGenerating ? 'Membuat preview…' : 'Preview thumbnail belum tersedia'}</span>{/if}
-									<button type="button" onclick={() => void refreshThumbnailPreview()} disabled={thumbnailGenerating}>
-										{thumbnailGenerating ? 'Memproses…' : 'Jadikan thumbnail'}
-									</button>
+									<small>{thumbnailGenerating ? 'Mengambil frame…' : 'Frame ini otomatis menjadi thumbnail.'}</small>
 								</div>
 							</div>
 						{:else}<audio src={previewUrl} controls></audio>{/if}
@@ -1683,36 +1699,25 @@
 	}
 	.thumbnail-preview {
 		display: grid;
-		grid-template-columns: 86px 1fr;
-		align-items: center;
-		gap: 10px;
+		gap: 8px;
 	}
 	.thumbnail-preview img,
 	.thumbnail-preview span {
 		display: grid;
-		width: 86px;
+		width: 100%;
 		aspect-ratio: 16 / 9;
 		place-items: center;
 		overflow: hidden;
 		background: var(--color-canvas-deep);
-		border-radius: 10px;
+		border-radius: 14px;
 		color: var(--color-muted);
-		font-size: 0.6rem;
+		font-size: 0.72rem;
 		text-align: center;
 		object-fit: cover;
+		box-shadow: inset 0 0 0 1px rgb(255 255 255 / 8%);
 	}
-	.thumbnail-preview button {
-		min-height: 38px;
-		padding: 0 12px;
-		background: var(--color-primary-soft);
-		border: 0;
-		border-radius: 11px;
-		color: var(--color-primary-strong);
-		font-size: 0.74rem;
-		font-weight: 720;
-	}
-	.thumbnail-preview button:disabled {
-		opacity: 0.65;
+	.thumbnail-preview small {
+		text-align: center;
 	}
 	.crop-editor {
 		position: relative;
