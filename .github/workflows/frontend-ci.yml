@@ -3,11 +3,11 @@ name: Frontend CI
 on:
   push:
     paths:
-      - 'frontend-svelte/**'
+      - 'apps/web/**'
       - '.github/workflows/frontend-ci.yml'
   pull_request:
     paths:
-      - 'frontend-svelte/**'
+      - 'apps/web/**'
       - '.github/workflows/frontend-ci.yml'
 
 permissions:
@@ -19,14 +19,14 @@ jobs:
     timeout-minutes: 20
     defaults:
       run:
-        working-directory: frontend-svelte
+        working-directory: apps/web
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: frontend-svelte/package-lock.json
+          cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
       - run: npm run check
       - run: npm run lint

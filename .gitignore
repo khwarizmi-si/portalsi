@@ -1,57 +1,31 @@
-# Miscellaneous
-*.class
-*.log
-*.pyc
-*.swp
+# OS / editor noise
 .DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
-
-# IntelliJ related
-*.iml
-*.ipr
-*.iws
+Thumbs.db
+*.swp
+*.log
 .idea/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
-
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.pub-cache/
-.pub/
-/build/
-
-# Symbolication related
-app.*.symbols
-
-# Obfuscation related
-app.*.map.json
-
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
-# Tambahkan ini di akhir file .gitignore
-/android/key.properties
-/android/app/my-release-key.jks
-lib/generated
-
-# SSO secrets injected via --dart-define-from-file (keep real values out of git)
-akun_rg.env.json
+# Local environment / secrets
+.env
+.env.*
+!.env.example
+!*.env.example
 *.env.json
 !*.env.example.json
-# Build artifacts / iOS ephemeral
-/Flutter/
-/android/build/
+
+# Root build/cache artifacts
+.agents/
+.dart_tool/
+build/
+dist/
+node_modules/
+
+# Nested Laravel API repo is managed by its own Git remote
+apps/api/
+
+# Common language caches
+*.class
+*.pyc
+__pycache__/
+.pytest_cache/
+.phpunit.result.cache
